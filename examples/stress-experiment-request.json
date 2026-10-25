@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "claim": {
+    "title": "Synthetic net marked PnL after fees",
+    "hypothesis": "The declared baseline has positive marked PnL after explicit fees.",
+    "metric": "net_marked_pnl_v1",
+    "comparator": "gt",
+    "threshold": "0",
+    "unit": "USD"
+  },
+  "replay_spec": {
+    "schema_version": 1,
+    "clock_policy_id": "receive_order_v1",
+    "instrument": {
+      "base_currency": "EUR",
+      "quote_currency": "USD",
+      "price_increment": "1.00",
+      "size_increment": "1"
+    },
+    "account": {
+      "starting_cash": "10000.00"
+    },
+    "fees": {
+      "maker_rate": "0.01",
+      "taker_rate": "0.02"
+    },
+    "execution": {
+      "insert_latency_ns": 0,
+      "cancel_latency_ns": 1500000000
+    },
+    "strategy": {
+      "kind": "single_limit_buy_v1",
+      "submit_capture_seq": 1,
+      "limit_price_ticks": 100,
+      "quantity_lots": 2,
+      "cancel_after_first_fill": true
+    },
+    "seed": 7
+  },
+  "budget": {
+    "max_attempts": 3,
+    "max_wall_seconds": 60,
+    "max_events": 1000
+  }
+}

@@ -1,11 +1,11 @@
 # Sprint 5 场景约束工程状态
 
-更新：2026-10-26（Asia/Singapore）。S04-03 的 PR #78 已获 owner 合并；`0.1.0a1` 发行由[独立发布记录](../releases/0.1.0a1.md)跟踪，本文不把合并、候选 CI 与实际发行视为同一事实。本切片进入 `0.2.0.dev0`，先交付 S05-01 的最小声明/输入约束闭环，后两项执行工作不提前计为完成。
+更新：2026-10-26（Asia/Singapore）。S04-03 的 PR #78 已获 owner 合并；`0.1.0a1` 发行由[独立发布记录](../releases/0.1.0a1.md)跟踪。`0.2.0.dev0` 的 S05-01 在 PR #79 待 owner 合并；后续 PR #80 先通过固定时钟资格，再接入 S05-02 耦合时钟压力执行。本页区分实现、远端验证及人类接受。
 
 | 故事 | 本切片范围 | 状态与后续门 |
 | --- | --- | --- |
-| S05-01 / Issue #13 | 不可变 AssumptionSpec / ScenarioSpec、研究者设定的未校准纳秒范围、suffix anchor、真实来源绑定与只读 `validate-scenario` | 实施中，待对应 PR、远端 CI 和 owner 接受；本机未执行本轮测试/基准 |
-| S05-02 / Issue #14 | 额外接收延迟压力的实际执行 | 尚未批准执行；需先确定市场/观察/决策时钟、derived-view lineage、新 semantic 与原生/审计资格门 |
+| S05-01 / Issue #13 | 不可变 AssumptionSpec / ScenarioSpec、研究者设定的未校准纳秒范围、suffix anchor、真实来源绑定与只读 `validate-scenario` | PR #79 远端检查通过，待 owner 合并 |
+| S05-02 / Issue #14 | 耦合 receive-clock 后缀压力执行、独立派生身份、持久intent、共享预算及复核 | PR #80 实施中；Phase A 时钟资格已通过，Phase B 执行链待远端回归与 owner 接受 |
 | S05-03 / Issue #15 | 基线/干预配对与首次分歧、数值变化说明 | 依赖 S05-02；不能将输入时间戳/hash 不同、incomplete 或不可评价状态当作命题翻转 |
 
 故事范围与容量仍见 [Sprint backlog](sprint-backlog.md#s5--假设约束与首个压力情景)。实际投入时间尚未登记，不把代码生成、自审或 AI 交叉审查计为独立人类领域验收。真实访谈、外部采用和其他开放研究门继续保留原记录，不由本切片补数。
@@ -31,7 +31,15 @@
 | 干净安装与回归 | 候选 commit 的远端 CI job、安装后 CLI smoke、既有 core/native/evidence 回归结果；配置或脚本存在不算已通过 |
 | 人类接受 | owner 对本切片差异的接受记录；AI 审查如实标记，独立领域复核缺口保留 |
 
-截至本状态页初稿，上表是待收集门，不填虚构测试数量、CI 结果或耗时。具体 run/PR 链接在实际发生后补入对应工程记录；不会把 `0.1.0a1` 的旧结果当作 `0.2.0.dev0` 本切片通过。
+上表定义所需门；实际发生的证据追加于下节，不把旧版通过结果替代当前版本，也不虚构投入工时或独立人类验收。
+
+## S05-02 两阶段执行记录
+
+[PR #80](https://github.com/Darrenus/tickwitness/pull/80) 以仍待合并的 PR #79 为 base。Phase A head 为 `c1edcf5d772cae78702e33cd2c1d62d2b8622d14`；[Engineering 40220550602](https://github.com/Darrenus/tickwitness/actions/runs/40220550602) 实际测试 merge checkout `2b78eb75d843f9128bf91ce72868f4bc4a784a10`，两者不混记。13 项检查通过，原生两平台各 959 passed / 1 skipped；固定时钟脚本每平台 9 cases / 154 checks 全部通过。报告 artifact 名称为 `scenario-clocks-<os>-<merge checkout>`，包含原始 native traces、精确 spec、环境与 audit。
+
+零延迟/全流平移维持业务投影；1.5 秒撤单延迟、capture 4 起 suffix 加 2 秒的原创合成案例使成交 2 手变 1 手、手续费 2 USD 变 1 USD，两边均完整可评价（net marked PnL -2 / -1 USD）。同刻撤单反证确认：到期命令在真实输入步骤后结算，不能假定在行情间独立生效。这些是模型资格，未校准真实市场，也不判原 baseline claim 的反例。
+
+Phase B 仅在读取上述实际报告后接入执行：原协议 reserve、engine 前持久intent/CAS、派生 view 身份、独立 scenario receipt/evaluation、`inspect-scenario-run` 重派生和账务审计。旧 baseline receipt/bundle 拒绝压力结果。场景 portable bundle 与通用配对/首次分歧仍不计完成。Phase B 的实际 CI 与安装后执行结果在完成后补入；本机未运行测试、构建、回放或基准。
 
 ## 延迟执行与配对风险
 

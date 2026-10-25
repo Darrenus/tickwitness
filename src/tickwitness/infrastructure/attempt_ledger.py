@@ -25,6 +25,12 @@ from tickwitness.domain.evidence.run_records import (
     load_run_receipt,
     parse,
 )
+from tickwitness.domain.evidence.scenario_records import (
+    ScenarioIntent,
+    load_scenario_failure,
+    load_scenario_intent,
+    load_scenario_run_receipt,
+)
 from tickwitness.domain.research_contracts.executable import ExecutableProtocol
 
 _RECORD_LIMIT = 16 * 1024
@@ -58,11 +64,20 @@ def _reservation(raw: bytes) -> AttemptReservation:
         raise AttemptLedgerError(f"Invalid attempt reservation: {error}") from error
 
 
-def _outcome(raw: bytes, reservation: AttemptReservation) -> None:
+def _outcome(raw: bytes, reservation: AttemptReservation) -> ScenarioIntent | None:
     try:
         document = parse(raw, limit=_RECORD_LIMIT)
+        intent: ScenarioIntent | None = None
         if document.get("kind") == "research_run_receipt_v1":
             load_run_receipt(raw)
+        elif document.get("kind") in ("scenario_run_receipt_v1", "scenario_attempt_failure_v1"):
+            if document["kind"] == "scenario_run_receipt_v1":
+                load_scenario_run_receipt(raw)
+            else:
+                load_scenario_failure(raw)
+            intent = load_scenario_intent(
+                canonical(cast("dict[str, object]", document["intent"]))
+            )
         elif document.get("kind") == "replay_attempt_failure_v1":
             if (
                 set(document) != {"kind", "schema_version", "attempt", "protocol_id", "error"}
@@ -84,6 +99,7 @@ def _outcome(raw: bytes, reservation: AttemptReservation) -> None:
             raise EvidenceValidationError("Outcome does not bind the complete reserved attempt")
         if document.get("protocol_id") != reservation.protocol_id:
             raise EvidenceValidationError("Outcome belongs to a different protocol")
+        return intent
     except (EvidenceValidationError, TypeError, ValueError, RecursionError) as error:
         raise AttemptLedgerError(f"Invalid attempt outcome: {error}") from error
 
@@ -168,18 +184,14 @@ class LocalAttemptLedger:
         """Persist opaque artifact CAS first, then one immutable outcome commit."""
         if not isinstance(reservation, AttemptReservation):
             raise AttemptLedgerError("publish requires an actual AttemptReservation")
-        committed = self.get_reservation(reservation.attempt_id)
-        if committed.canonical_bytes != reservation.canonical_bytes:
-            raise AttemptLedgerError("Reservation differs from its committed slot")
-        _outcome(outcome, reservation)
-        if type(artifacts) is not tuple or len(artifacts) > _ARTIFACT_COUNT:
-            raise AttemptLedgerError(
-                "artifacts must be a tuple of at most 16 immutable byte values"
-            )
-        for artifact in artifacts:
-            self._bounded(artifact, _ARTIFACT_LIMIT)
+        intended = _outcome(outcome, reservation)
+        self._artifacts(artifacts)
         try:
-            with self._directories() as (objects, _, outcomes):
+            with (
+                self._locked_attempt(reservation),
+                self._directories() as (objects, _, outcomes),
+            ):
+                self._match_intent(intended, self.get_intent(reservation.attempt_id))
                 for artifact in artifacts:
                     self._cas(objects, artifact)
                 outcome_id = self._cas(objects, outcome)
@@ -189,6 +201,61 @@ class LocalAttemptLedger:
                 return outcome_id
         except OSError as error:
             raise AttemptLedgerError(f"Cannot publish attempt outcome: {error}") from error
+
+    def bind_intent(
+        self, reservation: AttemptReservation, intent_bytes: bytes,
+        *, artifacts: tuple[bytes, ...] = (),
+    ) -> str:
+        """Commit an immutable scenario intent before constructing a native engine.
+
+        A failure cannot refund the already occupied reservation. Artifact objects
+        become durable before the intent name; no execution is authorized here.
+        """
+        if not isinstance(reservation, AttemptReservation):
+            raise AttemptLedgerError("bind_intent requires an actual AttemptReservation")
+        intent = self._intent(intent_bytes, reservation)
+        self._artifacts(artifacts)
+        try:
+            with self._locked_attempt(reservation):
+                existing = self.get_intent(reservation.attempt_id)
+                if existing is not None and existing != intent_bytes:
+                    raise AttemptLedgerError("Attempt already binds a different immutable intent")
+                if self.get_outcome(reservation.attempt_id) is not None and existing is None:
+                    raise AttemptLedgerError("Cannot bind intent after an outcome was finalized")
+                with self._directories() as (objects, _, _):
+                    for artifact in artifacts:
+                        self._cas(objects, artifact)
+                    self._cas(objects, intent_bytes)
+                with self._intents(create=True) as directory:
+                    assert directory is not None
+                    self._publish_bytes(
+                        directory, f"{reservation.attempt_id}.json", intent_bytes, _RECORD_LIMIT
+                    )
+                return intent.intent_id
+        except OSError as error:
+            raise AttemptLedgerError(f"Cannot bind scenario intent: {error}") from error
+
+    def get_intent(self, attempt_id: str) -> bytes | None:
+        """Read optional durable intent and CAS closure without upgrading old roots."""
+        reservation = self.get_reservation(attempt_id)
+        try:
+            with self._intents() as directory:
+                if directory is None:
+                    return None
+                try:
+                    raw = self._read(directory, f"{attempt_id}.json", _RECORD_LIMIT)
+                except FileNotFoundError:
+                    return None
+            intent = self._intent(raw, reservation)
+            try:
+                closure = self.read_artifact(intent.intent_id, max_bytes=_RECORD_LIMIT)
+            except AttemptNotFoundError as error:
+                raise AttemptLedgerError("Scenario intent CAS closure is missing") from error
+            if closure != raw:
+                raise AttemptLedgerError("Scenario intent CAS closure differs")
+            return raw
+        except OSError as error:
+            raise AttemptLedgerError(f"Cannot verify scenario intent: {error}") from error
 
     def get_reservation(self, attempt_id: str) -> AttemptReservation:
         """Require reservation CAS and the exact protocol slot closure."""
@@ -224,7 +291,10 @@ class LocalAttemptLedger:
                     raw = self._read(outcomes, f"{attempt_id}.json", _RECORD_LIMIT)
                 except FileNotFoundError:
                     return None
-                _outcome(raw, reservation)
+                # A scenario terminal is committed after its immutable intent.
+                # Reading intent first could retain a stale None while a writer
+                # commits both records before this reader opens the outcome.
+                self._match_intent(_outcome(raw, reservation), self.get_intent(attempt_id))
                 try:
                     closure = self._read(objects, digest(raw), _RECORD_LIMIT, expected=digest(raw))
                 except FileNotFoundError as error:
@@ -252,6 +322,60 @@ class LocalAttemptLedger:
     def _bounded(raw: bytes, limit: int) -> None:
         if not isinstance(raw, bytes) or not 0 < len(raw) <= limit:
             raise AttemptLedgerError(f"Evidence requires nonempty immutable bytes within {limit}")
+
+    @staticmethod
+    def _artifacts(artifacts: tuple[bytes, ...]) -> None:
+        if type(artifacts) is not tuple or len(artifacts) > _ARTIFACT_COUNT:
+            raise AttemptLedgerError("artifacts must be a tuple of at most 16 immutable byte values")
+        for artifact in artifacts:
+            LocalAttemptLedger._bounded(artifact, _ARTIFACT_LIMIT)
+
+    @staticmethod
+    def _intent(raw: bytes, reservation: AttemptReservation) -> ScenarioIntent:
+        try:
+            intent = load_scenario_intent(raw)
+            if intent.document["protocol_id"] != reservation.protocol_id:
+                raise EvidenceValidationError("Intent belongs to a different reserved protocol")
+            return intent
+        except EvidenceValidationError as error:
+            raise AttemptLedgerError(f"Invalid scenario intent: {error}") from error
+
+    @staticmethod
+    def _match_intent(intended: ScenarioIntent | None, persisted: bytes | None) -> None:
+        if intended is None:
+            if persisted is not None:
+                raise AttemptLedgerError("Scenario-bound attempts cannot publish baseline outcomes")
+        elif persisted != intended.canonical_bytes:
+            raise AttemptLedgerError("Scenario outcome requires its exact durable intent")
+
+    @contextmanager
+    def _locked_attempt(self, reservation: AttemptReservation) -> Iterator[None]:
+        # Lock the immutable reservation inode, not a new mutable lock-file namespace.
+        # No native runtime or non-stdlib dependency is imported at this IO boundary.
+        import fcntl
+
+        with self._directories() as (objects, _, _):
+            try:
+                descriptor = os.open(
+                    reservation.attempt_id, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                    dir_fd=objects,
+                )
+            except FileNotFoundError as error:
+                raise AttemptNotFoundError("Attempt reservation CAS does not exist") from error
+            try:
+                if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                    raise AttemptLedgerError("Attempt reservation lock requires a regular file")
+                fcntl.flock(descriptor, fcntl.LOCK_EX)
+                try:
+                    if self.get_reservation(reservation.attempt_id).canonical_bytes != (
+                        reservation.canonical_bytes
+                    ):
+                        raise AttemptLedgerError("Reservation differs from its committed slot")
+                    yield
+                finally:
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+            finally:
+                os.close(descriptor)
 
     @staticmethod
     def _existing_slot(
@@ -319,6 +443,20 @@ class LocalAttemptLedger:
         _identity(protocol_id)
         with ExitStack() as stack:
             yield self._directory(stack, slots, protocol_id, create)
+
+    @contextmanager
+    def _intents(self, *, create: bool = False) -> Iterator[int | None]:
+        with ExitStack() as stack:
+            root = os.open(self._root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            stack.callback(os.close, root)
+            try:
+                directory = self._directory(stack, root, "intents", create)
+            except FileNotFoundError:
+                if create:
+                    raise
+                yield None
+                return
+            yield directory
 
     @staticmethod
     def _read(

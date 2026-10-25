@@ -91,3 +91,13 @@ bundle仅固定目录/8role，原子no-replace发布，安全有界读取；offl
 后续执行门：S05-02 必须先确定市场/观察/决策与命令到达的明确时间语义，版本化新的 adapter/clock semantic 与 derived-view lineage，防止策略提前读取未来 cache；验证零变换、全流平移负对照、可手查有效案例、同刻顺序、延迟、EOF 与审计一致性。不能改写 raw 或静默复用原 semantic_id。若只实现订单发送延迟，应明确修订范围，不能冒充接收延迟。
 
 S05-03 的 controlled intervention 配对应披露共同条件与允许变化；不能把干预导致的数据/模型变化包装成旧比较器的 strictly paired。只有双方可评价且满足声明的完成规则时才比较冻结 metric/comparator；无成交、费用歧义、未决 EOF 或执行错误不能变成命题翻转。零变换与全流平移在本批只是后续执行资格门，不是已运行的实验。
+
+## ADR-013 耦合回放时钟压力与持久场景身份
+
+状态：Proposed，2026-10-26，PR #80。细化 ADR-012 后续执行范围：复用不变的 Nautilus receive-order adapter，并新增组合层 `coupled_receive_suffix_clock_v1`，明确 suffix receive 同时改变 native 市场与策略时钟。它不实现独立 venue/observer feed-delay；native 输入步骤先匹配后结算命令的资格结果不能替换为独立 timer 假设。固定案例先在远端两平台验证，再启用场景执行。精确合同见[场景执行 v1](../contracts/scenario-execution-v1.md)。
+
+派生是纯函数：原数据、事件顺序、event_time 和 source_ref 保留，只移动声明后缀 receive；zero 保留原字节。派生 ReplayInput 使用独立 view ID，显式标记非 catalog manifest，不改写原 sealed dataset。复核重新派生，不能信任提供的派生 hash。
+
+每次引擎调用占原 v2 protocol 的一个不可退 slot；不因 candidate/assumption 变更重置预算。预留后必须先持久完整 intent 及其制品才能构造引擎，中断保留候选归属；intent 绑定与终态发布串行且不可替换。新 scenario receipt/failure 与 baseline 类型严格分开；场景审计复用精确费用/账务逻辑，只输出 metric observation，不套用原 baseline claim 的 comparator 形成反例结论。
+
+S05-02 的持久化和复核依赖 data/registry/runs 三根；旧八角色 bundle v1 保持只接受 baseline。独立场景 bundle 和 S05-03 通用配对留作后续独立能力，不用放宽旧 verifier 或伪造 baseline protocol 来接纳派生数据。

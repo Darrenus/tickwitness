@@ -96,19 +96,20 @@ def _execute(
     changes: dict[str, dict[str, object]] | None = None,
 ) -> dict[str, Any]:
     replay_input = _input(records, changes or {})
-    result = NautilusReplayAdapter().run(replay_input)
-    document = result.document
-    evaluation = evaluate_replay(replay_input, result).document
-    case["runs"][label] = {
+    run: dict[str, Any] = {
         "input_identity_policy": "clock_qualification_input_identity_v1",
         "dataset_id": replay_input.dataset_id,
         "normalized_sha256": hashlib.sha256(replay_input.normalized_bytes).hexdigest(),
+        "normalized_jsonl": replay_input.normalized_bytes.decode("utf-8"),
         "replay_spec": replay_input.spec.document,
         "replay_spec_id": replay_input.spec.spec_id,
-        "result_sha256": hashlib.sha256(result.canonical_bytes).hexdigest(),
-        "result": document,
-        "evaluation": evaluation,
     }
+    case["runs"][label] = run
+    result = NautilusReplayAdapter().run(replay_input)
+    document = result.document
+    run.update(result_sha256=hashlib.sha256(result.canonical_bytes).hexdigest(), result=document)
+    # Retain actual native evidence even when independent accounting rejects it.
+    run["evaluation"] = evaluate_replay(replay_input, result).document
     _check(
         case,
         f"{label}: all input records processed",

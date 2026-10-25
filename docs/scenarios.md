@@ -1,6 +1,6 @@
-# 只读校验一项压力场景声明
+# 校验与执行耦合回放时钟压力
 
-状态：S05-01 开发用例，目标版本 `0.2.0.dev0`；对应 PR/远端 CI 验收前不记为已接受能力。`validate-scenario` 核对一份 assumption 与候选 scenario 的冻结来源和输入约束。它**不执行变换或回放、不占用 attempt、不计算收益或 finding**。0.1 技术预览的发行状态仍以[其发布记录](releases/0.1.0a1.md)为准。
+状态：S05-01/02 开发用例，目标版本 `0.2.0.dev0`；对应 PR/远端 CI 验收前不记为已接受能力。`validate-scenario` 核对一份 assumption 与候选 scenario 的冻结来源和输入约束，仍然**不执行、不占用 attempt、不计算收益**。单独的 `run-scenario` 负责占预算和运行，`inspect-scenario-run` 重新派生并审计已提交结果。0.1 技术预览的发行状态仍以[其发布记录](releases/0.1.0a1.md)为准。
 
 首个声明是 `replay_receive_suffix_shift_v1`：从指定 capture 起，对整个后缀的 receive 时间声明增加一个非负常数。它属于人为额外压力，范围由研究者设置且未校准；不是对历史网络延迟的还原。精确字段见[Assumption / Scenario 合同](contracts/assumption-scenario-v1.md)，设计理由见 [ADR-012](architecture/decisions.md#adr-012-场景声明与延迟压力执行分开验收)。
 
@@ -70,8 +70,39 @@ test ! -e .local/scenario-must-stay-absent
 
 其他应拒绝的输入包括：未知 kind/semantic/字段、错误类别、float/bool 延迟、缺失或非 ns 单位、负值/倒置/超范围区间、非空校准引用、不存在的 capture anchor、与协议不符的数据/spec，以及时间或 execution horizon 溢出。错误保留为校验失败，不登记为策略亏损或反例；缺失 store/registry 不会因检查而自动创建。
 
-## 为什么暂不运行延迟压力
+## 已限定的时钟含义
 
-目前引擎 profile 使用同一 receive-order 时钟推动市场数据与策略，并以 capture_seq 触发内置下单。把全部记录加一个常数可能只平移时间戳，trace/hash 不同不能证明经济结果不同。后缀平移也尚未被资格验证为“市场照常、研究者晚收到信息”的双时钟接收延迟模型。
+引擎使用同一 receive-order 时钟推动市场数据与策略，并以 capture_seq 触发内置下单。native `ts_event` 和 `ts_init` 都取派生 receive 时间；原始 event 时间保留为证据字段。每个真实输入步骤先处理行情/匹配，再派发策略回调并结算命令。到期撤单没有独立 timer 保证，不能假定它必定先于该步骤的成交生效。EOF 不补虚构输入，不强行排空未决命令。
 
-S05-02 将另行验证时间、lineage、adapter 能力和审计语义；S05-03 再处理有明确共同条件的干预配对。零延迟对照、全流平移负对照与已知有效压力案例是未来门槛，本页不声称已完成。当前无情景执行结果、命题翻转、搜索覆盖、收益范围或观测相容性结论。
+全流平移负对照、零延迟、非零撤单竞争和 EOF 的固定合成案例已先在远端资格门运行，记录见 [Sprint 5 状态](planning/sprint-05-status.md)。该资格限于 pinned engine 与声明的 `coupled_receive_suffix_clock_v1`，不证明“市场照常、研究者晚收到信息”的双时钟 feed-delay，也不构成真实市场校准。完整合同见[场景执行 v1](contracts/scenario-execution-v1.md)。
+
+## 在远端执行与复核
+
+下面例子使用 CPU 原生环境；从本分支固定 commit 安装，不在个人电脑运行测试或回放：
+
+```sh
+TW_STRESS_ENV=/tmp/tickwitness-stress-native
+UV_PROJECT_ENVIRONMENT="$TW_STRESS_ENV" uv sync --locked --extra nautilus --python 3.12
+TW="$TW_STRESS_ENV/bin/tickwitness"
+TW_DEV=$("$TW" import-events replay-partials.jsonl --input-root examples --store .local/stress-data --id-only)
+TW_CONFIRM=$("$TW" import-events replay-confirmation.jsonl --input-root examples --store .local/stress-data --id-only)
+TW_PROTOCOL=$("$TW" freeze-experiment stress-experiment-request.json --input-root examples --development-dataset "$TW_DEV" --confirmation-dataset "$TW_CONFIRM" --store .local/stress-data --registry .local/stress-experiments --id-only)
+"$TW" replay-protocol "$TW_PROTOCOL" --store .local/stress-data --registry .local/stress-experiments --runs .local/stress-runs
+"$TW" run-scenario "$TW_PROTOCOL" stress-assumption-request.json stress-zero-request.json --input-root examples --store .local/stress-data --registry .local/stress-experiments --runs .local/stress-runs
+"$TW" run-scenario "$TW_PROTOCOL" stress-assumption-request.json stress-suffix-request.json --input-root examples --store .local/stress-data --registry .local/stress-experiments --runs .local/stress-runs
+```
+
+从成功 JSON 复制实际返回的 `run_id`、`attempt_id`，传给以下命令（用实际 ID 替换 `RUN_ID`、`ATTEMPT_ID`）：
+
+```sh
+"$TW" inspect-scenario-run RUN_ID --store .local/stress-data --registry .local/stress-experiments --runs .local/stress-runs
+"$TW" inspect-scenario-attempt ATTEMPT_ID --runs .local/stress-runs
+```
+
+一次原生调用消耗原协议一个 slot；上面三次运行正好消耗样例三次预算。重复同一候选、改候选、失败、超时和中断都不返还。基线结果要单独运行或引用已有证据，本命令不会暗中额外跑基线。更改范围生成新的 assumption 身份，但不会替同一协议重置预算。
+
+启动 worker 前，reservation、完整 scenario intent、assumption/scenario、派生描述及派生字节先持久化。来源数据仓库和协议不被改写；派生 input 使用 `derived_view_not_catalog_manifest_v1` 身份，不能冒充原 sealed dataset。`inspect-scenario-attempt` 读取已消耗 slot 与场景身份，缺终态显示 `reserved_unfinalized`；intent 持久化失败时不会启动引擎，该 slot 仍然消耗。运行失败返回带 `attempt_id`、`budget_consumed=true` 的错误；持久化终态无法确认时返回 `attempt_outcome_unconfirmed`，先检查 attempt，不能盲目重跑。
+
+`inspect-scenario-run` 不启动 native：重新读取原 development 闭包、校验声明、重新派生字节和身份、核对 CAS/intent/终态，再重算账务与估值。只在完整且费用可审计时输出 `metric_observation.eligible=true`；否则值为 null。它不输出原 baseline claim 的真假、反例、搜索覆盖或历史相容性。完整的基线/干预关联和首次分歧报告仍属于 S05-03。
+
+本切片的场景证据保存在三个持久根（data、registry、runs）中，需一起保留。独立可搬迁的场景 bundle 尚未提供；旧 `export-evidence`/`verify-evidence` 八角色 v1 仍只接受 baseline，场景回执进入旧导出路径应被拒绝。查询失败不会创建缺失的仓库根。
