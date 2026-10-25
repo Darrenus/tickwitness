@@ -1,0 +1,63 @@
+{
+  "all_no_cancel_controls_filled_one_lot": true,
+  "byte_identical": true,
+  "case_count": 20,
+  "final_script_sha256": "5577f80818c8fae5e14ab549e620488836b30bb41cac20bdd2b832c9379ac288",
+  "full_adapter_implemented": false,
+  "independent_process_runs": 2,
+  "not_a_performance_benchmark": true,
+  "notes": [
+    "All 20 probes executed; execution completion does not mean the correctness gates passed.",
+    "Original intermediate failed-expectation records are preserved.",
+    "EOF receipt metadata proves final processing despite stale public current_timestamp."
+  ],
+  "observation_compatible_engine_witnesses_certified": false,
+  "partial_accounting_mismatch_cases": [
+    "partial-separated",
+    "partial-same-exchange-time",
+    "partial-coarse-poll"
+  ],
+  "probe_errors": [],
+  "queue_cancel_fills": {
+    "cancel-log_prob": 0.0,
+    "cancel-log_prob2": 0.0,
+    "cancel-power_prob-2": 0.0,
+    "cancel-power_prob2-16": 1.0,
+    "cancel-power_prob2-2": 0.0,
+    "cancel-power_prob3-2": 0.0,
+    "cancel-risk_adverse": 0.0
+  },
+  "run_a_sha256": "47c02fd99fda040b34cf2aaa6ca3e61d2e3ed286f2b453467c811e14ebba8123",
+  "run_b_sha256": "47c02fd99fda040b34cf2aaa6ca3e61d2e3ed286f2b453467c811e14ebba8123",
+  "schema": "hft-selection-comparison-v1",
+  "selection_gates": {
+    "bounded_single_fill_replay_candidate": true,
+    "exact_front_and_back_l2_witness_gate": "CLOSED_NOT_EXPRESSED_BY_PUBLIC_BUILTINS",
+    "lossless_per_fill_poll_trace_gate": "CLOSED_SAME_TIME_AND_COARSE_POLL_COLLAPSE",
+    "note": "EXECUTED means the probe ran, not that its correctness expectation passed.",
+    "partial_fill_local_accounting_gate": "CLOSED_OBSERVED_MISMATCH",
+    "terminal_current_timestamp_gate": "CLOSED_STALE_CLOCK_OBSERVED"
+  },
+  "terminal_stale_clock_cases": [
+    "cancel-risk_adverse",
+    "cancel-log_prob",
+    "cancel-log_prob2",
+    "cancel-power_prob-2",
+    "cancel-power_prob2-2",
+    "cancel-power_prob3-2",
+    "cancel-power_prob2-16",
+    "no-cancel-control-risk_adverse",
+    "no-cancel-control-log_prob",
+    "no-cancel-control-log_prob2",
+    "no-cancel-control-power_prob-2",
+    "no-cancel-control-power_prob2-2",
+    "no-cancel-control-power_prob3-2",
+    "no-cancel-control-power_prob2-16",
+    "partial-separated",
+    "partial-same-exchange-time",
+    "partial-coarse-poll",
+    "eof-no-guard",
+    "eof-guard-before-response",
+    "eof-guard-after-response"
+  ]
+}

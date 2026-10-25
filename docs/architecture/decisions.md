@@ -20,6 +20,8 @@
 
 暂不造两套完整回测器。可手算参考实现只用于微型语义检查。第二引擎须有外部需求、明确边界和 adapter 维护预算。参考 [HftBacktest](https://github.com/nkaz001/hftbacktest)、[NautilusTrader](https://github.com/nautechsystems/nautilus_trader)。
 
+2026-10-25选型门更新：S1比较已获owner接受，但S2[补测](../research/hftbacktest-selection-gates.md)发现固定HFT版本的部分成交账务不一致、fill轮询不完整及终止时钟陈旧。单次完整成交的受限路径可继续研究，不能据此批准产品完整执行模型。**默认adapter决策暂缓**，待核对替代引擎的L2/partial能力或经验证的上游修复成本；不会静默换成无部分成交模型。S02-02不可变数据发布可独立交付，其引擎选型验收项保持未完成。
+
 ## ADR-004 原始证据不可变，catalog 与分析存储分开
 
 决定：原始数据和制品采用 content-addressed immutable objects + manifest；规范化列数据使用 Parquet；DuckDB 负责只读分析，不作为并发任务状态库；SQLite 支持本地 catalog 与事务，jobs/state 遵守单写/事务边界。冻结后修订创建新版本。
