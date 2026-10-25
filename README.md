@@ -1,5 +1,7 @@
 # TickWitness
 
+[![Documentation](https://github.com/Darrenus/tickwitness/actions/workflows/docs.yml/badge.svg)](https://github.com/Darrenus/tickwitness/actions/workflows/docs.yml)
+
 Find reproducible counterexamples to quantitative research claims under explicit data and execution assumptions.
 
 **Status: planning baseline, 2026-10-25.** This repository currently contains the product and engineering plan. The research engine, SDK, CLI, API, MCP server, and UI are planned, not implemented. There are no measured product performance or adoption results yet.
@@ -19,6 +21,7 @@ The initial product is a local-first research verification toolkit for quantitat
 | [Architecture decisions](docs/architecture/decisions.md) | Initial decisions and explicit reconsideration triggers |
 | [Roadmap](docs/planning/roadmap.md) | 24 two-week Sprints, release gates, capacity assumptions |
 | [Sprint backlog](docs/planning/sprint-backlog.md) | Stories, dependencies, acceptance criteria and deliverables |
+| [GitHub execution index](docs/planning/github-backlog.md) | Links to 24 planned Sprint milestones and 72 story issues |
 | [Agile working agreement](docs/planning/working-agreement.md) | Refinement, Definition of Ready/Done, review and change control |
 | [Requirements traceability](docs/planning/traceability.md) | Domain rules and product goals mapped to stories and release evidence |
 | [Quality and research validation](docs/quality/quality-strategy.md) | Research correctness, verification matrix and release gates |
@@ -29,10 +32,18 @@ The initial product is a local-first research verification toolkit for quantitat
 
 The planning horizon assumes one full-time human maintainer supported by AI tools. Two-week iterations and milestone gates control scope; dates are forecasts, not promises. The early CLI release is a usable incremental product, while v1.0 requires external replication, operational evidence, compatibility guarantees, and maintenance readiness.
 
+The current [milestones](https://github.com/Darrenus/tickwitness/milestones) and [issues](https://github.com/Darrenus/tickwitness/issues) describe planned work. No Sprint dates or product completion claims have been assigned.
+
 Documentation checks can be run now with Python 3:
 
 ```sh
 python3 scripts/check_docs.py
+```
+
+To export the planning source as machine-readable JSON without modifying GitHub:
+
+```sh
+python3 scripts/export_backlog.py
 ```
 
 There is no product installation command yet. Sprint 1 will establish the package and reproducible development environment. Do not interpret proposed directory layouts or API examples as existing functionality.
