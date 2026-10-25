@@ -1,6 +1,6 @@
 # Security policy
 
-TickWitness `0.1.0a1` is a technical preview candidate, pending owner acceptance and release. A version label or this policy does not mean a tag, GitHub Release, or PyPI package already exists. The candidate supports a bounded local evidence workflow, not a production trading or hosted research service. The actual artifact, supported environments and verification records are listed in the [candidate release record](docs/releases/0.1.0a1.md) and [support matrix](docs/support.md).
+TickWitness `v0.1.0a1` is a published GitHub technical preview; no PyPI package was published. It supports the bounded trusted-owner evidence workflow described in the [release record](docs/releases/0.1.0a1.md) and [support matrix](docs/support.md). The subsequent `0.2.0.dev0` branch is unreleased development, including read-only scenario-contract checks which do not approve execution. Preview availability does not provide production or hosted-service support.
 
 The supported trust model is a trusted local owner using authorized data and the built-in strategy profile. Input and evidence IO reject unsafe paths, symlinks, special files and quota breaches within the documented boundary. Root ancestors and the host owner remain trusted configuration. The subprocess worker provides crash and timeout supervision; it is not a sandbox for malicious strategy code, credentials, network access or a hostile owner. Confirmation denial applies to application entry points and does not hide owner-controlled files from their owner.
 

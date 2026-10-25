@@ -1,6 +1,6 @@
 # TickWitness 开发入口
 
-状态：Sprint 4 技术预览候选，2026-10-26。PR#77的v2可执行协议、per-protocol attempt预算、独立账务/费用/最后bid估值、导出与离线核验已接受；本批准备`0.1.0a1`候选制品与安装支持说明。完整操作见[证据工作流](evidence-workflow.md)，安装入口见[quickstart](quickstart.md)。v1仍不可执行，首个profile仅EUR/USD内置买单；任意源码、确认解封、搜索判定和完整公共SDK尚未提供。
+状态：Sprint 5 开发，2026-10-26。PR#78已接受，`v0.1.0a1`技术预览[已发布](https://github.com/Darrenus/tickwitness/releases/tag/v0.1.0a1)；当前`0.2.0.dev0`新增只读[假设/场景契约校验](scenarios.md)，仍待本批PR验收。既有v2协议、预算、账务、导出和离线核验见[证据工作流](evidence-workflow.md)，发行版安装入口见[quickstart](quickstart.md)。v1仍不可执行，回放profile仅EUR/USD内置买单；任意源码、确认解封、场景执行、搜索判定和完整公共SDK尚未提供。
 
 ## 从干净 checkout 开始
 
@@ -14,9 +14,9 @@ make check
 make build
 ```
 
-PR#73–77已合并；当前预览工作位于`codex/sprint-04-preview-release`。`make sync`使用已提交的`uv.lock`，不静默更新版本；修改依赖时显式运行`uv lock`，把版本与锁文件一同提交。核心运行时无第三方依赖，开发工具在`dev`组；`nautilus`是显式可选extra，不能成为domain隐式依赖。开发与验收计算使用远端Linux或CI；本机仅作编辑与连接入口。GPU留待大规模工作负载测量后另做有门槛的扩展，不是预览安装要求。
+PR#73–78已合并；当前开发位于`codex/sprint-05-assumption-contracts`。`make sync`使用已提交的`uv.lock`，不静默更新版本；修改依赖时显式运行`uv lock`，把版本与锁文件一同提交。核心运行时无第三方依赖，开发工具在`dev`组；`nautilus`是显式可选extra，不能成为domain隐式依赖。开发与验收计算使用远端Linux或CI；本机仅作编辑与连接入口。GPU留待大规模工作负载测量后另做有门槛的扩展，不是预览安装要求。
 
-`make build`先同步锁定的开发工具，再使用该环境中的固定Hatchling构建wheel/sdist，不使用未固定的全局构建后端。`dist/`不提交Git。当前`0.1.0a1`是S4技术预览候选，不是稳定版；候选CI制品不等于已发布tag或PyPI包。预览制品工具拒绝混入旧版wheel/sdist，应在干净远端checkout中构建。发布和校验步骤见[预览说明](releases/0.1.0a1.md)。
+`make build`先同步锁定的开发工具，再使用该环境中的固定Hatchling构建wheel/sdist，不使用未固定的全局构建后端。`dist/`不提交Git。当前`0.2.0.dev0`是未发布开发构建；已发行的`0.1.0a1`保持原tag与原制品字节。制品工具拒绝混入旧版wheel/sdist，允许uv自动生成的非发行物`.gitignore`；应在干净远端checkout构建。已完成的发行记录与校验步骤见[预览说明](releases/0.1.0a1.md)。
 
 ## 当前检查
 
