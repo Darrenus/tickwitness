@@ -1,0 +1,2869 @@
+{
+  "cases": [
+    {
+      "case_id": "partial-separated",
+      "checks": {
+        "callback_cash_matches_margin_fees": true,
+        "callback_position_matches_observed_fills": true,
+        "exact_front_back_witnesses_verified": false,
+        "final_cash_matches_margin_fees": true,
+        "final_position_matches_observed_fills": true
+      },
+      "config": {
+        "account_type": "MARGIN",
+        "book_type": "L2_MBP",
+        "cancel_latency_ns": "0",
+        "insert_latency_ns": "0",
+        "liquidity_consumption": true,
+        "maker_fee_rate": "0.01",
+        "queue_position": true,
+        "taker_fee_rate": "0.02",
+        "trade_execution": true,
+        "use_message_queue": true
+      },
+      "decisions": [
+        {
+          "action": "submit",
+          "client_order_id": "O-20231114-221320-001-001-1",
+          "clock_ns": "1700000000000000000",
+          "order_type": "LIMIT"
+        }
+      ],
+      "execution_status": "EXECUTED",
+      "fills": [
+        {
+          "client_order_id": "O-20231114-221320-001-001-1",
+          "commission": "1.00 USD",
+          "commission_amount": "1",
+          "liquidity_side": "MAKER",
+          "price": "100.00",
+          "quantity": "1",
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000"
+        },
+        {
+          "client_order_id": "O-20231114-221320-001-001-1",
+          "commission": "1.00 USD",
+          "commission_amount": "1",
+          "liquidity_side": "MAKER",
+          "price": "100.00",
+          "quantity": "1",
+          "ts_event": "1700000002000000000",
+          "ts_init": "1700000002000000000"
+        }
+      ],
+      "final_state": {
+        "cash_free_usd": "9798",
+        "cash_locked_usd": "200",
+        "cash_total_usd": "9998",
+        "clock_ns": "1700000003000000000",
+        "net_position_from_cache": "2",
+        "observed_commission_usd": "2",
+        "observed_fill_qty": "2",
+        "orders": [
+          {
+            "client_order_id": "O-20231114-221320-001-001-1",
+            "filled_qty": "2",
+            "leaves_qty": "0",
+            "quantity": "2",
+            "status": "FILLED"
+          }
+        ]
+      },
+      "input_trace": [
+        {
+          "deltas": [
+            {
+              "action": "CLEAR",
+              "flags": 0,
+              "price": "0",
+              "sequence": 1,
+              "side": "NO_ORDER_SIDE",
+              "size": "0"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "100.00",
+              "sequence": 2,
+              "side": "BUY",
+              "size": "1"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "99.00",
+              "sequence": 3,
+              "side": "BUY",
+              "size": "10"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "103.00",
+              "sequence": 4,
+              "side": "SELL",
+              "size": "10"
+            },
+            {
+              "action": "ADD",
+              "flags": 160,
+              "price": "104.00",
+              "sequence": 5,
+              "side": "SELL",
+              "size": "10"
+            }
+          ],
+          "ts_event": "1700000000000000000",
+          "ts_init": "1700000000000000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 6,
+              "side": "BUY",
+              "size": "4"
+            }
+          ],
+          "ts_event": "1700000000500000000",
+          "ts_init": "1700000000500000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "aggressor_side": "SELLER",
+          "price": "100.00",
+          "size": "2",
+          "trade_id": "SOURCE-TRADE-1",
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000",
+          "type": "TradeTick"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 7,
+              "side": "BUY",
+              "size": "2"
+            }
+          ],
+          "ts_event": "1700000001000000001",
+          "ts_init": "1700000001000000001",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "aggressor_side": "SELLER",
+          "price": "100.00",
+          "size": "1",
+          "trade_id": "SOURCE-TRADE-2",
+          "ts_event": "1700000002000000000",
+          "ts_init": "1700000002000000000",
+          "type": "TradeTick"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 8,
+              "side": "BUY",
+              "size": "1"
+            }
+          ],
+          "ts_event": "1700000002000000001",
+          "ts_init": "1700000002000000001",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 9,
+              "side": "BUY",
+              "size": "1"
+            }
+          ],
+          "ts_event": "1700000003000000000",
+          "ts_init": "1700000003000000000",
+          "type": "OrderBookDeltas"
+        }
+      ],
+      "timeline": [
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderInitialized",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderSubmitted",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "2",
+                "quantity": "2",
+                "status": "SUBMITTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderAccepted",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9800",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "2",
+                "quantity": "2",
+                "status": "ACCEPTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000000500000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9800",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000500000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "2",
+                "quantity": "2",
+                "status": "ACCEPTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_filled",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PARTIALLY_FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PARTIALLY_FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "PositionOpened",
+          "stage": "on_position_opened",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PARTIALLY_FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "TradeTick",
+          "stage": "on_trade_tick",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PARTIALLY_FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000001",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000001",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PARTIALLY_FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000002000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_filled",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000002000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000002000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000002000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000002000000000",
+          "event_type": "PositionChanged",
+          "stage": "on_position_changed",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000002000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000002000000000",
+          "event_type": "TradeTick",
+          "stage": "on_trade_tick",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000002000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000002000000001",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000002000000001",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000003000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "on_stop",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "partial-same-time",
+      "checks": {
+        "callback_cash_matches_margin_fees": true,
+        "callback_position_matches_observed_fills": true,
+        "exact_front_back_witnesses_verified": false,
+        "final_cash_matches_margin_fees": true,
+        "final_position_matches_observed_fills": true
+      },
+      "config": {
+        "account_type": "MARGIN",
+        "book_type": "L2_MBP",
+        "cancel_latency_ns": "0",
+        "insert_latency_ns": "0",
+        "liquidity_consumption": true,
+        "maker_fee_rate": "0.01",
+        "queue_position": true,
+        "taker_fee_rate": "0.02",
+        "trade_execution": true,
+        "use_message_queue": true
+      },
+      "decisions": [
+        {
+          "action": "submit",
+          "client_order_id": "O-20231114-221320-001-001-1",
+          "clock_ns": "1700000000000000000",
+          "order_type": "LIMIT"
+        }
+      ],
+      "execution_status": "EXECUTED",
+      "fills": [
+        {
+          "client_order_id": "O-20231114-221320-001-001-1",
+          "commission": "1.00 USD",
+          "commission_amount": "1",
+          "liquidity_side": "MAKER",
+          "price": "100.00",
+          "quantity": "1",
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000"
+        },
+        {
+          "client_order_id": "O-20231114-221320-001-001-1",
+          "commission": "1.00 USD",
+          "commission_amount": "1",
+          "liquidity_side": "MAKER",
+          "price": "100.00",
+          "quantity": "1",
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000"
+        }
+      ],
+      "final_state": {
+        "cash_free_usd": "9798",
+        "cash_locked_usd": "200",
+        "cash_total_usd": "9998",
+        "clock_ns": "1700000003000000000",
+        "net_position_from_cache": "2",
+        "observed_commission_usd": "2",
+        "observed_fill_qty": "2",
+        "orders": [
+          {
+            "client_order_id": "O-20231114-221320-001-001-1",
+            "filled_qty": "2",
+            "leaves_qty": "0",
+            "quantity": "2",
+            "status": "FILLED"
+          }
+        ]
+      },
+      "input_trace": [
+        {
+          "deltas": [
+            {
+              "action": "CLEAR",
+              "flags": 0,
+              "price": "0",
+              "sequence": 1,
+              "side": "NO_ORDER_SIDE",
+              "size": "0"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "100.00",
+              "sequence": 2,
+              "side": "BUY",
+              "size": "1"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "99.00",
+              "sequence": 3,
+              "side": "BUY",
+              "size": "10"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "103.00",
+              "sequence": 4,
+              "side": "SELL",
+              "size": "10"
+            },
+            {
+              "action": "ADD",
+              "flags": 160,
+              "price": "104.00",
+              "sequence": 5,
+              "side": "SELL",
+              "size": "10"
+            }
+          ],
+          "ts_event": "1700000000000000000",
+          "ts_init": "1700000000000000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 6,
+              "side": "BUY",
+              "size": "4"
+            }
+          ],
+          "ts_event": "1700000000500000000",
+          "ts_init": "1700000000500000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "aggressor_side": "SELLER",
+          "price": "100.00",
+          "size": "2",
+          "trade_id": "SOURCE-TRADE-1",
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000",
+          "type": "TradeTick"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 7,
+              "side": "BUY",
+              "size": "2"
+            }
+          ],
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "aggressor_side": "SELLER",
+          "price": "100.00",
+          "size": "1",
+          "trade_id": "SOURCE-TRADE-2",
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000",
+          "type": "TradeTick"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 8,
+              "side": "BUY",
+              "size": "1"
+            }
+          ],
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 9,
+              "side": "BUY",
+              "size": "1"
+            }
+          ],
+          "ts_event": "1700000003000000000",
+          "ts_init": "1700000003000000000",
+          "type": "OrderBookDeltas"
+        }
+      ],
+      "timeline": [
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderInitialized",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderSubmitted",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "2",
+                "quantity": "2",
+                "status": "SUBMITTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderAccepted",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9800",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "2",
+                "quantity": "2",
+                "status": "ACCEPTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000000500000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9800",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000500000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "2",
+                "quantity": "2",
+                "status": "ACCEPTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_filled",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PARTIALLY_FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PARTIALLY_FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "PositionOpened",
+          "stage": "on_position_opened",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PARTIALLY_FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "TradeTick",
+          "stage": "on_trade_tick",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PARTIALLY_FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PARTIALLY_FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_filled",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "PositionChanged",
+          "stage": "on_position_changed",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "TradeTick",
+          "stage": "on_trade_tick",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000003000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "on_stop",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "cancel-zero-same-time",
+      "checks": {
+        "callback_cash_matches_margin_fees": true,
+        "callback_position_matches_observed_fills": true,
+        "exact_front_back_witnesses_verified": false,
+        "final_cash_matches_margin_fees": true,
+        "final_position_matches_observed_fills": true
+      },
+      "config": {
+        "account_type": "MARGIN",
+        "book_type": "L2_MBP",
+        "cancel_latency_ns": "0",
+        "insert_latency_ns": "0",
+        "liquidity_consumption": true,
+        "maker_fee_rate": "0.01",
+        "queue_position": true,
+        "taker_fee_rate": "0.02",
+        "trade_execution": true,
+        "use_message_queue": true
+      },
+      "decisions": [
+        {
+          "action": "submit",
+          "client_order_id": "O-20231114-221320-001-001-1",
+          "clock_ns": "1700000000000000000",
+          "order_type": "LIMIT"
+        },
+        {
+          "action": "cancel_after_first_fill",
+          "client_order_id": "O-20231114-221320-001-001-1",
+          "clock_ns": "1700000001000000000"
+        }
+      ],
+      "execution_status": "EXECUTED",
+      "fills": [
+        {
+          "client_order_id": "O-20231114-221320-001-001-1",
+          "commission": "1.00 USD",
+          "commission_amount": "1",
+          "liquidity_side": "MAKER",
+          "price": "100.00",
+          "quantity": "1",
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000"
+        }
+      ],
+      "final_state": {
+        "cash_free_usd": "9899",
+        "cash_locked_usd": "100",
+        "cash_total_usd": "9999",
+        "clock_ns": "1700000003000000000",
+        "net_position_from_cache": "1",
+        "observed_commission_usd": "1",
+        "observed_fill_qty": "1",
+        "orders": [
+          {
+            "client_order_id": "O-20231114-221320-001-001-1",
+            "filled_qty": "1",
+            "leaves_qty": "1",
+            "quantity": "2",
+            "status": "CANCELED"
+          }
+        ]
+      },
+      "input_trace": [
+        {
+          "deltas": [
+            {
+              "action": "CLEAR",
+              "flags": 0,
+              "price": "0",
+              "sequence": 1,
+              "side": "NO_ORDER_SIDE",
+              "size": "0"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "100.00",
+              "sequence": 2,
+              "side": "BUY",
+              "size": "1"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "99.00",
+              "sequence": 3,
+              "side": "BUY",
+              "size": "10"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "103.00",
+              "sequence": 4,
+              "side": "SELL",
+              "size": "10"
+            },
+            {
+              "action": "ADD",
+              "flags": 160,
+              "price": "104.00",
+              "sequence": 5,
+              "side": "SELL",
+              "size": "10"
+            }
+          ],
+          "ts_event": "1700000000000000000",
+          "ts_init": "1700000000000000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 6,
+              "side": "BUY",
+              "size": "4"
+            }
+          ],
+          "ts_event": "1700000000500000000",
+          "ts_init": "1700000000500000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "aggressor_side": "SELLER",
+          "price": "100.00",
+          "size": "2",
+          "trade_id": "SOURCE-TRADE-1",
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000",
+          "type": "TradeTick"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 7,
+              "side": "BUY",
+              "size": "2"
+            }
+          ],
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "aggressor_side": "SELLER",
+          "price": "100.00",
+          "size": "1",
+          "trade_id": "SOURCE-TRADE-2",
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000",
+          "type": "TradeTick"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 8,
+              "side": "BUY",
+              "size": "1"
+            }
+          ],
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 9,
+              "side": "BUY",
+              "size": "1"
+            }
+          ],
+          "ts_event": "1700000003000000000",
+          "ts_init": "1700000003000000000",
+          "type": "OrderBookDeltas"
+        }
+      ],
+      "timeline": [
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderInitialized",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderSubmitted",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "2",
+                "quantity": "2",
+                "status": "SUBMITTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderAccepted",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9800",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "2",
+                "quantity": "2",
+                "status": "ACCEPTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000000500000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9800",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000500000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "2",
+                "quantity": "2",
+                "status": "ACCEPTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_filled",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PARTIALLY_FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderPendingCancel",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PENDING_CANCEL"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PENDING_CANCEL"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "PositionOpened",
+          "stage": "on_position_opened",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PENDING_CANCEL"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "TradeTick",
+          "stage": "on_trade_tick",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PENDING_CANCEL"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderCanceled",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9899",
+            "cash_locked_usd": "100",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "CANCELED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9899",
+            "cash_locked_usd": "100",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "CANCELED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "TradeTick",
+          "stage": "on_trade_tick",
+          "state": {
+            "cash_free_usd": "9899",
+            "cash_locked_usd": "100",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "CANCELED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9899",
+            "cash_locked_usd": "100",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "CANCELED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000003000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9899",
+            "cash_locked_usd": "100",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "CANCELED"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "on_stop",
+          "state": {
+            "cash_free_usd": "9899",
+            "cash_locked_usd": "100",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "CANCELED"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "cancel-delayed-same-time",
+      "checks": {
+        "callback_cash_matches_margin_fees": true,
+        "callback_position_matches_observed_fills": true,
+        "exact_front_back_witnesses_verified": false,
+        "final_cash_matches_margin_fees": true,
+        "final_position_matches_observed_fills": true
+      },
+      "config": {
+        "account_type": "MARGIN",
+        "book_type": "L2_MBP",
+        "cancel_latency_ns": "1000000000",
+        "insert_latency_ns": "0",
+        "liquidity_consumption": true,
+        "maker_fee_rate": "0.01",
+        "queue_position": true,
+        "taker_fee_rate": "0.02",
+        "trade_execution": true,
+        "use_message_queue": true
+      },
+      "decisions": [
+        {
+          "action": "submit",
+          "client_order_id": "O-20231114-221320-001-001-1",
+          "clock_ns": "1700000000000000000",
+          "order_type": "LIMIT"
+        },
+        {
+          "action": "cancel_after_first_fill",
+          "client_order_id": "O-20231114-221320-001-001-1",
+          "clock_ns": "1700000001000000000"
+        }
+      ],
+      "execution_status": "EXECUTED",
+      "fills": [
+        {
+          "client_order_id": "O-20231114-221320-001-001-1",
+          "commission": "1.00 USD",
+          "commission_amount": "1",
+          "liquidity_side": "MAKER",
+          "price": "100.00",
+          "quantity": "1",
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000"
+        },
+        {
+          "client_order_id": "O-20231114-221320-001-001-1",
+          "commission": "1.00 USD",
+          "commission_amount": "1",
+          "liquidity_side": "MAKER",
+          "price": "100.00",
+          "quantity": "1",
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000"
+        }
+      ],
+      "final_state": {
+        "cash_free_usd": "9798",
+        "cash_locked_usd": "200",
+        "cash_total_usd": "9998",
+        "clock_ns": "1700000003000000000",
+        "net_position_from_cache": "2",
+        "observed_commission_usd": "2",
+        "observed_fill_qty": "2",
+        "orders": [
+          {
+            "client_order_id": "O-20231114-221320-001-001-1",
+            "filled_qty": "2",
+            "leaves_qty": "0",
+            "quantity": "2",
+            "status": "FILLED"
+          }
+        ]
+      },
+      "input_trace": [
+        {
+          "deltas": [
+            {
+              "action": "CLEAR",
+              "flags": 0,
+              "price": "0",
+              "sequence": 1,
+              "side": "NO_ORDER_SIDE",
+              "size": "0"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "100.00",
+              "sequence": 2,
+              "side": "BUY",
+              "size": "1"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "99.00",
+              "sequence": 3,
+              "side": "BUY",
+              "size": "10"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "103.00",
+              "sequence": 4,
+              "side": "SELL",
+              "size": "10"
+            },
+            {
+              "action": "ADD",
+              "flags": 160,
+              "price": "104.00",
+              "sequence": 5,
+              "side": "SELL",
+              "size": "10"
+            }
+          ],
+          "ts_event": "1700000000000000000",
+          "ts_init": "1700000000000000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 6,
+              "side": "BUY",
+              "size": "4"
+            }
+          ],
+          "ts_event": "1700000000500000000",
+          "ts_init": "1700000000500000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "aggressor_side": "SELLER",
+          "price": "100.00",
+          "size": "2",
+          "trade_id": "SOURCE-TRADE-1",
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000",
+          "type": "TradeTick"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 7,
+              "side": "BUY",
+              "size": "2"
+            }
+          ],
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "aggressor_side": "SELLER",
+          "price": "100.00",
+          "size": "1",
+          "trade_id": "SOURCE-TRADE-2",
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000",
+          "type": "TradeTick"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 8,
+              "side": "BUY",
+              "size": "1"
+            }
+          ],
+          "ts_event": "1700000001000000000",
+          "ts_init": "1700000001000000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 9,
+              "side": "BUY",
+              "size": "1"
+            }
+          ],
+          "ts_event": "1700000003000000000",
+          "ts_init": "1700000003000000000",
+          "type": "OrderBookDeltas"
+        }
+      ],
+      "timeline": [
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderInitialized",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderSubmitted",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "2",
+                "quantity": "2",
+                "status": "SUBMITTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderAccepted",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9800",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "2",
+                "quantity": "2",
+                "status": "ACCEPTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000000500000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9800",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000500000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "2",
+                "quantity": "2",
+                "status": "ACCEPTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_filled",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PARTIALLY_FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderPendingCancel",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PENDING_CANCEL"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PENDING_CANCEL"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "PositionOpened",
+          "stage": "on_position_opened",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PENDING_CANCEL"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "TradeTick",
+          "stage": "on_trade_tick",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PENDING_CANCEL"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9699",
+            "cash_locked_usd": "300",
+            "cash_total_usd": "9999",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "1",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "1",
+                "quantity": "2",
+                "status": "PENDING_CANCEL"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_filled",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "PositionChanged",
+          "stage": "on_position_changed",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "TradeTick",
+          "stage": "on_trade_tick",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000001000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000001000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000003000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000003000000000",
+          "event_type": "OrderCancelRejected",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "on_stop",
+          "state": {
+            "cash_free_usd": "9798",
+            "cash_locked_usd": "200",
+            "cash_total_usd": "9998",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "2",
+            "observed_commission_usd": "2",
+            "observed_fill_qty": "2",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221320-001-001-1",
+                "filled_qty": "2",
+                "leaves_qty": "0",
+                "quantity": "2",
+                "status": "FILLED"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "eof-no-future-data",
+      "checks": {
+        "callback_cash_matches_margin_fees": true,
+        "callback_position_matches_observed_fills": true,
+        "exact_front_back_witnesses_verified": false,
+        "final_cash_matches_margin_fees": true,
+        "final_position_matches_observed_fills": true
+      },
+      "config": {
+        "account_type": "MARGIN",
+        "book_type": "L2_MBP",
+        "cancel_latency_ns": "0",
+        "insert_latency_ns": "2000000000",
+        "liquidity_consumption": true,
+        "maker_fee_rate": "0.01",
+        "queue_position": true,
+        "taker_fee_rate": "0.02",
+        "trade_execution": true,
+        "use_message_queue": true
+      },
+      "decisions": [
+        {
+          "action": "submit",
+          "client_order_id": "O-20231114-221323-001-001-1",
+          "clock_ns": "1700000003000000000",
+          "order_type": "MARKET"
+        }
+      ],
+      "execution_status": "EXECUTED",
+      "fills": [],
+      "final_state": {
+        "cash_free_usd": "10000",
+        "cash_locked_usd": "0",
+        "cash_total_usd": "10000",
+        "clock_ns": "1700000003000000000",
+        "net_position_from_cache": "0",
+        "observed_commission_usd": "0",
+        "observed_fill_qty": "0",
+        "orders": [
+          {
+            "client_order_id": "O-20231114-221323-001-001-1",
+            "filled_qty": "0",
+            "leaves_qty": "1",
+            "quantity": "1",
+            "status": "SUBMITTED"
+          }
+        ]
+      },
+      "input_trace": [
+        {
+          "deltas": [
+            {
+              "action": "CLEAR",
+              "flags": 0,
+              "price": "0",
+              "sequence": 1,
+              "side": "NO_ORDER_SIDE",
+              "size": "0"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "100.00",
+              "sequence": 2,
+              "side": "BUY",
+              "size": "1"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "99.00",
+              "sequence": 3,
+              "side": "BUY",
+              "size": "10"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "103.00",
+              "sequence": 4,
+              "side": "SELL",
+              "size": "10"
+            },
+            {
+              "action": "ADD",
+              "flags": 160,
+              "price": "104.00",
+              "sequence": 5,
+              "side": "SELL",
+              "size": "10"
+            }
+          ],
+          "ts_event": "1700000000000000000",
+          "ts_init": "1700000000000000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 6,
+              "side": "BUY",
+              "size": "1"
+            }
+          ],
+          "ts_event": "1700000003000000000",
+          "ts_init": "1700000003000000000",
+          "type": "OrderBookDeltas"
+        }
+      ],
+      "timeline": [
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000003000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000003000000000",
+          "event_type": "OrderInitialized",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000003000000000",
+          "event_type": "OrderSubmitted",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221323-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "1",
+                "quantity": "1",
+                "status": "SUBMITTED"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "on_stop",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221323-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "1",
+                "quantity": "1",
+                "status": "SUBMITTED"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "eof-with-later-data",
+      "checks": {
+        "callback_cash_matches_margin_fees": true,
+        "callback_position_matches_observed_fills": true,
+        "exact_front_back_witnesses_verified": false,
+        "final_cash_matches_margin_fees": true,
+        "final_position_matches_observed_fills": true
+      },
+      "config": {
+        "account_type": "MARGIN",
+        "book_type": "L2_MBP",
+        "cancel_latency_ns": "0",
+        "insert_latency_ns": "2000000000",
+        "liquidity_consumption": true,
+        "maker_fee_rate": "0.01",
+        "queue_position": true,
+        "taker_fee_rate": "0.02",
+        "trade_execution": true,
+        "use_message_queue": true
+      },
+      "decisions": [
+        {
+          "action": "submit",
+          "client_order_id": "O-20231114-221323-001-001-1",
+          "clock_ns": "1700000003000000000",
+          "order_type": "MARKET"
+        }
+      ],
+      "execution_status": "EXECUTED",
+      "fills": [
+        {
+          "client_order_id": "O-20231114-221323-001-001-1",
+          "commission": "2.06 USD",
+          "commission_amount": "2.06",
+          "liquidity_side": "TAKER",
+          "price": "103.00",
+          "quantity": "1",
+          "ts_event": "1700000006000000000",
+          "ts_init": "1700000006000000000"
+        }
+      ],
+      "final_state": {
+        "cash_free_usd": "9894.94",
+        "cash_locked_usd": "103",
+        "cash_total_usd": "9997.94",
+        "clock_ns": "1700000006000000000",
+        "net_position_from_cache": "1",
+        "observed_commission_usd": "2.06",
+        "observed_fill_qty": "1",
+        "orders": [
+          {
+            "client_order_id": "O-20231114-221323-001-001-1",
+            "filled_qty": "1",
+            "leaves_qty": "0",
+            "quantity": "1",
+            "status": "FILLED"
+          }
+        ]
+      },
+      "input_trace": [
+        {
+          "deltas": [
+            {
+              "action": "CLEAR",
+              "flags": 0,
+              "price": "0",
+              "sequence": 1,
+              "side": "NO_ORDER_SIDE",
+              "size": "0"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "100.00",
+              "sequence": 2,
+              "side": "BUY",
+              "size": "1"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "99.00",
+              "sequence": 3,
+              "side": "BUY",
+              "size": "10"
+            },
+            {
+              "action": "ADD",
+              "flags": 32,
+              "price": "103.00",
+              "sequence": 4,
+              "side": "SELL",
+              "size": "10"
+            },
+            {
+              "action": "ADD",
+              "flags": 160,
+              "price": "104.00",
+              "sequence": 5,
+              "side": "SELL",
+              "size": "10"
+            }
+          ],
+          "ts_event": "1700000000000000000",
+          "ts_init": "1700000000000000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 6,
+              "side": "BUY",
+              "size": "1"
+            }
+          ],
+          "ts_event": "1700000003000000000",
+          "ts_init": "1700000003000000000",
+          "type": "OrderBookDeltas"
+        },
+        {
+          "deltas": [
+            {
+              "action": "UPDATE",
+              "flags": 128,
+              "price": "100.00",
+              "sequence": 7,
+              "side": "BUY",
+              "size": "1"
+            }
+          ],
+          "ts_event": "1700000006000000000",
+          "ts_init": "1700000006000000000",
+          "type": "OrderBookDeltas"
+        }
+      ],
+      "timeline": [
+        {
+          "event_ts_ns": "1700000000000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000000000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000003000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000003000000000",
+          "event_type": "OrderInitialized",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": []
+          }
+        },
+        {
+          "event_ts_ns": "1700000003000000000",
+          "event_type": "OrderSubmitted",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000003000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221323-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "1",
+                "quantity": "1",
+                "status": "SUBMITTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000006000000000",
+          "event_type": "OrderBookDeltas",
+          "stage": "on_order_book_deltas",
+          "state": {
+            "cash_free_usd": "10000",
+            "cash_locked_usd": "0",
+            "cash_total_usd": "10000",
+            "clock_ns": "1700000006000000000",
+            "net_position_from_cache": "0",
+            "observed_commission_usd": "0",
+            "observed_fill_qty": "0",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221323-001-001-1",
+                "filled_qty": "0",
+                "leaves_qty": "1",
+                "quantity": "1",
+                "status": "SUBMITTED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000006000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_filled",
+          "state": {
+            "cash_free_usd": "9894.94",
+            "cash_locked_usd": "103",
+            "cash_total_usd": "9997.94",
+            "clock_ns": "1700000006000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "2.06",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221323-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "0",
+                "quantity": "1",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000006000000000",
+          "event_type": "OrderFilled",
+          "stage": "on_order_event",
+          "state": {
+            "cash_free_usd": "9894.94",
+            "cash_locked_usd": "103",
+            "cash_total_usd": "9997.94",
+            "clock_ns": "1700000006000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "2.06",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221323-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "0",
+                "quantity": "1",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "event_ts_ns": "1700000006000000000",
+          "event_type": "PositionOpened",
+          "stage": "on_position_opened",
+          "state": {
+            "cash_free_usd": "9894.94",
+            "cash_locked_usd": "103",
+            "cash_total_usd": "9997.94",
+            "clock_ns": "1700000006000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "2.06",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221323-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "0",
+                "quantity": "1",
+                "status": "FILLED"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "on_stop",
+          "state": {
+            "cash_free_usd": "9894.94",
+            "cash_locked_usd": "103",
+            "cash_total_usd": "9997.94",
+            "clock_ns": "1700000006000000000",
+            "net_position_from_cache": "1",
+            "observed_commission_usd": "2.06",
+            "observed_fill_qty": "1",
+            "orders": [
+              {
+                "client_order_id": "O-20231114-221323-001-001-1",
+                "filled_qty": "1",
+                "leaves_qty": "0",
+                "quantity": "1",
+                "status": "FILLED"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "engine_version": "1.231.0",
+  "environment": {
+    "package_license_expression": null,
+    "platform": "macOS-27.0.1-arm64-arm-64bit",
+    "python": "3.12.14",
+    "source_hashes": {
+      "backtest/engine.pyx": "eb404e3558cf00ab9a13e3a1c67b05aab1d1d02647ac67409faa8350d33a1fbb",
+      "model/data.pyx": "0d3734c84e540d059a6274e0a6657d86add4fd63e310af5728bc3d10a9b0fb12"
+    }
+  },
+  "limits": [
+    "No exact front/back cancellation-world certificate.",
+    "Margin cash is not debited by opening notional; fees are separate from margin lock.",
+    "No third-party source or binary modified; no upstream reports sent."
+  ],
+  "normalization": [
+    "Random event UUIDs, engine run/instance IDs, wall-clock time omitted.",
+    "Synthetic event times, event ordering, prices, quantities and cash preserved."
+  ],
+  "schema": "nautilus-v1-l2-selection-v1",
+  "scope": "Original synthetic L2 book deltas plus TradeTick; no quotes, v2 API or live trading.",
+  "script_sha256": "539a400b6ccf613d2034e0eb7f2ada26e9f919de0302e0070025b76d1a669712"
+}

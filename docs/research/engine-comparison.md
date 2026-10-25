@@ -2,6 +2,8 @@
 
 日期：2026-10-25（Asia/Singapore）。状态：**S1有限spike证据已形成，待维护者审阅；S2默认引擎尚未选定。** 试验仅使用原创合成输入与可信策略，没有访问交易账户或执行真实交易。
 
+后续更新：本页保留S1比较时的状态与证据。S1现已通过PR#73接受；S2追加L2/partial/EOF实验后的有限选择见[选型记录](engine-selection.md)与ADR-008，当前正式adapter仍未实现。
+
 更新：S1证据随[PR#73](https://github.com/Darrenus/tickwitness/pull/73)获owner接受并合并。S2的[HFT选型补测](hftbacktest-selection-gates.md)发现部分成交账务不一致、同刻fill响应合并，并更正旧EOF推断；默认引擎仍未锁定。
 
 两候选分别运行自己的最小可核算案例，并在各自环境比较两次语义trace。它们不是相同输入、策略或执行语义，**不能横向比较收益、吞吐或准确性**。所有合成损益仅验证可调用能力和账务，不支持alpha或真实市场结论。
