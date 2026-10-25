@@ -62,10 +62,13 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: make build
-      - name: Install wheel in a separate environment and working directory
+      - name: Verify the installed data-evidence workflow outside the source directory
         run: |
           uv venv /tmp/tickwitness-wheel --python 3.12
           uv pip install --python /tmp/tickwitness-wheel/bin/python --no-index --no-deps dist/*.whl
+          python3 scripts/smoke_distribution.py --python /tmp/tickwitness-wheel/bin/python
+      - name: Install wheel in a separate environment and working directory
+        run: |
           cd /tmp
           /tmp/tickwitness-wheel/bin/tickwitness --version
           /tmp/tickwitness-wheel/bin/python -m tickwitness --help
