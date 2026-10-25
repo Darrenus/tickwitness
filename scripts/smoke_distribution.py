@@ -4,6 +4,7 @@
 import argparse
 import json
 import subprocess
+import tomllib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -15,8 +16,20 @@ def main() -> None:
     arguments = parser.parse_args()
     # Keep the venv executable path: resolving its symlink would select base Python.
     interpreter = str(arguments.python.absolute())
+    project = tomllib.loads(
+        (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]
     with TemporaryDirectory(prefix="tickwitness-installed-") as temporary:
         directory = Path(temporary)
+        installed_version = subprocess.run(
+            [interpreter, "-I", "-m", "tickwitness", "--version"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if installed_version.stdout.strip() != f"tickwitness {project['version']}":
+            raise RuntimeError("Installed CLI version differs from the source artifact")
         sample = {
             "schema_version": 1,
             "type": "snapshot",

@@ -1,13 +1,13 @@
 # Sprint 4 证据闭环工程状态
 
-更新：2026-10-26（Asia/Singapore）。PR#76已由owner合并，S03-01/03已接受。当前补齐S03-02在明确受限profile内的估值，并实现S04-01/02纵向链路；本批待PR验收。真实访谈仍为0，S02-03完整family/trial/exposure生命周期、S6精确队列见证和S7搜索判定继续开放。
+更新：2026-10-26（Asia/Singapore）。PR#77已由owner合并，S03-02与S04-01/02在其明确受限profile内已接受。本批细化S04-03：准备`0.1.0a1`技术预览候选、支持矩阵、干净安装与可校验制品；候选仍待owner审阅，不把版本更新当作已发行。真实访谈仍为0，S02-03完整family/trial/exposure生命周期、S6精确队列见证和S7搜索判定继续开放。
 
 | 故事 | 本批交付 | 剩余范围 |
 | --- | --- | --- |
 | S03-02 / Issue#8 | 源输入/订单/fill/缓存账户独立审计、费用数值模型、最后观测bid估值与scoped claim observation | 只EUR/USD做多单限价、trade触发maker；无跨资产/平仓/通用投资组合收益评价 |
 | S04-01 / Issue#10 | v2 freeze-experiment→预算预留→replay-protocol→export-evidence→verify-evidence；所有CLI调用共享application | 不执行任意策略，不把v1升级为可执行；完整公共SDK/HTTP/MCP/UI后续提供 |
 | S04-02 / Issue#11 | 固定8-role目录包、原子no-replace发布、安全quota/no-follow读取、迁移后纯核心独立复算 | 非压缩包/签名系统，不独立重跑native或认证真实市场撮合 |
-| S04-03 / Issue#12 | 保留为待细化发布工作，当前构建0.0.2.dev0 | 尚未发布0.1、PyPI或release tag；支持/维护与预览发布清单另验收 |
+| S04-03 / Issue#12 | 本批准备0.1.0a1候选打包、checksum/来源manifest、支持矩阵、安装与维护说明 | 候选CI和owner验收随PR记录；实际GitHub prerelease/tag尚未发布，不发布PyPI，不代表稳定版或整个Sprint的外部验证已完成 |
 
 完整命令见[证据工作流](../evidence-workflow.md)，严格schema见[v2协议](../contracts/executable-protocol-v2.md)、[估值](../contracts/evaluation-v1.md)和[bundle](../contracts/evidence-bundle-v1.md)。[原创native生成样例](../../examples/evidence-demo/manifest.json)可用核心安装离线验证；确认行情不在包中。
 

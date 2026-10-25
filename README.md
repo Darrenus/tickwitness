@@ -3,9 +3,11 @@
 [![Documentation](https://github.com/Darrenus/tickwitness/actions/workflows/docs.yml/badge.svg)](https://github.com/Darrenus/tickwitness/actions/workflows/docs.yml)
 [![Engineering](https://github.com/Darrenus/tickwitness/actions/workflows/engineering.yml/badge.svg)](https://github.com/Darrenus/tickwitness/actions/workflows/engineering.yml)
 
-Find reproducible counterexamples to quantitative research claims under explicit data and execution assumptions.
+Freeze a scoped quantitative research experiment, audit its replay accounting, and export independently verifiable evidence.
 
-**Status: Sprint 4 evidence workflow development, 2026-10-26.** PRs #74–76 established data sealing, immutable declarations and bounded native replay. This branch adds a separate executable v2 protocol, consumed attempt budgets, exact accounting/fee audit, scoped bid-marked claim observations, portable evidence export and offline verification. The profile remains EUR/USD and one built-in limit buy; arbitrary strategy source, confirmation unsealing and search verdicts are unsupported. Version `0.0.2.dev0` is an internal build, not a 0.1 release. Real interviews remain outstanding; consistency checks do not certify actual market fills.
+**Status: `0.1.0a1` technical preview candidate, 2026-10-26.** PR #77 established the executable v2 protocol, consumed attempt budgets, accounting/fee audit, scoped bid-marked claim observations, portable evidence export and offline verification. This candidate packages that limited workflow; a version number alone does not mean a GitHub release or PyPI publication exists. The supported profile is EUR/USD and one built-in limit buy. Arbitrary strategy source, confirmation unsealing and counterexample search remain unsupported. User interviews and independent human domain review remain outstanding; consistency checks do not certify actual market fills.
+
+Start with the [quickstart](docs/quickstart.md), [task-specific support matrix](docs/support.md), and [preview notes](docs/releases/0.1.0a1.md). The core install can verify the supplied synthetic evidence without an engine or GPU. Native replay is a separate optional installation. Run compute in a remote Linux environment or CI; Colab is suitable for temporary qualification, while persistent collection and long-lived services require their own deployment validation.
 
 TickWitness 将研究声明、行情证据、执行假设和反例联系起来，帮助研究员回答：**什么有依据的假设变化会使结论翻转，如何复现，下一步需要采集什么证据？**
 
@@ -15,6 +17,9 @@ The initial product is a local-first research verification toolkit for quantitat
 
 | Document | Purpose |
 | --- | --- |
+| [Quickstart](docs/quickstart.md) | Clean installation, synthetic replay and portable offline verification |
+| [Preview support](docs/support.md) | Tested environments, trust boundaries, compatibility and maintenance scope |
+| [0.1.0a1 preview notes](docs/releases/0.1.0a1.md) | Candidate artifacts, release gates and known limitations |
 | [Development entry point](docs/development.md) | Locked environment, local checks, package build and current limitations |
 | [Data import guide](docs/data-import.md) | Executable import/inspect workflow, format, limits, and trust boundaries |
 | [Frozen protocol guide](docs/research-protocols.md) | Bind actual data/source, seal a declaration, read development data and verify confirmation denial |

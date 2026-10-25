@@ -1,6 +1,6 @@
 # 从冻结协议到可迁移证据
 
-本批把`import → freeze → replay → export → verify`接为同一application链路。版本为`0.0.2.dev0`，仍是内部开发构建；未发布PyPI或0.1预览。首个支持范围是EUR/USD、内置post-only限价买单、开发集baseline与最后观测bid估值，不执行任意Python策略，不解封确认集，也不进行反例搜索或全市场收益认证。
+`import → freeze → replay → export → verify`已接为同一application链路，并由owner合并PR#77。当前`0.1.0a1`为技术预览候选；实际制品和发布状态见[预览说明](releases/0.1.0a1.md)，不假定已存在PyPI包或release tag。首个支持范围是EUR/USD、内置post-only限价买单、开发集baseline与最后观测bid估值，不执行任意Python策略，不解封确认集，也不进行反例搜索或全市场收益认证。先安装请看[quickstart](quickstart.md)，环境边界见[支持矩阵](support.md)。
 
 ## 先离线验证随附样例
 
@@ -16,6 +16,7 @@ uv run --locked tickwitness verify-evidence examples/evidence-demo
 安装[开发入口](development.md)所列uv与Python，先clone仓库。以下从仓库根运行，仅在新建的`.local`下产生私有运行数据：
 
 ```sh
+set -eu
 uv sync --locked --extra nautilus
 TW_DEV=$(uv run --locked --extra nautilus tickwitness import-events replay-partials.jsonl --input-root examples --store .local/data --id-only)
 TW_CONFIRM=$(uv run --locked --extra nautilus tickwitness import-events replay-confirmation.jsonl --input-root examples --store .local/data --id-only)
