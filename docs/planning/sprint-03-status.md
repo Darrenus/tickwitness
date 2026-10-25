@@ -1,8 +1,8 @@
 # Sprint 3 受限回放工程状态
 
-更新：2026-10-26（Asia/Singapore）。PR#75已合并，S02-02有限选型已接受；S02-03冻结技术部分已接受，但真实访谈仍为0，完整trial生命周期未完成。当前推进可独立验证的引擎验收切片，不宣称S2/S3整体或市场验证已完成。
+更新：2026-10-26（Asia/Singapore）。PR#76已由owner合并，S03-01/03已接受；下表保留S3交付范围，S03-02估值补充见[Sprint4状态](sprint-04-status.md)。S02-03真实访谈仍为0，完整family/trial生命周期未完成，不宣称整体市场验证完成。
 
-| 故事 | 本批实际交付，待PR验收 | 剩余边界 |
+| 故事 | PR#76已接受的交付 | 剩余边界 |
 | --- | --- | --- |
 | S03-01 / Issue#7 | 原生无关ReplayPort/不可变DTO/strict schema、盘口与时钟预检、Nautilus1.231.0 adapter、显式能力声明、固定单位/排序和结构化错误；CLI经监督worker调用 | 只支持EUR/USD内置单限价买单；任意策略、其他资产/账户、checkpoint和强隔离不在本批 |
 | S03-02 / Issue#8 | 输入→决策→订单/命令receipt→两次partial fill→真实缓存持仓/现金/费用；同刻源引用与首次决策分歧可定位 | 尚无通用mark/realized/unrealized净收益评价合同，不能以账务快照替代研究命题评价，故事继续开放 |

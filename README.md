@@ -5,7 +5,7 @@
 
 Find reproducible counterexamples to quantitative research claims under explicit data and execution assumptions.
 
-**Status: Sprint 3 bounded replay development, 2026-10-26.** Data evidence and frozen declarations were accepted in PRs #74–75. This branch adds a native-free ReplayPort, the optional NautilusTrader 1.231.0 adapter, supervised built-in L2 replay, trace comparison, and a ten-run synthetic baseline. The first profile supports EUR/USD and one limit buy; it does not execute frozen research protocols or arbitrary strategy source. Claim evaluation, search, the research SDK, API, MCP server, and UI remain future work. Real interviews remain outstanding; synthetic timings are not product throughput or adoption results.
+**Status: Sprint 4 evidence workflow development, 2026-10-26.** PRs #74–76 established data sealing, immutable declarations and bounded native replay. This branch adds a separate executable v2 protocol, consumed attempt budgets, exact accounting/fee audit, scoped bid-marked claim observations, portable evidence export and offline verification. The profile remains EUR/USD and one built-in limit buy; arbitrary strategy source, confirmation unsealing and search verdicts are unsupported. Version `0.0.2.dev0` is an internal build, not a 0.1 release. Real interviews remain outstanding; consistency checks do not certify actual market fills.
 
 TickWitness 将研究声明、行情证据、执行假设和反例联系起来，帮助研究员回答：**什么有依据的假设变化会使结论翻转，如何复现，下一步需要采集什么证据？**
 
@@ -18,12 +18,14 @@ The initial product is a local-first research verification toolkit for quantitat
 | [Development entry point](docs/development.md) | Locked environment, local checks, package build and current limitations |
 | [Data import guide](docs/data-import.md) | Executable import/inspect workflow, format, limits, and trust boundaries |
 | [Frozen protocol guide](docs/research-protocols.md) | Bind actual data/source, seal a declaration, read development data and verify confirmation denial |
+| [Complete evidence workflow](docs/evidence-workflow.md) | Run import → v2 freeze → budgeted replay → export → portable offline verify |
 | [Bounded replay guide](docs/replay.md) | Install the optional engine, qualify a sealed dataset, inspect trace/completeness and compare results |
 | [Replay baseline](docs/research/sprint-03-replay-baseline.md) | Ten independent runs, original timings, golden trace and controlled input difference |
 | [Engine selection](docs/research/engine-selection.md) | Limited integration decision, partial-fill evidence, timing and queue restrictions |
 | [Sprint 1 status](docs/planning/sprint-01-status.md) | Evidence-based progress and remaining external dependencies |
 | [Sprint 2 status](docs/planning/sprint-02-status.md) | Implemented data scope and unresolved research/selection gates |
 | [Sprint 3 status](docs/planning/sprint-03-status.md) | Adapter, trace and baseline progress with remaining research execution gates |
+| [Sprint 4 status](docs/planning/sprint-04-status.md) | Accounting audit, executable protocol, evidence packaging and remaining preview gates |
 | [Engine feasibility comparison](docs/research/engine-comparison.md) | Version-fixed synthetic spike evidence and unresolved selection gates |
 | [Product strategy](docs/product/product-strategy.md) | Users, workflows, scope, differentiation, product outcomes |
 | [Discovery and adoption](docs/product/discovery-and-adoption.md) | User validation, experiments, ecosystem, adoption gates |
@@ -59,7 +61,7 @@ To export the planning source as machine-readable JSON without modifying GitHub:
 uv run --locked python scripts/export_backlog.py
 ```
 
-The installed CLI provides data import/inspection, protocol freezing/inspection, development-only protocol reads, `replay-dataset`, and `compare-replays`. The replay guide uses the explicit `nautilus` extra and original synthetic fixtures. Frozen declarations remain `execution_ready=false`; direct dataset replay is a trusted local engine-qualification entry, not an Agent holdout grant. Open orders and pending commands remain visibly incomplete. Research protocol execution and verdicts arrive in later Sprints; the remaining architecture is a proposed target.
+The CLI now includes `freeze-experiment`, `replay-protocol`, `inspect-attempt`, `inspect-run`, `export-evidence`, and `verify-evidence`, alongside the earlier data/protocol/replay commands. V1 declarations remain non-executable; v2 binds the supported built-in profile and development-only policy. Failed or interrupted attempts consume budget, and ambiguous fee models produce no claim truth. The verifier recomputes source bindings, accounting and valuation without a native engine, while explicitly stating that it has not replayed matching, authenticated an author or audited a complete historical trial ledger. The remaining architecture is a proposed target.
 
 ## Contribute
 

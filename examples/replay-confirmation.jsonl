@@ -1,0 +1,1 @@
+{"asks":[[104,10],[105,10]],"bids":[[101,5],[100,10]],"capture_seq":100,"event_time_ns":1700000010000000000,"instrument":"EUR-USD","last_sequence":100,"receive_time_ns":1700000010000000100,"schema_version":1,"session":"replay-fixture-v1","source":"synthetic","type":"snapshot"}
