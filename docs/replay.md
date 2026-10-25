@@ -67,4 +67,4 @@ comparison先报告engine/version/semantic、环境、spec和dataset/hash的条�
 
 同fixture十次独立进程的原始耗时、golden语义输出和已知输入变化控制见[S3回放基线](research/sprint-03-replay-baseline.md)。重复一致只说明当前条件下的已测fixture；原始run包含预检、初始化/懒加载等成本，不是产品吞吐、P99或纯撮合性能。
 
-原生集成由独立的Ubuntu24.04/macOS15、CPython3.12 CI检查；核心仍在Python3.12–3.14矩阵运行。其他native平台/版本仅在相同契约通过后扩展。源码包包含原创examples，wheel安装后的CLI由独立工作目录实跑验证。引擎继续保留LGPL-3.0-or-later许可，项目原创代码Apache-2.0；optional不代表免除分发义务。
+原生集成由独立的Ubuntu24.04/macOS26 arm64、CPython3.12 CI检查；核心仍在Ubuntu24.04/macOS15与Python3.12–3.14矩阵运行。固定native wheel要求macOS26+ arm64；macOS15不在此profile支持范围，uv配置禁止该依赖回退源码构建。其他native平台/版本仅在相同契约通过后扩展。源码包包含原创examples，wheel安装后的CLI由独立工作目录实跑验证。引擎继续保留LGPL-3.0-or-later许可，项目原创代码Apache-2.0；optional不代表免除分发义务。

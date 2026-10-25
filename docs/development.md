@@ -48,7 +48,9 @@ uv run --locked --extra nautilus pytest
 
 ## CI与打包边界
 
-`Engineering`工作流执行同一Make入口，核心矩阵为Ubuntu24.04/macOS15与Python3.12/3.13/3.14；缺native时显式跳过原生case，不把skip当引擎通过。独立native矩阵只含这两个OS的Python3.12，安装固定extra运行全部测试，再用wheel替换editable包，以独立目录、Python`-I`验证真实worker/CLI。聚合engineering检查要求native矩阵也通过。
+`Engineering`工作流执行同一Make入口，核心矩阵为Ubuntu24.04/macOS15与Python3.12/3.13/3.14；缺native时显式跳过原生case，不把skip当引擎通过。独立native矩阵为Ubuntu24.04/macOS26的Python3.12，安装固定extra运行全部测试，再用wheel替换editable包，以独立目录、Python`-I`验证真实worker/CLI。聚合engineering检查要求native矩阵也通过。
+
+固定Nautilus wheel的macOS标签是`macosx_26_0_arm64`，不能在macOS15当作受支持binary安装；原生CI初次使用macOS15时因退回上游sdist构建而失败。项目uv配置明确`no-build-package=["nautilus-trader"]`，缺兼容wheel立即拒绝，避免用户意外进入未验证的Rust/Cython源码构建。核心包不受此native平台限制；[runner平台说明](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 
 distribution作业从sdist构建wheel，在新环境/不同目录离线安装，验证原有数据与协议链路及核心安装下明确的engine_unavailable；native作业则验证真正L2部分成交与监督进程输出。源码包包含原创examples供测试，wheel不包含native二进制或第三方源码。
 
