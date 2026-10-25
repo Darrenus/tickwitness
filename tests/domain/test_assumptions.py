@@ -229,8 +229,9 @@ def test_specs_and_validated_views_are_detached_and_frozen() -> None:
     assert assumptions.document["bindings"]["protocol_id"] == protocol.protocol_id
     with pytest.raises(FrozenInstanceError):
         assumptions.assumption_id = "f" * 64
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, TypeError), match="execution_approved"):
         replace(validated, execution_approved=True)
+    assert validated.execution_approved is False
     with pytest.raises(AssumptionValidationError, match="identity mismatch"):
         replace(assumptions, assumption_id="f" * 64)
     with pytest.raises(AssumptionValidationError, match="identity mismatch"):
