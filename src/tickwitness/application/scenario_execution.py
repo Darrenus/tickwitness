@@ -20,7 +20,6 @@ from tickwitness.domain.evidence.run_records import (
     canonical,
     digest,
     identity,
-    parse,
 )
 from tickwitness.domain.evidence.scenario_records import (
     ScenarioEvaluation,
@@ -36,7 +35,7 @@ from tickwitness.domain.research_contracts.executable import load_executable_pro
 
 class ScenarioLedger(AttemptLedger, Protocol):
     def bind_intent(
-        self, reservation: AttemptReservation, intent: bytes, *, artifacts: tuple[bytes, ...] = ()
+        self, reservation: AttemptReservation, intent_bytes: bytes, *, artifacts: tuple[bytes, ...] = ()
     ) -> str: ...
 
     def get_intent(self, attempt_id: str) -> bytes | None: ...
@@ -94,7 +93,9 @@ def run_scenario(
             or reservation.document["max_wall_seconds"] != budget["max_wall_seconds"]
         ):
             raise EvidenceValidationError("Scenario reservation differs from the frozen budget")
-        committed = ledger.bind_intent(reservation, intent.canonical_bytes, artifacts=_artifacts(view))
+        committed = ledger.bind_intent(
+            reservation, intent.canonical_bytes, artifacts=_artifacts(view)
+        )
         if committed != intent.intent_id:
             raise EvidenceValidationError("Ledger returned a conflicting scenario intent")
         result = engine_factory(budget["max_wall_seconds"]).run(view.replay_input)
@@ -131,8 +132,9 @@ def run_scenario(
             evaluation.document,
         )
     except Exception as error:
-        raw_code, raw_exit = getattr(error, "code", "scenario_run_failed"), getattr(
-            error, "exit_code", 7
+        raw_code, raw_exit = (
+            getattr(error, "code", "scenario_run_failed"),
+            getattr(error, "exit_code", 7),
         )
         code = (
             raw_code
@@ -146,9 +148,7 @@ def run_scenario(
             .decode("utf-8", errors="ignore")
         )
         try:
-            ledger.publish(
-                reservation, build_scenario_failure(reservation, intent, code, message)
-            )
+            ledger.publish(reservation, build_scenario_failure(reservation, intent, code, message))
         except Exception as publication_error:
             raise ProtocolRunError(
                 "attempt_outcome_unconfirmed",
@@ -228,8 +228,7 @@ def inspect_scenario_run(
     evaluation = ScenarioEvaluation(view, result)
     if (
         evaluation.evaluation_id != result_bindings["evaluation_sha256"]
-        or
-        ledger.read_artifact(result_bindings["evaluation_sha256"], max_bytes=4 * 1024 * 1024)
+        or ledger.read_artifact(result_bindings["evaluation_sha256"], max_bytes=4 * 1024 * 1024)
         != evaluation.canonical_bytes
     ):
         raise EvidenceValidationError("Scenario accounting differs from recomputation")

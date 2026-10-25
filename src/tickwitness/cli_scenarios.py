@@ -35,7 +35,9 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
         parser.add_argument("--input-root", type=Path, required=True)
         parser.add_argument("--store", type=Path, required=True)
         parser.add_argument("--registry", type=Path, required=True)
-        parser.add_argument("--split", choices=("development", "confirmation"), default="development")
+        parser.add_argument(
+            "--split", choices=("development", "confirmation"), default="development"
+        )
     execute.add_argument("--runs", type=Path, required=True)
     execute.add_argument("--engine-python", type=Path)
     inspect = commands.add_parser(

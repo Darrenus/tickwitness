@@ -32,16 +32,33 @@ SCENARIO_SCOPE: Mapping[str, object] = MappingProxyType(
 )
 _EVALUATION_LIMIT = 128 * 1024
 _INTENT_FIELDS = {
-    "kind", "schema_version", "protocol_id", "claim_revision_id", "scope", "bindings",
+    "kind",
+    "schema_version",
+    "protocol_id",
+    "claim_revision_id",
+    "scope",
+    "bindings",
     "clock_profile_id",
 }
 _BINDINGS = {
-    "development_dataset_id", "source_normalized_sha256", "replay_spec_id", "assumption_id",
-    "scenario_id", "derived_view_id", "derived_normalized_sha256",
+    "development_dataset_id",
+    "source_normalized_sha256",
+    "replay_spec_id",
+    "assumption_id",
+    "scenario_id",
+    "derived_view_id",
+    "derived_normalized_sha256",
 }
 _RECEIPT_FIELDS = {
-    "kind", "schema_version", "attempt", "protocol_id", "claim_revision_id",
-    "execution_status", "scope", "intent", "bindings",
+    "kind",
+    "schema_version",
+    "attempt",
+    "protocol_id",
+    "claim_revision_id",
+    "execution_status",
+    "scope",
+    "intent",
+    "bindings",
 }
 
 
@@ -87,7 +104,9 @@ class ScenarioIntent:
 
     def __post_init__(self) -> None:
         _validate_intent(self.canonical_bytes)
-        _require(identity(self.intent_id) == digest(self.canonical_bytes), "Intent identity mismatch")
+        _require(
+            identity(self.intent_id) == digest(self.canonical_bytes), "Intent identity mismatch"
+        )
 
     @property
     def document(self) -> dict[str, object]:
@@ -156,7 +175,8 @@ class ScenarioEvaluation:
         audited = evaluate_replay(self.view.replay_input, self.result)
         base = audited.document
         _equal(
-            base["evaluation_policy"], protocol["evaluation_policy"],
+            base["evaluation_policy"],
+            protocol["evaluation_policy"],
             "Scenario valuation policy mismatch",
         )
         eligible = base["valuation_status"] == "valued"
@@ -170,8 +190,10 @@ class ScenarioEvaluation:
                 "intent_id": intent.intent_id,
                 "scope": dict(SCENARIO_SCOPE),
                 "metric_observation": {
-                    "metric": "net_marked_pnl_v1", "unit": "USD",
-                    "eligible": eligible, "value": value,
+                    "metric": "net_marked_pnl_v1",
+                    "unit": "USD",
+                    "eligible": eligible,
+                    "value": value,
                 },
                 "replay_evaluation": base,
             }
@@ -191,8 +213,15 @@ class ScenarioEvaluation:
 def _attempt_and_intent(document: dict[str, object]) -> tuple[AttemptReservation, ScenarioIntent]:
     attempt = _exact(
         document["attempt"],
-        {"kind", "schema_version", "protocol_id", "attempt_index", "nonce",
-         "max_wall_seconds", "created_at_utc"},
+        {
+            "kind",
+            "schema_version",
+            "protocol_id",
+            "attempt_index",
+            "nonce",
+            "max_wall_seconds",
+            "created_at_utc",
+        },
         "Scenario attempt",
     )
     raw = canonical(attempt)
@@ -211,7 +240,8 @@ def _validate_receipt(raw: bytes) -> dict[str, object]:
     _markers(document, "scenario_run_receipt_v1")
     _, intent = _attempt_and_intent(document)
     _equal(
-        document["claim_revision_id"], intent.document["claim_revision_id"],
+        document["claim_revision_id"],
+        intent.document["claim_revision_id"],
         "Scenario claim reference mismatch",
     )
     _equal(document["scope"], intent.document["scope"], "Scenario receipt scope mismatch")
@@ -220,7 +250,8 @@ def _validate_receipt(raw: bytes) -> dict[str, object]:
         "Scenario receipts require audited completed or incomplete execution",
     )
     bindings = _exact(
-        document["bindings"], {"replay_result_sha256", "evaluation_sha256"},
+        document["bindings"],
+        {"replay_result_sha256", "evaluation_sha256"},
         "Scenario receipt bindings",
     )
     for value in bindings.values():
@@ -235,7 +266,9 @@ class ScenarioRunReceipt:
 
     def __post_init__(self) -> None:
         _validate_receipt(self.canonical_bytes)
-        _require(identity(self.run_id) == digest(self.canonical_bytes), "Scenario receipt ID mismatch")
+        _require(
+            identity(self.run_id) == digest(self.canonical_bytes), "Scenario receipt ID mismatch"
+        )
 
     @property
     def document(self) -> dict[str, object]:
@@ -257,7 +290,8 @@ def load_scenario_run_receipt(raw: bytes) -> ScenarioRunReceipt:
 
 def load_scenario_failure(raw: bytes) -> dict[str, object]:
     document = _exact(
-        parse(raw), {"kind", "schema_version", "attempt", "protocol_id", "intent", "error"},
+        parse(raw),
+        {"kind", "schema_version", "attempt", "protocol_id", "intent", "error"},
         "Scenario failure",
     )
     _markers(document, "scenario_attempt_failure_v1")

@@ -190,7 +190,9 @@ def test_intent_and_its_artifacts_are_persisted_before_engine_construction(exper
         class SavedNativeResult:
             def run(self, replay_input):
                 assert replay_input.dataset_id == bindings["derived_view_id"]
-                assert digest(replay_input.normalized_bytes) == bindings["derived_normalized_sha256"]
+                assert (
+                    digest(replay_input.normalized_bytes) == bindings["derived_normalized_sha256"]
+                )
                 return saved_native.run(replay_input)
 
         return SavedNativeResult()
@@ -324,7 +326,9 @@ def test_outcome_publication_failure_retains_intent_and_unfinalized_reservation(
     assert inspect_attempt(caught.value.attempt_id, ledger)["budget_consumed"] is True
 
 
-def test_committed_outcome_is_recoverable_if_the_returned_identity_conflicts(experiment_case) -> None:
+def test_committed_outcome_is_recoverable_if_the_returned_identity_conflicts(
+    experiment_case,
+) -> None:
     case = experiment_case
     ledger = case.ledger_factory()
 
@@ -415,7 +419,10 @@ def test_inspection_rejects_self_consistent_reservation_outside_frozen_budget(
 
     with pytest.raises(EvidenceValidationError, match="frozen budget"):
         inspect_scenario_run(
-            forged.run_id, ledger=SelfConsistentPort(), registry=case.registry, datasets=NoDataRead()
+            forged.run_id,
+            ledger=SelfConsistentPort(),
+            registry=case.registry,
+            datasets=NoDataRead(),
         )
 
 

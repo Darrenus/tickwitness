@@ -30,7 +30,9 @@ def main() -> None:
                 timeout=180,
             )
             if result.returncode != expected or (expected and result.stdout):
-                raise RuntimeError(f"Installed scenario CLI failed: {result.stdout}\n{result.stderr}")
+                raise RuntimeError(
+                    f"Installed scenario CLI failed: {result.stdout}\n{result.stderr}"
+                )
             return json.loads(result.stdout if expected == 0 else result.stderr)
 
         ids = [
@@ -54,35 +56,50 @@ def main() -> None:
             "--registry",
             str(registry),
         )
-        common = (
-            "--store", str(store), "--registry", str(registry), "--runs", str(runs)
-        )
+        common = ("--store", str(store), "--registry", str(registry), "--runs", str(runs))
 
         def scenario(name, expected=0):
             return run(
-                "run-scenario", frozen["protocol_id"], "stress-assumption-request.json",
-                f"stress-{name}-request.json", "--input-root", str(examples), *common,
-                expected=expected
+                "run-scenario",
+                frozen["protocol_id"],
+                "stress-assumption-request.json",
+                f"stress-{name}-request.json",
+                "--input-root",
+                str(examples),
+                *common,
+                expected=expected,
             )
 
         missing = directory / "never-created"
         denied = run(
-            "run-scenario", "invalid-id", "absent.json", "absent.json", "--split", "confirmation",
-            "--input-root", str(missing), "--store", str(missing / "data"),
-            "--registry", str(missing / "registry"), "--runs", str(missing / "runs"), expected=5
+            "run-scenario",
+            "invalid-id",
+            "absent.json",
+            "absent.json",
+            "--split",
+            "confirmation",
+            "--input-root",
+            str(missing),
+            "--store",
+            str(missing / "data"),
+            "--registry",
+            str(missing / "registry"),
+            "--runs",
+            str(missing / "runs"),
+            expected=5,
         )
         assert denied["error"]["code"] == "confirmation_access_denied" and not missing.exists()
         if not arguments.native:
             failed = scenario("suffix", expected=6)["error"]
             assert failed["budget_consumed"] is True
-            attempt = run(
-                "inspect-scenario-attempt", failed["attempt_id"], "--runs", str(runs)
-            )
+            attempt = run("inspect-scenario-attempt", failed["attempt_id"], "--runs", str(runs))
             assert attempt["state"] == "finalized"
             assert attempt["outcome"]["kind"] == "scenario_attempt_failure_v1"
             assert attempt["scenario_intent"]["protocol_id"] == frozen["protocol_id"]
             assert run("inspect-dataset", ids[0], "--store", str(store)) == original
-            print("Installed core scenario workflow: persistent failure intent and source preserved.")
+            print(
+                "Installed core scenario workflow: persistent failure intent and source preserved."
+            )
             return
         baseline = run("replay-protocol", frozen["protocol_id"], *common)
         zero, suffix = scenario("zero"), scenario("suffix")
@@ -117,7 +134,9 @@ def main() -> None:
         }
         if arguments.report is not None:
             arguments.report.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
-        print("Installed native scenario workflow: zero control, nonzero stress, audits and budget passed.")
+        print(
+            "Installed native scenario workflow: zero control, nonzero stress, audits and budget passed."
+        )
 
 
 if __name__ == "__main__":

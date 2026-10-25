@@ -36,8 +36,10 @@ def fixture(case):
     checked = validate_scenario_contracts(
         case.frozen.protocol_id,
         (examples / "assumption-request.json").read_bytes(),
-        (examples / "scenario-request.json").read_bytes(), split="development",
-        registry_factory=lambda: case.registry, datasets_factory=lambda: case.data,
+        (examples / "scenario-request.json").read_bytes(),
+        split="development",
+        registry_factory=lambda: case.registry,
+        datasets_factory=lambda: case.data,
     )
     view = DerivedReplayView(checked.validation)
     return view, build_scenario_intent(view)
@@ -46,8 +48,10 @@ def fixture(case):
 def legacy_failure(reservation) -> bytes:
     return canonical(
         {
-            "kind": "replay_attempt_failure_v1", "schema_version": 1,
-            "attempt": reservation.document, "protocol_id": reservation.protocol_id,
+            "kind": "replay_attempt_failure_v1",
+            "schema_version": 1,
+            "attempt": reservation.document,
+            "protocol_id": reservation.protocol_id,
             "error": {"code": "native_failure", "message": "Original baseline failure"},
         }
     )
@@ -71,7 +75,10 @@ def test_intent_roundtrip_idempotency_failure_closure_and_same_budget(experiment
     protocol = bound_protocol(case)
     reservation = ledger.reserve(protocol)
     artifacts = (view.canonical_bytes, view.replay_input.normalized_bytes)
-    assert ledger.bind_intent(reservation, intent.canonical_bytes, artifacts=artifacts) == intent.intent_id
+    assert (
+        ledger.bind_intent(reservation, intent.canonical_bytes, artifacts=artifacts)
+        == intent.intent_id
+    )
     assert ledger.get_intent(reservation.attempt_id) == intent.canonical_bytes
     assert ledger.get_outcome(reservation.attempt_id) is None
     assert ledger.read_artifact(intent.intent_id) == intent.canonical_bytes
@@ -168,7 +175,8 @@ def test_reader_does_not_keep_stale_missing_intent_across_outcome_commit(
 
     def read(directory, name, limit, **kwargs):
         if (
-            reader_thread and get_ident() == reader_thread[0]
+            reader_thread
+            and get_ident() == reader_thread[0]
             and name == f"{reservation.attempt_id}.json"
             and os.fstat(directory).st_ino == outcome_inode
         ):
@@ -232,7 +240,8 @@ def test_unsafe_intent_or_missing_closure_is_rejected(experiment_case, target, m
     ledger.publish(reservation, failure)
     path = (
         root / "intents" / f"{reservation.attempt_id}.json"
-        if target == "mapping" else root / "objects" / "sha256" / intent.intent_id
+        if target == "mapping"
+        else root / "objects" / "sha256" / intent.intent_id
     )
     path.unlink()
     if mutation == "corrupt":

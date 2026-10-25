@@ -75,9 +75,7 @@ def _outcome(raw: bytes, reservation: AttemptReservation) -> ScenarioIntent | No
                 load_scenario_run_receipt(raw)
             else:
                 load_scenario_failure(raw)
-            intent = load_scenario_intent(
-                canonical(cast("dict[str, object]", document["intent"]))
-            )
+            intent = load_scenario_intent(canonical(cast("dict[str, object]", document["intent"])))
         elif document.get("kind") == "replay_attempt_failure_v1":
             if (
                 set(document) != {"kind", "schema_version", "attempt", "protocol_id", "error"}
@@ -203,8 +201,11 @@ class LocalAttemptLedger:
             raise AttemptLedgerError(f"Cannot publish attempt outcome: {error}") from error
 
     def bind_intent(
-        self, reservation: AttemptReservation, intent_bytes: bytes,
-        *, artifacts: tuple[bytes, ...] = (),
+        self,
+        reservation: AttemptReservation,
+        intent_bytes: bytes,
+        *,
+        artifacts: tuple[bytes, ...] = (),
     ) -> str:
         """Commit an immutable scenario intent before constructing a native engine.
 
@@ -326,7 +327,9 @@ class LocalAttemptLedger:
     @staticmethod
     def _artifacts(artifacts: tuple[bytes, ...]) -> None:
         if type(artifacts) is not tuple or len(artifacts) > _ARTIFACT_COUNT:
-            raise AttemptLedgerError("artifacts must be a tuple of at most 16 immutable byte values")
+            raise AttemptLedgerError(
+                "artifacts must be a tuple of at most 16 immutable byte values"
+            )
         for artifact in artifacts:
             LocalAttemptLedger._bounded(artifact, _ARTIFACT_LIMIT)
 
@@ -357,7 +360,8 @@ class LocalAttemptLedger:
         with self._directories() as (objects, _, _):
             try:
                 descriptor = os.open(
-                    reservation.attempt_id, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                    reservation.attempt_id,
+                    os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
                     dir_fd=objects,
                 )
             except FileNotFoundError as error:

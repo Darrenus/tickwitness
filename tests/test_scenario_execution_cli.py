@@ -64,9 +64,7 @@ def command(root: Path, protocol_id: str = "0" * 64) -> list[str]:
 
 
 def inspect_failure(root: Path, attempt_id: str, capsys: pytest.CaptureFixture[str]) -> dict:
-    assert (
-        main(["inspect-scenario-attempt", attempt_id, "--runs", str(root / "runs")]) == 0
-    )
+    assert main(["inspect-scenario-attempt", attempt_id, "--runs", str(root / "runs")]) == 0
     output = capsys.readouterr()
     assert output.err == ""
     state = json.loads(output.out)
