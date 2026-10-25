@@ -1,6 +1,6 @@
 # TickWitness 安全、发布与长期运维
 
-状态：Proposed，2026-10-25。Sprint1分支已加入开发包和工程检查，实际验证见[开发入口](../development.md)与[S1状态](../planning/sprint-01-status.md)；下文产品级隔离、SLO、发行及恢复能力仍需逐步实现和演练。
+状态：Proposed，2026-10-25。Sprint1基础已合并，S2数据证据分支已加入有界导入/inspection，实际验证见[开发入口](../development.md)与[S2状态](../planning/sprint-02-status.md)；下文产品级隔离、SLO、发行及恢复能力仍需逐步实现和演练。
 
 ## 信任边界与威胁模型
 

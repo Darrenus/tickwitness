@@ -2,6 +2,8 @@
 
 记录日期：2026-10-25。项目：TickWitness。状态：**已完成本机有限 spike；正式 adapter、完整 trace 契约和生产支持尚未实现。** 本文不替代 S2 引擎选型 ADR，也不声明 S01-01 的全部跨引擎比较工作已完成。
 
+**后续更正（2026-10-25）：** 本文依据EOF时`current_timestamp`推断最后guard尚未消费的解释已被[选型补测](hftbacktest-selection-gates.md)取代。新增receipt字段显示事件已被处理，陈旧的是公开终止时钟。旧JSON与下述原始实验记录保留；不得继续将那项推断当成丢消息证据。补测还记录了部分成交账务不一致和轮询fill日志的限制。
+
 本次结论：**HftBacktest 2.4.4 可以在当前 macOS arm64 / CPython 3.12.14 上安装并运行受控 L2 合成案例，值得保留为默认引擎候选。** 能读到订单状态、执行价格/数量、持仓、cash 与 fee；策略决策日志需要自行记录。完整多次部分成交事件流、EOF drain、任意 Python 队列解释注入和完整 checkpoint 恢复均未成立为已验证能力，应作为后续选型门槛。
 
 实施次序以 [路线图](../planning/roadmap.md)、[Sprint backlog](../planning/sprint-backlog.md) 和 [ADR-003](../architecture/decisions.md) 为准：S1 比较候选的可行性，S2 选择默认目标，S3 完成 adapter 后建立同语义基线。这里的两次确定性运行不是性能 benchmark。

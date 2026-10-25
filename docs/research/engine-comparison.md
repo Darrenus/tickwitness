@@ -2,6 +2,8 @@
 
 日期：2026-10-25（Asia/Singapore）。状态：**S1有限spike证据已形成，待维护者审阅；S2默认引擎尚未选定。** 试验仅使用原创合成输入与可信策略，没有访问交易账户或执行真实交易。
 
+更新：S1证据随[PR#73](https://github.com/Darrenus/tickwitness/pull/73)获owner接受并合并。S2的[HFT选型补测](hftbacktest-selection-gates.md)发现部分成交账务不一致、同刻fill响应合并，并更正旧EOF推断；默认引擎仍未锁定。
+
 两候选分别运行自己的最小可核算案例，并在各自环境比较两次语义trace。它们不是相同输入、策略或执行语义，**不能横向比较收益、吞吐或准确性**。所有合成损益仅验证可调用能力和账务，不支持alpha或真实市场结论。
 
 | 项目 | HftBacktest | NautilusTrader |
@@ -15,7 +17,7 @@
 | 决策记录 | 受控策略自行instrument | Strategy回调中自行instrument |
 | 订单与fill | 状态轮询可读本例两个单次fill；未证明多fill无遗漏 | 本例订单生命周期与fill回调可读；其他复杂路径未验证 |
 | L2具体队列解释 | 现有builder模型可选；具体前/后撤单相容解释未验证 | 安装源码含相关接口；本次只跑L1，队列解释未验证 |
-| 关键已观察语义 | EOF时最后tail guard尚未本地消费，需定义drain/incomplete | 本例延迟命令在后续行情step处理，未证明连续时间独立撮合 |
+| 关键已观察语义 | S2更正：receipt证明末尾事件已处理，但终止current_timestamp可能陈旧；另有部分成交账务不一致 | 本例延迟命令在后续行情step处理，未证明连续时间独立撮合 |
 | 完整checkpoint | 未验证；盘口snapshot不等于完整状态 | 未验证；strategy save/load不等于全部引擎状态恢复 |
 | 当前可行性结论 | 可继续候选评估 | 可继续L1/明确压力路径评估；核心L2需求仍待验证 |
 

@@ -1,0 +1,3 @@
+{"schema_version":1,"type":"snapshot","source":"synthetic","instrument":"TEST-USD","session":"example-gap","capture_seq":1,"event_time_ns":100,"receive_time_ns":110,"last_sequence":10,"bids":[[99,5]],"asks":[[101,5]]}
+{"schema_version":1,"type":"delta","source":"synthetic","instrument":"TEST-USD","session":"example-gap","capture_seq":2,"event_time_ns":102,"receive_time_ns":112,"first_sequence":12,"last_sequence":12,"bids":[[99,4]],"asks":[]}
+{"schema_version":1,"type":"snapshot","source":"synthetic","instrument":"TEST-USD","session":"example-gap","capture_seq":3,"event_time_ns":103,"receive_time_ns":113,"last_sequence":20,"bids":[[99,4]],"asks":[[101,6]]}
