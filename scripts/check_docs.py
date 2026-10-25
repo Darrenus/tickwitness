@@ -5,11 +5,10 @@ This validates the planning repository. It does not test the planned product.
 Run from any directory with Python 3; no third-party dependencies are required.
 """
 
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 from urllib.parse import unquote, urlsplit
-
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -17,7 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     errors = []
     documents = sorted(
-        path for path in ROOT.rglob("*.md")
+        path
+        for path in ROOT.rglob("*.md")
         if not any(part in {".git", "node_modules", ".venv"} for part in path.parts)
     )
     links = 0
@@ -41,17 +41,17 @@ def main():
     sections = list(re.finditer(r"^## S(\d+) — .+$", backlog, re.MULTILINE))
     numbers = [int(match.group(1)) for match in sections]
     if numbers != list(range(1, 25)):
-        errors.append(f"Expected S1–S24 exactly once and in order; found {numbers}")
+        errors.append(f"Expected S1-S24 exactly once and in order; found {numbers}")
     seen = set()
     planned_hours = 0
     for index, section in enumerate(sections):
         sprint = int(section.group(1))
         end = sections[index + 1].start() if index + 1 < len(sections) else len(backlog)
-        body = backlog[section.end():end]
-        rows = re.findall(r"^\| (S\d{2}-\d{2}) /[^\n]+$", body, re.MULTILINE)
+        body = backlog[section.end() : end]
         full_rows = re.findall(r"^\| S\d{2}-\d{2} /[^\n]+$", body, re.MULTILINE)
         hours = 0
-        for story, row in zip(rows, full_rows):
+        for row in full_rows:
+            story = row.split(" /", 1)[0].lstrip("| ")
             if story in seen:
                 errors.append(f"Duplicate story ID: {story}")
             seen.add(story)
@@ -65,7 +65,7 @@ def main():
             hours += amount
             if amount > 16:
                 errors.append(f"{story}: exceeds the 16h story limit")
-        if not rows:
+        if not full_rows:
             errors.append(f"S{sprint}: no stories")
         if hours > 35:
             errors.append(f"S{sprint}: {hours}h exceeds 35h planned capacity")
@@ -78,9 +78,11 @@ def main():
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)
         return 1
-    print(f"OK: {len(documents)} documents, {links} local links, "
-          f"{len(sections)} Sprints, {len(seen)} unique stories, "
-          f"{planned_hours}h planned work + {15 * len(sections)}h ongoing quality budget.")
+    print(
+        f"OK: {len(documents)} documents, {links} local links, "
+        f"{len(sections)} Sprints, {len(seen)} unique stories, "
+        f"{planned_hours}h planned work + {15 * len(sections)}h ongoing quality budget."
+    )
     return 0
 
 

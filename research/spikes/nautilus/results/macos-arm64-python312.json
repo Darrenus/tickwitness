@@ -1,0 +1,660 @@
+{
+  "status": "EXECUTED_SYNTHETIC_PROBE",
+  "engine_version": "1.231.0",
+  "python": "3.12.14",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "machine": "arm64",
+  "package_license_expression": null,
+  "package_license": "LGPL-3.0-or-later",
+  "package_requires_python": ">=3.12,<3.15",
+  "wheel_metadata": "Wheel-Version: 1.0\nGenerator: poetry-core 2.3.1\nRoot-Is-Purelib: false\nTag: cp312-cp312-macosx_26_0_arm64\n",
+  "dependencies": {
+    "click": "8.5.0",
+    "fsspec": "2026.2.0",
+    "msgspec": "0.22.0",
+    "nautilus_trader": "1.231.0",
+    "numpy": "2.5.4",
+    "pandas": "3.1.0",
+    "portion": "2.6.3",
+    "pyarrow": "26.0.0",
+    "python-dateutil": "3.0.0",
+    "pytz": "2026.5",
+    "six": "1.17.0",
+    "sortedcontainers": "2.4.0",
+    "tqdm": "4.70.1",
+    "tzdata": "2026.5",
+    "uvloop": "0.22.1"
+  },
+  "determinism": {
+    "baseline_runs": 2,
+    "semantic_traces_equal": true,
+    "semantic_sha256": "43bc7df6c6c76b6604e021756f7817fbbfa844d3ad76d50f27f64303e4d0a0d7",
+    "semantic_sha256_repeat": "43bc7df6c6c76b6604e021756f7817fbbfa844d3ad76d50f27f64303e4d0a0d7",
+    "excluded": [
+      "random event UUIDs",
+      "engine instance/run IDs",
+      "wall-clock runtime",
+      "logging"
+    ],
+    "scope": "same interpreter, package versions, machine and fixture; not cross-platform bitwise proof"
+  },
+  "baseline": {
+    "scenario_kind": "BASELINE",
+    "insert_latency_ns": "0",
+    "input_trace": [
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000000000000000",
+        "ts_init": "1700000000000000000",
+        "bid": "1.00000",
+        "ask": "1.00002",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000001000000000",
+        "ts_init": "1700000001000000000",
+        "bid": "1.00005",
+        "ask": "1.00007",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000002000000000",
+        "ts_init": "1700000002000000000",
+        "bid": "1.00015",
+        "ask": "1.00017",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000003000000000",
+        "ts_init": "1700000003000000000",
+        "bid": "1.00010",
+        "ask": "1.00012",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000004000000000",
+        "ts_init": "1700000004000000000",
+        "bid": "1.00002",
+        "ask": "1.00004",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000005000000000",
+        "ts_init": "1700000005000000000",
+        "bid": "1.00000",
+        "ask": "1.00002",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000006000000000",
+        "ts_init": "1700000006000000000",
+        "bid": "1.00000",
+        "ask": "1.00002",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      }
+    ],
+    "decisions": [
+      {
+        "input_ordinal": 0,
+        "clock_ns": "1700000000000000000",
+        "side": "BUY",
+        "quantity": "1000",
+        "client_order_id": "O-20231114-221320-001-001-1"
+      },
+      {
+        "input_ordinal": 3,
+        "clock_ns": "1700000003000000000",
+        "side": "SELL",
+        "quantity": "1000",
+        "client_order_id": "O-20231114-221323-001-001-2"
+      }
+    ],
+    "order_events": [
+      {
+        "type": "OrderInitialized",
+        "client_order_id": "O-20231114-221320-001-001-1",
+        "ts_event": "1700000000000000000",
+        "ts_init": "1700000000000000000"
+      },
+      {
+        "type": "OrderSubmitted",
+        "client_order_id": "O-20231114-221320-001-001-1",
+        "ts_event": "1700000000000000000",
+        "ts_init": "1700000000000000000"
+      },
+      {
+        "type": "OrderFilled",
+        "client_order_id": "O-20231114-221320-001-001-1",
+        "ts_event": "1700000000000000000",
+        "ts_init": "1700000000000000000"
+      },
+      {
+        "type": "OrderInitialized",
+        "client_order_id": "O-20231114-221323-001-001-2",
+        "ts_event": "1700000003000000000",
+        "ts_init": "1700000003000000000"
+      },
+      {
+        "type": "OrderSubmitted",
+        "client_order_id": "O-20231114-221323-001-001-2",
+        "ts_event": "1700000003000000000",
+        "ts_init": "1700000003000000000"
+      },
+      {
+        "type": "OrderFilled",
+        "client_order_id": "O-20231114-221323-001-001-2",
+        "ts_event": "1700000003000000000",
+        "ts_init": "1700000003000000000"
+      }
+    ],
+    "fills": [
+      {
+        "client_order_id": "O-20231114-221320-001-001-1",
+        "side": "BUY",
+        "quantity": "1000",
+        "price": "1.00002",
+        "commission": "0.00 USD",
+        "liquidity_side": "TAKER",
+        "ts_event": "1700000000000000000",
+        "ts_init": "1700000000000000000"
+      },
+      {
+        "client_order_id": "O-20231114-221323-001-001-2",
+        "side": "SELL",
+        "quantity": "1000",
+        "price": "1.00010",
+        "commission": "0.00 USD",
+        "liquidity_side": "TAKER",
+        "ts_event": "1700000003000000000",
+        "ts_init": "1700000003000000000"
+      }
+    ],
+    "account_report": [
+      {
+        "total": "10000.00",
+        "locked": "0.00",
+        "free": "10000.00",
+        "currency": "USD",
+        "account_id": "SIM-001",
+        "account_type": "MARGIN",
+        "base_currency": "USD",
+        "margins": [],
+        "reported": true,
+        "info": {},
+        "ts_event_ns": "1700000000000000000"
+      },
+      {
+        "total": "10000.00",
+        "locked": "1000.02",
+        "free": "8999.98",
+        "currency": "USD",
+        "account_id": "SIM-001",
+        "account_type": "MARGIN",
+        "base_currency": "USD",
+        "margins": [
+          {
+            "type": "MarginBalance",
+            "initial": "0.00",
+            "maintenance": "1000.02",
+            "currency": "USD",
+            "instrument_id": "EURUSD.SIM"
+          }
+        ],
+        "reported": false,
+        "info": {},
+        "ts_event_ns": "1700000000000000000"
+      },
+      {
+        "total": "10000.08",
+        "locked": "0.00",
+        "free": "10000.08",
+        "currency": "USD",
+        "account_id": "SIM-001",
+        "account_type": "MARGIN",
+        "base_currency": "USD",
+        "margins": [],
+        "reported": false,
+        "info": {},
+        "ts_event_ns": "1700000003000000000"
+      }
+    ],
+    "final_cash_usd": "10000.08",
+    "realized_pnl_usd": "0.08000",
+    "closed_positions": 1
+  },
+  "baseline_repeat": {
+    "scenario_kind": "BASELINE",
+    "insert_latency_ns": "0",
+    "input_trace": [
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000000000000000",
+        "ts_init": "1700000000000000000",
+        "bid": "1.00000",
+        "ask": "1.00002",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000001000000000",
+        "ts_init": "1700000001000000000",
+        "bid": "1.00005",
+        "ask": "1.00007",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000002000000000",
+        "ts_init": "1700000002000000000",
+        "bid": "1.00015",
+        "ask": "1.00017",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000003000000000",
+        "ts_init": "1700000003000000000",
+        "bid": "1.00010",
+        "ask": "1.00012",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000004000000000",
+        "ts_init": "1700000004000000000",
+        "bid": "1.00002",
+        "ask": "1.00004",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000005000000000",
+        "ts_init": "1700000005000000000",
+        "bid": "1.00000",
+        "ask": "1.00002",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000006000000000",
+        "ts_init": "1700000006000000000",
+        "bid": "1.00000",
+        "ask": "1.00002",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      }
+    ],
+    "decisions": [
+      {
+        "input_ordinal": 0,
+        "clock_ns": "1700000000000000000",
+        "side": "BUY",
+        "quantity": "1000",
+        "client_order_id": "O-20231114-221320-001-001-1"
+      },
+      {
+        "input_ordinal": 3,
+        "clock_ns": "1700000003000000000",
+        "side": "SELL",
+        "quantity": "1000",
+        "client_order_id": "O-20231114-221323-001-001-2"
+      }
+    ],
+    "order_events": [
+      {
+        "type": "OrderInitialized",
+        "client_order_id": "O-20231114-221320-001-001-1",
+        "ts_event": "1700000000000000000",
+        "ts_init": "1700000000000000000"
+      },
+      {
+        "type": "OrderSubmitted",
+        "client_order_id": "O-20231114-221320-001-001-1",
+        "ts_event": "1700000000000000000",
+        "ts_init": "1700000000000000000"
+      },
+      {
+        "type": "OrderFilled",
+        "client_order_id": "O-20231114-221320-001-001-1",
+        "ts_event": "1700000000000000000",
+        "ts_init": "1700000000000000000"
+      },
+      {
+        "type": "OrderInitialized",
+        "client_order_id": "O-20231114-221323-001-001-2",
+        "ts_event": "1700000003000000000",
+        "ts_init": "1700000003000000000"
+      },
+      {
+        "type": "OrderSubmitted",
+        "client_order_id": "O-20231114-221323-001-001-2",
+        "ts_event": "1700000003000000000",
+        "ts_init": "1700000003000000000"
+      },
+      {
+        "type": "OrderFilled",
+        "client_order_id": "O-20231114-221323-001-001-2",
+        "ts_event": "1700000003000000000",
+        "ts_init": "1700000003000000000"
+      }
+    ],
+    "fills": [
+      {
+        "client_order_id": "O-20231114-221320-001-001-1",
+        "side": "BUY",
+        "quantity": "1000",
+        "price": "1.00002",
+        "commission": "0.00 USD",
+        "liquidity_side": "TAKER",
+        "ts_event": "1700000000000000000",
+        "ts_init": "1700000000000000000"
+      },
+      {
+        "client_order_id": "O-20231114-221323-001-001-2",
+        "side": "SELL",
+        "quantity": "1000",
+        "price": "1.00010",
+        "commission": "0.00 USD",
+        "liquidity_side": "TAKER",
+        "ts_event": "1700000003000000000",
+        "ts_init": "1700000003000000000"
+      }
+    ],
+    "account_report": [
+      {
+        "total": "10000.00",
+        "locked": "0.00",
+        "free": "10000.00",
+        "currency": "USD",
+        "account_id": "SIM-001",
+        "account_type": "MARGIN",
+        "base_currency": "USD",
+        "margins": [],
+        "reported": true,
+        "info": {},
+        "ts_event_ns": "1700000000000000000"
+      },
+      {
+        "total": "10000.00",
+        "locked": "1000.02",
+        "free": "8999.98",
+        "currency": "USD",
+        "account_id": "SIM-001",
+        "account_type": "MARGIN",
+        "base_currency": "USD",
+        "margins": [
+          {
+            "type": "MarginBalance",
+            "initial": "0.00",
+            "maintenance": "1000.02",
+            "currency": "USD",
+            "instrument_id": "EURUSD.SIM"
+          }
+        ],
+        "reported": false,
+        "info": {},
+        "ts_event_ns": "1700000000000000000"
+      },
+      {
+        "total": "10000.08",
+        "locked": "0.00",
+        "free": "10000.08",
+        "currency": "USD",
+        "account_id": "SIM-001",
+        "account_type": "MARGIN",
+        "base_currency": "USD",
+        "margins": [],
+        "reported": false,
+        "info": {},
+        "ts_event_ns": "1700000003000000000"
+      }
+    ],
+    "final_cash_usd": "10000.08",
+    "realized_pnl_usd": "0.08000",
+    "closed_positions": 1
+  },
+  "delayed_order_stress": {
+    "scenario_kind": "COUNTERFACTUAL_STRESS",
+    "insert_latency_ns": "1500000000",
+    "input_trace": [
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000000000000000",
+        "ts_init": "1700000000000000000",
+        "bid": "1.00000",
+        "ask": "1.00002",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000001000000000",
+        "ts_init": "1700000001000000000",
+        "bid": "1.00005",
+        "ask": "1.00007",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000002000000000",
+        "ts_init": "1700000002000000000",
+        "bid": "1.00015",
+        "ask": "1.00017",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000003000000000",
+        "ts_init": "1700000003000000000",
+        "bid": "1.00010",
+        "ask": "1.00012",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000004000000000",
+        "ts_init": "1700000004000000000",
+        "bid": "1.00002",
+        "ask": "1.00004",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000005000000000",
+        "ts_init": "1700000005000000000",
+        "bid": "1.00000",
+        "ask": "1.00002",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      },
+      {
+        "type": "QuoteTick",
+        "instrument_id": "EURUSD.SIM",
+        "ts_event": "1700000006000000000",
+        "ts_init": "1700000006000000000",
+        "bid": "1.00000",
+        "ask": "1.00002",
+        "bid_size": "10000",
+        "ask_size": "10000"
+      }
+    ],
+    "decisions": [
+      {
+        "input_ordinal": 0,
+        "clock_ns": "1700000000000000000",
+        "side": "BUY",
+        "quantity": "1000",
+        "client_order_id": "O-20231114-221320-001-001-1"
+      },
+      {
+        "input_ordinal": 3,
+        "clock_ns": "1700000003000000000",
+        "side": "SELL",
+        "quantity": "1000",
+        "client_order_id": "O-20231114-221323-001-001-2"
+      }
+    ],
+    "order_events": [
+      {
+        "type": "OrderInitialized",
+        "client_order_id": "O-20231114-221320-001-001-1",
+        "ts_event": "1700000000000000000",
+        "ts_init": "1700000000000000000"
+      },
+      {
+        "type": "OrderSubmitted",
+        "client_order_id": "O-20231114-221320-001-001-1",
+        "ts_event": "1700000000000000000",
+        "ts_init": "1700000000000000000"
+      },
+      {
+        "type": "OrderFilled",
+        "client_order_id": "O-20231114-221320-001-001-1",
+        "ts_event": "1700000002000000000",
+        "ts_init": "1700000002000000000"
+      },
+      {
+        "type": "OrderInitialized",
+        "client_order_id": "O-20231114-221323-001-001-2",
+        "ts_event": "1700000003000000000",
+        "ts_init": "1700000003000000000"
+      },
+      {
+        "type": "OrderSubmitted",
+        "client_order_id": "O-20231114-221323-001-001-2",
+        "ts_event": "1700000003000000000",
+        "ts_init": "1700000003000000000"
+      },
+      {
+        "type": "OrderFilled",
+        "client_order_id": "O-20231114-221323-001-001-2",
+        "ts_event": "1700000005000000000",
+        "ts_init": "1700000005000000000"
+      }
+    ],
+    "fills": [
+      {
+        "client_order_id": "O-20231114-221320-001-001-1",
+        "side": "BUY",
+        "quantity": "1000",
+        "price": "1.00017",
+        "commission": "0.00 USD",
+        "liquidity_side": "TAKER",
+        "ts_event": "1700000002000000000",
+        "ts_init": "1700000002000000000"
+      },
+      {
+        "client_order_id": "O-20231114-221323-001-001-2",
+        "side": "SELL",
+        "quantity": "1000",
+        "price": "1.00000",
+        "commission": "0.00 USD",
+        "liquidity_side": "TAKER",
+        "ts_event": "1700000005000000000",
+        "ts_init": "1700000005000000000"
+      }
+    ],
+    "account_report": [
+      {
+        "total": "10000.00",
+        "locked": "0.00",
+        "free": "10000.00",
+        "currency": "USD",
+        "account_id": "SIM-001",
+        "account_type": "MARGIN",
+        "base_currency": "USD",
+        "margins": [],
+        "reported": true,
+        "info": {},
+        "ts_event_ns": "1700000000000000000"
+      },
+      {
+        "total": "10000.00",
+        "locked": "1000.17",
+        "free": "8999.83",
+        "currency": "USD",
+        "account_id": "SIM-001",
+        "account_type": "MARGIN",
+        "base_currency": "USD",
+        "margins": [
+          {
+            "type": "MarginBalance",
+            "initial": "0.00",
+            "maintenance": "1000.17",
+            "currency": "USD",
+            "instrument_id": "EURUSD.SIM"
+          }
+        ],
+        "reported": false,
+        "info": {},
+        "ts_event_ns": "1700000002000000000"
+      },
+      {
+        "total": "9999.83",
+        "locked": "0.00",
+        "free": "9999.83",
+        "currency": "USD",
+        "account_id": "SIM-001",
+        "account_type": "MARGIN",
+        "base_currency": "USD",
+        "margins": [],
+        "reported": false,
+        "info": {},
+        "ts_event_ns": "1700000005000000000"
+      }
+    ],
+    "final_cash_usd": "9999.83",
+    "realized_pnl_usd": "-0.17000",
+    "closed_positions": 1
+  },
+  "limits": [
+    "Original synthetic L1 quotes; not real exchange data or a profitable strategy claim",
+    "No exchange connection, network data, credentials or live execution",
+    "Decision trace is explicitly instrumented in this strategy; not arbitrary-strategy reasoning extraction",
+    "No L2 queue inference, partial fill, fees, custom FillModel or checkpoint restoration tested",
+    "Extra order latency is a counterfactual stress scenario, not an observation-compatible historical explanation"
+  ]
+}
