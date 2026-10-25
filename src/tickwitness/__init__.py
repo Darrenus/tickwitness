@@ -1,1 +1,1 @@
-"""TickWitness engineering foundation; the research workflow is not implemented yet."""
+"""TickWitness data evidence and frozen declarations; execution remains future work."""

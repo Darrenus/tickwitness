@@ -1,6 +1,6 @@
 # TickWitness 需求与验收追踪
 
-状态：Proposed，2026-10-25。以下映射将产品目标、领域规则、故事和验收证据连接起来；对应故事尚未实现。规则定义以[领域模型](../architecture/domain-model.md)与[质量策略](../quality/quality-strategy.md)为准，实际工作状态在 GitHub Issues 维护。
+状态：滚动维护，2026-10-25。以下是产品目标、领域规则、故事与目标验收证据的映射，不表示整行能力已实现。实际工程状态见[Sprint1](sprint-01-status.md)、[Sprint2](sprint-02-status.md)与GitHub Issues。规则定义以[领域模型](../architecture/domain-model.md)及[质量策略](../quality/quality-strategy.md)为准。
 
 | 用户目标或质量规则 | 领域责任 | 首批故事 | 发布证据 |
 | --- | --- | --- | --- |
@@ -21,6 +21,8 @@
 | 能持续维护与发行 | 交付 / 治理 | S19-01–S19-03、S22-01–S24-03 | 许可、SBOM、provenance、RC、支持矩阵和维护政策 |
 
 ## 领域建模如何持续演进
+
+当前S2代码证据：Q-01/Q-02由`tests/domain/test_data_evidence.py`的结构/缺口/未知时间案例覆盖明示的预检范围；Q-08由`tests/infrastructure/test_local_dataset_store.py`的真实CAS/SQLite完整性及故障案例覆盖本地封存范围。[协议合同](../contracts/frozen-protocol-v1.md)对应`tests/domain/test_research_protocols.py`，应用层分区绑定与confirmation拒绝对应`tests/application/test_research.py`和`tests/test_protocol_cli.py`。这些检查不认证完整回放、统计独立或Q-09/Q-10的完整attempt ledger；后者仍未完成。依赖方向由`tests/architecture/test_domain_boundaries.py`约束，安装制品链路由`scripts/smoke_distribution.py`在独立环境验证。
 
 S1–S2 通过问题访谈和轻量 EventStorming 建立命令、事件、参与者、外部系统和热点清单。没有领域专家参与的部分标为假设，不把 AI 同意视为领域共识。每个关键规则使用 Example Mapping 写出规则、具体例子和未决问题；未决问题阻塞对应 story ready，不阻塞独立可行性试验。
 

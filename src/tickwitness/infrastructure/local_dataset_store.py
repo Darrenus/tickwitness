@@ -274,6 +274,50 @@ class LocalDatasetStore:
         except (OSError, sqlite3.Error) as exc:
             raise DatasetStoreError(f"Cannot list dataset evidence: {exc}") from exc
 
+    def read_normalized(self, dataset_id: str, *, max_bytes: int = 8 * 1024 * 1024) -> bytes:
+        """Read bounded normalized-v1 bytes through a sealed, verified dataset.
+
+        This is a content read, not replay certification. Callers enforce the
+        development/confirmation policy before invoking this trusted repository.
+        """
+        _require_hash(dataset_id)
+        if type(max_bytes) is not int or max_bytes <= 0:
+            raise DatasetStoreError("max_bytes must be a positive integer")
+        try:
+            with self._directories() as directories:
+                with self._connection(directories.root, read_only=True) as connection:
+                    row = connection.execute(
+                        "SELECT dataset_id, manifest_sha256, sealed FROM datasets "
+                        "WHERE dataset_id = ?",
+                        (dataset_id,),
+                    ).fetchone()
+                    if row is None:
+                        raise DatasetNotFoundError(f"Dataset is not published: {dataset_id}")
+                    self._validate_row(row)
+                record = self._read_record(
+                    directories,
+                    dataset_id,
+                    created=False,
+                    normalized_limit=max_bytes,
+                    normalized_v1=True,
+                )
+                references = record.manifest["objects"]
+                if not isinstance(references, dict):
+                    raise DatasetStoreError("Invalid normalized content references")
+                reference = references["normalized"]
+                if not isinstance(reference, dict) or type(reference["size_bytes"]) is not int:
+                    raise DatasetStoreError("Invalid normalized content reference")
+                content_hash = _require_hash(reference["sha256"])
+                return self._read_verified_file(
+                    directories.objects,
+                    content_hash,
+                    content_hash,
+                    size=reference["size_bytes"],
+                    max_size=max_bytes,
+                )
+        except (OSError, sqlite3.Error) as exc:
+            raise DatasetStoreError(f"Cannot read normalized dataset evidence: {exc}") from exc
+
     @staticmethod
     def _validate_format(format_id: object) -> None:
         if not isinstance(format_id, str) or _FORMAT_ID.fullmatch(format_id) is None:
@@ -291,7 +335,13 @@ class LocalDatasetStore:
         return identity
 
     def _read_record(
-        self, directories: _Directories, identity: str, *, created: bool
+        self,
+        directories: _Directories,
+        identity: str,
+        *,
+        created: bool,
+        normalized_limit: int | None = None,
+        normalized_v1: bool = False,
     ) -> DatasetRecord:
         manifest_bytes = self._read_verified_file(
             directories.manifests, f"{identity}.json", identity, max_size=16_384
@@ -302,6 +352,8 @@ class LocalDatasetStore:
         if type(manifest["schema_version"]) is not int or manifest["schema_version"] != 1:
             raise DatasetStoreError("Unsupported dataset manifest schema version")
         self._validate_format(manifest["format_id"])
+        if normalized_v1 and manifest["format_id"] != "tickwitness.normalized-events.v1":
+            raise DatasetStoreError("Normalized reads require tickwitness.normalized-events.v1")
         references = manifest["objects"]
         if not isinstance(references, dict) or set(references) != _ROLES:
             raise DatasetStoreError("Manifest must bind raw, normalized, and report evidence")
@@ -314,6 +366,8 @@ class LocalDatasetStore:
             size = reference["size_bytes"]
             if type(size) is not int or size < 0:
                 raise DatasetStoreError("Content size must be a nonnegative integer")
+            if role == "normalized" and normalized_limit is not None and size > normalized_limit:
+                raise DatasetStoreError("Normalized evidence exceeds max_bytes")
             if reference["ref"] != f"objects/sha256/{content_hash}":
                 raise DatasetStoreError(
                     "Content reference must point to its restricted CAS identity"

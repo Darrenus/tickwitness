@@ -468,3 +468,46 @@ def test_format_id_cannot_inject_a_filesystem_path(tmp_path: Path) -> None:
     with pytest.raises(DatasetStoreError, match="non-path"):
         store.publish(RAW, NORMALIZED, REPORT, format_id="../../outside")
     assert store.list_datasets() == ()
+
+
+def test_read_normalized_returns_verified_bounded_bytes_even_when_quarantined(
+    tmp_path: Path,
+) -> None:
+    store = LocalDatasetStore(tmp_path)
+    record = publish(store)
+    assert store.read_normalized(record.dataset_id, max_bytes=len(NORMALIZED)) == NORMALIZED
+    with pytest.raises(DatasetStoreError, match="max_bytes"):
+        store.read_normalized(record.dataset_id, max_bytes=len(NORMALIZED) - 1)
+    assert record.report["quality_status"] == "quarantined"
+
+
+@pytest.mark.parametrize("budget", [0, -1, True])
+def test_read_normalized_requires_a_positive_real_byte_budget(tmp_path: Path, budget: int) -> None:
+    store = LocalDatasetStore(tmp_path)
+    with pytest.raises(DatasetStoreError, match="positive integer"):
+        store.read_normalized(publish(store).dataset_id, max_bytes=budget)
+
+
+def test_read_normalized_requires_the_fixed_v1_format(tmp_path: Path) -> None:
+    store = LocalDatasetStore(tmp_path)
+    record = store.publish(RAW, NORMALIZED, REPORT, format_id="tickwitness.other-format.v1")
+    with pytest.raises(DatasetStoreError, match=r"normalized-events\.v1"):
+        store.read_normalized(record.dataset_id)
+
+
+@pytest.mark.parametrize("role", ["raw", "normalized", "report"])
+def test_read_normalized_rechecks_the_entire_sealed_closure(tmp_path: Path, role: str) -> None:
+    store = LocalDatasetStore(tmp_path)
+    record = publish(store)
+    path = reference_path(tmp_path, record.manifest, role)
+    path.write_bytes(b"damaged")
+    with pytest.raises(DatasetStoreError):
+        store.read_normalized(record.dataset_id)
+
+
+def test_read_normalized_cannot_read_arbitrary_cas_paths(tmp_path: Path) -> None:
+    store = LocalDatasetStore(tmp_path)
+    with pytest.raises(DatasetStoreError, match="64 lowercase"):
+        store.read_normalized("../outside")
+    with pytest.raises(DatasetNotFoundError):
+        store.read_normalized("0" * 64)
