@@ -27,6 +27,7 @@ def main() -> None:
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=180,
             )
             if result.returncode != expected or (expected and result.stdout):
                 raise RuntimeError(f"Installed scenario CLI failed: {result.stdout}\n{result.stderr}")

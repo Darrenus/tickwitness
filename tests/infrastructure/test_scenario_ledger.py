@@ -15,12 +15,20 @@ from tickwitness.domain.evidence.scenario_records import (
     build_scenario_intent,
     load_scenario_intent,
 )
-from tickwitness.domain.research_contracts.executable import load_executable_protocol
+from tickwitness.domain.research_contracts.executable import (
+    ExecutableProtocol,
+    load_executable_protocol,
+)
 from tickwitness.infrastructure.attempt_ledger import (
     AttemptBudgetExceededError,
     AttemptLedgerError,
     LocalAttemptLedger,
 )
+
+
+def bound_protocol(case) -> ExecutableProtocol:
+    stored = case.registry.get(case.frozen.protocol_id)
+    return load_executable_protocol(stored.canonical_bytes)
 
 
 def fixture(case):
@@ -48,7 +56,7 @@ def legacy_failure(reservation) -> bytes:
 def test_intent_is_optional_for_legacy_roots_and_reading_never_creates_it(experiment_case) -> None:
     case = experiment_case
     ledger = LocalAttemptLedger(case.root / "runs")
-    reservation = ledger.reserve(load_executable_protocol(case.frozen.canonical_bytes))
+    reservation = ledger.reserve(bound_protocol(case))
     assert ledger.get_intent(reservation.attempt_id) is None
     assert not (case.root / "runs" / "intents").exists()
     ledger.publish(reservation, legacy_failure(reservation))
@@ -60,7 +68,7 @@ def test_intent_roundtrip_idempotency_failure_closure_and_same_budget(experiment
     case = experiment_case
     view, intent = fixture(case)
     ledger = LocalAttemptLedger(case.root / "runs")
-    protocol = load_executable_protocol(case.frozen.canonical_bytes)
+    protocol = bound_protocol(case)
     reservation = ledger.reserve(protocol)
     artifacts = (view.canonical_bytes, view.replay_input.normalized_bytes)
     assert ledger.bind_intent(reservation, intent.canonical_bytes, artifacts=artifacts) == intent.intent_id
@@ -83,7 +91,7 @@ def test_scenario_outcome_requires_preexisting_exact_intent(experiment_case) -> 
     case = experiment_case
     _, intent = fixture(case)
     ledger = LocalAttemptLedger(case.root / "runs")
-    reservation = ledger.reserve(load_executable_protocol(case.frozen.canonical_bytes))
+    reservation = ledger.reserve(bound_protocol(case))
     failure = build_scenario_failure(reservation, intent, "native_failure", "Original failure")
     with pytest.raises(AttemptLedgerError, match="durable intent"):
         ledger.publish(reservation, failure)
@@ -104,7 +112,7 @@ def test_finalized_baseline_attempt_cannot_gain_a_scenario_intent(experiment_cas
     case = experiment_case
     _, intent = fixture(case)
     ledger = LocalAttemptLedger(case.root / "runs")
-    reservation = ledger.reserve(load_executable_protocol(case.frozen.canonical_bytes))
+    reservation = ledger.reserve(bound_protocol(case))
     ledger.publish(reservation, legacy_failure(reservation))
     with pytest.raises(AttemptLedgerError, match="after an outcome"):
         ledger.bind_intent(reservation, intent.canonical_bytes)
@@ -115,7 +123,7 @@ def test_baseline_publication_racing_intent_bind_cannot_commit_both(experiment_c
     case = experiment_case
     _, intent = fixture(case)
     ledger = LocalAttemptLedger(case.root / "runs")
-    reservation = ledger.reserve(load_executable_protocol(case.frozen.canonical_bytes))
+    reservation = ledger.reserve(bound_protocol(case))
     barrier = Barrier(2)
 
     def publish_baseline() -> bool:
@@ -151,7 +159,7 @@ def test_reader_does_not_keep_stale_missing_intent_across_outcome_commit(
     _, intent = fixture(case)
     root = case.root / "runs"
     ledger = LocalAttemptLedger(root)
-    reservation = ledger.reserve(load_executable_protocol(case.frozen.canonical_bytes))
+    reservation = ledger.reserve(bound_protocol(case))
     failure = build_scenario_failure(reservation, intent, "native_failure", "Original failure")
     paused, release = Event(), Event()
     outcome_inode = (root / "outcomes").stat().st_ino
@@ -191,7 +199,7 @@ def test_intent_commit_failure_consumes_slot_and_preserves_only_cas_orphan(
     _, intent = fixture(case)
     root = case.root / "runs"
     ledger = LocalAttemptLedger(root)
-    protocol = load_executable_protocol(case.frozen.canonical_bytes)
+    protocol = bound_protocol(case)
     reservation = ledger.reserve(protocol)
     original = os.link
 
@@ -218,7 +226,7 @@ def test_unsafe_intent_or_missing_closure_is_rejected(experiment_case, target, m
     _, intent = fixture(case)
     root = case.root / "runs"
     ledger = LocalAttemptLedger(root)
-    reservation = ledger.reserve(load_executable_protocol(case.frozen.canonical_bytes))
+    reservation = ledger.reserve(bound_protocol(case))
     ledger.bind_intent(reservation, intent.canonical_bytes)
     failure = build_scenario_failure(reservation, intent, "native_failure", "Original failure")
     ledger.publish(reservation, failure)
@@ -244,7 +252,7 @@ def test_intent_directory_symlink_is_not_followed(experiment_case) -> None:
     _, intent = fixture(case)
     root = case.root / "runs"
     ledger = LocalAttemptLedger(root)
-    reservation = ledger.reserve(load_executable_protocol(case.frozen.canonical_bytes))
+    reservation = ledger.reserve(bound_protocol(case))
     outside = case.root / "outside"
     outside.mkdir()
     (root / "intents").symlink_to(outside, target_is_directory=True)
