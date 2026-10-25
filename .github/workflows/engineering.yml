@@ -92,6 +92,16 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked --extra nautilus
+      - name: Qualify step-coupled receive clocks before scenario execution
+        run: uv run --locked --extra nautilus python -I scripts/qualify_scenario_clocks.py --output /tmp/scenario-clock-qualification.json
+      - name: Preserve clock hypotheses and observed native evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scenario-clocks-${{ matrix.os }}-${{ github.sha }}
+          path: /tmp/scenario-clock-qualification.json
+          if-no-files-found: error
+          retention-days: 30
       - run: uv run --locked --extra nautilus pytest
       - name: Build and replace editable package with wheel
         run: |

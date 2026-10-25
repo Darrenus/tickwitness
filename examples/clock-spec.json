@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "clock_policy_id": "receive_order_v1",
+  "instrument": {"base_currency": "EUR", "quote_currency": "USD", "price_increment": "1", "size_increment": "1"},
+  "account": {"starting_cash": "10000"},
+  "fees": {"maker_rate": "0.01", "taker_rate": "0.02"},
+  "execution": {"insert_latency_ns": 0, "cancel_latency_ns": 0},
+  "strategy": {"kind": "single_limit_buy_v1", "submit_capture_seq": 1, "limit_price_ticks": 100, "quantity_lots": 2, "cancel_after_first_fill": false},
+  "seed": 7
+}
