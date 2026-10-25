@@ -35,7 +35,11 @@ from tickwitness.domain.research_contracts.executable import load_executable_pro
 
 class ScenarioLedger(AttemptLedger, Protocol):
     def bind_intent(
-        self, reservation: AttemptReservation, intent_bytes: bytes, *, artifacts: tuple[bytes, ...] = ()
+        self,
+        reservation: AttemptReservation,
+        intent_bytes: bytes,
+        *,
+        artifacts: tuple[bytes, ...] = (),
     ) -> str: ...
 
     def get_intent(self, attempt_id: str) -> bytes | None: ...

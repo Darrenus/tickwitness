@@ -135,7 +135,8 @@ def main() -> None:
         if arguments.report is not None:
             arguments.report.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
         print(
-            "Installed native scenario workflow: zero control, nonzero stress, audits and budget passed."
+            "Installed native scenario workflow: zero control, nonzero stress, "
+            "audits and budget passed."
         )
 
 
