@@ -25,6 +25,7 @@ from typing import cast
 
 _PROJECT = "tickwitness"
 _DERIVED = {"preview-manifest.json", "SHA256SUMS"}
+_BUILD_CONTROL = {".gitignore"}  # uv build creates this; it is not a release asset.
 _VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(?:(?:a|b|rc)[0-9]+|\.dev[0-9]+)?\Z")
 _COMMIT = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
 _METADATA_LIMIT = 256 * 1024
@@ -331,7 +332,7 @@ def prepare_preview(root: Path, dist: Path | None = None) -> dict[str, object]:
     found: set[str] = set()
     for path in dist.iterdir():
         _regular(path)
-        if path.name not in expected | _DERIVED:
+        if path.name not in expected | _DERIVED | _BUILD_CONTROL:
             raise PreviewError(f"dist/ contains an old or unexpected asset: {path.name}")
         if path.name in expected:
             found.add(path.name)

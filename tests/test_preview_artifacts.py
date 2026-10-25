@@ -245,6 +245,16 @@ def test_old_or_extra_assets_are_rejected(candidate: Path, filename: str) -> Non
         preview.prepare_preview(candidate)
 
 
+def test_uv_build_gitignore_is_not_a_distribution_asset(candidate: Path) -> None:
+    (candidate / "dist" / ".gitignore").write_text("*\n")
+    manifest = preview.prepare_preview(candidate)
+    assert {item["filename"] for item in manifest["artifacts"]} == {
+        f"tickwitness-{VERSION}-py3-none-any.whl",
+        f"tickwitness-{VERSION}.tar.gz",
+    }
+    assert ".gitignore" not in (candidate / "dist" / "SHA256SUMS").read_text()
+
+
 @pytest.mark.parametrize(
     "missing",
     [
