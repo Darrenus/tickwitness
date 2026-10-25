@@ -50,7 +50,7 @@
 
 ## ADR-008 首个有限L2 adapter选择NautilusTrader稳定v1
 
-状态：Proposed，2026-10-26，随本批PR交owner验收。选择固定NautilusTrader **1.231.0**作为S3首个单资产L2 adapter的集成目标，依据[综合记录](../research/engine-selection.md)和[六案例L2补测](../research/nautilus-l2-selection-gates.md)。两个独立进程结果一致，分时/同刻partial的fill回调与持仓、现金、费用对齐；HftBacktest2.4.4的已知失败门保持记录，不启用其产品默认路径。
+状态：Accepted，2026-10-26，owner已合并PR#75。选择固定NautilusTrader **1.231.0**作为S3首个单资产L2 adapter的集成目标，依据[综合记录](../research/engine-selection.md)和[六案例L2补测](../research/nautilus-l2-selection-gates.md)。两个独立进程结果一致，分时/同刻partial的fill回调与持仓、现金、费用对齐；HftBacktest2.4.4的已知失败门保持记录，不启用其产品默认路径。
 
 范围约束：adapter尚未实现；数据步进时间不代表任意时间精确命令到达；EOF不自动drain，待处理命令必须报告incomplete；S6精确观测相容队列见证仍closed。正式性能、平台wheel、费用/单位、确定性及输入反腐映射由S3契约检查后逐项开放。重评条件包括稳定版本语义变化、复验失败、许可/维护成本或所需公开扩展无法实现。
 
@@ -58,6 +58,14 @@
 
 ## ADR-009 冻结声明与执行许可分开
 
-状态：Proposed，2026-10-26，随本批PR交owner验收。协议以canonical bytes的SHA-256为身份，claim以规范化命题的独立hash为revision。应用验证真实dataset、数据质量、向前不交叠分区和策略源码后，通过独立不可变registry发布；模型、数据、参数或策略变化生成新protocol，不覆盖旧版本。domain只处理值，存储与CLI通过application ports连接。
+状态：Accepted，2026-10-26，owner已合并PR#75。协议以canonical bytes的SHA-256为身份，claim以规范化命题的独立hash为revision。应用验证真实dataset、数据质量、向前不交叠分区和策略源码后，通过独立不可变registry发布；模型、数据、参数或策略变化生成新protocol，不覆盖旧版本。domain只处理值，存储与CLI通过application ports连接。
 
 当前冻结结果始终`execution_ready=false`，只有development读取，任何confirmation读取在repository初始化前被拒绝。该政策不对宿主owner保密，也不证明时间绑定、模型有效或统计独立。完整ClaimSpec/trial生命周期、累计预算、确认解封/一次性使用和执行sandbox由后续切片实现，不能用当前声明hash代替实际执行证据。完整schema见[协议合同](../contracts/frozen-protocol-v1.md)。
+
+## ADR-010 先交付显式受限的引擎验收profile
+
+状态：Proposed，2026-10-26。本批以独立ReplaySpec和ReplayPort实现可信本地dataset qualification，只支持EUR/USD内置单限价买单。原有FrozenProtocol v1不升级为可执行，也不被此入口解封。先验证排序、单位、源引用、逐笔账务和终止完整性，再另行版本化研究执行合同。
+
+`receive_order_v1`明确映射native双时间到receive，并保留来源原始时点；不是UTC校准。公开pre_process在撮合前绑定source_ref；submit/cancel都有独立receipt，FILLED不抹掉仍在途取消。未决命令或开放订单均incomplete，不造未来行情推进结算。native实际费用与精确理论值分别记录，不隐藏其f64/Money舍入。
+
+worker采用schema化JSON、独立CWD、`-I`、进程组终止和输出/墙钟预算；这是可信代码故障边界，不是任意Python沙箱或RAM硬配额。可选引擎依赖固定版本与uv.lock，核心仍无必需第三方runtime。扩大资产、策略、时钟、完成规则或执行权限必须先补合同/测试与维护证据，不能只放开枚举。见[回放指南](../replay.md)及[合同](../contracts/replay-v1.md)。

@@ -1,6 +1,6 @@
 # TickWitness 开发入口
 
-状态：Sprint 2 冻结协议工程，2026-10-26。当前支持有界JSONL数据导入、完整性inspection、绑定真实数据与策略源码的声明冻结、开发集读取和确认集拒绝。回放、反例搜索和最终研究判定尚未实现。[选型记录](research/engine-selection.md)提出NautilusTrader1.231.0作为有限L2集成目标；第三方引擎当前仍只用于独立spike，没有正式adapter。
+状态：Sprint 3 受限回放工程，2026-10-26。在已接受的数据证据与冻结协议上新增ReplayPort、可选NautilusTrader1.231.0正式adapter、内置L2策略回放与轨迹比较。首个profile仅EUR/USD，不执行FrozenProtocol或任意源码；研究判定、搜索和完整研究SDK尚未实现。[回放指南](replay.md)给出完整命令、限制及退出码。
 
 ## 从干净 checkout 开始
 
@@ -14,7 +14,7 @@ make check
 make build
 ```
 
-Sprint1基础与PR#74的数据导入已合并；本批冻结能力验收前位于`codex/sprint-02-frozen-protocols`。`make sync`使用已提交的`uv.lock`，不静默更新版本；修改依赖时显式运行`uv lock`，把版本与锁文件一同提交。根包运行时没有第三方依赖，开发工具在`dev`依赖组。HftBacktest/Nautilus不能成为纯domain的隐式依赖。
+PR#73–75已合并；本批回放验收前位于`codex/sprint-03-replay-adapter`。`make sync`使用已提交的`uv.lock`，不静默更新版本；修改依赖时显式运行`uv lock`，把版本与锁文件一同提交。核心运行时无第三方依赖，开发工具在`dev`组；`nautilus`是显式可选extra，不能成为domain隐式依赖。
 
 `make build`先同步锁定的开发工具，再使用该环境中的固定Hatchling构建wheel/sdist，不使用未固定的全局构建后端。`dist/`不提交Git。当前版本`0.0.1.dev0`是内部开发基础，不是S4的0.1产品预览，也没有上传PyPI。
 
@@ -37,13 +37,22 @@ uv run --locked tickwitness --help
 uv run --locked tickwitness --version
 ```
 
-回放尚未实现。能力声明类型只检查请求集合是否被声明支持，不认证引擎真实性；每个adapter还需要S3契约测试。
+原生adapter的声明支持输入/决策/订单/成交/账户trace，拒绝checkpoint。能力声明不等于当前环境已安装依赖；运行时还核对精确版本、输入profile和结果绑定。完整native检查使用：
+
+```sh
+uv sync --locked --extra nautilus
+uv run --locked --extra nautilus pytest
+```
+
+`uv sync`默认只同步核心，会移除不需要的可选包；原生操作持续显式传`--extra nautilus`。预检、比较与原有数据/协议路径无需安装native。
 
 ## CI与打包边界
 
-`Engineering`工作流执行同一Make入口，核心测试矩阵为Ubuntu24.04/macOS15与Python3.12/3.13/3.14。独立distribution作业从sdist构建wheel，在新环境、不同工作目录离线安装wheel，实际验证数据import/inspect、未知时间、篡改失败，以及协议freeze/inspect、幂等、开发集读取、确认集拒绝，另检查命令和domain导入，防止源码路径掩盖打包问题。
+`Engineering`工作流执行同一Make入口，核心矩阵为Ubuntu24.04/macOS15与Python3.12/3.13/3.14；缺native时显式跳过原生case，不把skip当引擎通过。独立native矩阵只含这两个OS的Python3.12，安装固定extra运行全部测试，再用wheel替换editable包，以独立目录、Python`-I`验证真实worker/CLI。聚合engineering检查要求native矩阵也通过。
 
-研究spike各有固定依赖、命令与证据，不属于根包的正式adapter或基础单测。禁止把其需要的所有金融依赖塞入开发包；第三方引擎的许可证、平台和支持语义分别登记。原始交易数据和任何私有策略不进入公开代码仓库。
+distribution作业从sdist构建wheel，在新环境/不同目录离线安装，验证原有数据与协议链路及核心安装下明确的engine_unavailable；native作业则验证真正L2部分成交与监督进程输出。源码包包含原创examples供测试，wheel不包含native二进制或第三方源码。
+
+历史spike保留原证据，不由正式adapter覆盖。S3的[十次基线](research/sprint-03-replay-baseline.md)保存原始耗时与安装制品/模块hash，不冒充纯撮合吞吐。第三方引擎的许可证、平台和支持语义分别登记；原始交易数据及私有策略不进入公开仓库。
 
 ## 受限本地环境的排错记录
 

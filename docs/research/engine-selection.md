@@ -1,5 +1,7 @@
 # S02-02：初始回放引擎的有限选择
 
+后续状态，2026-10-26：PR#75已接受本选型并关闭S02-02；本页保留当时的决定与门槛。S3的受限adapter、optional extra、契约与原始基线见[最新工程状态](../planning/sprint-03-status.md)，不继承为S6或任意研究策略的通过记录。
+
 日期：2026-10-25（Asia/Singapore）。状态：**选择决定已记录；S3 正式 adapter 尚未实现或验收。** 本文汇总 S1/S2 实验，记录初始集成目标与边界；不自动关闭 S02-02 全部工作，不代替 [ADR-003](../architecture/decisions.md)、Sprint 状态或产品发布 gate。
 
 **选择 NautilusTrader `1.231.0` stable v1，作为 S3 首个单资产 L2 adapter 的目标。** 采用固定 v1 公开的 L2 delta、TradeTick、策略决策 instrumentation、订单/fill 与持仓事件路径。选择理由是所测分时/同刻部分成交能逐笔回调，且每次回调内的持仓、保证金账户现金与费用一致；不要求先维护上游原生补丁。

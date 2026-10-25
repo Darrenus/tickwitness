@@ -1,0 +1,2 @@
+{"schema_version":1,"type":"snapshot","source":"synthetic","instrument":"EUR-USD","session":"replay-fixture-v1","capture_seq":1,"event_time_ns":1699999999999999900,"receive_time_ns":1700000000000000000,"last_sequence":10,"bids":[[100,1],[99,10]],"asks":[[103,10],[104,10]]}
+{"schema_version":1,"type":"delta","source":"synthetic","instrument":"EUR-USD","session":"replay-fixture-v1","capture_seq":2,"event_time_ns":1700000002999999900,"receive_time_ns":1700000003000000000,"first_sequence":11,"last_sequence":11,"bids":[[100,1]],"asks":[]}

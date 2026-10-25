@@ -5,7 +5,7 @@
 
 Find reproducible counterexamples to quantitative research claims under explicit data and execution assumptions.
 
-**Status: Sprint 2 frozen-protocol development, 2026-10-26.** Data-evidence import and integrity inspection were accepted in PR #74. The current branch adds frozen research declarations bound to real datasets and strategy source, immutable protocol registration, development-only reads, and confirmation-read denial. NautilusTrader 1.231.0 is the proposed limited L2 integration target; its product adapter, replay, search, the research SDK, API, MCP server, and UI are not implemented. Real interviews remain outstanding; there are no measured product performance or adoption results yet.
+**Status: Sprint 3 bounded replay development, 2026-10-26.** Data evidence and frozen declarations were accepted in PRs #74–75. This branch adds a native-free ReplayPort, the optional NautilusTrader 1.231.0 adapter, supervised built-in L2 replay, trace comparison, and a ten-run synthetic baseline. The first profile supports EUR/USD and one limit buy; it does not execute frozen research protocols or arbitrary strategy source. Claim evaluation, search, the research SDK, API, MCP server, and UI remain future work. Real interviews remain outstanding; synthetic timings are not product throughput or adoption results.
 
 TickWitness 将研究声明、行情证据、执行假设和反例联系起来，帮助研究员回答：**什么有依据的假设变化会使结论翻转，如何复现，下一步需要采集什么证据？**
 
@@ -18,9 +18,12 @@ The initial product is a local-first research verification toolkit for quantitat
 | [Development entry point](docs/development.md) | Locked environment, local checks, package build and current limitations |
 | [Data import guide](docs/data-import.md) | Executable import/inspect workflow, format, limits, and trust boundaries |
 | [Frozen protocol guide](docs/research-protocols.md) | Bind actual data/source, seal a declaration, read development data and verify confirmation denial |
+| [Bounded replay guide](docs/replay.md) | Install the optional engine, qualify a sealed dataset, inspect trace/completeness and compare results |
+| [Replay baseline](docs/research/sprint-03-replay-baseline.md) | Ten independent runs, original timings, golden trace and controlled input difference |
 | [Engine selection](docs/research/engine-selection.md) | Limited integration decision, partial-fill evidence, timing and queue restrictions |
 | [Sprint 1 status](docs/planning/sprint-01-status.md) | Evidence-based progress and remaining external dependencies |
 | [Sprint 2 status](docs/planning/sprint-02-status.md) | Implemented data scope and unresolved research/selection gates |
+| [Sprint 3 status](docs/planning/sprint-03-status.md) | Adapter, trace and baseline progress with remaining research execution gates |
 | [Engine feasibility comparison](docs/research/engine-comparison.md) | Version-fixed synthetic spike evidence and unresolved selection gates |
 | [Product strategy](docs/product/product-strategy.md) | Users, workflows, scope, differentiation, product outcomes |
 | [Discovery and adoption](docs/product/discovery-and-adoption.md) | User validation, experiments, ecosystem, adoption gates |
@@ -40,7 +43,7 @@ The initial product is a local-first research verification toolkit for quantitat
 
 The planning horizon assumes one full-time human maintainer supported by AI tools. Two-week iterations and milestone gates control scope; dates are forecasts, not promises. The early CLI release is a usable incremental product, while v1.0 requires external replication, operational evidence, compatibility guarantees, and maintenance readiness.
 
-The current [milestones](https://github.com/Darrenus/tickwitness/milestones) and [issues](https://github.com/Darrenus/tickwitness/issues) track the plan and actual progress separately. Two Sprint 1 engineering stories are accepted; user discovery remains open while independent data-evidence engineering proceeds. The later schedule remains a forecast.
+The current [milestones](https://github.com/Darrenus/tickwitness/milestones) and [issues](https://github.com/Darrenus/tickwitness/issues) track the plan and actual progress separately. Data sealing, limited engine selection and frozen declarations are accepted; user discovery and the full trial lifecycle remain open while independent replay engineering proceeds. The later schedule remains a forecast.
 
 For development, install uv 0.12.13 and use the locked Python environment:
 
@@ -56,7 +59,7 @@ To export the planning source as machine-readable JSON without modifying GitHub:
 uv run --locked python scripts/export_backlog.py
 ```
 
-The installed CLI provides `import-events`, `inspect-dataset`, `freeze-protocol`, `inspect-protocol`, and `read-protocol-data`; the guides provide complete local examples using synthetic fixtures. Sealing verifies content integrity. Frozen declarations remain `execution_ready=false`, and confirmation denial is an application routing policy, not secrecy from the host owner. Strategy execution and research verdicts arrive in later Sprints; the remaining architecture is a proposed target.
+The installed CLI provides data import/inspection, protocol freezing/inspection, development-only protocol reads, `replay-dataset`, and `compare-replays`. The replay guide uses the explicit `nautilus` extra and original synthetic fixtures. Frozen declarations remain `execution_ready=false`; direct dataset replay is a trusted local engine-qualification entry, not an Agent holdout grant. Open orders and pending commands remain visibly incomplete. Research protocol execution and verdicts arrive in later Sprints; the remaining architecture is a proposed target.
 
 ## Contribute
 
