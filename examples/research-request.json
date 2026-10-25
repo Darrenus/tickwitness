@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "claim": {
+    "title": "Synthetic net marked PnL declaration",
+    "hypothesis": "Under the frozen declared model the net marked PnL exceeds zero.",
+    "metric": "net_marked_pnl_v1",
+    "comparator": "gt",
+    "threshold": "0.00",
+    "unit": "synthetic_quote_units"
+  },
+  "strategy_name": "synthetic_strategy_v1",
+  "parameters": {"size_lots": 1},
+  "configuration": {
+    "fee_model_id": "declared_fee_demo_v1",
+    "execution_model_id": "declared_execution_demo_v1",
+    "clock_policy_id": "capture_order_unbound_v1"
+  },
+  "budget": {"max_scenarios": 10, "max_wall_seconds": 60, "max_events": 1000},
+  "seed": 42
+}

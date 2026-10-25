@@ -1,0 +1,271 @@
+{
+  "byte_identical": true,
+  "case_count": 6,
+  "case_summary": [
+    {
+      "case_id": "partial-separated",
+      "checks": {
+        "callback_cash_matches_margin_fees": true,
+        "callback_position_matches_observed_fills": true,
+        "exact_front_back_witnesses_verified": false,
+        "fill_callbacks_evaluated": 2,
+        "fill_count_matches_fixture_expectation": true,
+        "final_cash_matches_margin_fees": true,
+        "final_position_matches_observed_fills": true,
+        "per_fill_commission_matches_declared_rate": true
+      },
+      "completeness": {
+        "has_unresolved_order_commands_at_end": false,
+        "label": "FIXTURE_ORDER_TERMINAL",
+        "last_input_time_ns": "1700000003000000000",
+        "note": "Engine run returned; this does not certify universal inflight drain."
+      },
+      "fill_count": 2,
+      "final_state": {
+        "cached_ask_levels": 2,
+        "cached_bid_levels": 2,
+        "cached_book_type": "L2_MBP",
+        "cash_free_usd": "9798",
+        "cash_locked_usd": "200",
+        "cash_total_usd": "9998",
+        "clock_ns": "1700000003000000000",
+        "net_position_from_cache": "2",
+        "observed_commission_usd": "2",
+        "observed_fill_qty": "2",
+        "orders": [
+          {
+            "client_order_id": "O-20231114-221320-001-001-1",
+            "filled_qty": "2",
+            "leaves_qty": "0",
+            "quantity": "2",
+            "status": "FILLED"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "partial-same-time",
+      "checks": {
+        "callback_cash_matches_margin_fees": true,
+        "callback_position_matches_observed_fills": true,
+        "exact_front_back_witnesses_verified": false,
+        "fill_callbacks_evaluated": 2,
+        "fill_count_matches_fixture_expectation": true,
+        "final_cash_matches_margin_fees": true,
+        "final_position_matches_observed_fills": true,
+        "per_fill_commission_matches_declared_rate": true
+      },
+      "completeness": {
+        "has_unresolved_order_commands_at_end": false,
+        "label": "FIXTURE_ORDER_TERMINAL",
+        "last_input_time_ns": "1700000003000000000",
+        "note": "Engine run returned; this does not certify universal inflight drain."
+      },
+      "fill_count": 2,
+      "final_state": {
+        "cached_ask_levels": 2,
+        "cached_bid_levels": 2,
+        "cached_book_type": "L2_MBP",
+        "cash_free_usd": "9798",
+        "cash_locked_usd": "200",
+        "cash_total_usd": "9998",
+        "clock_ns": "1700000003000000000",
+        "net_position_from_cache": "2",
+        "observed_commission_usd": "2",
+        "observed_fill_qty": "2",
+        "orders": [
+          {
+            "client_order_id": "O-20231114-221320-001-001-1",
+            "filled_qty": "2",
+            "leaves_qty": "0",
+            "quantity": "2",
+            "status": "FILLED"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "cancel-zero-same-time",
+      "checks": {
+        "callback_cash_matches_margin_fees": true,
+        "callback_position_matches_observed_fills": true,
+        "exact_front_back_witnesses_verified": false,
+        "fill_callbacks_evaluated": 1,
+        "fill_count_matches_fixture_expectation": true,
+        "final_cash_matches_margin_fees": true,
+        "final_position_matches_observed_fills": true,
+        "per_fill_commission_matches_declared_rate": true
+      },
+      "completeness": {
+        "has_unresolved_order_commands_at_end": false,
+        "label": "FIXTURE_ORDER_TERMINAL",
+        "last_input_time_ns": "1700000003000000000",
+        "note": "Engine run returned; this does not certify universal inflight drain."
+      },
+      "fill_count": 1,
+      "final_state": {
+        "cached_ask_levels": 2,
+        "cached_bid_levels": 2,
+        "cached_book_type": "L2_MBP",
+        "cash_free_usd": "9899",
+        "cash_locked_usd": "100",
+        "cash_total_usd": "9999",
+        "clock_ns": "1700000003000000000",
+        "net_position_from_cache": "1",
+        "observed_commission_usd": "1",
+        "observed_fill_qty": "1",
+        "orders": [
+          {
+            "client_order_id": "O-20231114-221320-001-001-1",
+            "filled_qty": "1",
+            "leaves_qty": "1",
+            "quantity": "2",
+            "status": "CANCELED"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "cancel-delayed-same-time",
+      "checks": {
+        "callback_cash_matches_margin_fees": true,
+        "callback_position_matches_observed_fills": true,
+        "exact_front_back_witnesses_verified": false,
+        "fill_callbacks_evaluated": 2,
+        "fill_count_matches_fixture_expectation": true,
+        "final_cash_matches_margin_fees": true,
+        "final_position_matches_observed_fills": true,
+        "per_fill_commission_matches_declared_rate": true
+      },
+      "completeness": {
+        "has_unresolved_order_commands_at_end": false,
+        "label": "FIXTURE_ORDER_TERMINAL",
+        "last_input_time_ns": "1700000003000000000",
+        "note": "Engine run returned; this does not certify universal inflight drain."
+      },
+      "fill_count": 2,
+      "final_state": {
+        "cached_ask_levels": 2,
+        "cached_bid_levels": 2,
+        "cached_book_type": "L2_MBP",
+        "cash_free_usd": "9798",
+        "cash_locked_usd": "200",
+        "cash_total_usd": "9998",
+        "clock_ns": "1700000003000000000",
+        "net_position_from_cache": "2",
+        "observed_commission_usd": "2",
+        "observed_fill_qty": "2",
+        "orders": [
+          {
+            "client_order_id": "O-20231114-221320-001-001-1",
+            "filled_qty": "2",
+            "leaves_qty": "0",
+            "quantity": "2",
+            "status": "FILLED"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "eof-no-future-data",
+      "checks": {
+        "callback_cash_matches_margin_fees": null,
+        "callback_position_matches_observed_fills": null,
+        "exact_front_back_witnesses_verified": false,
+        "fill_callbacks_evaluated": 0,
+        "fill_count_matches_fixture_expectation": true,
+        "final_cash_matches_margin_fees": true,
+        "final_position_matches_observed_fills": true,
+        "per_fill_commission_matches_declared_rate": true
+      },
+      "completeness": {
+        "has_unresolved_order_commands_at_end": true,
+        "label": "INCOMPLETE_AT_DATA_END",
+        "last_input_time_ns": "1700000003000000000",
+        "note": "Engine run returned; this does not certify universal inflight drain."
+      },
+      "fill_count": 0,
+      "final_state": {
+        "cached_ask_levels": 2,
+        "cached_bid_levels": 2,
+        "cached_book_type": "L2_MBP",
+        "cash_free_usd": "10000",
+        "cash_locked_usd": "0",
+        "cash_total_usd": "10000",
+        "clock_ns": "1700000003000000000",
+        "net_position_from_cache": "0",
+        "observed_commission_usd": "0",
+        "observed_fill_qty": "0",
+        "orders": [
+          {
+            "client_order_id": "O-20231114-221323-001-001-1",
+            "filled_qty": "0",
+            "leaves_qty": "1",
+            "quantity": "1",
+            "status": "SUBMITTED"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "eof-with-later-data",
+      "checks": {
+        "callback_cash_matches_margin_fees": true,
+        "callback_position_matches_observed_fills": true,
+        "exact_front_back_witnesses_verified": false,
+        "fill_callbacks_evaluated": 1,
+        "fill_count_matches_fixture_expectation": true,
+        "final_cash_matches_margin_fees": true,
+        "final_position_matches_observed_fills": true,
+        "per_fill_commission_matches_declared_rate": true
+      },
+      "completeness": {
+        "has_unresolved_order_commands_at_end": false,
+        "label": "FIXTURE_ORDER_TERMINAL",
+        "last_input_time_ns": "1700000006000000000",
+        "note": "Engine run returned; this does not certify universal inflight drain."
+      },
+      "fill_count": 1,
+      "final_state": {
+        "cached_ask_levels": 2,
+        "cached_bid_levels": 2,
+        "cached_book_type": "L2_MBP",
+        "cash_free_usd": "9894.94",
+        "cash_locked_usd": "103",
+        "cash_total_usd": "9997.94",
+        "clock_ns": "1700000006000000000",
+        "net_position_from_cache": "1",
+        "observed_commission_usd": "2.06",
+        "observed_fill_qty": "1",
+        "orders": [
+          {
+            "client_order_id": "O-20231114-221323-001-001-1",
+            "filled_qty": "1",
+            "leaves_qty": "0",
+            "quantity": "1",
+            "status": "FILLED"
+          }
+        ]
+      }
+    }
+  ],
+  "engine_version": "1.231.0",
+  "errors": [],
+  "independent_process_runs": 2,
+  "limits": [
+    "Fixed synthetic L2 plus trades only; no true exchange queue inference.",
+    "Two same-machine processes; no cross-platform determinism or performance benchmark.",
+    "No upstream message, third-party modification or production adapter implementation."
+  ],
+  "package_license": "LGPL-3.0-or-later",
+  "run_a_sha256": "e710002f27e7fde245297b53767bd2306979d4bf5c58477df2e3d1182e81634c",
+  "run_b_sha256": "e710002f27e7fde245297b53767bd2306979d4bf5c58477df2e3d1182e81634c",
+  "schema": "nautilus-v1-l2-comparison-v1",
+  "script_sha256": "17b523a394b24942d80957ca30a4035e44eddaef5e2d6413a90cf711e64adc76",
+  "selection_findings": {
+    "autonomous_command_drain_after_last_input": "NOT_SUPPORTED_BY_OBSERVED_CASE",
+    "required_adapter_policy": "Preserve deterministic data ordering; label unresolved terminal commands incomplete; never invent market data to force completion.",
+    "s3_l2_trade_and_partial_trace_candidate": "CONDITIONAL_GO_FOR_TESTED_PUBLIC_CALLBACK_PATH",
+    "s6_exact_front_back_witness_gate": "CLOSED_NOT_VERIFIED"
+  }
+}

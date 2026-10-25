@@ -1,0 +1,2 @@
+{"schema_version":1,"type":"snapshot","source":"synthetic","instrument":"TEST-USD","session":"example-001","capture_seq":3,"event_time_ns":200,"receive_time_ns":null,"last_sequence":20,"bids":[[199,5]],"asks":[[201,5]]}
+{"schema_version":1,"type":"delta","source":"synthetic","instrument":"TEST-USD","session":"example-001","capture_seq":4,"event_time_ns":201,"receive_time_ns":211,"first_sequence":21,"last_sequence":21,"bids":[[199,4]],"asks":[]}

@@ -62,7 +62,7 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: make build
-      - name: Verify the installed data-evidence workflow outside the source directory
+      - name: Verify installed data and protocol workflows outside the source directory
         run: |
           uv venv /tmp/tickwitness-wheel --python 3.12
           uv pip install --python /tmp/tickwitness-wheel/bin/python --no-index --no-deps dist/*.whl

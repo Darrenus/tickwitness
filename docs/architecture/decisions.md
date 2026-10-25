@@ -22,6 +22,8 @@
 
 2026-10-25选型门更新：S1比较已获owner接受，但S2[补测](../research/hftbacktest-selection-gates.md)发现固定HFT版本的部分成交账务不一致、fill轮询不完整及终止时钟陈旧。单次完整成交的受限路径可继续研究，不能据此批准产品完整执行模型。**默认adapter决策暂缓**，待核对替代引擎的L2/partial能力或经验证的上游修复成本；不会静默换成无部分成交模型。S02-02不可变数据发布可独立交付，其引擎选型验收项保持未完成。
 
+同日后续补测与有限选型提案见ADR-008；上段保留为当时的决策依据，不覆盖原始失败证据。
+
 ## ADR-004 原始证据不可变，catalog 与分析存储分开
 
 决定：原始数据和制品采用 content-addressed immutable objects + manifest；规范化列数据使用 Parquet；DuckDB 负责只读分析，不作为并发任务状态库；SQLite 支持本地 catalog 与事务，jobs/state 遵守单写/事务边界。冻结后修订创建新版本。
@@ -45,3 +47,17 @@
 决定：CLI/SDK 构成早期完整产品；HTTP、MCP 和 UI 是相同应用用例的 adapter，不直接操作数据库。UI 只显示真实 job、场景、证据和 unknown/error；不使用假后端状态证明产品完成。
 
 代价：首版视觉能力有限；优先保证用户能从自己的流程调用并独立复验。UI 投入由用户定位任务耗时和采用反馈触发。
+
+## ADR-008 首个有限L2 adapter选择NautilusTrader稳定v1
+
+状态：Proposed，2026-10-26，随本批PR交owner验收。选择固定NautilusTrader **1.231.0**作为S3首个单资产L2 adapter的集成目标，依据[综合记录](../research/engine-selection.md)和[六案例L2补测](../research/nautilus-l2-selection-gates.md)。两个独立进程结果一致，分时/同刻partial的fill回调与持仓、现金、费用对齐；HftBacktest2.4.4的已知失败门保持记录，不启用其产品默认路径。
+
+范围约束：adapter尚未实现；数据步进时间不代表任意时间精确命令到达；EOF不自动drain，待处理命令必须报告incomplete；S6精确观测相容队列见证仍closed。正式性能、平台wheel、费用/单位、确定性及输入反腐映射由S3契约检查后逐项开放。重评条件包括稳定版本语义变化、复验失败、许可/维护成本或所需公开扩展无法实现。
+
+第三方LGPL-3.0-or-later保留独立许可，后续只通过optional extra/独立worker边界引入，不能重标Apache或隐式进入核心依赖。本批不打包引擎、不改第三方源码；发布组合制品前仍须检查实际链接、再分发与NOTICE义务。依赖隔离本身不构成许可豁免。
+
+## ADR-009 冻结声明与执行许可分开
+
+状态：Proposed，2026-10-26，随本批PR交owner验收。协议以canonical bytes的SHA-256为身份，claim以规范化命题的独立hash为revision。应用验证真实dataset、数据质量、向前不交叠分区和策略源码后，通过独立不可变registry发布；模型、数据、参数或策略变化生成新protocol，不覆盖旧版本。domain只处理值，存储与CLI通过application ports连接。
+
+当前冻结结果始终`execution_ready=false`，只有development读取，任何confirmation读取在repository初始化前被拒绝。该政策不对宿主owner保密，也不证明时间绑定、模型有效或统计独立。完整ClaimSpec/trial生命周期、累计预算、确认解封/一次性使用和执行sandbox由后续切片实现，不能用当前声明hash代替实际执行证据。完整schema见[协议合同](../contracts/frozen-protocol-v1.md)。

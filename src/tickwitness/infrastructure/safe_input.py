@@ -17,6 +17,19 @@ class InputReadError(ValueError):
 
 def read_jsonl(input_root: Path, relative_path: str, *, max_bytes: int) -> bytes:
     """Read one regular JSONL file within a trusted root, with a hard byte bound."""
+    return read_regular_file(
+        input_root, relative_path, max_bytes=max_bytes, allowed_suffixes=frozenset({".jsonl"})
+    )
+
+
+def read_regular_file(
+    input_root: Path,
+    relative_path: str,
+    *,
+    max_bytes: int,
+    allowed_suffixes: frozenset[str],
+) -> bytes:
+    """Apply the same no-follow boundary to explicitly allowed text artifact types."""
     if type(max_bytes) is not int or max_bytes <= 0:
         raise InputReadError("max_bytes must be a positive integer")
     parts = relative_path.split("/")
@@ -27,9 +40,10 @@ def read_jsonl(input_root: Path, relative_path: str, *, max_bytes: int) -> bytes
         or "\\" in relative_path
         or "\x00" in relative_path
         or any(part in {"", ".", ".."} for part in parts)
-        or not parts[-1].endswith(".jsonl")
+        or not allowed_suffixes
+        or not any(parts[-1].endswith(suffix) for suffix in allowed_suffixes)
     ):
-        raise InputReadError("Input must be a relative .jsonl path without traversal")
+        raise InputReadError("Input must be a relative path of an allowed type without traversal")
     if not hasattr(os, "O_NOFOLLOW") or os.open not in os.supports_dir_fd:
         raise InputReadError("Safe directory-relative import is unsupported on this platform")
 
