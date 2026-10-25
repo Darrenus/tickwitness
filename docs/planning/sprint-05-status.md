@@ -5,12 +5,12 @@
 | 故事 | 本切片范围 | 状态与后续门 |
 | --- | --- | --- |
 | S05-01 / Issue #13 | 不可变 AssumptionSpec / ScenarioSpec、研究者设定的未校准纳秒范围、suffix anchor、真实来源绑定与只读 `validate-scenario` | PR #79 远端检查通过，待 owner 合并 |
-| S05-02 / Issue #14 | 耦合 receive-clock 后缀压力执行、独立派生身份、持久intent、共享预算及复核 | PR #80 实施中；Phase A 时钟资格已通过，Phase B 执行链待远端回归与 owner 接受 |
+| S05-02 / Issue #14 | 耦合 receive-clock 后缀压力执行、独立派生身份、持久intent、共享预算及复核 | PR #80 两阶段远端验收通过，待 owner 合并；未发行 |
 | S05-03 / Issue #15 | 基线/干预配对与首次分歧、数值变化说明 | 依赖 S05-02；不能将输入时间戳/hash 不同、incomplete 或不可评价状态当作命题翻转 |
 
 故事范围与容量仍见 [Sprint backlog](sprint-backlog.md#s5--假设约束与首个压力情景)。实际投入时间尚未登记，不把代码生成、自审或 AI 交叉审查计为独立人类领域验收。真实访谈、外部采用和其他开放研究门继续保留原记录，不由本切片补数。
 
-## 本次最小交付边界
+## S05-01 声明校验边界
 
 - [Assumption / Scenario v1](../contracts/assumption-scenario-v1.md) 将请求与 canonical spec 分开；hash/frozen DTO 保存声明身份，不提供执行权限。
 - transform 仅 `replay_receive_suffix_shift_v1`，从实际存在的 capture 起对全部后缀声明增加非负 receive delay；类别仅额外压力。
@@ -39,7 +39,11 @@
 
 零延迟/全流平移维持业务投影；1.5 秒撤单延迟、capture 4 起 suffix 加 2 秒的原创合成案例使成交 2 手变 1 手、手续费 2 USD 变 1 USD，两边均完整可评价（net marked PnL -2 / -1 USD）。同刻撤单反证确认：到期命令在真实输入步骤后结算，不能假定在行情间独立生效。这些是模型资格，未校准真实市场，也不判原 baseline claim 的反例。
 
-Phase B 仅在读取上述实际报告后接入执行：原协议 reserve、engine 前持久intent/CAS、派生 view 身份、独立 scenario receipt/evaluation、`inspect-scenario-run` 重派生和账务审计。旧 baseline receipt/bundle 拒绝压力结果。场景 portable bundle 与通用配对/首次分歧仍不计完成。Phase B 的实际 CI 与安装后执行结果在完成后补入；本机未运行测试、构建、回放或基准。
+Phase B 仅在读取上述实际报告后接入执行：原协议 reserve、engine 前持久intent/CAS、派生 view 身份、独立 scenario receipt/evaluation、`inspect-scenario-run` 重派生和账务审计。旧 baseline receipt/bundle 拒绝压力结果。场景 portable bundle 与通用配对/首次分歧仍不计完成。本机未运行测试、构建、回放或基准。
+
+Phase B head `101a3dc06932d1ef0f4736b0ad7fbedad64dd7f6` 的 [Engineering 40221168032](https://github.com/Darrenus/tickwitness/actions/runs/40221168032) 与 [Documentation 40221168033](https://github.com/Darrenus/tickwitness/actions/runs/40221168033) 全部通过；实际 merge checkout 为 `c751bc9a64fce85934d6fddebf88787d1474b36e`。核心六组合各 1038 passed / 27 optional-native skips；原生 Ubuntu 24.04、macOS 26 / Python 3.12 各 1063 passed / 2 core-only skips。106 个 warning 来自既有原生撮合路径，未将 warning 当通过断言。
+
+两平台实际 wheel 安装后均跑完整 CLI：独立基线、零干预、2 秒 suffix 压力分别输出 -2 / -2 / -1 USD；场景 inspect 重派生/账务核验成功且 `native_replayed=false`；三次共用预算，第四次被拒；原数据 unchanged、旧 baseline bundle 拒绝场景回执。各平台报告 artifact 为 `scenario-execution-<os>-c751bc9a64fce85934d6fddebf88787d1474b36e`。预览制品 job 另从实际 sdist 取脚本和样例，在新环境安装实际 wheel，核心及原生场景 smoke 通过；制品为未发布开发构建。
 
 ## 延迟执行与配对风险
 

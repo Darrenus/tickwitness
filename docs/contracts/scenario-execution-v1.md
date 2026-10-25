@@ -1,6 +1,6 @@
 # Scenario Execution v1：耦合接收时钟的派生回放
 
-本文件描述 S05-02 的受限执行契约。Phase A 已取得远端时钟资格证据；生产执行、持久化和 CLI 的 Phase B 全量回归仍待验收，不能将本文件视为已经发布的执行支持承诺。[S05-01 声明契约](assumption-scenario-v1.md)的 `execution_approved=false` 保持原义：声明合法、来源绑定和输入约束成立，不等于批准执行。
+本文件描述 S05-02 的受限执行契约。Phase A 时钟资格和 Phase B 执行、持久化、CLI 全量远端回归已通过，确切 checkout/CI/制品记录见 [Sprint 5 状态](../planning/sprint-05-status.md)；PR #80 仍待 owner 接受，尚未发行。[S05-01 声明契约](assumption-scenario-v1.md)的 `execution_approved=false` 保持原义：声明合法、来源绑定和输入约束成立，不等于批准执行。
 
 首个 profile 仅为 `COUNTERFACTUAL_STRESS`、`researcher_defined / uncalibrated` 的 `replay_receive_suffix_shift_v1`。执行 clock profile 为 **`coupled_receive_suffix_clock_v1`**，原始 [ReplaySpec](replay-v1.md) 仍使用 `receive_order_v1`，adapter 仍固定 `nautilus-trader==1.231.0 / nautilus_v1_receive_order_single_limit_buy_v1`。它不是独立 venue clock 加延迟 observer 的 feed 模型，也不是历史网络延迟或真实 UTC 的重建。
 
