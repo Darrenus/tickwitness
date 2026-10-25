@@ -6,10 +6,9 @@ The export is deterministic and contains no credentials or user market data.
 """
 
 import json
-from pathlib import Path
 import re
 import sys
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = "docs/planning/sprint-backlog.md"
@@ -21,7 +20,7 @@ def export():
     sprints = []
     for index, match in enumerate(headings):
         end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
-        section = text[match.end():end].strip()
+        section = text[match.end() : end].strip()
         # The final Sprint is followed by shared process documentation.
         section = section.split("\n## 持续、跨 Sprint 的工作", 1)[0].strip()
         stories = []
@@ -33,20 +32,24 @@ def export():
                 raise ValueError(f"Cannot parse story table: {row}")
             identifier, epics = columns[0].split(" / ", 1)
             estimate = re.search(r"(\d+)h", columns[2])
-            stories.append({
-                "id": identifier,
-                "epics": re.findall(r"E\d{2}", epics),
-                "description": columns[1],
-                "estimate_hours": int(estimate.group(1)),
-                "acceptance": columns[3],
-            })
-        sprints.append({
-            "number": int(match.group(1)),
-            "title": match.group(2),
-            "source": SOURCE,
-            "section_markdown": section,
-            "stories": stories,
-        })
+            stories.append(
+                {
+                    "id": identifier,
+                    "epics": re.findall(r"E\d{2}", epics),
+                    "description": columns[1],
+                    "estimate_hours": int(estimate.group(1)),
+                    "acceptance": columns[3],
+                }
+            )
+        sprints.append(
+            {
+                "number": int(match.group(1)),
+                "title": match.group(2),
+                "source": SOURCE,
+                "section_markdown": section,
+                "stories": stories,
+            }
+        )
     return {"schema_version": 1, "status": "planned", "sprints": sprints}
 
 

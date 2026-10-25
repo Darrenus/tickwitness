@@ -1,6 +1,6 @@
 # Contributing to TickWitness
 
-TickWitness is currently a planning baseline. Read the [roadmap](docs/planning/roadmap.md), [domain model](docs/architecture/domain-model.md), and [working agreement](docs/planning/working-agreement.md) before implementation.
+TickWitness is in Sprint 1. Read the [development guide](docs/development.md), [roadmap](docs/planning/roadmap.md), [domain model](docs/architecture/domain-model.md), and [working agreement](docs/planning/working-agreement.md) before implementation.
 
 ## Before contributing
 
@@ -12,13 +12,15 @@ Use the story template for an agreed user outcome, the defect template for obser
 
 Keep changes scoped to one independently reviewable outcome. Explain the concrete behavior, domain rules, evidence, compatibility and limitations. Reference the story and affected ADR. Add risk-appropriate verification; documentation-only changes do not require fabricated product tests.
 
-Run the currently available documentation checks:
+Use the locked development environment and the same checks as CI:
 
 ```sh
-python3 scripts/check_docs.py
+make sync
+make check
+make build
 ```
 
-Product install, test, and benchmark commands will be added with their implementation. All existing required checks must pass before merge. AI assistance must not be represented as independent human approval; contributors remain responsible for correctness and rights.
+These commands validate the engineering foundation. Engine spikes have separate environments; no product performance benchmark exists yet. All existing required checks must pass before merge. AI assistance must not be represented as independent human approval; contributors remain responsible for correctness and rights.
 
 ## Research reports
 

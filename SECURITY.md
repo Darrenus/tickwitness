@@ -1,6 +1,6 @@
 # Security policy
 
-TickWitness is in the planning stage. There is no released engine or hosted service and no supported production version yet. Planned controls must not be interpreted as implemented protections.
+TickWitness is in early Sprint 1 development. An internal engineering package and synthetic engine spikes exist; there is no released research engine, hosted service, or supported production version yet. Planned controls must not be interpreted as implemented protections.
 
 Do not submit secrets, private market data, proprietary strategies, or exploit details in public issues. GitHub private vulnerability reporting was enabled and verified for this repository on 2026-10-25. Use the repository Security tab to report privately. If that channel is later unavailable, open a minimal issue asking the maintainer to establish a private channel, without technical exploit details or sensitive attachments.
 

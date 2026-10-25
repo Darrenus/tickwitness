@@ -1,0 +1,26 @@
+{
+  "observed_client_date": "2026-10-25",
+  "independent_process_runs": 2,
+  "byte_identical": true,
+  "run_a_sha256": "6cae5b861917f611a7b0931c791a0512919282bdc671ffed8a9d3cea68b215d7",
+  "run_b_sha256": "6cae5b861917f611a7b0931c791a0512919282bdc671ffed8a9d3cea68b215d7",
+  "not_a_performance_benchmark": true,
+  "cross_platform_determinism_verified": false,
+  "fixture_summary": {
+    "checkpoint_resume_verified": false,
+    "complete_per_fill_event_sink_verified": false,
+    "decisions": 2,
+    "fees": 0.2,
+    "fills_observed_in_this_fixture": 2,
+    "gross_cash_change": 2.0,
+    "input_events": 8,
+    "net_cash_change": 1.8,
+    "position": 0.0
+  },
+  "limitations": [
+    "Single fixture, single queue model, single platform.",
+    "Polling own-order state does not verify a complete per-fill event sink.",
+    "Final local tail-guard event was not observed before EndOfData.",
+    "No checkpoint restore exercised."
+  ]
+}

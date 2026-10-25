@@ -1,0 +1,87 @@
+name: Engineering
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: engineering-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: make lint format type docs
+
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+        python: ["3.12", "3.13", "3.14"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.13"
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - run: uv sync --locked
+      - run: make test
+
+  distribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+          enable-cache: true
+      - run: make build
+      - name: Install wheel in a separate environment and working directory
+        run: |
+          uv venv /tmp/tickwitness-wheel --python 3.12
+          uv pip install --python /tmp/tickwitness-wheel/bin/python --no-index --no-deps dist/*.whl
+          cd /tmp
+          /tmp/tickwitness-wheel/bin/tickwitness --version
+          /tmp/tickwitness-wheel/bin/python -m tickwitness --help
+          /tmp/tickwitness-wheel/bin/python -c "from tickwitness.domain.replay.capabilities import EngineCapabilities"
+
+  engineering:
+    if: always()
+    needs: [quality, tests, distribution]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every engineering job to pass
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          TESTS: ${{ needs.tests.result }}
+          DISTRIBUTION: ${{ needs.distribution.result }}
+        run: |
+          test "$QUALITY" = success
+          test "$TESTS" = success
+          test "$DISTRIBUTION" = success

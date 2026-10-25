@@ -1,0 +1,328 @@
+{
+  "observed_client_date": "2026-10-25",
+  "source_url": "https://pypi.org/pypi/hftbacktest/2.4.4/json",
+  "source_json_sha256": "a0f1b84825b046415c047492a2bf836fafd950506d76ab18469f97fc34824697",
+  "release_version": "2.4.4",
+  "requires_python": ">=3.11",
+  "requires_dist": [
+    "numpy<2.3,>=2.0",
+    "numba~=0.61",
+    "polars",
+    "matplotlib",
+    "holoviews",
+    "databento; extra == \"databento\""
+  ],
+  "license_classifiers": [
+    "License :: OSI Approved :: MIT License"
+  ],
+  "wheel_files": [
+    {
+      "filename": "hftbacktest-2.4.4-cp311-cp311-macosx_10_12_x86_64.whl",
+      "sha256": "61a452ccd8be0f305a198fe62ff94b62aa8afcde8c4a43f2deaea4be841decc8",
+      "upload_time": "2025-12-10T16:54:25.408563Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp311-cp311-macosx_11_0_arm64.whl",
+      "sha256": "d3dc70fde982cc57a4ea027caa7f953a073e63af75aa8a7bfd167edae7080a06",
+      "upload_time": "2025-12-10T16:54:18.905807Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp311-cp311-manylinux_2_28_aarch64.whl",
+      "sha256": "a4ee285a7fefe590b17821247808115b15e17558c0aea03fffcd68426a8d41aa",
+      "upload_time": "2025-12-10T16:53:45.286279Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp311-cp311-manylinux_2_28_armv7l.whl",
+      "sha256": "18e1e6d7de0abaaccb0b3c167a039424797757a9e5dc86ee231e6907ca939670",
+      "upload_time": "2025-12-10T16:53:58.130302Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp311-cp311-manylinux_2_28_x86_64.whl",
+      "sha256": "36eeb8558662ff0992c2b972f97b2d6928e55d5328a54649c08fc30647505213",
+      "upload_time": "2025-12-10T16:54:11.331279Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp311-cp311-musllinux_1_2_aarch64.whl",
+      "sha256": "077406aac81064198cb9887869ad0cbef87b3bebe3d508b7c40dbb928fa7e85f",
+      "upload_time": "2025-12-10T16:54:31.937523Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp311-cp311-musllinux_1_2_armv7l.whl",
+      "sha256": "1a70763976f7155f60beee18f13ee6cf920788f92d956320d89d84cff3e2c722",
+      "upload_time": "2025-12-10T16:54:44.089469Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp311-cp311-musllinux_1_2_x86_64.whl",
+      "sha256": "b8de1f006b69407ca5a571bd221762129ac41ee59b818a71562fca8109d949b8",
+      "upload_time": "2025-12-10T16:54:56.088278Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp311-cp311-win_amd64.whl",
+      "sha256": "81ae7873e87e492e5f3f69d7dcb797f0d7a382b4798da36e5e47a81e631b4c9a",
+      "upload_time": "2025-12-10T16:55:09.499841Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp312-cp312-macosx_10_12_x86_64.whl",
+      "sha256": "1ea771cb9da6d014de5d88c69fb92ebcbf9974b4811b68387e23be669210b650",
+      "upload_time": "2025-12-10T16:54:26.893734Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp312-cp312-macosx_11_0_arm64.whl",
+      "sha256": "a61c7cc00fdfa498e4d20ee0c30dfcc8d184c8e7e7f2a5ea4ac50810f09101bb",
+      "upload_time": "2025-12-10T16:54:20.846419Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp312-cp312-manylinux_2_28_aarch64.whl",
+      "sha256": "f2ef43a5cdaf68775552344e5c8bd41649c96d4bad713ec6634f8bc6aafa3d7d",
+      "upload_time": "2025-12-10T16:53:47.336990Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp312-cp312-manylinux_2_28_armv7l.whl",
+      "sha256": "f2fbd675e741adcc2af82c098ae29f21eb30c47a29a34c57f02f422368729a67",
+      "upload_time": "2025-12-10T16:53:59.885670Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "sha256": "7df29f3f600e74cde4b7223dbc65d64caed7ae16c67dd4a85d33a5bf4e2e36b5",
+      "upload_time": "2025-12-10T16:54:12.879209Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp312-cp312-musllinux_1_2_aarch64.whl",
+      "sha256": "7b91e45af3156b08f34e2d08d288e9ab0d1e44abc947497c42d5491e01f88ad0",
+      "upload_time": "2025-12-10T16:54:33.453609Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp312-cp312-musllinux_1_2_armv7l.whl",
+      "sha256": "0f184bff3e89769999feec79a57266d6df2107e55a920d79bb7a51753a8cbd16",
+      "upload_time": "2025-12-10T16:54:45.766481Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp312-cp312-musllinux_1_2_x86_64.whl",
+      "sha256": "b23798eb375e8298dfb0e964ee639ab5cf88c8b7c973a4d5dbaf22a33c9aac7f",
+      "upload_time": "2025-12-10T16:54:57.573386Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp312-cp312-win_amd64.whl",
+      "sha256": "ec6b89437325e32941a934a9b8d186e7bc127e8cd90dca5c630025ab8f030339",
+      "upload_time": "2025-12-10T16:55:21.721007Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313-macosx_10_12_x86_64.whl",
+      "sha256": "8737d0de7f1b3af679f74ed8bf738cb6c4d7b368c212c83dedca0f700746c599",
+      "upload_time": "2025-12-10T16:54:28.637886Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313-macosx_11_0_arm64.whl",
+      "sha256": "d05ead0a97389ec3eaeb0447a9f7e9024371b7ea57b7aebdbcc93ed2748c8aae",
+      "upload_time": "2025-12-10T16:54:22.335240Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313-manylinux_2_28_aarch64.whl",
+      "sha256": "f1687766660bce7bfa5bc339799db815dab549e2cf1753449013cef5b7ea23c3",
+      "upload_time": "2025-12-10T16:53:49.221145Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313-manylinux_2_28_armv7l.whl",
+      "sha256": "02206c16107aea1649a143898e6a33c41bb7a44ba4fa7335ba159b5fe84633fe",
+      "upload_time": "2025-12-10T16:54:01.825837Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313-manylinux_2_28_x86_64.whl",
+      "sha256": "96e6378c81390e2071ab168e78c0cf693ef328c1a839ba0fbef59b67f40c5c47",
+      "upload_time": "2025-12-10T16:54:14.390694Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313-musllinux_1_2_aarch64.whl",
+      "sha256": "16f9b07042b7d9bffb274415ca75a4b746c5fe427e3b93962bd055b4ce2b4b93",
+      "upload_time": "2025-12-10T16:54:35.217488Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313-musllinux_1_2_armv7l.whl",
+      "sha256": "db6733e47e68aae58f79b55510ae5679298356cb0e1758509544c6271302d02d",
+      "upload_time": "2025-12-10T16:54:47.753195Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313-musllinux_1_2_x86_64.whl",
+      "sha256": "711fc9b743303fa1061ea388782004fea73b6e77b227c323a9299ef10da26e76",
+      "upload_time": "2025-12-10T16:54:59.343900Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313-win_amd64.whl",
+      "sha256": "41ed85964c1f638980e4b1733ffafd2594dd2060504b096a4da80b93d7696d58",
+      "upload_time": "2025-12-10T16:55:23.226712Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313t-manylinux_2_28_aarch64.whl",
+      "sha256": "aa138c880c02706dca88914aa6f43c09775f8e2abca603d4084eabacea1aed48",
+      "upload_time": "2025-12-10T16:53:51.016391Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313t-manylinux_2_28_armv7l.whl",
+      "sha256": "e240455b21b4771d66e7ea3931812b145dabf3ebd0b8eacfa7c6167e6b734f68",
+      "upload_time": "2025-12-10T16:54:03.666715Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313t-musllinux_1_2_aarch64.whl",
+      "sha256": "586fd9f3de067f279c42f02f84bf266b4fea32b26cb1d204cc6c675e6d7ba255",
+      "upload_time": "2025-12-10T16:54:36.974101Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313t-musllinux_1_2_armv7l.whl",
+      "sha256": "dd38e4acf55994ee8e5b7e5b3b60c71b010f26a85963a94cd03ec0bc6b61ad6b",
+      "upload_time": "2025-12-10T16:54:49.543123Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp313-cp313t-musllinux_1_2_x86_64.whl",
+      "sha256": "fae0fd62003e9bc68feb6984ae5f941e2dafd76ab175efb1de49f527a6d36cf6",
+      "upload_time": "2025-12-10T16:55:00.877039Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314-macosx_10_12_x86_64.whl",
+      "sha256": "fe6c313e651331178667f568434342b90ce0652ecba9c443c3182f205cbf03e0",
+      "upload_time": "2025-12-10T16:54:30.519649Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314-macosx_11_0_arm64.whl",
+      "sha256": "ed1a2af8f660f98b873d795d3363df5dbbc467f2d6576258ee0bdca4dc9807c4",
+      "upload_time": "2025-12-10T16:54:23.890392Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314-manylinux_2_28_aarch64.whl",
+      "sha256": "08ecbadd393cc60d36d0dde2dd482cedc8fa1e10afc4b5a088ad6be96214b81d",
+      "upload_time": "2025-12-10T16:53:52.795059Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314-manylinux_2_28_armv7l.whl",
+      "sha256": "8bea264841607bc6f72928405b25205dd4d66a0f4536610e46572ae0a1a216a3",
+      "upload_time": "2025-12-10T16:54:05.590379Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314-manylinux_2_28_x86_64.whl",
+      "sha256": "509b9282e89381c535ef350d48ba42537ced6458af53ee87d29b3c2d6b9eea84",
+      "upload_time": "2025-12-10T16:54:15.939625Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314-musllinux_1_2_aarch64.whl",
+      "sha256": "81b5b5ebf01fa39dd812e2c8e8bac5fb6419a3e4e408f18605d16856ba607ba6",
+      "upload_time": "2025-12-10T16:54:39.230081Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314-musllinux_1_2_armv7l.whl",
+      "sha256": "ffcb6e74f19d85fd7927168e188ed8300545d9eff32e78059b9a4a7e46334612",
+      "upload_time": "2025-12-10T16:54:51.209702Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314-musllinux_1_2_x86_64.whl",
+      "sha256": "e4c78afb57a1ff963d0dbac83f42031042332b2b6acd893b829d59e435897133",
+      "upload_time": "2025-12-10T16:55:02.670868Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314-win_amd64.whl",
+      "sha256": "14e2c2f0bd43eef9e2fb938212d10cbfa9a5823ca202e75f556490c713d0f619",
+      "upload_time": "2025-12-10T16:55:24.655082Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314t-manylinux_2_28_aarch64.whl",
+      "sha256": "792b2181b783dd5713430abbc202fab1d8dade6606fff312c9d15d8140d7ea44",
+      "upload_time": "2025-12-10T16:53:54.510379Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314t-manylinux_2_28_armv7l.whl",
+      "sha256": "d372652dd6c9ff781ba0205cf9915042c6015b53c9e16f0c5ce2d79b9ecf72af",
+      "upload_time": "2025-12-10T16:54:07.391830Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314t-musllinux_1_2_aarch64.whl",
+      "sha256": "1c2479d6eb707ebbac03b6a087fa8d9a1eaad2258e864426787f99e0f73c9fb6",
+      "upload_time": "2025-12-10T16:54:40.900500Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314t-musllinux_1_2_armv7l.whl",
+      "sha256": "a970cc973f61967ebba3cb1ff7cf49d35d57ecf7e6a4be5ac5e459c88b77e767",
+      "upload_time": "2025-12-10T16:54:52.895418Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-cp314-cp314t-musllinux_1_2_x86_64.whl",
+      "sha256": "b189d5fb90eea13e45378d675342602af9ba29c8c98b609695816db7ef453b9c",
+      "upload_time": "2025-12-10T16:55:05.077450Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-pp311-pypy311_pp73-manylinux_2_28_aarch64.whl",
+      "sha256": "fe979ceb8043fc1d1b86cfe5111a74ee9fd7bde356a8d8ba16b9a5d1adc728db",
+      "upload_time": "2025-12-10T16:53:56.358145Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-pp311-pypy311_pp73-manylinux_2_28_armv7l.whl",
+      "sha256": "c0cb8e4e1266f46afae85306faa33da70f9802c536e09eec6bec01d1f5593acb",
+      "upload_time": "2025-12-10T16:54:08.918281Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-pp311-pypy311_pp73-manylinux_2_28_x86_64.whl",
+      "sha256": "262d07a0a01a975fc1d646f4dc9357857ef92067d13629c05131749fb7818d60",
+      "upload_time": "2025-12-10T16:54:17.455104Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-pp311-pypy311_pp73-musllinux_1_2_aarch64.whl",
+      "sha256": "896c0b5145267ad831e447fb0ca9bb067f10192f02ab9b8bab1cefdcf008dc1a",
+      "upload_time": "2025-12-10T16:54:42.636053Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-pp311-pypy311_pp73-musllinux_1_2_armv7l.whl",
+      "sha256": "8685e8d2d110a30cc6fe649933b1a9810e6ea9a4616bfa7d193d52bc8af8e6bd",
+      "upload_time": "2025-12-10T16:54:54.316454Z"
+    },
+    {
+      "filename": "hftbacktest-2.4.4-pp311-pypy311_pp73-musllinux_1_2_x86_64.whl",
+      "sha256": "190abfdfebaa52dbdeee47a533a26d7a7def1edef69177784206e4d767d76787",
+      "upload_time": "2025-12-10T16:55:06.612456Z"
+    }
+  ],
+  "installed_version": "2.4.4",
+  "installed_source_sha256": {
+    "__init__.py": "d3f5a0745126633d581b304240bede32c0e6bb8fc7ebb91b0f7e9ab8b2f37704",
+    "binding.py": "bfa89381289213e89873df55e2c8e2ce637ffaf3369003c5b7cddfa84bf6f0f6",
+    "types.py": "c616c7a5ba4261608df488491690a674534bfa22f8c158be4991244946366c59",
+    "order.py": "c40b3654befde837860880811b1112db49b016f15d9fcf8b4e7ce87bb3864013",
+    "state.py": "d5e45a804532918e1b4a649b613d907dd453902e2493c51e8ce7dc2f37a89f2c",
+    "recorder.py": "680c0ab30b30526e760d721fabaa51db0f3c74a0500116f17c4491e402116285",
+    "_hftbacktest.cpython-312-darwin.so": "361fc79c952408c7c64c26297f09fce143ff0cf81ac1cd32a06c1c7a39e33f8c"
+  },
+  "python": "3.12.14 (main, Sep  1 2026, 14:09:38) [Clang 22.1.3 ]",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "machine": "arm64",
+  "backtest_asset_public_methods": [
+    "add_data",
+    "add_file",
+    "constant_latency",
+    "constant_order_latency",
+    "data",
+    "flat_per_trade_fee_model",
+    "initial_snapshot",
+    "intp_order_latency",
+    "inverse_asset",
+    "l3_fifo_queue_model",
+    "last_trades_capacity",
+    "latency_offset",
+    "linear_asset",
+    "log_prob_queue_model",
+    "log_prob_queue_model2",
+    "lot_size",
+    "no_partial_fill_exchange",
+    "parallel_load",
+    "partial_fill_exchange",
+    "power_prob_queue_model",
+    "power_prob_queue_model2",
+    "power_prob_queue_model3",
+    "risk_adverse_queue_model",
+    "roi_lb",
+    "roi_ub",
+    "tick_size",
+    "trading_qty_fee_model",
+    "trading_value_fee_model"
+  ],
+  "limits": [
+    "Wheel availability does not establish successful installation on every listed platform.",
+    "Only macOS arm64 / CPython 3.12.14 was executed in this spike.",
+    "No complete checkpoint restore or complete per-fill event sink was verified."
+  ]
+}
