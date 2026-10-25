@@ -1,9 +1,15 @@
 # Security policy
 
-TickWitness is in early data-evidence development. An internal package, bounded import/inspection path, and synthetic engine spikes exist; there is no released research engine, hosted service, or supported production version yet. Planned controls must not be interpreted as implemented protections.
+TickWitness `0.1.0a1` is a technical preview candidate, pending owner acceptance and release. A version label or this policy does not mean a tag, GitHub Release, or PyPI package already exists. The candidate supports a bounded local evidence workflow, not a production trading or hosted research service. The actual artifact, supported environments and verification records are listed in the [candidate release record](docs/releases/0.1.0a1.md) and [support matrix](docs/support.md).
+
+The supported trust model is a trusted local owner using authorized data and the built-in strategy profile. Input and evidence IO reject unsafe paths, symlinks, special files and quota breaches within the documented boundary. Root ancestors and the host owner remain trusted configuration. The subprocess worker provides crash and timeout supervision; it is not a sandbox for malicious strategy code, credentials, network access or a hostile owner. Confirmation denial applies to application entry points and does not hide owner-controlled files from their owner.
+
+Offline verification checks integrity, source bindings and the declared accounting profile. It does not authenticate an author, prove a native matching run occurred, certify real market fills, inspect confirmation observations or audit every historical trial. Arbitrary Python strategies, confirmation unsealing and hosted untrusted execution are unsupported. Planned controls must not be described as implemented protections.
 
 Do not submit secrets, private market data, proprietary strategies, or exploit details in public issues. GitHub private vulnerability reporting was enabled and verified for this repository on 2026-10-25. Use the repository Security tab to report privately. If that channel is later unavailable, open a minimal issue asking the maintainer to establish a private channel, without technical exploit details or sensitive attachments.
 
-The owner will triage within published support availability; there is no 24×7 response SLA. A supported-version matrix, verified reporting channel and coordinated disclosure process are release requirements before wider external use.
+Preview reports are handled by the maintainer on a best-effort basis. There is no 24×7 response SLA, guaranteed response/fix deadline or announced long-term maintenance window. Acknowledge and coordinate a private disclosure before sharing sensitive details publicly; keep reproducible reports limited to the affected version, environment, error and an authorized minimal synthetic case when possible.
+
+The preview does not promise automatic migrations. Preserve original CAS objects, catalogs, protocols, attempt ledgers and bundles before upgrading; test new versions in separate environments. Unsupported formats must be rejected without overwriting originals. For rollback, retain the previous installation artifacts and a matching complete backup. See the [upgrade and rollback policy](docs/support.md#兼容升级与回退).
 
 See the proposed [security and operations plan](docs/operations/security-and-operations.md) for trust boundaries and release gates.

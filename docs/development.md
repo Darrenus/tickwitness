@@ -1,6 +1,6 @@
 # TickWitness 开发入口
 
-状态：Sprint 4 证据闭环，2026-10-26。已接受的数据/声明/受限回放之上新增v2可执行协议、per-protocol attempt预算、独立账务/费用/最后bid估值、导出与离线核验。完整操作见[证据工作流](evidence-workflow.md)。v1仍不可执行，首个profile仅EUR/USD内置买单；任意源码、确认解封、搜索判定和完整公共SDK尚未提供。
+状态：Sprint 4 技术预览候选，2026-10-26。PR#77的v2可执行协议、per-protocol attempt预算、独立账务/费用/最后bid估值、导出与离线核验已接受；本批准备`0.1.0a1`候选制品与安装支持说明。完整操作见[证据工作流](evidence-workflow.md)，安装入口见[quickstart](quickstart.md)。v1仍不可执行，首个profile仅EUR/USD内置买单；任意源码、确认解封、搜索判定和完整公共SDK尚未提供。
 
 ## 从干净 checkout 开始
 
@@ -14,9 +14,9 @@ make check
 make build
 ```
 
-PR#73–76已合并；本批验收前位于`codex/sprint-04-evidence-workflow`。`make sync`使用已提交的`uv.lock`，不静默更新版本；修改依赖时显式运行`uv lock`，把版本与锁文件一同提交。核心运行时无第三方依赖，开发工具在`dev`组；`nautilus`是显式可选extra，不能成为domain隐式依赖。
+PR#73–77已合并；当前预览工作位于`codex/sprint-04-preview-release`。`make sync`使用已提交的`uv.lock`，不静默更新版本；修改依赖时显式运行`uv lock`，把版本与锁文件一同提交。核心运行时无第三方依赖，开发工具在`dev`组；`nautilus`是显式可选extra，不能成为domain隐式依赖。开发与验收计算使用远端Linux或CI；本机仅作编辑与连接入口。GPU留待大规模工作负载测量后另做有门槛的扩展，不是预览安装要求。
 
-`make build`先同步锁定的开发工具，再使用该环境中的固定Hatchling构建wheel/sdist，不使用未固定的全局构建后端。`dist/`不提交Git。当前`0.0.2.dev0`是内部开发构建，不是S4的0.1产品预览，没有上传PyPI。目录可能保留以前版本的wheel，本地安装应选择明确版本文件；CI始于干净checkout。
+`make build`先同步锁定的开发工具，再使用该环境中的固定Hatchling构建wheel/sdist，不使用未固定的全局构建后端。`dist/`不提交Git。当前`0.1.0a1`是S4技术预览候选，不是稳定版；候选CI制品不等于已发布tag或PyPI包。预览制品工具拒绝混入旧版wheel/sdist，应在干净远端checkout中构建。发布和校验步骤见[预览说明](releases/0.1.0a1.md)。
 
 ## 当前检查
 
