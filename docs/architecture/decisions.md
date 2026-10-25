@@ -64,8 +64,16 @@
 
 ## ADR-010 先交付显式受限的引擎验收profile
 
-状态：Proposed，2026-10-26。本批以独立ReplaySpec和ReplayPort实现可信本地dataset qualification，只支持EUR/USD内置单限价买单。原有FrozenProtocol v1不升级为可执行，也不被此入口解封。先验证排序、单位、源引用、逐笔账务和终止完整性，再另行版本化研究执行合同。
+状态：Accepted，2026-10-26，owner已合并PR#76。以独立ReplaySpec和ReplayPort实现可信本地dataset qualification，只支持EUR/USD内置单限价买单。原有FrozenProtocol v1不升级为可执行，也不被此入口解封。先验证排序、单位、源引用、逐笔账务和终止完整性，再另行版本化研究执行合同。
 
 `receive_order_v1`明确映射native双时间到receive，并保留来源原始时点；不是UTC校准。公开pre_process在撮合前绑定source_ref；submit/cancel都有独立receipt，FILLED不抹掉仍在途取消。未决命令或开放订单均incomplete，不造未来行情推进结算。native实际费用与精确理论值分别记录，不隐藏其f64/Money舍入。
 
 worker采用schema化JSON、独立CWD、`-I`、进程组终止和输出/墙钟预算；这是可信代码故障边界，不是任意Python沙箱或RAM硬配额。可选引擎依赖固定版本与uv.lock，核心仍无必需第三方runtime。扩大资产、策略、时钟、完成规则或执行权限必须先补合同/测试与维护证据，不能只放开枚举。见[回放指南](../replay.md)及[合同](../contracts/replay-v1.md)。
+
+## ADR-011 可执行协议与可迁移一致性证据分开建模
+
+状态：Proposed，2026-10-26。本批新增ExecutableProtocol v2，以显式builtin/engine/spec/evaluation政策与开发集数据、claim和预算绑定；保持v1不可执行且确认集永不解封。每次native运行前占不可退款attempt，终态不覆盖，中断状态保留未知；预算只约束per-protocol，完整统计family/exposure账本仍另建。
+
+采用最后观测bid的受限做多mark，独立重建源fields、订单生命周期、成交、费用和缓存账户。native费用算法用精确有理数模拟binary64与两级Money量化，不能只信任自报actual/difference；原生精度模式导致费用不唯一则不给估值或claimtruth。model、mark与独立审计必须和实际数据/结果一起封存，不用单个布尔PASS代表全部研究结论。
+
+bundle仅固定目录/8role，原子no-replace发布，安全有界读取；offline verifier无native/SQLite依赖并重新计算规范化、绑定、账务、估值和claim观察。回执显式不认证作者、native重放、确认外部引用或完整attempt历史；hash自洽不能替代出处真实性。提交后fsync失败不删除已发布目录，单列durability未知。扩大可执行策略、档位填价、账户/资产、验证级别或签名承诺须版本化合同和新测试。见[完整工作流](../evidence-workflow.md)。

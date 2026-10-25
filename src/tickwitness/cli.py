@@ -9,6 +9,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 from tickwitness.application.datasets import import_events, inspect_dataset
+from tickwitness.application.experiments import ProtocolRunError
 from tickwitness.application.replay import compare_replays, replay_dataset
 from tickwitness.application.research import (
     ConfirmationAccessDenied,
@@ -16,9 +17,29 @@ from tickwitness.application.research import (
     inspect_protocol,
     read_protocol_data,
 )
+from tickwitness.cli_experiments import COMMANDS as EXPERIMENT_COMMANDS
+from tickwitness.cli_experiments import add_commands as add_experiment_commands
+from tickwitness.cli_experiments import execute as execute_experiment_command
 from tickwitness.domain.data_evidence.events import DataValidationError, ValidationLimits
+from tickwitness.domain.evidence.evaluation import EvaluationValidationError
+from tickwitness.domain.evidence.run_records import EvidenceValidationError
 from tickwitness.domain.replay.specs import ReplayValidationError
 from tickwitness.domain.research_contracts.protocols import ProtocolValidationError
+from tickwitness.infrastructure.attempt_ledger import (
+    AttemptBudgetExceededError,
+    AttemptLedgerError,
+    AttemptNotFoundError,
+)
+from tickwitness.infrastructure.evidence_bundles import (
+    BundleDestinationExistsError,
+    BundleDurabilityError,
+    BundleError,
+    BundleNotFoundError,
+)
+from tickwitness.infrastructure.executable_registry import (
+    ExecutableProtocolNotFoundError,
+    ExecutableRegistryError,
+)
 from tickwitness.infrastructure.local_dataset_store import (
     DatasetNotFoundError,
     DatasetStoreError,
@@ -58,13 +79,12 @@ def _write_error(code: str, error: Exception, exit_code: int) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Import evidence, freeze declarations and qualify the bounded replay adapter."""
+    """Import, freeze, execute a scoped baseline and verify portable accounting evidence."""
     parser = argparse.ArgumentParser(
         prog="tickwitness",
         description=(
-            "TickWitness data evidence and frozen research declarations. "
-            "Bounded built-in replay qualification is available; "
-            "research verdicts remain future work."
+            "TickWitness scoped protocol execution and portable accounting evidence. "
+            "Arbitrary strategy execution and search verdicts remain unsupported."
         ),
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {version('tickwitness')}")
@@ -125,13 +145,16 @@ def main(argv: list[str] | None = None) -> int:
     comparison.add_argument("left", help="Relative left result .json path")
     comparison.add_argument("right", help="Relative right result .json path")
     comparison.add_argument("--input-root", required=True, type=Path)
+    add_experiment_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command == "import-events":
+        if arguments.command in EXPERIMENT_COMMANDS:
+            output, identity = execute_experiment_command(arguments)
+        elif arguments.command == "import-events":
             limits = ValidationLimits(
                 max_bytes=arguments.max_bytes, max_records=arguments.max_records
             )
@@ -229,6 +252,33 @@ def main(argv: list[str] | None = None) -> int:
         return _write_error("invalid_replay", error, 2)
     except ReplayProcessError as error:
         return _write_error(error.code, error, error.exit_code)
+    except ProtocolRunError as error:
+        print(
+            json.dumps(
+                {
+                    "error": {
+                        "code": error.code,
+                        "message": str(error),
+                        "attempt_id": error.attempt_id,
+                        "budget_consumed": True,
+                    }
+                }
+            ),
+            file=sys.stderr,
+        )
+        return error.exit_code
+    except (EvaluationValidationError, EvidenceValidationError) as error:
+        return _write_error("invalid_research_evidence", error, 2)
+    except AttemptBudgetExceededError as error:
+        return _write_error("attempt_budget_exhausted", error, 8)
+    except (AttemptNotFoundError, ExecutableProtocolNotFoundError, BundleNotFoundError) as error:
+        return _write_error("research_evidence_not_found", error, 4)
+    except BundleDestinationExistsError as error:
+        return _write_error("bundle_destination_exists", error, 3)
+    except BundleDurabilityError as error:
+        return _write_error("bundle_durability_unconfirmed", error, 3)
+    except (AttemptLedgerError, ExecutableRegistryError, BundleError) as error:
+        return _write_error("research_store_integrity_or_io_failure", error, 3)
     except DatasetNotFoundError as error:
         return _write_error("dataset_not_found", error, 4)
     except DatasetStoreError as error:

@@ -318,6 +318,55 @@ class LocalDatasetStore:
         except (OSError, sqlite3.Error) as exc:
             raise DatasetStoreError(f"Cannot read normalized dataset evidence: {exc}") from exc
 
+    def read_artifacts(self, dataset_id: str) -> dict[str, bytes]:
+        """Read a bounded portable closure without exposing arbitrary CAS paths."""
+        _require_hash(dataset_id)
+        try:
+            with self._directories() as directories:
+                with self._connection(directories.root, read_only=True) as connection:
+                    row = connection.execute(
+                        "SELECT dataset_id, manifest_sha256, sealed FROM datasets "
+                        "WHERE dataset_id = ?",
+                        (dataset_id,),
+                    ).fetchone()
+                    if row is None:
+                        raise DatasetNotFoundError(f"Dataset is not published: {dataset_id}")
+                    self._validate_row(row)
+                record = self._read_record(
+                    directories,
+                    dataset_id,
+                    created=False,
+                    normalized_limit=8 * 1024 * 1024,
+                    normalized_v1=True,
+                    role_limits={
+                        "raw": 8 * 1024 * 1024,
+                        "normalized": 8 * 1024 * 1024,
+                        "report": 4 * 1024 * 1024,
+                    },
+                )
+                result = {"dataset_manifest": _canonical(record.manifest)}
+                references = record.manifest["objects"]
+                if not isinstance(references, dict):
+                    raise DatasetStoreError("Invalid portable evidence references")
+                for role in ("raw", "normalized", "report"):
+                    reference = references[role]
+                    if not isinstance(reference, dict):
+                        raise DatasetStoreError("Invalid portable evidence reference")
+                    content_hash = _require_hash(reference["sha256"])
+                    size = reference["size_bytes"]
+                    if type(size) is not int:
+                        raise DatasetStoreError("Invalid portable content size")
+                    result[role] = self._read_verified_file(
+                        directories.objects,
+                        content_hash,
+                        content_hash,
+                        size=size,
+                        max_size=(4 if role == "report" else 8) * 1024 * 1024,
+                    )
+                return result
+        except (OSError, sqlite3.Error) as error:
+            raise DatasetStoreError(f"Cannot read portable dataset evidence: {error}") from error
+
     @staticmethod
     def _validate_format(format_id: object) -> None:
         if not isinstance(format_id, str) or _FORMAT_ID.fullmatch(format_id) is None:
@@ -342,6 +391,7 @@ class LocalDatasetStore:
         created: bool,
         normalized_limit: int | None = None,
         normalized_v1: bool = False,
+        role_limits: dict[str, int] | None = None,
     ) -> DatasetRecord:
         manifest_bytes = self._read_verified_file(
             directories.manifests, f"{identity}.json", identity, max_size=16_384
@@ -368,6 +418,8 @@ class LocalDatasetStore:
                 raise DatasetStoreError("Content size must be a nonnegative integer")
             if role == "normalized" and normalized_limit is not None and size > normalized_limit:
                 raise DatasetStoreError("Normalized evidence exceeds max_bytes")
+            if role_limits is not None and size > role_limits[role]:
+                raise DatasetStoreError(f"Portable {role} evidence exceeds its byte limit")
             if reference["ref"] != f"objects/sha256/{content_hash}":
                 raise DatasetStoreError(
                     "Content reference must point to its restricted CAS identity"

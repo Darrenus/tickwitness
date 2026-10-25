@@ -511,3 +511,21 @@ def test_read_normalized_cannot_read_arbitrary_cas_paths(tmp_path: Path) -> None
         store.read_normalized("../outside")
     with pytest.raises(DatasetNotFoundError):
         store.read_normalized("0" * 64)
+
+
+def test_portable_artifacts_include_exact_manifest_and_verified_role_bytes(tmp_path: Path) -> None:
+    store = LocalDatasetStore(tmp_path)
+    record = publish(store)
+    artifacts = store.read_artifacts(record.dataset_id)
+    assert set(artifacts) == {"dataset_manifest", "raw", "normalized", "report"}
+    assert hashlib.sha256(artifacts["dataset_manifest"]).hexdigest() == record.dataset_id
+    assert artifacts["raw"] == RAW and artifacts["normalized"] == NORMALIZED
+    artifacts["raw"] = b"caller changes its detached copy"
+    assert store.read_artifacts(record.dataset_id)["raw"] == RAW
+
+
+def test_portable_report_budget_is_checked_before_retaining_large_report(tmp_path: Path) -> None:
+    store = LocalDatasetStore(tmp_path)
+    record = store.publish(RAW, NORMALIZED, {"large": "x" * (4 * 1024 * 1024 + 1)})
+    with pytest.raises(DatasetStoreError, match=r"report.*byte limit"):
+        store.read_artifacts(record.dataset_id)

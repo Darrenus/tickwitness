@@ -67,6 +67,7 @@ jobs:
           uv venv /tmp/tickwitness-wheel --python 3.12
           uv pip install --python /tmp/tickwitness-wheel/bin/python --no-index --no-deps dist/*.whl
           python3 scripts/smoke_distribution.py --python /tmp/tickwitness-wheel/bin/python
+          python3 scripts/smoke_evidence.py --python /tmp/tickwitness-wheel/bin/python
       - name: Install wheel in a separate environment and working directory
         run: |
           cd /tmp
@@ -97,7 +98,9 @@ jobs:
           uv build --no-build-isolation
           uv pip install --python .venv/bin/python --no-index --no-deps --reinstall dist/*.whl
       - name: Verify installed native replay through supervised CLI
-        run: python3 scripts/smoke_distribution.py --python .venv/bin/python --native
+        run: |
+          python3 scripts/smoke_distribution.py --python .venv/bin/python --native
+          python3 scripts/smoke_evidence.py --python .venv/bin/python --native
 
   engineering:
     if: always()

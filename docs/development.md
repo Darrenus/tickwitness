@@ -1,6 +1,6 @@
 # TickWitness 开发入口
 
-状态：Sprint 3 受限回放工程，2026-10-26。在已接受的数据证据与冻结协议上新增ReplayPort、可选NautilusTrader1.231.0正式adapter、内置L2策略回放与轨迹比较。首个profile仅EUR/USD，不执行FrozenProtocol或任意源码；研究判定、搜索和完整研究SDK尚未实现。[回放指南](replay.md)给出完整命令、限制及退出码。
+状态：Sprint 4 证据闭环，2026-10-26。已接受的数据/声明/受限回放之上新增v2可执行协议、per-protocol attempt预算、独立账务/费用/最后bid估值、导出与离线核验。完整操作见[证据工作流](evidence-workflow.md)。v1仍不可执行，首个profile仅EUR/USD内置买单；任意源码、确认解封、搜索判定和完整公共SDK尚未提供。
 
 ## 从干净 checkout 开始
 
@@ -14,9 +14,9 @@ make check
 make build
 ```
 
-PR#73–75已合并；本批回放验收前位于`codex/sprint-03-replay-adapter`。`make sync`使用已提交的`uv.lock`，不静默更新版本；修改依赖时显式运行`uv lock`，把版本与锁文件一同提交。核心运行时无第三方依赖，开发工具在`dev`组；`nautilus`是显式可选extra，不能成为domain隐式依赖。
+PR#73–76已合并；本批验收前位于`codex/sprint-04-evidence-workflow`。`make sync`使用已提交的`uv.lock`，不静默更新版本；修改依赖时显式运行`uv lock`，把版本与锁文件一同提交。核心运行时无第三方依赖，开发工具在`dev`组；`nautilus`是显式可选extra，不能成为domain隐式依赖。
 
-`make build`先同步锁定的开发工具，再使用该环境中的固定Hatchling构建wheel/sdist，不使用未固定的全局构建后端。`dist/`不提交Git。当前版本`0.0.1.dev0`是内部开发基础，不是S4的0.1产品预览，也没有上传PyPI。
+`make build`先同步锁定的开发工具，再使用该环境中的固定Hatchling构建wheel/sdist，不使用未固定的全局构建后端。`dist/`不提交Git。当前`0.0.2.dev0`是内部开发构建，不是S4的0.1产品预览，没有上传PyPI。目录可能保留以前版本的wheel，本地安装应选择明确版本文件；CI始于干净checkout。
 
 ## 当前检查
 
@@ -53,6 +53,8 @@ uv run --locked --extra nautilus pytest
 固定Nautilus wheel的macOS标签是`macosx_26_0_arm64`，不能在macOS15当作受支持binary安装；原生CI初次使用macOS15时因退回上游sdist构建而失败。项目uv配置明确`no-build-package=["nautilus-trader"]`，缺兼容wheel立即拒绝，避免用户意外进入未验证的Rust/Cython源码构建。核心包不受此native平台限制；[runner平台说明](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 
 distribution作业从sdist构建wheel，在新环境/不同目录离线安装，验证原有数据与协议链路及核心安装下明确的engine_unavailable；native作业则验证真正L2部分成交与监督进程输出。源码包包含原创examples供测试，wheel不包含native二进制或第三方源码。
+
+`scripts/smoke_evidence.py`另验完整v2链路：原生安装实跑freeze/run/export/move/verify并故意破坏对象；核心安装核对缺依赖的attempt被消费，并独立验证随附的native生成样例。纯核心回归禁止verifier导入Nautilus或连接SQLite。费用double-quantization与模糊cent候选也有独立原生完整回放CI案例，不靠宽容差放过账务矛盾。
 
 历史spike保留原证据，不由正式adapter覆盖。S3的[十次基线](research/sprint-03-replay-baseline.md)保存原始耗时与安装制品/模块hash，不冒充纯撮合吞吐。第三方引擎的许可证、平台和支持语义分别登记；原始交易数据及私有策略不进入公开仓库。
 
