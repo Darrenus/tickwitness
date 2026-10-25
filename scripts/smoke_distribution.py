@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--python", required=True, type=Path)
+    parser.add_argument("--native", action="store_true", help="Verify an installed nautilus extra")
     arguments = parser.parse_args()
     # Keep the venv executable path: resolving its symlink would select base Python.
     interpreter = str(arguments.python.absolute())
@@ -70,6 +71,8 @@ def main() -> None:
             )
             if result.returncode != expected:
                 raise RuntimeError(f"Installed CLI failed: {result.stdout}\n{result.stderr}")
+            if expected != 0 and result.stdout:
+                raise RuntimeError("Failed CLI command exposed partial stdout")
             return json.loads(result.stdout if expected == 0 else result.stderr)
 
         command = (
@@ -200,13 +203,97 @@ def main() -> None:
         assert denied["error"]["code"] == "confirmation_access_denied"
         assert not missing_store.parent.exists()
 
+        replay_events = []
+        for capture, kind, sequence, size in [
+            (1, "snapshot", 1, 1),
+            (2, "delta", 2, 4),
+            (3, "trade", 0, 2),
+            (4, "delta", 3, 2),
+            (5, "trade", 0, 1),
+            (6, "delta", 4, 1),
+        ]:
+            event = {
+                "schema_version": 1,
+                "type": kind,
+                "source": "synthetic",
+                "instrument": "EUR-USD",
+                "session": "wheel-replay",
+                "capture_seq": capture,
+                "event_time_ns": 1700000000000000000 + capture * 1000000000,
+                "receive_time_ns": 1700000000000000000 + capture * 1000000000,
+            }
+            if kind == "snapshot":
+                event.update(
+                    last_sequence=sequence,
+                    bids=[[100, size], [99, 10]],
+                    asks=[[103, 10], [104, 10]],
+                )
+            elif kind == "delta":
+                event.update(
+                    first_sequence=sequence, last_sequence=sequence, bids=[[100, size]], asks=[]
+                )
+            else:
+                event.update(
+                    trade_id=f"trade-{capture}",
+                    price_ticks=100,
+                    quantity_lots=size,
+                    aggressor_side="sell",
+                )
+            replay_events.append(event)
+        (directory / "replay.jsonl").write_text(
+            "".join(json.dumps(event) + "\n" for event in replay_events), encoding="utf-8"
+        )
+        replay_dataset = run(
+            "import-events", "replay.jsonl", "--input-root", str(directory), "--store", str(store)
+        )
+        replay_spec = {
+            "schema_version": 1,
+            "clock_policy_id": "receive_order_v1",
+            "instrument": {
+                "base_currency": "EUR",
+                "quote_currency": "USD",
+                "price_increment": "1",
+                "size_increment": "1",
+            },
+            "account": {"starting_cash": "10000"},
+            "fees": {"maker_rate": "0.01", "taker_rate": "0.02"},
+            "execution": {"insert_latency_ns": 0, "cancel_latency_ns": 0},
+            "strategy": {
+                "kind": "single_limit_buy_v1",
+                "submit_capture_seq": 1,
+                "limit_price_ticks": 100,
+                "quantity_lots": 2,
+                "cancel_after_first_fill": False,
+            },
+            "seed": 7,
+        }
+        (directory / "replay-spec.json").write_text(json.dumps(replay_spec), encoding="utf-8")
+        replay_result = run(
+            "replay-dataset",
+            str(replay_dataset["dataset_id"]),
+            "replay-spec.json",
+            "--input-root",
+            str(directory),
+            "--store",
+            str(store),
+            expected=0 if arguments.native else 6,
+        )
+        if arguments.native:
+            assert replay_result["dataset_id"] == replay_dataset["dataset_id"]
+            assert replay_result["execution_status"] == "completed"
+            assert replay_result["engine"]["version"] == "1.231.0"
+            assert len(replay_result["fill_trace"]) == 2
+            assert replay_result["completeness"]["pending_commands"] == []
+        else:
+            assert replay_result["error"]["code"] == "engine_unavailable"
+
         raw_reference = first["manifest"]["objects"]["raw"]["ref"]
         (store / raw_reference).write_bytes(b"tampered")
         failure = run("inspect-dataset", identity, "--store", str(store), expected=3)
         assert failure["error"]["code"] == "store_integrity_or_publication_failure"
     print(
         "Installed wheel: data import/inspect, protocol freeze/inspect/development read, "
-        "idempotency, confirmation denial, unknown-time and tamper checks passed."
+        "idempotency, confirmation denial, bounded replay, unknown-time and tamper checks passed."
     )
 
 

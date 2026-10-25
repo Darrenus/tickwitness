@@ -74,9 +74,34 @@ jobs:
           /tmp/tickwitness-wheel/bin/python -m tickwitness --help
           /tmp/tickwitness-wheel/bin/python -c "from tickwitness.domain.replay.capabilities import EngineCapabilities"
 
+  native-replay:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked --extra nautilus
+      - run: uv run --locked --extra nautilus pytest
+      - name: Build and replace editable package with wheel
+        run: |
+          uv build --no-build-isolation
+          uv pip install --python .venv/bin/python --no-index --no-deps --reinstall dist/*.whl
+      - name: Verify installed native replay through supervised CLI
+        run: python3 scripts/smoke_distribution.py --python .venv/bin/python --native
+
   engineering:
     if: always()
-    needs: [quality, tests, distribution]
+    needs: [quality, tests, distribution, native-replay]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every engineering job to pass
@@ -84,7 +109,9 @@ jobs:
           QUALITY: ${{ needs.quality.result }}
           TESTS: ${{ needs.tests.result }}
           DISTRIBUTION: ${{ needs.distribution.result }}
+          NATIVE_REPLAY: ${{ needs.native-replay.result }}
         run: |
           test "$QUALITY" = success
           test "$TESTS" = success
           test "$DISTRIBUTION" = success
+          test "$NATIVE_REPLAY" = success

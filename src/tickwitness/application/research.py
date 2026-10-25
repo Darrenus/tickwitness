@@ -11,8 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-from tickwitness.application.datasets import DatasetRecord
-from tickwitness.domain.data_evidence.events import DataValidationError, normalize_events
+from tickwitness.application.data_access import DataAccessError, DatasetReader, read_accepted_events
 from tickwitness.domain.research_contracts.protocols import (
     FrozenProtocol,
     ProtocolValidationError,
@@ -20,18 +19,11 @@ from tickwitness.domain.research_contracts.protocols import (
     load_frozen_protocol,
 )
 
-_MAX_DATA_BYTES = 8 * 1024 * 1024
 _MAX_STRATEGY_BYTES = 256 * 1024
 
 
 class ConfirmationAccessDenied(PermissionError):
     """The current application phase never exposes confirmation observations."""
-
-
-class DatasetReader(Protocol):
-    def get(self, dataset_id: str) -> DatasetRecord: ...
-
-    def read_normalized(self, dataset_id: str, *, max_bytes: int = _MAX_DATA_BYTES) -> bytes: ...
 
 
 class ProtocolRecord(Protocol):
@@ -85,32 +77,10 @@ def _strategy_digest(source: bytes) -> str:
 
 
 def _dataset_records(dataset_id: str, datasets: DatasetReader) -> tuple[dict[str, object], ...]:
-    record = datasets.get(dataset_id)
-    if (
-        record.dataset_id != dataset_id
-        or record.manifest.get("format_id") != "tickwitness.normalized-events.v1"
-    ):
-        raise ProtocolValidationError("Dataset identity or event format does not match")
-    data = datasets.read_normalized(dataset_id, max_bytes=_MAX_DATA_BYTES)
     try:
-        validated = normalize_events(data)
-    except DataValidationError as error:
-        raise ProtocolValidationError("Dataset does not satisfy normalized-events-v1") from error
-    try:
-        stored_report = json.dumps(
-            record.report, sort_keys=True, separators=(",", ":"), allow_nan=False
-        )
-        expected_report = json.dumps(
-            validated.report, sort_keys=True, separators=(",", ":"), allow_nan=False
-        )
-    except (TypeError, ValueError, RecursionError) as error:
-        raise ProtocolValidationError(
-            "Dataset quality report cannot be encoded as finite JSON"
-        ) from error
-    if data != validated.normalized_bytes or stored_report != expected_report:
-        raise ProtocolValidationError("Dataset normalization or quality report does not match")
-    if validated.report["quality_status"] != "accepted":
-        raise ProtocolValidationError("Quarantined data cannot bind a frozen protocol")
+        data = read_accepted_events(dataset_id, datasets)
+    except DataAccessError as error:
+        raise ProtocolValidationError(str(error)) from error
     return tuple(cast("dict[str, object]", json.loads(line)) for line in data.splitlines())
 
 

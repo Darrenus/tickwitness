@@ -1,1 +1,1 @@
-"""TickWitness data evidence and frozen declarations; execution remains future work."""
+"""TickWitness evidence, frozen declarations and bounded replay qualification."""

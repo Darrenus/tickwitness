@@ -1,0 +1,176 @@
+{
+  "all_semantically_equal": true,
+  "all_strictly_paired": true,
+  "benchmark_script_sha256": "f53d3b5595cf4e501587b8941c5fbf1283d7acbedbe0b05817a4ae0cbad4e0d4",
+  "changed_control": {
+    "change": "First source receive_time_ns increases by exactly 1 ns; all else unchanged.",
+    "duration_ns": 503633250,
+    "result_sha256": "bbcc49423af1cf84d05e8863eae27b0d7f3e30513f82cfbd658d136e08af7738",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "worker_wall_ns": 582387750
+  },
+  "engine": {
+    "id": "nautilus-trader",
+    "semantic_id": "nautilus_v1_receive_order_single_limit_buy_v1",
+    "version": "1.231.0"
+  },
+  "environment": {
+    "package_versions": {
+      "msgspec": "0.22.0",
+      "nautilus_trader": "1.231.0",
+      "numpy": "2.5.4",
+      "pandas": "3.1.0",
+      "pyarrow": "26.0.0",
+      "pytz": "2026.5"
+    },
+    "platform": "macOS-27.0.1-arm64-arm-64bit",
+    "python_version": "3.12.14"
+  },
+  "fixture_raw_sha256": "f3959505d541f249f11a190dc016bdc847ec2d12662a1e386de829911df68bb9",
+  "fixture_spec_sha256": "0093a6ddf1a410d0ab7b38a7d2f5bd6594d10b794e6d8cdc4c42ac17b7c7ce12",
+  "golden_result_sha256": "eafd1aadccb8b8853459b0a5cdbe19be4a29cb0dc816ca9fc3383f50a6cd848e",
+  "installed_module_sha256": {
+    "nautilus_trader.backtest.engine": "fad4155bd5e94d58f95928cfc0b83be78897bd1dfe154bc7de637394e3a4f81a",
+    "tickwitness.infrastructure._nautilus_native": "4d1068acae6a05f9a1e13eb3cca55889407fc3dec4133f2b5ac7265c4568ff92",
+    "tickwitness.infrastructure.nautilus_replay": "372f7bd3443c574a4233ee9c8ae5ee94ca0779c3da059161d52af55612f80908"
+  },
+  "installed_package_versions": {
+    "click": "8.5.0",
+    "fsspec": "2026.2.0",
+    "msgspec": "0.22.0",
+    "nautilus_trader": "1.231.0",
+    "numpy": "2.5.4",
+    "pandas": "3.1.0",
+    "portion": "2.6.3",
+    "pyarrow": "26.0.0",
+    "python-dateutil": "3.0.0",
+    "pytz": "2026.5",
+    "six": "1.17.0",
+    "sortedcontainers": "2.4.0",
+    "tickwitness": "0.0.1.dev0",
+    "tqdm": "4.70.1",
+    "tzdata": "2026.5",
+    "uvloop": "0.22.1"
+  },
+  "kind": "sprint_03_native_qualification_baseline_v1",
+  "limits": [
+    "Original seven-event single-instrument built-in buy qualification only.",
+    "Ten fresh isolated processes on one machine; not a platform support certification.",
+    "No FrozenProtocol, arbitrary source, research verdict, live API or external data.",
+    "No throughput, P99, native-only timing, wrapper overhead or real-market claim."
+  ],
+  "machine_observation": {
+    "logical_cpu_count": 10,
+    "machine": "arm64",
+    "perf_counter_resolution_seconds": "4.166666666666667e-08",
+    "python_compiler": "Clang 22.1.3 ",
+    "python_implementation": "CPython"
+  },
+  "measured_at_utc": "2026-10-25T16:28:09.631054+00:00",
+  "run_count": 10,
+  "runs": [
+    {
+      "duration_ns": 1105101917,
+      "result_sha256": "eafd1aadccb8b8853459b0a5cdbe19be4a29cb0dc816ca9fc3383f50a6cd848e",
+      "run": 1,
+      "semantically_equal_to_first": true,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "strictly_paired_to_first": true,
+      "worker_wall_ns": 1206062708
+    },
+    {
+      "duration_ns": 506301666,
+      "result_sha256": "eafd1aadccb8b8853459b0a5cdbe19be4a29cb0dc816ca9fc3383f50a6cd848e",
+      "run": 2,
+      "semantically_equal_to_first": true,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "strictly_paired_to_first": true,
+      "worker_wall_ns": 584588458
+    },
+    {
+      "duration_ns": 499762209,
+      "result_sha256": "eafd1aadccb8b8853459b0a5cdbe19be4a29cb0dc816ca9fc3383f50a6cd848e",
+      "run": 3,
+      "semantically_equal_to_first": true,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "strictly_paired_to_first": true,
+      "worker_wall_ns": 577677708
+    },
+    {
+      "duration_ns": 502079916,
+      "result_sha256": "eafd1aadccb8b8853459b0a5cdbe19be4a29cb0dc816ca9fc3383f50a6cd848e",
+      "run": 4,
+      "semantically_equal_to_first": true,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "strictly_paired_to_first": true,
+      "worker_wall_ns": 580265625
+    },
+    {
+      "duration_ns": 515772958,
+      "result_sha256": "eafd1aadccb8b8853459b0a5cdbe19be4a29cb0dc816ca9fc3383f50a6cd848e",
+      "run": 5,
+      "semantically_equal_to_first": true,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "strictly_paired_to_first": true,
+      "worker_wall_ns": 598293083
+    },
+    {
+      "duration_ns": 512092375,
+      "result_sha256": "eafd1aadccb8b8853459b0a5cdbe19be4a29cb0dc816ca9fc3383f50a6cd848e",
+      "run": 6,
+      "semantically_equal_to_first": true,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "strictly_paired_to_first": true,
+      "worker_wall_ns": 594759334
+    },
+    {
+      "duration_ns": 504964916,
+      "result_sha256": "eafd1aadccb8b8853459b0a5cdbe19be4a29cb0dc816ca9fc3383f50a6cd848e",
+      "run": 7,
+      "semantically_equal_to_first": true,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "strictly_paired_to_first": true,
+      "worker_wall_ns": 583668083
+    },
+    {
+      "duration_ns": 503600708,
+      "result_sha256": "eafd1aadccb8b8853459b0a5cdbe19be4a29cb0dc816ca9fc3383f50a6cd848e",
+      "run": 8,
+      "semantically_equal_to_first": true,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "strictly_paired_to_first": true,
+      "worker_wall_ns": 581820208
+    },
+    {
+      "duration_ns": 508242375,
+      "result_sha256": "eafd1aadccb8b8853459b0a5cdbe19be4a29cb0dc816ca9fc3383f50a6cd848e",
+      "run": 9,
+      "semantically_equal_to_first": true,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "strictly_paired_to_first": true,
+      "worker_wall_ns": 586813500
+    },
+    {
+      "duration_ns": 507381167,
+      "result_sha256": "eafd1aadccb8b8853459b0a5cdbe19be4a29cb0dc816ca9fc3383f50a6cd848e",
+      "run": 10,
+      "semantically_equal_to_first": true,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "strictly_paired_to_first": true,
+      "worker_wall_ns": 586320750
+    }
+  ],
+  "timing_scope": "adapter.run only; work and lazy imports inside that call are included",
+  "worker_wall_scope": "subprocess.run wall time, including startup, input preparation and sealing, adapter.run, serialization and exit; startup is not separately isolated"
+}

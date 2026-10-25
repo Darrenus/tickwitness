@@ -9,6 +9,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 from tickwitness.application.datasets import import_events, inspect_dataset
+from tickwitness.application.replay import compare_replays, replay_dataset
 from tickwitness.application.research import (
     ConfirmationAccessDenied,
     freeze_protocol,
@@ -16,6 +17,7 @@ from tickwitness.application.research import (
     read_protocol_data,
 )
 from tickwitness.domain.data_evidence.events import DataValidationError, ValidationLimits
+from tickwitness.domain.replay.specs import ReplayValidationError
 from tickwitness.domain.research_contracts.protocols import ProtocolValidationError
 from tickwitness.infrastructure.local_dataset_store import (
     DatasetNotFoundError,
@@ -28,6 +30,7 @@ from tickwitness.infrastructure.local_protocol_registry import (
     ProtocolRegistryError,
 )
 from tickwitness.infrastructure.safe_input import InputReadError, read_jsonl, read_regular_file
+from tickwitness.infrastructure.subprocess_replay import ReplayProcessError, SubprocessReplayAdapter
 
 
 def _positive_integer(value: str) -> int:
@@ -55,12 +58,13 @@ def _write_error(code: str, error: Exception, exit_code: int) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Import evidence and freeze declarations; replay and search remain future work."""
+    """Import evidence, freeze declarations and qualify the bounded replay adapter."""
     parser = argparse.ArgumentParser(
         prog="tickwitness",
         description=(
             "TickWitness data evidence and frozen research declarations. "
-            "Replay, search, and research verdicts are not implemented yet."
+            "Bounded built-in replay qualification is available; "
+            "research verdicts remain future work."
         ),
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {version('tickwitness')}")
@@ -102,6 +106,25 @@ def main(argv: list[str] | None = None) -> int:
         "--split", choices=("development", "confirmation"), default="development"
     )
     protocol_reader.add_argument("--limit", type=_positive_integer, default=100)
+    replay = commands.add_parser(
+        "replay-dataset", help="Qualify sealed data with a bounded built-in L2 strategy"
+    )
+    replay.add_argument("dataset_id", type=_dataset_identity)
+    replay.add_argument("input", help="Relative replay spec .json path under --input-root")
+    replay.add_argument("--input-root", required=True, type=Path)
+    replay.add_argument("--store", required=True, type=Path)
+    replay.add_argument("--timeout-seconds", type=_positive_integer, default=60)
+    replay.add_argument(
+        "--engine-python",
+        type=Path,
+        help="Trusted Python environment with TickWitness and its nautilus extra installed",
+    )
+    comparison = commands.add_parser(
+        "compare-replays", help="Compare validated replay conditions and traces"
+    )
+    comparison.add_argument("left", help="Relative left result .json path")
+    comparison.add_argument("right", help="Relative right result .json path")
+    comparison.add_argument("--input-root", required=True, type=Path)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
@@ -153,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             output = asdict(protocol)
             identity = protocol.protocol_id
-        else:
+        elif arguments.command == "read-protocol-data":
             observations = read_protocol_data(
                 arguments.protocol_id,
                 split=arguments.split,
@@ -163,6 +186,37 @@ def main(argv: list[str] | None = None) -> int:
             )
             output = asdict(observations)
             identity = observations.protocol_id
+        elif arguments.command == "replay-dataset":
+            request = read_regular_file(
+                arguments.input_root,
+                arguments.input,
+                max_bytes=64 * 1024,
+                allowed_suffixes=frozenset({".json"}),
+            )
+            # Validate supervisor configuration before opening a dataset.
+            supervisor = SubprocessReplayAdapter(
+                timeout_seconds=arguments.timeout_seconds, python_executable=arguments.engine_python
+            )
+            replayed = replay_dataset(
+                arguments.dataset_id,
+                request,
+                datasets_factory=lambda: LocalDatasetStore(arguments.store, create=False),
+                engine_factory=lambda: supervisor,
+            )
+            output = replayed.document
+            identity = arguments.dataset_id
+        else:
+            result_files = [
+                read_regular_file(
+                    arguments.input_root,
+                    name,
+                    max_bytes=16 * 1024 * 1024 + 1,
+                    allowed_suffixes=frozenset({".json"}),
+                )
+                for name in (arguments.left, arguments.right)
+            ]
+            output = compare_replays(*result_files).document
+            identity = ""
     except ConfirmationAccessDenied as error:
         return _write_error("confirmation_access_denied", error, 5)
     except InputReadError as error:
@@ -171,6 +225,10 @@ def main(argv: list[str] | None = None) -> int:
         return _write_error("invalid_data", error, 2)
     except ProtocolValidationError as error:
         return _write_error("invalid_protocol", error, 2)
+    except ReplayValidationError as error:
+        return _write_error("invalid_replay", error, 2)
+    except ReplayProcessError as error:
+        return _write_error(error.code, error, error.exit_code)
     except DatasetNotFoundError as error:
         return _write_error("dataset_not_found", error, 4)
     except DatasetStoreError as error:
@@ -185,5 +243,9 @@ def main(argv: list[str] | None = None) -> int:
     if getattr(arguments, "id_only", False):
         print(identity)
         return 0
-    print(json.dumps(output, sort_keys=True, allow_nan=False))
+    print(
+        json.dumps(
+            output, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+        )
+    )
     return 0

@@ -1,0 +1,89 @@
+{
+  "comparison_order": [
+    "input_trace",
+    "decision_trace",
+    "order_trace",
+    "fill_trace",
+    "account_trace",
+    "execution_status",
+    "completeness"
+  ],
+  "condition_differences": [
+    {
+      "category": "data",
+      "json_pointer": "/dataset_id",
+      "left_condition": "c8ca7ef5454cf942d4947600fed91677012171e159c530004a5677500c7e5e97",
+      "left_present": true,
+      "left_value": "c8ca7ef5454cf942d4947600fed91677012171e159c530004a5677500c7e5e97",
+      "right_condition": "1f36c716071cd924c1570f64a7adfd227c4448d844e8f9b189f12a50d5575d30",
+      "right_present": true,
+      "right_value": "1f36c716071cd924c1570f64a7adfd227c4448d844e8f9b189f12a50d5575d30"
+    },
+    {
+      "category": "data",
+      "json_pointer": "/data_sha256",
+      "left_condition": "f3959505d541f249f11a190dc016bdc847ec2d12662a1e386de829911df68bb9",
+      "left_present": true,
+      "left_value": "f3959505d541f249f11a190dc016bdc847ec2d12662a1e386de829911df68bb9",
+      "right_condition": "c2b47e02353eda1ce26dd71088fc89ef97cee2ddc8971c30561f5a8840bde01f",
+      "right_present": true,
+      "right_value": "c2b47e02353eda1ce26dd71088fc89ef97cee2ddc8971c30561f5a8840bde01f"
+    }
+  ],
+  "first_decision_divergence": {
+    "json_pointer": "/decision_trace/0/native_time_ns",
+    "left_present": true,
+    "left_trace_ref": {
+      "channel": "decision_trace",
+      "ordinal": 0,
+      "source_ref": {
+        "capture_seq": 1,
+        "event_type": "snapshot",
+        "line": 1
+      }
+    },
+    "left_value": 1700000000000000100,
+    "right_present": true,
+    "right_trace_ref": {
+      "channel": "decision_trace",
+      "ordinal": 0,
+      "source_ref": {
+        "capture_seq": 1,
+        "event_type": "snapshot",
+        "line": 1
+      }
+    },
+    "right_value": 1700000000000000101,
+    "section": "decision_trace"
+  },
+  "first_divergence": {
+    "json_pointer": "/input_trace/0/fields/native_ts_event_ns",
+    "left_present": true,
+    "left_trace_ref": {
+      "channel": "input_trace",
+      "ordinal": 0,
+      "source_ref": {
+        "capture_seq": 1,
+        "event_type": "snapshot",
+        "line": 1
+      }
+    },
+    "left_value": 1700000000000000100,
+    "right_present": true,
+    "right_trace_ref": {
+      "channel": "input_trace",
+      "ordinal": 0,
+      "source_ref": {
+        "capture_seq": 1,
+        "event_type": "snapshot",
+        "line": 1
+      }
+    },
+    "right_value": 1700000000000000101,
+    "section": "input_trace"
+  },
+  "kind": "replay_qualification_comparison_v1",
+  "schema_version": 1,
+  "semantically_equal": false,
+  "strictly_paired": false
+}
