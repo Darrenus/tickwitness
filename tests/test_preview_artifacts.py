@@ -308,7 +308,7 @@ def test_wheel_license_and_notice_are_complete_and_identical_to_source(
 def test_lock_project_version_must_match_metadata(candidate: Path) -> None:
     path = candidate / "uv.lock"
     path.write_text(path.read_text().replace(VERSION, "0.0.2.dev0"))
-    with pytest.raises(preview.PreviewError, match="uv.lock must bind"):
+    with pytest.raises(preview.PreviewError, match=r"uv\.lock must bind"):
         preview.prepare_preview(candidate)
 
 
