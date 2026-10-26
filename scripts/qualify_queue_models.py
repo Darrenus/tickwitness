@@ -42,6 +42,7 @@ SECOND = 1_000_000_000
 SEMANTIC_ID = "nautilus_public_shadow_fifo_queue_probe_v1"
 CASE_IDS = (
     "front_back_cancel",
+    "gross_churn_checkpoint",
     "no_cancel_control",
     "same_time_capture_order",
     "repeated_public_hook",
@@ -76,6 +77,16 @@ def _input(case_id: str):
         for line in (ROOT / "examples" / "queue-observations.jsonl").read_bytes().splitlines()
     ]
     request = json.loads((ROOT / "examples" / "queue-constraint-request.json").read_bytes())
+    if case_id == "gross_churn_checkpoint":
+        for update in request["updates"]:
+            if update["capture_seq"] == 3:
+                update["additions_lots"] = 1
+                update["cancellations_lots"] = 4
+        for row in rows:
+            if row["capture_seq"] == 4:
+                row["quantity_lots"] = 2
+            elif row["capture_seq"] in (5, 6):
+                row["bids"] = [[100, 3]]
     if case_id == "no_cancel_control":
         for row in rows:
             if row["capture_seq"] == 3:
@@ -147,8 +158,10 @@ def _oracle(request: dict[str, Any], prepared: Any) -> dict[str, Any]:
 class _ShadowQueue:
     """Probe-only addressed queue observer, independently checked against domain trace."""
 
-    def __init__(self, policy: str):
+    def __init__(self, policy: str, request: dict[str, Any]):
         self.policy = policy
+        self.updates = {update["capture_seq"]: update for update in request["updates"]}
+        self.pending_trade_refs: list[int] = []
         self.current: Any = None
         self.index = 0
         self.active = False
@@ -188,6 +201,7 @@ class _ShadowQueue:
             if quantity > self.external:
                 raise ValueError("Trade exceeds declared external visible depth")
             flow["trade_lots"] = quantity
+            self.pending_trade_refs.append(event.capture_seq)
             if self.active:
                 old_ahead = self.ahead
                 self.ahead = max(0, self.ahead - quantity)
@@ -198,15 +212,32 @@ class _ShadowQueue:
             target = next((size for price, size in event.bids if price == 100), None)
             if target is not None:
                 self.observed = target
-                difference = 0 if event.event_type == "snapshot" else target - self.external
-                if difference >= 0:
-                    flow["additions_lots"] = difference
-                    if self.active:
-                        self.behind += difference
+                if event.event_type == "snapshot":
+                    if self.index != 1 or self.active:
+                        raise ValueError("Only the initial fixed snapshot can initialize depth")
                 else:
-                    cancellation = -difference
+                    update = self.updates.get(event.capture_seq)
+                    if update is None:
+                        raise ValueError("Every target checkpoint requires declared gross flow")
+                    addition, cancellation = update["additions_lots"], update["cancellations_lots"]
+                    if (
+                        type(addition) is not int
+                        or addition < 0
+                        or type(cancellation) is not int
+                        or cancellation < 0
+                        or self.external + addition - cancellation != target
+                        or update["trade_capture_seqs"] != self.pending_trade_refs
+                    ):
+                        raise ValueError(
+                            "Declared gross flow or trade reconciliation is inconsistent"
+                        )
+                    self.pending_trade_refs.clear()
+                    flow["additions_lots"] = addition
                     flow["cancellations_lots"] = cancellation
                     if self.active:
+                        # Declared profile: add at tail, then allocate cancellations.
+                        # Net depth alone cannot identify either gross quantity.
+                        self.behind += addition
                         front = (
                             min(cancellation, self.ahead)
                             if self.policy == POLICIES[0]
@@ -274,7 +305,9 @@ class _ShadowQueue:
         self.current_row["own_remaining_lots"] = 2 - self.filled
 
 
-def _run(prepared: Any, policy: str, case_id: str, output: dict[str, Any]) -> dict[str, Any]:
+def _run(
+    prepared: Any, policy: str, case_id: str, output: dict[str, Any], request: dict[str, Any]
+) -> dict[str, Any]:
     if metadata.version("nautilus_trader") != "1.231.0":
         raise ValueError("The queue probe requires pinned Nautilus 1.231.0")
     api = _native_api()
@@ -298,7 +331,7 @@ def _run(prepared: Any, policy: str, case_id: str, output: dict[str, Any]) -> di
         return api.Quantity.from_str(_decimal(Decimal(lots) * settings.size_increment))
 
     iid, venue = api.InstrumentId.from_str("EURUSD.SIM"), api.Venue("SIM")
-    queue = _ShadowQueue(policy)
+    queue = _ShadowQueue(policy, request)
     orders: list[dict[str, Any]] = []
     fills: list[dict[str, Any]] = []
     accounts: list[dict[str, Any]] = []
@@ -323,6 +356,8 @@ def _run(prepared: Any, policy: str, case_id: str, output: dict[str, Any]) -> di
             "normalized_jsonl": prepared.replay_input.normalized_bytes.decode("utf-8"),
             "spec_id": prepared.spec.spec_id,
             "spec": prepared.spec.document,
+            "declared_gross_flow_request": json.loads(_canonical(request)),
+            "flow_source": "declared_gross_additions_cancellations_and_trade_references",
             "queue_trace": queue.trace,
             "hook_trace": queue.hooks,
             "order_trace": orders,
@@ -696,7 +731,12 @@ def run_case(case_id: str) -> dict[str, Any]:
         rows, request, prepared = _input(case_id)
         policies = (
             POLICIES
-            if case_id in ("front_back_cancel", "no_cancel_control", "same_time_capture_order")
+            if case_id in (
+                "front_back_cancel",
+                "gross_churn_checkpoint",
+                "no_cancel_control",
+                "same_time_capture_order",
+            )
             else POLICIES[:1]
         )
         oracle = None
@@ -706,7 +746,7 @@ def run_case(case_id: str) -> dict[str, Any]:
         for policy in policies:
             observed: dict[str, Any] = {}
             case["runs"][policy] = observed
-            _run(prepared, policy, case_id, observed)
+            _run(prepared, policy, case_id, observed, request)
             expected_fills = (
                 0
                 if case_id in ("no_cancel_control", "late_acceptance", "eof_pending_insert")
@@ -834,6 +874,10 @@ def qualify() -> dict[str, Any]:
         "observation_compatibility_proved": False,
         "finding_issued": False,
         "production_queue_execution_enabled": False,
+        "qualification_scope": {
+            "fixed_original_cases_only": True,
+            "arbitrary_user_execution_enabled": False,
+        },
         "public_extension_probe_qualified": all(case["passed"] for case in cases),
         "cases": cases,
     }
