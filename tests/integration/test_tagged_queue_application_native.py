@@ -47,9 +47,7 @@ pytestmark = pytest.mark.skipif(
 
 def _tree(root: Path) -> dict[str, bytes]:
     return {
-        str(path.relative_to(root)): path.read_bytes()
-        for path in root.rglob("*")
-        if path.is_file()
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
     }
 
 
@@ -106,7 +104,9 @@ def _reserved_intent(case, expected_count):
     return reservation, intent
 
 
-def test_actual_native_pair_commits_independently_reinspectable_success(tagged_native_app, monkeypatch):
+def test_actual_native_pair_commits_independently_reinspectable_success(
+    tagged_native_app, monkeypatch
+):
     case = tagged_native_app
     calls = []
 
@@ -125,7 +125,10 @@ def test_actual_native_pair_commits_independently_reinspectable_success(tagged_n
     assert front["attempt_id"] != back["attempt_id"]
     assert [item["evaluation"]["filled_quantity_lots"] for item in (front, back)] == [2, 0]
     assert [item["evaluation"]["actual_commission"] for item in (front, back)] == ["2", "0"]
-    assert [item["evaluation"]["valuation"]["net_marked_pnl"] for item in (front, back)] == ["-2", "0"]
+    assert [item["evaluation"]["valuation"]["net_marked_pnl"] for item in (front, back)] == [
+        "-2",
+        "0",
+    ]
     for item in (front, back):
         outcome = case.ledger.get_outcome(item["attempt_id"])
         receipt = load_tagged_queue_run_receipt(outcome)
@@ -155,7 +158,9 @@ def test_actual_native_pair_commits_independently_reinspectable_success(tagged_n
     assert before == _tree(case.root)
 
 
-def test_second_failure_retains_first_actual_native_receipt_and_stops(tagged_native_app, monkeypatch):
+def test_second_failure_retains_first_actual_native_receipt_and_stops(
+    tagged_native_app, monkeypatch
+):
     case = tagged_native_app
     calls = []
 
@@ -190,11 +195,15 @@ def test_second_failure_retains_first_actual_native_receipt_and_stops(tagged_nat
     assert report["budget"]["consumed_attempts"] == 2
     assert report["budget"]["remaining_attempts"] == 0
     assert [row["outcome_kind"] for row in report["attempts"]] == [
-        "tagged_queue_run_receipt_v1", "tagged_queue_attempt_failure_v1"
+        "tagged_queue_run_receipt_v1",
+        "tagged_queue_attempt_failure_v1",
     ]
     before = _tree(case.root)
-    monkeypatch.setattr(NautilusTaggedQueueReplayAdapter, "run",
-                        lambda *args: pytest.fail("Inspection must not replay native"))
+    monkeypatch.setattr(
+        NautilusTaggedQueueReplayAdapter,
+        "run",
+        lambda *args: pytest.fail("Inspection must not replay native"),
+    )
     inspected = inspect_tagged_queue_run(first["run_id"], **case.factories)
     assert inspected["evaluation"] == first["evaluation"]
     assert inspected["verification"]["native_replayed"] is False
@@ -258,3 +267,42 @@ def test_audit_rejection_preserves_raw_actual_native_diagnostic_without_success_
     with pytest.raises(EvidenceValidationError):
         inspect_tagged_queue_run(raw_sha, **case.factories)
     assert _tree(case.root) == before
+
+
+def test_distinct_execution_environments_keep_runs_verified_but_pair_comparison_ineligible(
+    tagged_native_app,
+):
+    case = tagged_native_app
+
+    class ChangedEnvironmentAdapter:
+        def run(self, replay_input):
+            actual = NautilusTaggedQueueReplayAdapter().run(replay_input)
+            document = actual.document
+            if replay_input.policy_id == TAGGED_POLICY_IDS[1]:
+                document["environment"]["platform"] += " | injected distinct platform"
+            return build_tagged_queue_replay_result(document)
+
+    pair = run_tagged_queue_pair(
+        case.protocol.protocol_id,
+        split="development",
+        replay_factory=lambda _: ChangedEnvironmentAdapter(),
+        **case.factories,
+    )
+    assert pair["status"] == "completed" and pair["failures"] == []
+    assert len(pair["runs"]) == 2
+    assert pair["runs"][0]["execution_environment"] != pair["runs"][1]["execution_environment"]
+    comparison = pair["claim_comparison"]
+    assert comparison["truths"] == [False, False]
+    assert comparison["same_execution_environment"] is False
+    assert comparison["relation"] == "ineligible"
+    assert comparison["ineligible_reason"] == "execution_environment_mismatch"
+    assert pair["findings"] == []
+    for run in pair["runs"]:
+        assert run["evaluation"]["status"] == "verified"
+        inspected = inspect_tagged_queue_run(run["run_id"], **case.factories)
+        assert inspected["evaluation"] == run["evaluation"]
+        assert inspected["result"]["environment"] == run["execution_environment"]
+        assert inspected["verification"]["native_replayed"] is False
+    report = inspect_tagged_queue(case.protocol.protocol_id, **case.factories)
+    assert report["budget"]["consumed_attempts"] == 2
+    assert report["budget"]["remaining_attempts"] == 0

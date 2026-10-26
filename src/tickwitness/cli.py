@@ -17,6 +17,7 @@ from tickwitness.application.research import (
     inspect_protocol,
     read_protocol_data,
 )
+from tickwitness.application.tagged_queue_execution import TaggedQueueReservationUnconfirmed
 from tickwitness.cli_experiments import COMMANDS as EXPERIMENT_COMMANDS
 from tickwitness.cli_experiments import add_commands as add_experiment_commands
 from tickwitness.cli_experiments import execute as execute_experiment_command
@@ -290,6 +291,21 @@ def main(argv: list[str] | None = None) -> int:
         return _write_error("invalid_replay", error, 2)
     except ReplayProcessError as error:
         return _write_error(error.code, error, error.exit_code)
+    except TaggedQueueReservationUnconfirmed as error:
+        print(
+            json.dumps(
+                {
+                    "error": {
+                        "code": error.code,
+                        "message": str(error),
+                        "protocol_id": error.protocol_id,
+                        "budget_consumed": error.budget_consumed,
+                    }
+                }
+            ),
+            file=sys.stderr,
+        )
+        return error.exit_code
     except ProtocolRunError as error:
         print(
             json.dumps(

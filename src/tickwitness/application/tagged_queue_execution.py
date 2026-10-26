@@ -77,6 +77,21 @@ class TaggedQueueLedger(Protocol):
     def read_artifact(self, content_hash: str, *, max_bytes: int = 16 * 1024 * 1024) -> bytes: ...
 
 
+class TaggedQueueReservationUnconfirmed(RuntimeError):
+    """A reserve error cannot establish whether publication consumed a slot."""
+
+    code = "tagged_queue_reservation_unconfirmed"
+    exit_code = 3
+    budget_consumed: None = None
+
+    def __init__(self, protocol_id: str) -> None:
+        self.protocol_id = protocol_id
+        super().__init__(
+            "Tagged attempt reservation could not be confirmed; budget consumption is unknown. "
+            "Inspect the protocol's committed attempt ledger before retrying."
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class TaggedQueueFreezeReceipt:
     protocol: TaggedQueueProtocol
@@ -103,6 +118,7 @@ class TaggedQueueModelSubmission:
     protocol_id: str
     policy_id: str
     execution_status: str
+    execution_environment: dict[str, object]
     evaluation: dict[str, object]
 
     @property
@@ -114,6 +130,7 @@ class TaggedQueueModelSubmission:
             "protocol_id": self.protocol_id,
             "policy_id": self.policy_id,
             "execution_status": self.execution_status,
+            "execution_environment": self.execution_environment,
             "evaluation": self.evaluation,
         }
 
@@ -306,7 +323,14 @@ def run_tagged_queue_model(
     actual = _actual_input(protocol, datasets_factory())
     replay_input = TaggedQueueReplayInput(protocol, actual.normalized_bytes, policy_id)
     ledger = ledger_factory()
-    reservation = ledger.reserve(protocol)
+    try:
+        reservation = ledger.reserve(protocol)
+    except Exception as error:
+        # Reserve can fail after its slot link was published, for example during fsync.
+        # Only explicit exhaustion proves that this call did not consume another slot.
+        if type(error).__name__ == "AttemptBudgetExceededError":
+            raise
+        raise TaggedQueueReservationUnconfirmed(protocol.protocol_id) from error
     budget = cast("dict[str, int]", protocol.document["budget"])
     diagnostic_artifacts: tuple[bytes, ...] = ()
     try:
@@ -355,6 +379,7 @@ def run_tagged_queue_model(
             protocol.protocol_id,
             policy_id,
             cast("str", result.document["execution_status"]),
+            cast("dict[str, object]", result.document["environment"]),
             evaluation.document,
         )
     except Exception as error:
@@ -432,7 +457,13 @@ def run_tagged_queue_pair(
                 {
                     "policy_id": policy,
                     "attempt_id": attempt_id,
-                    "budget_consumed": attempt_id is not None,
+                    "budget_consumed": (
+                        True
+                        if attempt_id is not None
+                        else False
+                        if code == "attempt_budget_exhausted"
+                        else None
+                    ),
                     "code": code,
                     "message": message,
                     "exit_code": exit_code,
@@ -450,10 +481,25 @@ def run_tagged_queue_pair(
         ]
         for run in runs
     ]
+    same_environment = (
+        completed
+        and canonical(cast("dict[str, object]", runs[0]["execution_environment"]))
+        == canonical(cast("dict[str, object]", runs[1]["execution_environment"]))
+    )
+    eligible_truths = len(truths) == 2 and all(type(value) is bool for value in truths)
     relation = (
         ("opposite_truth_values" if truths[0] != truths[1] else "same_truth_value")
-        if completed and len(truths) == 2 and all(type(value) is bool for value in truths)
+        if completed and same_environment and eligible_truths
         else "ineligible"
+    )
+    ineligible_reason = (
+        "execution_incomplete"
+        if not completed
+        else "execution_environment_mismatch"
+        if not same_environment
+        else "claim_evaluation_ineligible"
+        if not eligible_truths
+        else None
     )
     return {
         "protocol_id": protocol_id,
@@ -466,6 +512,8 @@ def run_tagged_queue_pair(
         "claim_comparison": {
             "claim_revision_id": protocol.claim_revision_id,
             "relation": relation,
+            "ineligible_reason": ineligible_reason,
+            "same_execution_environment": same_environment,
             "truths": truths,
             "scope": "frozen_conditional_tagged_pair_only",
             "source_claim_evaluated": False,

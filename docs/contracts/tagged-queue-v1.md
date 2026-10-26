@@ -130,6 +130,10 @@ net_marked_pnl = filled_lots * size_increment * (final_best_bid - fill_price) - 
 
 双调用首次失败即停止，返回 partial／failed、已完成 run 与未尝试政策，CLI 非零退出；不删除第一份成功。取得但审计失败的有界原生结果作为诊断工件保留，不成为 verified 结果。共同预算仅约束该协议；它不是跨协议完整试验历史，也不证明多重检验已校正。
 
+reserve 的持久化确认失败时，槽可能已经提交。调用停止并返回 `tagged_queue_reservation_unconfirmed`、`budget_consumed=null`；不能因缺少 attempt ID 就声称未占预算或自动退款。先用 `inspect-tagged-queue` 检查已提交前缀；后续显式重试仍受原共同预算约束。明确预算耗尽且本次未占新槽才报告 false。
+
 `tagged_queue_replay_result_v1`、`tagged_queue_replay_evaluation_v1` 绑定新协议／命题／policy／实际源。只读 inspect 检查 committed reservation／intent／receipt／CAS 和注册表，重读实际 development 输入并重算评价，返回 `native_replayed=false`。hash 闭包不认证作者，不证明完整历史或真实交易所 ownership。
+
+每份 submission 保留实际 `execution_environment`。两份已完成运行只有在该环境的 canonical JSON 相同、估值均 eligible 时才报告同真值／异真值关系；环境不一致返回 ineligible 及 `execution_environment_mismatch`，仍保留两份独立运行的审计结果。环境字符串不是第三方认证。
 
 当前 findings 始终为空；旧 baseline bundle、S05 比较器和旧 queue qualification 继续拒绝新 kind／semantic。跨机器独立 sealed tagged evidence 流程、最终 finding、确认集 lifecycle、独立人类领域复核与真实用户采用证据仍是后续验收门。

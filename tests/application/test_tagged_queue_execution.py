@@ -9,6 +9,7 @@ from tickwitness.application.datasets import import_events
 from tickwitness.application.experiments import ProtocolRunError, freeze_experiment
 from tickwitness.application.research import ConfirmationAccessDenied
 from tickwitness.application.tagged_queue_execution import (
+    TaggedQueueReservationUnconfirmed,
     freeze_tagged_queue,
     inspect_tagged_queue,
     inspect_tagged_queue_run,
@@ -127,6 +128,61 @@ def test_pair_stops_after_first_failure_and_shared_budget_does_not_refund(tagged
     assert calls == [30, 30]
     with pytest.raises(AttemptBudgetExceededError):
         case.ledger.reserve(case.protocol)
+
+
+@pytest.mark.parametrize("paired", [False, True])
+def test_reservation_publication_failure_reports_unknown_consumption_and_retains_real_slot(
+    tagged_app, monkeypatch, paired
+):
+    case = tagged_app
+    reserve = case.ledger.reserve
+    worker_calls = []
+
+    def publish_then_fail(protocol):
+        reserve(protocol)
+        raise OSError("Simulated failure after a real reservation was committed")
+
+    def forbidden_worker(timeout):
+        worker_calls.append(timeout)
+        pytest.fail("An uncertain reservation must not construct a worker or retry")
+
+    monkeypatch.setattr(case.ledger, "reserve", publish_then_fail)
+    if paired:
+        result = run_tagged_queue_pair(
+            case.protocol.protocol_id,
+            split="development",
+            replay_factory=forbidden_worker,
+            **case.factories,
+        )
+        assert result["status"] == "failed" and result["runs"] == []
+        assert len(result["failures"]) == 1
+        failure = result["failures"][0]
+        assert failure["code"] == "tagged_queue_reservation_unconfirmed"
+        assert failure["attempt_id"] is None
+        assert failure["budget_consumed"] is None
+        assert failure["exit_code"] == 3
+        assert result["pending_policy_ids"] == [TAGGED_POLICY_IDS[1]]
+    else:
+        with pytest.raises(TaggedQueueReservationUnconfirmed, match="Inspect") as caught:
+            run_tagged_queue_model(
+                case.protocol.protocol_id,
+                TAGGED_POLICY_IDS[0],
+                split="development",
+                replay_factory=forbidden_worker,
+                **case.factories,
+            )
+        assert caught.value.code == "tagged_queue_reservation_unconfirmed"
+        assert caught.value.protocol_id == case.protocol.protocol_id
+        assert caught.value.budget_consumed is None
+        assert caught.value.exit_code == 3
+    assert worker_calls == []
+    inspected = inspect_tagged_queue(case.protocol.protocol_id, **case.factories)
+    assert inspected["budget"]["consumed_attempts"] == 1
+    assert inspected["budget"]["remaining_attempts"] == 1
+    attempt = inspected["attempts"][0]
+    assert attempt["budget_consumed"] is True
+    assert attempt["state"] == "reserved_unfinalized"
+    assert attempt["intent_id"] is attempt["policy_id"] is attempt["outcome_id"] is None
 
 
 def test_interruption_leaves_visible_consumed_slot_and_intent(tagged_app):
