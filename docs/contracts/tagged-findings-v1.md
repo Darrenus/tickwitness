@@ -1,8 +1,10 @@
 # Tagged Findings v1：冻结权限后签发有限条件结论
 
-状态：S06-02d 实现切片，远端验收待完成；基线为 owner 已合并的 [PR #86](https://github.com/Darrenus/tickwitness/pull/86)，merge `62fc66b563528fcd03713ec8597ddb66e4d9c870`。本合同承接 [Tagged Pair Evidence v1](tagged-pair-evidence-v1.md)，决策见 [ADR 0020](../adr/0020-frozen-tagged-finding-authority.md)，实际验收维护于 [Sprint 6](../planning/sprint-06-status.md)。
+状态：S06-02d 功能及远端验收完成，[PR #87](https://github.com/Darrenus/tickwitness/pull/87) 待 owner 接受；基线为 owner 已合并的 [PR #86](https://github.com/Darrenus/tickwitness/pull/86)，merge `62fc66b563528fcd03713ec8597ddb66e4d9c870`。本合同承接 [Tagged Pair Evidence v1](tagged-pair-evidence-v1.md)，决策见 [ADR 0020](../adr/0020-frozen-tagged-finding-authority.md)，实际验收维护于 [Sprint 6](../planning/sprint-06-status.md#s06-02d-远端验收记录)。
 
 本切片为已封存的有限 tagged reconstruction 增加独立报告权限。原 `TaggedQueueProtocol`、单次 run、十二角色 assessment 的 `finding_issued=false` 保持原字节；不能以改字段、重命名旧包或编辑已有结果取得新权限。新权限只评价被绑定的新 tagged claim，不评价 source v2 的原命题，不延长执行权限或重放预算。
+
+这里 authority 是可复算的研究规则合同，不是用户认证、访问控制或数字签名。
 
 ## 冻结明确的报告问题
 

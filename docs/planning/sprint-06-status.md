@@ -7,7 +7,7 @@
 | 故事 | 当前切片与接受边界 | 状态 |
 | --- | --- | --- |
 | S06-01 / #16 | S06-01a/b 已接受；冻结共同预算、持久前后模型执行与独立审计 | Owner 已合并 #83 |
-| S06-02 / #17 | S06-02a/b/c 已接受；S06-02d 独立 finding 权限与报告实现中 | In progress；owner 已合并 #86，本轮远端验收与 owner 接受待完成 |
+| S06-02 / #17 | S06-02a/b/c 已接受；S06-02d 独立 finding 权限与报告通过远端验收 | In progress；[PR #87](https://github.com/Darrenus/tickwitness/pull/87) 待 owner 接受，结论仅限显式冻结的条件 profile |
 | S06-03 / #18 | 真实近期问题访谈累计 8–12 次，反馈关联工作流阻力 | 未取得新增访谈证据；不虚填次数、采用或独立领域验收 |
 
 原故事验收与容量仍见 [Sprint backlog](sprint-backlog.md#s6--l2-队列解释与证据不足判定)。实际投入工时尚未登记。S06-01 原估算不因生成代码自动视为已完成；复杂执行能力需要单独可验收切片，不通过修改旧协议或跳过预算提前打开。
@@ -167,4 +167,32 @@ AI 静态交叉复核单独记录为 AI 审阅，补强了 assessment 深层序�
 
 十四角色新包包含原十二角色闭包和独立 finding_protocol／finding_report，旧八／十二角色 reader 保持严格。领域候选只声明 source CONTENT_CLOSED／publication UNASSERTED；应用在完整十四角色封存并复核或离线读取复核后返回 FINAL，仅表示内容闭合，不认证作者、人类领域审批、原始发布、完整 ledger 或断电持久性。撤回／更正 lifecycle 尚未实现。
 
-预设验收在前序原生配对流程中新增独立冻结的 bid100／ge0（F/T），与 F/F、T/F、T/T 共四种真值方向一起签发；F/T 的反例只应引用 front。报告流程复用这些真实 native 配对和保留的历史记录，再删除 issuer 的 source pair 副本与 finding registry，仅由独立 core 安装复核；签发自身不新增 native 运行或 attempt。完整 hash 重算后的报告与分配攻击、错误 subject／权限／pin、未知拒签、类型隔离、只读和无覆盖边界均须验证。实际 wheel、实际 sdist 脚本、两平台原生后的 core 签发链路及原始十四角色包将留存30天。本轮全部项目执行继续在远端；尚无本切片完整 CI 结果，不把预设 oracle 或静态复核记为通过。外部人类、真实市场、访谈、工时、性能及采用数据不补造。
+预设验收在前序原生配对流程中新增独立冻结的 bid100／ge0（F/T），与 F/F、T/F、T/T 共四种真值方向一起签发；F/T 的反例只应引用 front。报告流程复用这些真实 native 配对和保留的历史记录，再删除 issuer 的 source pair 副本与 finding registry，仅由独立 core 安装复核；签发自身不新增 native 运行或 attempt。完整 hash 重算后的报告与分配攻击、错误 subject／权限／pin、未知拒签、类型隔离、只读和无覆盖边界的实际结果见下文。实际 wheel、实际 sdist 脚本、两平台原生后的 core 签发链路及原始十四角色包留存30天。本轮全部项目执行在远端；外部人类、真实市场、访谈、工时、性能及采用数据不补造。
+
+### S06-02d 远端验收记录
+
+最终功能 head `871d4cec3aff6a3f655658148b3f037761cee022` 的 [Engineering 40313624621](https://github.com/Darrenus/tickwitness/actions/runs/40313624621) 与 [Documentation 40313624711](https://github.com/Darrenus/tickwitness/actions/runs/40313624711) 共13 checks 全部通过；实际 merge checkout 为 `666cd6b92b6916cd8cf35424c31a5b0773c6ef87`。本节是该已验证代码的文档补充，后续文档 head 的独立 CI 不与功能 head 混记。
+
+核心 Ubuntu 24.04／macOS 15 × Python 3.12／3.13／3.14 六组合各 **2091 passed / 111 optional-native skips**；原生 Ubuntu 24.04 与 macOS 26／Python 3.12 各 **2200 passed / 2 core-only skips / 313 warnings**。lint、184 文件格式、85 source files 严格类型、文档与实际 wheel／sdist 的 core／native 安装验收全部通过。warnings 保留，不作为通过断言；首轮 pytest 保留参数名导致收集失败及格式／长字面量失败有远端记录，修复后没有放宽规则或 oracle。
+
+| 独立预设原生配对 | 实际签发结果与见证 |
+| --- | --- |
+| bid100／gt0：F/F | COUNTEREXAMPLE_FOUND，引用 front、back 两份 false 见证 |
+| bid102／gt0：T/F | NOT_IDENTIFIABLE_WITHIN_MODEL 引用两份相反见证；COUNTEREXAMPLE_FOUND 只引用 back |
+| bid102／ge0：T/T | NO_COUNTEREXAMPLE_FOUND，仅覆盖已列两政策，admissible_world_space_exhausted=false |
+| bid100／ge0：F/T | NOT_IDENTIFIABLE_WITHIN_MODEL 引用两份相反见证；COUNTEREXAMPLE_FOUND 只引用 front |
+
+上述四案均在两平台及实际 source archive／wheel 工作流中先独立冻结并产生真实 native 配对，再由 core 冻结权限、签发十四角色包并迁移复核。COUNTER／NO_COUNTER 的 conclusion_target 为已列集合的稳健满足，NOTID 为单个隐藏分配下谓词的识别；T/F 或 F/T 时稳健满足已确定为 false，不将其称为未知。历史 #85 的 F/F、T/F 与 #86 的实际 T/T 记录作为只读 golden 回归，没有伪造 callback。
+
+| 边界核验 | 实际结果 |
+| --- | --- |
+| 权限、来源与固定规则 | 旧 subject／run／assessment 权限与字节保持原样；独立 authority 不接受 comparator、threshold、finding type 或 scope 的有利改写；每个结论都有目标、scope、限制与完整见证引用 |
+| 已验证但不可签发 | 对实际封存配对的环境标签构造受控不一致并重审，退出9且不产生报告目录；原评价／false 见证和文件字节保留，不改成 false、INSUFFICIENT_EVIDENCE 或其他 finding |
+| 发布与 FINAL | 错误 source pin、subject、publisher 换包均拒绝；完整十四角色写入并读回复核后返回 FINAL，领域正文仍为 CONTENT_CLOSED／UNASSERTED；认证、原发布和人类审批标志保持 false |
+| 独立 core 复核 | 删除 issuer 的源包副本与 finding registry，移动报告包后在禁止 native、数据库、网络、worker 和原 registry 构造的安装 core 中重验成功，文件字节树不变 |
+| 全量 hash 重算攻击 | 改写结论类型或 trade 分配，并重算关联 report／evaluation／receipt／assessment／manifest hash，仍被固定 rubric 或原始 source 审计拒绝；无效／未完成记录不能进入 finding |
+| IO 与兼容性 | 旧8／12／新14格式互拒；身份 pin、固定角色／大小／数量／哈希、symlink／FIFO／隐藏条目、无覆盖／并发、ENOSPC 与发布后 fsync 不确定性均覆盖 |
+
+真实报告与十四角色目录保存为 `tagged-findings-core-666cd6b92b6916cd8cf35424c31a5b0773c6ef87`、`tagged-findings-<os>-666cd6b92b6916cd8cf35424c31a5b0773c6ef87`、`tagged-findings-source-wheel-666cd6b92b6916cd8cf35424c31a5b0773c6ef87`，留存30天。core-only 历史记录与四个 fresh native 来源案例明确区分；source archive 使用实际 tar.gz 的脚本／样例及实际安装的 wheel。本机仅文本编辑、静态审查、Git／gh 和下载报告读取。
+
+AI 静态交叉复核单独记为 AI 审阅，重点纠正过“单解释谓词识别”与“全称稳健满足”混为同一结论目标的歧义。该 profile 的数学见证不认证真实历史所有权、插单、市场影响、私有执行、作者或完整试验历史；独立人类领域复核与真实市场／用户采用证据仍未取得。owner 接受之前不关闭故事；撤回／更正、确认集 lifecycle 与跨协议完整账本仍为后续能力，不补造实际工时或访谈。

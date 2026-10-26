@@ -196,6 +196,10 @@ stateDiagram-v2
 
 `NOT_IDENTIFIABLE_WITHIN_MODEL` 说明声明对未观测部分存在歧义，不是说市场不可研究。所有模型都通过时也只能给出已列模型内未找到反例，不能给出“未来真实收益已被证明”。
 
+[Tagged Findings v1](../contracts/tagged-findings-v1.md) 将这一规则限定到已冻结的条件 tagged profile：两份见证满足同一 declared gross／protected-tagged 约束，公开投影 π(w) 都等于同一封存路径，而冻结谓词 P(w) 的布尔真值不同。因此 P 不能由该模型内的公开投影唯一确定；这不是对真实所有权、私有执行或 gross 声明校准的认证，也不能由额外延迟压力冒充。报告以独立权限绑定该条件模型，旧执行协议和证据格式不自动获得 finding 权限。
+
+同一报告还可检查已列见证集合 S 的稳健满足 U_S=∀w∈S P(w)。相反真值见证使 U_S 已确定为 false，反例针对 U_S，而不可识别针对 P(w)，两者不得混为一个结论目标。每项 finding 分别携带 conclusion_target；S 的有限覆盖完成仍明确不等于所有 admissible worlds 被穷尽。
+
 证据包状态：`STAGING → VALIDATING → SEALED`，失败为 `REJECTED`。封存后的撤回或错误用新的 correction 记录表示，旧包仍可核验。判定初步结果为 `PROVISIONAL`；只有引用封存证据才能 `FINAL`；撤回产生 `VerdictWithdrawn` 记录，不修改原判定正文。
 
 命令包括 `StageArtifact`、`VerifyBundle`、`SealBundle`、`EvaluateEvidence`、`FinalizeVerdict`、`RecordCorrection`；对应事件包括 `ArtifactStaged`、`BundleVerified`、`BundleSealed`、`VerdictIssued`、`EvidenceCorrected`、`VerdictWithdrawn`。

@@ -110,4 +110,4 @@ IO 复用 `BundleError`、`BundleNotFoundError`、`BundleDestinationExistsError`
 | `full_attempt_ledger_checked=false` | 没有完整试验历史或预算账本认证 |
 | `ledger_commitment_checked=false` | 离线闭包不证明 receipt 曾由原 ledger 提交 |
 
-回执不包含剩余预算估计，不为实际新插单、历史所有权、市场冲击、退出可成交性或未来收益背书。新 finding 授权、确认集 lifecycle、跨协议试验账本与外部人类复核仍是后续门。
+回执不包含剩余预算估计，不为实际新插单、历史所有权、市场冲击、退出可成交性或未来收益背书。本十二角色 assessment 的 findings 保持为空；另行冻结权限并签发十四角色报告见 [Tagged Findings v1](tagged-findings-v1.md)。确认集 lifecycle、跨协议试验账本与外部人类复核仍是后续门。
