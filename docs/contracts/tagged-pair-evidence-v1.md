@@ -1,6 +1,6 @@
 # Tagged Pair Evidence v1：可迁移的双模型证据闭包
 
-状态：S06-02c 实现切片，远端验收待完成。基线为 owner 已合并的 [PR #85](https://github.com/Darrenus/tickwitness/pull/85)，merge `dcf38714b5ee306e9328f1ad25624fc687f036e8`。本合同承接 [Tagged Queue v1](tagged-queue-v1.md)，决策见 [ADR 0019](../adr/0019-portable-tagged-pair-evidence.md)，实际验收记录维护于 [Sprint 6](../planning/sprint-06-status.md)。
+状态：S06-02c 功能与远端验收已完成，[PR #86](https://github.com/Darrenus/tickwitness/pull/86) 待 owner 接受。基线为 owner 已合并的 [PR #85](https://github.com/Darrenus/tickwitness/pull/85)，merge `dcf38714b5ee306e9328f1ad25624fc687f036e8`。本合同承接 [Tagged Queue v1](tagged-queue-v1.md)，决策见 [ADR 0019](../adr/0019-portable-tagged-pair-evidence.md)，实际验收记录维护于 [Sprint 6](../planning/sprint-06-status.md#s06-02c-远端验收记录)。
 
 本切片将两个已提交 run 封装为可移动目录，随后在只有 core wheel 的环境重新计算来源、守恒、原生回调账务及配对关系。它不运行 native，不连接原 catalog／registry／ledger，也不把 frozen protocol 中的 `finding_issued=false` 改成 true。新命题的同／异真值关系仍只限于声明的有限 tagged reconstruction，findings 保持空数组。
 

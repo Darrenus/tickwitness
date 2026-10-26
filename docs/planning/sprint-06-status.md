@@ -7,7 +7,7 @@
 | 故事 | 当前切片与接受边界 | 状态 |
 | --- | --- | --- |
 | S06-01 / #16 | S06-01a/b 已接受；冻结共同预算、持久前后模型执行与独立审计 | Owner 已合并 #83 |
-| S06-02 / #17 | S06-02a/b 已接受；S06-02c 可迁移双模型证据与离线重建实现中 | In progress；owner 已合并 #85，本轮远端验收待完成，生产 `NOT_IDENTIFIABLE_WITHIN_MODEL` 保持关闭 |
+| S06-02 / #17 | S06-02a/b 已接受；S06-02c 可迁移双模型证据与离线重建通过远端验收 | In progress；[PR #86](https://github.com/Darrenus/tickwitness/pull/86) 待 owner 接受，生产 `NOT_IDENTIFIABLE_WITHIN_MODEL` 保持关闭 |
 | S06-03 / #18 | 真实近期问题访谈累计 8–12 次，反馈关联工作流阻力 | 未取得新增访谈证据；不虚填次数、采用或独立领域验收 |
 
 原故事验收与容量仍见 [Sprint backlog](sprint-backlog.md#s6--l2-队列解释与证据不足判定)。实际投入工时尚未登记。S06-01 原估算不因生成代码自动视为已完成；复杂执行能力需要单独可验收切片，不通过修改旧协议或跳过预算提前打开。
@@ -135,4 +135,24 @@ AI 静态交叉审查单独计为 AI 审阅：补强过提前伪称 cleanup hook
 
 预设验收包含 F/F、T/F、T/T 的独立冻结案例、原生生成后移交并删除原状态、core 环境拦截 native／SQLite／network／worker／store 构造仍能复核、严格类型隔离、可信 bundle ID pin、不改文件字节，以及完全重算 hash 后的守恒攻击拒绝。实际 wheel 和实际 sdist 中的脚本／样例均须执行同一链路，报告及原始 sealed bundles 保存30天。
 
-本轮测试、构建、格式化和原生执行继续全部在远端；尚无本切片完整远端结果，不把预设 oracle 或静态审查记为通过。findings 保持空数组，模型范围仍限于声明的有限 public 路径下 tagged reconstruction；最终 finding、确认集 lifecycle、跨协议试验账本、外部人类复核与真实采用证据仍是后续门。
+本轮测试、构建、格式化和原生执行全部在远端，实际记录见下文。findings 保持空数组，模型范围仍限于声明的有限 public 路径下 tagged reconstruction；最终 finding、确认集 lifecycle、跨协议试验账本、外部人类复核与真实采用证据仍是后续门。
+
+### S06-02c 远端验收记录
+
+最终功能代码 head `b103f60dcfdbe81929466de71289fc93b22daac3` 的 [Engineering 40292165942](https://github.com/Darrenus/tickwitness/actions/runs/40292165942) 与 [Documentation 40292165780](https://github.com/Darrenus/tickwitness/actions/runs/40292165780) 共13 checks 全部通过；实际 merge checkout 为 `3afd7b5d04fa047b2374b6025653cc80e3ad3f36`。本记录是该已验证代码的文档补充，后续文档 head 有独立 CI，不与功能 head 混记。
+
+核心 Ubuntu 24.04／macOS 15 × Python 3.12／3.13／3.14 六组合各 **1918 passed / 111 optional-native skips**；原生 Ubuntu 24.04 与 macOS 26／Python 3.12 各 **2027 passed / 2 core-only skips / 313 warnings**。lint、171 文件格式、79 source files 严格类型、文档、实际 wheel 以及实际 sdist 的独立 core／native 安装验收全部通过。warnings 保留，不作为通过断言。首轮 identity 调用签名与格式／unused variable 失败有远端记录；修复实现，没有放宽 oracle。
+
+| 实际核验 | 结果 |
+| --- | --- |
+| 新生成原生配对 | 两平台及实际 sdist／wheel 各独立冻结3案例：bid100／gt0 为 F/F，bid102／gt0 为 T/F，bid102／ge0 为 T/T；均封存完整 source／result／evaluation／receipt／assessment |
+| 删除原状态后移交 | 原 store／registry／ledger 和请求目录删除，包移动至新目录后由另一份实际安装的 core wheel 复核；native、SQLite、network、worker 和原 store 构造均被护栏阻断，复核仍通过 |
+| 历史证据回归 | core 矩阵及安装后的 core 使用 #85 实际 [原生记录](https://github.com/Darrenus/tickwitness/actions/runs/40286175944/job/121450395382) 的两份 golden，重新构建原 source manifest 并核对已记录 dataset ID；没有用模拟 callback 替代历史证据 |
+| 全量 hash 重算攻击 | 修改 trade 分配并重算 result、evaluation、receipt、assessment 和 manifest 所有相关 hash，仍被独立守恒审计拒绝；虚假净值／真值、时钟、接受、费用、horizon、cleanup 和坏回执同样拒绝 |
+| 配对与发布绑定 | 两 attempt ID／index 均须不同；同一槽换 nonce 不能伪装两次尝试；反序参数和反序执行 index 可按 policy 正规配对；exporter 返回另一份合法配对也明确拒绝 |
+| 身份／未知与只读 | expected bundle ID 错误拒绝；环境不同保留审计但配对 ineligible，费用歧义不得当 false；重复导出不同目录身份相同，既有目标不覆盖，复核完整字节树不变 |
+| 固定树与失败恢复 | 未知／隐藏／缺件／symlink／FIFO、schema／大小／数量预算、旧新格式混用拒绝；no-replace 并发只有一个提交，ENOSPC 与发布后 fsync 故障区分并保留已发布目标 |
+
+报告与实际 sealed 目录以 `tagged-pair-core-3afd7b5d04fa047b2374b6025653cc80e3ad3f36`、`tagged-pair-evidence-<os>-3afd7b5d04fa047b2374b6025653cc80e3ad3f36`、`tagged-pair-source-wheel-3afd7b5d04fa047b2374b6025653cc80e3ad3f36` 保存30天。source-wheel 报告同时区分历史 golden 复核与3个 fresh native cases，实际脚本／样例来自 tar.gz，验证器为实际 wheel 的全新 core 安装。本机只做文本编辑、静态审查、Git／gh 和下载报告读取。
+
+AI 静态交叉复核单独记录为 AI 审阅，补强了 assessment 深层序列化校验及 exporter 返回错误合法包的边界。验证的是选定证据的来源闭包与模型内经济算术；离线不证明 native 日志真实出处、原 ledger commitment、完整尝试历史或作者身份。独立人类领域复核、真实市场和采用证据仍未取得，工时／访谈／性能记录未新增。
