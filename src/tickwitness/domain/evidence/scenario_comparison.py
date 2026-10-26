@@ -391,7 +391,9 @@ class ScenarioComparison:
         )
         for run_document, result in ((base_doc, left), (scenario_doc, right)):
             _equal(
-                run_document["execution_status"], result.document["execution_status"], "Status mismatch"
+                run_document["execution_status"],
+                result.document["execution_status"],
+                "Status mismatch",
             )
         _equal(left.document["engine"], right.document["engine"], "Comparison engine mismatch")
         _equal(
