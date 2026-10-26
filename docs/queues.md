@@ -83,3 +83,15 @@ TW="$TW_QUEUE_NATIVE_ENV/bin/tickwitness"
 复核核对实际 store、immutable family、reservation/intent/receipt 的持久闭包，并从源重新计算队列与金融审计。返回实际输入、队列/授予/原生订单/成交/费用/账户 trace；`native_replayed=false`。族视图展示当时可见的 committed slot 前缀，失败、超时与未结束 attempt 均消耗预算。缺失 ledger 根返回缺失证据错误，不创建空目录或假报 0 次研究。
 
 样例成功预期是 front 实际成交 1 lot、费用 1 USD；back 实际成交 0、费用 0，两者都在 capture 6 收到真实撤单回执。此预期必须由远端实际安装包验收确认。非 1 的价格/数量增量、不同数量/资金与不同最终取消 capture 也有独立原生测试。文件尾缺回执不会被标为 verified；已取得的有界原生结果保留为失败诊断。
+
+## 先核对配对语义
+
+已有两个成功 run 后，可在远端仅安装核心包的环境只读检查，不再执行引擎或消耗预算：
+
+```sh
+"$TW" qualify-queue-pair "$TW_FRONT_RUN" "$TW_BACK_RUN" --families .local/queue-families --store .local/queue-data --runs .local/queue-runs
+```
+
+检查重审两份 committed 闭包和实际来源，固定 front/back 顺序；相同 run、相同 policy、跨族／环境和篡改均拒绝。报告把外部 tape 投影与一个明确的单次 trade 分配诊断分开，给出逐笔超分配量及 checkpoint 残差。标准 front 的 public trade3 加 own fill1 不能共同解释为同一笔成交的单次分配；back 没有这个残差，也不因此获得完整市场相容性证明。
+
+现有 family 对 source claim 仅保留 lineage，因此生产报告 `observation_compatibility=not_established`、真假值 null、findings 为空。它不把成交差异、数值差异、失败或未成交当作命题翻转。另有固定原创案例在远端验证显式候选标记政策：原例 −1/0 对 gt0 同为 false；最终 bid102 的独立例 +1/0 对 gt0 才为 true/false。候选政策仅为语义资格，不进入用户命题权限。详见 [资格合同](contracts/queue-semantics-qualification-v1.md) 与 [研究记录](research/sprint-06-observation-semantics.md)。

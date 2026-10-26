@@ -1,13 +1,13 @@
 # Sprint 6 队列约束与资格状态
 
-更新：2026-10-26（Asia/Singapore）。Owner 已合并 PR #79–82；Sprint 5 和 S06-01a 的资格／只读约束进入 `main`。本轮基线为 #82 merge `3dc3d28f93a5c549d675b552676d9367d930446f`。已有技术预览 `0.1.0a1` 保持原发行物，`0.2.0.dev0` 仍未发行。
+更新：2026-10-26（Asia/Singapore）。Owner 已合并 PR #79–83；Sprint 5 与 S06-01 的资格、共同预算及持久双模型执行进入 `main`。本轮基线为 #83 merge `c78714bb9fca3a3a0ce21d29ae189d9ee0e5cd1d`。已有技术预览 `0.1.0a1` 保持原发行物，`0.2.0.dev0` 仍未发行。
 
-本轮 [PR #83](https://github.com/Darrenus/tickwitness/pull/83) 实现 S06-01b：独立版本的队列族、共同预算和基于实际 development store 的持久双模型执行，另有独立队列／账务审计和只读 inspect。实现的完整远端验证已通过，实际记录见下文；仍需 owner 审阅，不提前记为故事已接受。
+已接受的 [PR #83](https://github.com/Darrenus/tickwitness/pull/83) 实现 S06-01b；历史远端记录见下文。本轮继续 S06-02a：先验证观测投影、单次 trade 分配与真假比较的语义，提供已提交双模型 run 的只读资格检查。资格通过不等于实际观测相容性或原命题判定已获授权。
 
 | 故事 | 当前切片与接受边界 | 状态 |
 | --- | --- | --- |
-| S06-01 / #16 | S06-01a 已接受；S06-01b 实现冻结共同预算、持久前后模型执行与独立审计 | In progress；PR #83 完整远端验收通过，待 owner 审阅接受 |
-| S06-02 / #17 | 两个受支持且独立验证的观测相容解释，才可进入最小真假分歧判定 | 尚未实现；`NOT_IDENTIFIABLE_WITHIN_MODEL` 保持关闭 |
+| S06-01 / #16 | S06-01a/b 已接受；冻结共同预算、持久前后模型执行与独立审计 | Owner 已合并 #83 |
+| S06-02 / #17 | S06-02a 先验证明确投影、守恒反例、候选谓词真值表和只读配对 | In progress；生产 `NOT_IDENTIFIABLE_WITHIN_MODEL` 保持关闭 |
 | S06-03 / #18 | 真实近期问题访谈累计 8–12 次，反馈关联工作流阻力 | 未取得新增访谈证据；不虚填次数、采用或独立领域验收 |
 
 原故事验收与容量仍见 [Sprint backlog](sprint-backlog.md#s6--l2-队列解释与证据不足判定)。实际投入工时尚未登记。S06-01 原估算不因生成代码自动视为已完成；复杂执行能力需要单独可验收切片，不通过修改旧协议或跳过预算提前打开。
@@ -82,3 +82,11 @@
 | 只读与分发 | inspect 不调用 native、不消耗预算，完整文件字节树不变；耗尽重试 exit 8，不新增槽；core 安装缺 extra 明确失败并保留已耗尝试 |
 
 AI 并行静态复核单独计为 AI 审阅：发现并修复过“正容量漏成交也可能 verified”的漏洞与 worker 输入错误分类；独立人类领域复核仍待实际取得。上述结果不增加真实访谈次数或市场相容性结论，也不改变 S06-02 的关闭状态。
+
+## S06-02a：观测与真假语义资格
+
+合同见 [Queue Semantics Qualification v1](../contracts/queue-semantics-qualification-v1.md)，推导与远端实验见 [研究记录](../research/sprint-06-observation-semantics.md)。实际执行入口 `qualify-queue-pair` 只重审 committed run、实际源和共同条件，分别报告外部投影与一个指定插单投影的必要数量残差；所有生产 claim 真值仍为 null，findings 为空。候选 flat-zero／最终 bid 标记政策仅用于固定资格实验，不接受任意用户数据的免费重跑或事后改写 claim。
+
+硬 oracle 为原样例 −1/0 且 gt0 为 F/F；独立最终 bid102 样例 +1/0 且 gt0 为 T/F、ge0 为 T/T。正值 own fill 暴露 external 全扣 trade 后再额外 fill 的单次分配矛盾；该反例只针对明确指定投影，不否定所有 ghost 数学模型，无残差亦不构成完整世界证明。非法、未完成、未批准、费用歧义和缺证不能当 false。
+
+本切片远端验证完成后再补实际 case/check 数、head／merge SHA、完整矩阵与 wheel/sdist artifact。S06-02 整条故事尚未接受；需要后续独立冻结 queue claim、观测／干预合同及 sealed evidence 流程，才能考虑实际 finding。

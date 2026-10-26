@@ -13,7 +13,8 @@ from tickwitness.application.queue_execution import (
     run_queue_model,
 )
 from tickwitness.application.research import ConfirmationAccessDenied
-from tickwitness.domain.evidence.run_records import identity
+from tickwitness.application.queue_semantics import inspect_queue_semantics
+from tickwitness.domain.evidence.run_records import EvidenceValidationError, identity
 from tickwitness.domain.research_contracts.queue_family import QUEUE_POLICY_IDS
 from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger
 from tickwitness.infrastructure.executable_registry import LocalExecutableProtocolRegistry
@@ -29,6 +30,7 @@ COMMANDS = frozenset(
         "run-queue-model",
         "inspect-queue-family",
         "inspect-queue-run",
+        "qualify-queue-pair",
     }
 )
 
@@ -47,6 +49,7 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
         "run-queue-model",
         "inspect-queue-family",
         "inspect-queue-run",
+        "qualify-queue-pair",
     ):
         parser = commands.add_parser(
             name,
@@ -55,9 +58,12 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
                 "run-queue-model": "Execute one frozen model with one shared-budget slot",
                 "inspect-queue-family": "Recheck source and inspect consumed shared-budget slots",
                 "inspect-queue-run": "Re-audit committed queue evidence without native execution",
+                "qualify-queue-pair": "Check paired queue semantics without issuing a finding",
             }[name],
         )
-        parser.add_argument("run_id" if name == "inspect-queue-run" else "family_id")
+        parser.add_argument("run_id" if name in ("inspect-queue-run", "qualify-queue-pair") else "family_id")
+        if name == "qualify-queue-pair":
+            parser.add_argument("other_run_id")
         if name == "run-queue-model":
             parser.add_argument("policy_id", choices=QUEUE_POLICY_IDS)
         parser.add_argument("--runs", type=Path, required=True)
@@ -85,6 +91,10 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
             getattr(arguments, "family_id", getattr(arguments, "run_id", None)),
         )
     )
+    if arguments.command == "qualify-queue-pair":
+        identity(arguments.other_run_id)
+        if arguments.run_id == arguments.other_run_id:
+            raise EvidenceValidationError("Queue pair requires two distinct committed runs")
 
     def families() -> LocalQueueFamilyRegistry:
         return LocalQueueFamilyRegistry(arguments.families, create=False)
@@ -128,6 +138,11 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
             families_factory=families,
             datasets_factory=datasets,
             ledger_factory=ledger,
+        )
+    if arguments.command == "qualify-queue-pair":
+        return inspect_queue_semantics(
+            arguments.run_id, arguments.other_run_id, split=arguments.split,
+            families_factory=families, datasets_factory=datasets, ledger_factory=ledger,
         )
     if arguments.command == "inspect-queue-family":
         return inspect_queue_family(

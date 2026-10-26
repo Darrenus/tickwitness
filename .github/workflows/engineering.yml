@@ -135,6 +135,16 @@ jobs:
           path: /tmp/queue-model-qualification.json
           if-no-files-found: error
           retention-days: 30
+      - name: Qualify observation projections and diagnostic predicate semantics
+        run: uv run --locked --extra nautilus python -I scripts/qualify_queue_semantics.py --output /tmp/queue-semantics-qualification.json
+      - name: Preserve semantic qualification and known truth-table oracles
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: queue-semantics-${{ matrix.os }}-${{ github.sha }}
+          path: /tmp/queue-semantics-qualification.json
+          if-no-files-found: error
+          retention-days: 30
       - run: uv run --locked --extra nautilus pytest
       - name: Build and replace editable package with wheel
         run: |
@@ -148,6 +158,15 @@ jobs:
           python3 scripts/smoke_queue_constraints.py --python .venv/bin/python
           python3 scripts/smoke_queue_execution.py --python .venv/bin/python --native --report /tmp/queue-execution.json
           .venv/bin/python -I scripts/qualify_queue_models.py --output /tmp/queue-wheel-qualification.json
+          .venv/bin/python -I scripts/qualify_queue_semantics.py --output /tmp/queue-semantics-wheel.json
+      - name: Preserve installed-wheel semantic qualification
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: queue-semantics-wheel-${{ matrix.os }}-${{ github.sha }}
+          path: /tmp/queue-semantics-wheel.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve installed-wheel persistent queue execution evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -213,6 +232,7 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_queue_constraints.py" --python /tmp/tickwitness-preview-native/bin/python
           python3 "$TW_SOURCE/scripts/smoke_queue_execution.py" --python /tmp/tickwitness-preview-native/bin/python --native --report /tmp/queue-source-wheel-execution.json
           /tmp/tickwitness-preview-native/bin/python -I "$TW_SOURCE/scripts/qualify_queue_models.py" --output /tmp/queue-source-wheel-qualification.json
+          /tmp/tickwitness-preview-native/bin/python -I "$TW_SOURCE/scripts/qualify_queue_semantics.py" --output /tmp/queue-semantics-source-wheel.json
           cd dist
           sha256sum --check SHA256SUMS
       - name: Preserve qualification using actual source archive and installed wheel
@@ -229,6 +249,14 @@ jobs:
         with:
           name: queue-source-wheel-execution-${{ github.sha }}
           path: /tmp/queue-source-wheel-execution.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve semantic qualification from actual source archive and wheel
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: queue-semantics-source-wheel-${{ github.sha }}
+          path: /tmp/queue-semantics-source-wheel.json
           if-no-files-found: ignore
           retention-days: 30
       - name: Preserve qualified preview artifacts
