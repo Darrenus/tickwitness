@@ -481,11 +481,9 @@ def run_tagged_queue_pair(
         ]
         for run in runs
     ]
-    same_environment = (
-        completed
-        and canonical(cast("dict[str, object]", runs[0]["execution_environment"]))
-        == canonical(cast("dict[str, object]", runs[1]["execution_environment"]))
-    )
+    same_environment = completed and canonical(
+        cast("dict[str, object]", runs[0]["execution_environment"])
+    ) == canonical(cast("dict[str, object]", runs[1]["execution_environment"]))
     eligible_truths = len(truths) == 2 and all(type(value) is bool for value in truths)
     relation = (
         ("opposite_truth_values" if truths[0] != truths[1] else "same_truth_value")

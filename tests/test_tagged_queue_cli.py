@@ -48,11 +48,22 @@ def test_tagged_single_cli_preserves_unknown_reservation_consumption(monkeypatch
         raise TaggedQueueReservationUnconfirmed(protocol_id)
 
     monkeypatch.setattr(cli, "execute_tagged_queue_command", uncertain)
-    assert main([
-        "run-tagged-queue-model", protocol_id, "protected_tag_front_cancel_v1",
-        "--store", str(tmp_path / "data"), "--registry", str(tmp_path / "registry"),
-        "--ledger", str(tmp_path / "ledger"),
-    ]) == 3
+    assert (
+        main(
+            [
+                "run-tagged-queue-model",
+                protocol_id,
+                "protected_tag_front_cancel_v1",
+                "--store",
+                str(tmp_path / "data"),
+                "--registry",
+                str(tmp_path / "registry"),
+                "--ledger",
+                str(tmp_path / "ledger"),
+            ]
+        )
+        == 3
+    )
     captured = capsys.readouterr()
     assert captured.out == ""
     error = json.loads(captured.err)["error"]
