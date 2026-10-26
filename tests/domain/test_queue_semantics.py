@@ -26,9 +26,13 @@ def pair_inputs(*, variant="standard", threshold="0"):
     request = json.loads((EXAMPLES / "experiment-request.json").read_bytes())
     request["claim"]["threshold"] = threshold
     spec = build_replay_spec(canonical(request["replay_spec"]))
-    protocol = build_executable_protocol(canonical(request), development_dataset_id="a" * 64,
-                                         confirmation_dataset_id="b" * 64)
-    events = [json.loads(line) for line in (EXAMPLES / "queue-observations.jsonl").read_bytes().splitlines()]
+    protocol = build_executable_protocol(
+        canonical(request), development_dataset_id="a" * 64, confirmation_dataset_id="b" * 64
+    )
+    events = [
+        json.loads(line)
+        for line in (EXAMPLES / "queue-observations.jsonl").read_bytes().splitlines()
+    ]
     constraint = json.loads((EXAMPLES / "queue-constraint-request.json").read_bytes())
     if variant == "no_fills":
         events[3]["quantity_lots"] = 1
@@ -40,10 +44,14 @@ def pair_inputs(*, variant="standard", threshold="0"):
         constraint["updates"][2]["trade_capture_seqs"] = []
     elif variant == "gross_churn":
         constraint["updates"][1].update(additions_lots=3, cancellations_lots=6)
-    data = normalize_events(b"\n".join(canonical(event) for event in events) + b"\n").normalized_bytes
+    data = normalize_events(
+        b"\n".join(canonical(event) for event in events) + b"\n"
+    ).normalized_bytes
     family = build_queue_family_protocol(
-        (EXAMPLES / "queue-family-request.json").read_bytes(), source_protocol=protocol,
-        replay_input=ReplayInput("a" * 64, data, spec), queue_request=canonical(constraint),
+        (EXAMPLES / "queue-family-request.json").read_bytes(),
+        source_protocol=protocol,
+        replay_input=ReplayInput("a" * 64, data, spec),
+        queue_request=canonical(constraint),
     )
     return tuple(QueueReplayInput(family, data, policy) for policy in (FRONT, BACK))
 
@@ -53,15 +61,20 @@ def report(queue_result_factory, **changes):
     return qualify_queue_pair(front, queue_result_factory(front), back, queue_result_factory(back))
 
 
-def test_native_fill_difference_is_a_joint_projection_residual_not_a_truth_finding(queue_result_factory):
+def test_native_fill_difference_is_a_joint_projection_residual_not_a_truth_finding(
+    queue_result_factory,
+):
     qualification = report(queue_result_factory)
     document = qualification.document
     assert qualification == load_queue_pair_qualification(qualification.canonical_bytes)
     assert qualification.qualification_id == digest(qualification.canonical_bytes)
     assert document["kind"] == "queue_pair_semantics_v1"
     assert document["scope"] == {
-        "phase": "development", "scenario_kind": "MODEL_SENSITIVITY",
-        "source_claim_evaluated": False, "claim_verdict_issued": False, "finding_issued": False,
+        "phase": "development",
+        "scenario_kind": "MODEL_SENSITIVITY",
+        "source_claim_evaluated": False,
+        "claim_verdict_issued": False,
+        "finding_issued": False,
     }
     assert document["observation_compatibility"]["status"] == "not_established"
     assert document["pair_relation"] == "not_evaluable"
@@ -74,14 +87,20 @@ def test_native_fill_difference_is_a_joint_projection_residual_not_a_truth_findi
     assert [front["filled_quantity_lots"], back["filled_quantity_lots"]] == [1, 0]
     for model in (front, back):
         assert model["external_only_projection"]["status"] == "verified"
-        assert model["single_counted_insertion"]["projection_id"] == "literal_order_insertion_single_counted_trade_v1"
+        assert (
+            model["single_counted_insertion"]["projection_id"]
+            == "literal_order_insertion_single_counted_trade_v1"
+        )
     single = front["single_counted_insertion"]
     assert single["status"] == "contradiction"
     assert single["trades"][0] == {
         "source_ref": {"line": 4, "capture_seq": 4, "event_type": "trade"},
         "receive_time_ns": 1700000002000000000,
-        "public_trade_lots": 3, "external_consumed_lots": 3, "own_filled_lots": 1,
-        "total_allocated_lots": 4, "over_allocation_lots": 1,
+        "public_trade_lots": 3,
+        "external_consumed_lots": 3,
+        "own_filled_lots": 1,
+        "total_allocated_lots": 4,
+        "over_allocation_lots": 1,
     }
     assert single["checkpoints"][-1]["recorded_external_lots"] == 2
     assert single["checkpoints"][-1]["candidate_projected_external_lots"] == 3
@@ -100,22 +119,31 @@ def test_external_absolute_volume_is_checked_only_at_actual_l2_checkpoints(queue
 
 
 @pytest.mark.parametrize("variant", ["no_fills", "no_trades"])
-def test_no_residual_is_only_a_necessary_check_never_a_compatibility_certificate(queue_result_factory, variant):
+def test_no_residual_is_only_a_necessary_check_never_a_compatibility_certificate(
+    queue_result_factory, variant
+):
     document = report(queue_result_factory, variant=variant).document
     assert all(model["filled_quantity_lots"] == 0 for model in document["models"])
-    assert all(model["single_counted_insertion"]["status"] == "necessary_checks_passed"
-               for model in document["models"])
+    assert all(
+        model["single_counted_insertion"]["status"] == "necessary_checks_passed"
+        for model in document["models"]
+    )
     assert document["observation_compatibility"]["status"] == "not_established"
     assert document["predicate"]["status"] == "not_evaluable"
     assert document["findings"] == []
 
 
-def test_full_order_fill_and_declared_gross_churn_remain_accounting_diagnostics(queue_result_factory):
+def test_full_order_fill_and_declared_gross_churn_remain_accounting_diagnostics(
+    queue_result_factory,
+):
     document = report(queue_result_factory, variant="gross_churn").document
     front = document["models"][0]
     assert front["filled_quantity_lots"] == 2
     assert front["single_counted_insertion"]["trades"][0]["total_allocated_lots"] == 5
-    assert front["single_counted_insertion"]["checkpoints"][-1]["candidate_projected_external_lots"] == 4
+    assert (
+        front["single_counted_insertion"]["checkpoints"][-1]["candidate_projected_external_lots"]
+        == 4
+    )
     assert document["predicate"]["values"][FRONT] is None
 
 
@@ -126,7 +154,10 @@ def test_pair_order_is_normalized_and_documents_are_detached(queue_result_factor
     assert forward == qualify_queue_pair(back, bresult, front, fresult)
     altered = forward.document
     altered["models"][0]["single_counted_insertion"]["trades"][0]["own_filled_lots"] = 999
-    assert forward.document["models"][0]["single_counted_insertion"]["trades"][0]["own_filled_lots"] == 1
+    assert (
+        forward.document["models"][0]["single_counted_insertion"]["trades"][0]["own_filled_lots"]
+        == 1
+    )
 
 
 def test_loader_rejects_locally_conserved_but_unsupported_cumulative_gross_flow(queue_result_factory):
@@ -149,8 +180,13 @@ def test_loader_rejects_locally_conserved_but_unsupported_cumulative_gross_flow(
         load_queue_pair_qualification(canonical(document))
 
 
-@pytest.mark.parametrize("problem", ["same_policy", "cross_family", "swapped_results", "environment", "fees", "input_clock"])
-def test_incompatible_or_invalid_execution_evidence_is_rejected_before_diagnostics(queue_result_factory, problem):
+@pytest.mark.parametrize(
+    "problem",
+    ["same_policy", "cross_family", "swapped_results", "environment", "fees", "input_clock"],
+)
+def test_incompatible_or_invalid_execution_evidence_is_rejected_before_diagnostics(
+    queue_result_factory, problem
+):
     front, back = pair_inputs()
     fresult, bresult = queue_result_factory(front), queue_result_factory(back)
     if problem == "same_policy":
@@ -173,9 +209,27 @@ def test_incompatible_or_invalid_execution_evidence_is_rejected_before_diagnosti
         qualify_queue_pair(front, fresult, back, bresult)
 
 
-@pytest.mark.parametrize("mutation", ["scope", "compatibility", "truth", "value", "finding", "proof", "version",
-                                      "residual", "checkpoint", "projection_status", "external_flow", "recorded_trade",
-                                      "policy_order", "fee", "claim_binding", "noncanonical"])
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "scope",
+        "compatibility",
+        "truth",
+        "value",
+        "finding",
+        "proof",
+        "version",
+        "residual",
+        "checkpoint",
+        "projection_status",
+        "external_flow",
+        "recorded_trade",
+        "policy_order",
+        "fee",
+        "claim_binding",
+        "noncanonical",
+    ],
+)
 def test_loaded_report_cannot_be_promoted_or_rewrite_arithmetic(queue_result_factory, mutation):
     document = report(queue_result_factory).document
     front = document["models"][0]
@@ -196,7 +250,9 @@ def test_loaded_report_cannot_be_promoted_or_rewrite_arithmetic(queue_result_fac
     elif mutation == "residual":
         front["single_counted_insertion"]["trades"][0]["over_allocation_lots"] = 0
     elif mutation == "checkpoint":
-        front["single_counted_insertion"]["checkpoints"][-1]["candidate_projected_external_lots"] += 1
+        front["single_counted_insertion"]["checkpoints"][-1][
+            "candidate_projected_external_lots"
+        ] += 1
     elif mutation == "projection_status":
         front["single_counted_insertion"]["status"] = "verified"
     elif mutation == "external_flow":
