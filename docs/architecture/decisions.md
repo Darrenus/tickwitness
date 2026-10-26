@@ -107,3 +107,13 @@ S05-02 的持久化和复核依赖 data/registry/runs 三根；旧八角色 bund
 状态：Proposed，S05-03。使用已提交 baseline/scenario 回执关联，不增加 native 调用或预算槽；重新核验双方来源、派生、终态及账务，要求原协议、数据来源、ReplaySpec、engine 和完整 environment 一致。旧 baseline receipt、bundle 与 ReplayComparison 的严格相同条件判定保持不变；新报告为 controlled intervention，不能冒充 strictly paired。
 
 raw 与显式字段业务投影分别给每通道首差异，保留原始值、指针和事件引用。订单角色映射仅定址处理，不能递归替换源 trade ID 的文本；只精确识别 pinned cancel reason 模板。固定报告顺序不建立跨通道全局时间/因果顺序。双方完整可评价且 mark/fee 定义一致才给有理数计算的十进制差值；不可比较保留 null/原因，无分歧也不叫策略失效。精确合同见[Scenario Comparison v1](../contracts/scenario-comparison-v1.md)。
+
+## ADR-015 队列约束先核守恒与公开扩展资格
+
+状态：Proposed，S06-01a。固定 Nautilus 1.231.0 的内置 queue gate 不能表达两种显式前/后撤单分配；不能把 queue_position 的开关或概率模型名称当观测相容性证明。先交付来源绑定的纯队列约束检查与固定案例公开扩展资格，精确合同见 [Queue constraints v1](../contracts/queue-constraints-v1.md)。
+
+外部量与 shadow order 分开。gross additions/cancellations、FIFO、无隐藏流动性与 checkpoint 流时序必须明示；逐笔成交和绝对深度更新对账，不能重复扣量。两条分配 trace 的非负/量守恒仅是条件性可行性；shadow 无冲击仍未经证明，因此分类为模型敏感性候选，不签发 OBSERVATION_COMPATIBLE 或不可识别 finding。
+
+固定原生试验使用公开模块、FillModel 与订单回调，关闭旧 queue gate、以每 capture 的 grant/consume 账本限制 shadow 容量。空 book 与 None 回退的语义、重复 hook、接受前 trade、部分成交/费用/账户及 EOF 均须远端核实；原始观测不改写。旧生产 adapter 不声明 explicit_queue_allocation 能力，旧协议及审计器严格拒绝新 semantic。
+
+生产执行另行版本化 queue family 协议、解释集合、共同预算、intent 与审计；不得克隆两个协议重置尝试预算。固定原创资格 fixture 不属于用户研究尝试；一旦使用用户数据运行模型并暴露结果，必须先占研究预算。S06-01 未完成部分和 S06-02 finding 门保留开放，不以 qualification 文件或通过个例冒充全部生产能力。

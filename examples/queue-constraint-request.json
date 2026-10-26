@@ -1,0 +1,23 @@
+{
+  "kind": "queue_constraint_request_v1",
+  "schema_version": 1,
+  "model_profile_id": "external_fifo_shadow_queue_v1",
+  "entry_capture_seq": 1,
+  "parameter_basis": {
+    "kind": "researcher_defined",
+    "calibration_status": "uncalibrated",
+    "calibration_evidence_refs": []
+  },
+  "assumptions": {
+    "priority": "fifo",
+    "hidden_liquidity": "excluded",
+    "impact": "shadow_no_impact_unverified",
+    "flow_timing": "adds_then_cancels_at_checkpoint_v1"
+  },
+  "updates": [
+    {"capture_seq": 2, "additions_lots": 3, "cancellations_lots": 0, "trade_capture_seqs": []},
+    {"capture_seq": 3, "additions_lots": 0, "cancellations_lots": 3, "trade_capture_seqs": []},
+    {"capture_seq": 5, "additions_lots": 0, "cancellations_lots": 0, "trade_capture_seqs": [4]},
+    {"capture_seq": 6, "additions_lots": 0, "cancellations_lots": 0, "trade_capture_seqs": []}
+  ]
+}

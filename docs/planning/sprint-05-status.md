@@ -1,12 +1,12 @@
 # Sprint 5 场景约束工程状态
 
-更新：2026-10-26（Asia/Singapore）。S04-03 的 PR #78 已获 owner 合并；`0.1.0a1` 发行由[独立发布记录](../releases/0.1.0a1.md)跟踪。`0.2.0.dev0` 的 S05-01 在 PR #79 待 owner 合并；后续 PR #80 先通过固定时钟资格，再接入 S05-02 耦合时钟压力执行。本页区分实现、远端验证及人类接受。
+更新：2026-10-26（Asia/Singapore）。owner 已合并 PR #79、#80、#81，S05-01/02/03 的受限实现已接受，GitHub 故事 #13/#14/#15 已关闭并同步 done 标签。合并 main 为 `ccdf7d20cdcb3787d2880eb9c352a274fee8eed1`；[Engineering 40252756496](https://github.com/Darrenus/tickwitness/actions/runs/40252756496) 与 [Documentation 40252756404](https://github.com/Darrenus/tickwitness/actions/runs/40252756404) 已通过。当前 `0.2.0.dev0` 尚未发行；`0.1.0a1` 发行由[独立记录](../releases/0.1.0a1.md)跟踪。后续进入 [Sprint 6 队列资格](sprint-06-status.md)。
 
 | 故事 | 本切片范围 | 状态与后续门 |
 | --- | --- | --- |
-| S05-01 / Issue #13 | 不可变 AssumptionSpec / ScenarioSpec、研究者设定的未校准纳秒范围、suffix anchor、真实来源绑定与只读 `validate-scenario` | PR #79 远端检查通过，待 owner 合并 |
-| S05-02 / Issue #14 | 耦合 receive-clock 后缀压力执行、独立派生身份、持久intent、共享预算及复核 | PR #80 两阶段远端验收通过，待 owner 合并；未发行 |
-| S05-03 / Issue #15 | 已提交基线/干预关联重验、精确数值差、raw/业务投影各通道首次分歧 | PR #81 远端验收通过，待 owner 合并；未发行 |
+| S05-01 / Issue #13 | 不可变 AssumptionSpec / ScenarioSpec、研究者设定的未校准纳秒范围、suffix anchor、真实来源绑定与只读 `validate-scenario` | PR #79 已由 owner 合并 |
+| S05-02 / Issue #14 | 耦合 receive-clock 后缀压力执行、独立派生身份、持久intent、共享预算及复核 | PR #80 已由 owner 合并；未发行 |
+| S05-03 / Issue #15 | 已提交基线/干预关联重验、精确数值差、raw/业务投影各通道首次分歧 | PR #81 已由 owner 合并；未发行 |
 
 故事范围与容量仍见 [Sprint backlog](sprint-backlog.md#s5--假设约束与首个压力情景)。实际投入时间尚未登记，不把代码生成、自审或 AI 交叉审查计为独立人类领域验收。真实访谈、外部采用和其他开放研究门继续保留原记录，不由本切片补数。
 
