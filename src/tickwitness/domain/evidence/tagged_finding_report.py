@@ -37,6 +37,7 @@ from tickwitness.domain.research_contracts.tagged_queue_protocol import TAGGED_P
 Row = dict[str, object]
 MAX_TAGGED_FINDING_REPORT_BYTES = 512 * 1024
 FINDING_ARTIFACT_ROLES = ARTIFACT_ROLES | {"finding_protocol", "finding_report"}
+_TRUTH_TARGET = "per_interpretation_predicate_truth_given_public_observations_v1"
 _FINALIZATION: Row = {
     "source_evidence_state": "CONTENT_CLOSED",
     "report_publication_state": "UNASSERTED",
@@ -225,7 +226,7 @@ def _document(
             {
                 "type": "NOT_IDENTIFIABLE_WITHIN_MODEL",
                 "scope": scope,
-                "conclusion_target": "per_interpretation_predicate_truth_given_public_observations_v1",
+                "conclusion_target": _TRUTH_TARGET,
                 "witnesses": witnesses,
                 "limitations": list(FINDING_LIMITATIONS),
             }
