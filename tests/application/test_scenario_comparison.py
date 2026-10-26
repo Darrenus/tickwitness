@@ -94,7 +94,9 @@ def test_zero_pair_is_a_deterministic_read_only_query_after_budget_is_exhausted(
     assert document["numeric_comparison"]["delta"] == "0"
     assert document["trace_comparison"]["business_trace_changed"] is False
     assert document["trace_comparison"]["business"]["first_divergence"] is None
-    assert document["scope"]["baseline_claim_evaluated"] is False
+    assert document["scope"]["baseline_claim_recomputed_for_integrity"] is True
+    assert document["scope"]["scenario_claim_evaluated"] is False
+    assert document["scope"]["claim_verdict_issued"] is False
     document["numeric_comparison"]["delta"] = "99"
     assert report.document == repeated.document
     assert snapshot(case.root) == before

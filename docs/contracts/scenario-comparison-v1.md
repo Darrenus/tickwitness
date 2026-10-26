@@ -31,6 +31,8 @@
 
 报告的哈希绑定实际已提交证据，不认证作者或真实市场来源。比较不重新运行 native；它验证已存结果与来源、账务和声明的一致性，不证明原生撮合曾在外部市场真实发生。
 
+scope 如实区分复核与发出结论：`baseline_claim_recomputed_for_integrity=true` 表示为核验原 baseline evaluation 而重新计算过原冻结命题；`scenario_claim_evaluated=false`、`claim_verdict_issued=false` 表示没有把原命题应用到压力场景或发出新的命题判定。不能用“完全未计算命题”掩盖完整性审计实际执行的步骤。
+
 ## 3. 精确数值与不可比较状态
 
 `numeric_comparison` 给出 `metric`、`unit`、`status`、`reason`、`baseline_value`、`scenario_value` 和 `delta`。只支持原模型下的 `net_marked_pnl_v1 / USD`。双方必须完整、独立审计可评价，并使用相同 mark 和 fee 定义，才能报告 `status=comparable`；此时 `delta = scenario_value - baseline_value`，使用有理整数计算并输出唯一普通十进制字符串，不依赖 float 或宿主 Decimal 精度。

@@ -103,7 +103,9 @@ def test_cli_zero_pair_is_stable_core_only_and_opens_existing_roots_read_only(
     assert report["trace_comparison"]["business"]["first_divergence"] is None
     assert report["trace_comparison"]["business_trace_changed"] is False
     assert report["strictly_paired"] is False
-    assert report["scope"]["baseline_claim_evaluated"] is False
+    assert report["scope"]["baseline_claim_recomputed_for_integrity"] is True
+    assert report["scope"]["scenario_claim_evaluated"] is False
+    assert report["scope"]["claim_verdict_issued"] is False
     assert set(opened) == {"runs", "registry", "data"}
     assert snapshot(case.root) == before
 

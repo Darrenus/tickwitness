@@ -20,7 +20,6 @@ from tickwitness.domain.evidence.run_records import (
     parse,
 )
 from tickwitness.domain.evidence.scenario_records import (
-    SCENARIO_SCOPE,
     ScenarioEvaluation,
     ScenarioRunReceipt,
     build_scenario_intent,
@@ -363,9 +362,9 @@ class ScenarioComparison:
         left_evaluation = ProtocolEvaluation(protocol, self.source_input, left)
         right_evaluation = ScenarioEvaluation(view, right)
         base_doc, scenario_doc = baseline.document, scenario.document
-        for document in (base_doc, scenario_doc):
-            _equal(document["protocol_id"], protocol.protocol_id, "Run protocol mismatch")
-            _equal(document["claim_revision_id"], protocol.claim_revision_id, "Claim mismatch")
+        for run_document in (base_doc, scenario_doc):
+            _equal(run_document["protocol_id"], protocol.protocol_id, "Run protocol mismatch")
+            _equal(run_document["claim_revision_id"], protocol.claim_revision_id, "Claim mismatch")
         _equal(
             scenario_doc["intent"],
             build_scenario_intent(view).document,
@@ -390,9 +389,9 @@ class ScenarioComparison:
             },
             "Scenario bindings do not match recomputed evidence",
         )
-        for document, result in ((base_doc, left), (scenario_doc, right)):
+        for run_document, result in ((base_doc, left), (scenario_doc, right)):
             _equal(
-                document["execution_status"], result.document["execution_status"], "Status mismatch"
+                run_document["execution_status"], result.document["execution_status"], "Status mismatch"
             )
         _equal(left.document["engine"], right.document["engine"], "Comparison engine mismatch")
         _equal(
@@ -419,7 +418,15 @@ class ScenarioComparison:
         document: dict[str, object] = {
             "kind": "scenario_comparison_v1",
             "schema_version": 1,
-            "scope": dict(SCENARIO_SCOPE),
+            "scope": {
+                "phase": "development",
+                "scenario_kind": "COUNTERFACTUAL_STRESS",
+                "calibration_status": "uncalibrated",
+                "search_performed": False,
+                "baseline_claim_recomputed_for_integrity": True,
+                "scenario_claim_evaluated": False,
+                "claim_verdict_issued": False,
+            },
             "controlled_intervention": True,
             "strictly_paired": False,
             "bindings": {
