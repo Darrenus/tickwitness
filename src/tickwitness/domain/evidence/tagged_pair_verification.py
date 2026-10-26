@@ -277,7 +277,7 @@ class TaggedPairAssessment:
             "Unsupported tagged pair assessment",
         )
         bindings = exact(doc["bindings"], set(PAYLOAD_ROLES), "Tagged pair bindings")
-        for key, value in bindings.items():
+        for value in bindings.values():
             identity(value)
         for key in ("protocol_id", "claim_revision_id", "dataset_id", "witness_pair_id"):
             identity(doc[key])
