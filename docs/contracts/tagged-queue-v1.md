@@ -136,4 +136,4 @@ reserve 的持久化确认失败时，槽可能已经提交。调用停止并返
 
 每份 submission 保留实际 `execution_environment`。两份已完成运行只有在该环境的 canonical JSON 相同、估值均 eligible 时才报告同真值／异真值关系；环境不一致返回 ineligible 及 `execution_environment_mismatch`，仍保留两份独立运行的审计结果。环境字符串不是第三方认证。
 
-当前 findings 始终为空；旧 baseline bundle、S05 比较器和旧 queue qualification 继续拒绝新 kind／semantic。跨机器独立 sealed tagged evidence 流程、最终 finding、确认集 lifecycle、独立人类领域复核与真实用户采用证据仍是后续验收门。
+单次 run 的 findings 始终为空；旧 baseline bundle、S05 比较器和旧 queue qualification 继续拒绝新 kind／semantic。独立封存与 core 离线复核见 [Tagged Pair Evidence v1](tagged-pair-evidence-v1.md)。最终 finding 授权、确认集 lifecycle、独立人类领域复核与真实用户采用证据仍是后续验收门。

@@ -1,6 +1,6 @@
 # ADR 0018：独立冻结标记参与者的守恒重建
 
-- 状态：Proposed；S06-02b 实现中，远端验收待运行，待 owner 审阅。
+- 状态：Accepted；owner 已合并 [PR #85](https://github.com/Darrenus/tickwitness/pull/85)。实际远端结果见 [Sprint 6](../planning/sprint-06-status.md#s06-02b-远端验收记录)。
 - 日期：2026-10-26。
 - 基线：owner 已合并 PR #84，merge `e018100df57e66376c810edce4fdf9ffec698e28`。
 - 合同：[Tagged Queue v1](../contracts/tagged-queue-v1.md)。
