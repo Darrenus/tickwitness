@@ -42,10 +42,23 @@ _FINALIZATION: Row = {
     "report_publication_state": "UNASSERTED",
 }
 _REPORT_FIELDS = {
-    "kind", "schema_version", "report_policy", "finding_protocol", "finding_protocol_id",
-    "subject_protocol_id", "claim_revision_id", "source_pair_bundle_id", "assessment",
-    "assessment_id", "evidence_bindings", "scope", "execution_status", "finalization",
-    "findings", "completeness", "limitations",
+    "kind",
+    "schema_version",
+    "report_policy",
+    "finding_protocol",
+    "finding_protocol_id",
+    "subject_protocol_id",
+    "claim_revision_id",
+    "source_pair_bundle_id",
+    "assessment",
+    "assessment_id",
+    "evidence_bindings",
+    "scope",
+    "execution_status",
+    "finalization",
+    "findings",
+    "completeness",
+    "limitations",
 }
 
 
@@ -60,7 +73,8 @@ class TaggedFindingIneligibleError(EvidenceValidationError):
         self.source_pair_bundle_id = source_pair_bundle_id
         super().__init__(
             "Verified tagged evidence is not issuable under this frozen report authority: "
-            + reason + ". Existing evidence remains unchanged; no finding report is issued."
+            + reason
+            + ". Existing evidence remains unchanged; no finding report is issued."
         )
 
 
@@ -74,25 +88,37 @@ def _equal(actual: object, expected: object, message: str) -> None:
 
 
 def _pair(artifacts: dict[str, bytes]) -> dict[str, bytes]:
-    _require(type(artifacts) is dict and artifacts.keys() == ARTIFACT_ROLES,
-             "Finding evidence requires the exact twelve source-pair roles")
+    _require(
+        type(artifacts) is dict and artifacts.keys() == ARTIFACT_ROLES,
+        "Finding evidence requires the exact twelve source-pair roles",
+    )
     limits = {**PAYLOAD_LIMITS, "assessment": MAX_ASSESSMENT_BYTES}
     for role, data in artifacts.items():
-        _require(type(data) is bytes and 0 < len(data) <= limits[role],
-                 "Finding source artifact is empty, mutable or oversized: " + role)
+        _require(
+            type(data) is bytes and 0 < len(data) <= limits[role],
+            "Finding source artifact is empty, mutable or oversized: " + role,
+        )
     return dict(artifacts)
 
 
 def tagged_pair_bundle_id(pair_artifacts: dict[str, bytes]) -> str:
     """Compute fixed-envelope identity only; this helper does not audit its payload."""
     artifacts = _pair(pair_artifacts)
-    manifest = canonical({
-        "kind": "tagged_queue_pair_evidence_bundle_v1", "schema_version": 1,
-        "scope": "development_tagged_queue_pair_v1",
-        "roles": {role: {"sha256": digest(data), "size_bytes": len(data),
-                         "ref": "objects/sha256/" + digest(data)}
-                  for role, data in artifacts.items()},
-    })
+    manifest = canonical(
+        {
+            "kind": "tagged_queue_pair_evidence_bundle_v1",
+            "schema_version": 1,
+            "scope": "development_tagged_queue_pair_v1",
+            "roles": {
+                role: {
+                    "sha256": digest(data),
+                    "size_bytes": len(data),
+                    "ref": "objects/sha256/" + digest(data),
+                }
+                for role, data in artifacts.items()
+            },
+        }
+    )
     return digest(manifest)
 
 
@@ -119,7 +145,8 @@ def _scope(protocol: TaggedFindingProtocol, assessment: TaggedPairAssessment, pa
         "source_pair_bundle_id": pair_id,
         "assessment_id": assessment.assessment_id,
         "witness_pair_id": assessment.document["witness_pair_id"],
-        "model_id": model["model_id"], "projection_id": model["projection_id"],
+        "model_id": model["model_id"],
+        "projection_id": model["projection_id"],
         "intervention_id": model["intervention_id"],
         "evaluated_policy_ids": list(TAGGED_POLICY_IDS),
         "claim_truth_target": "frozen_predicate_per_hidden_allocation_v1",
@@ -129,59 +156,116 @@ def _scope(protocol: TaggedFindingProtocol, assessment: TaggedPairAssessment, pa
 
 def _witness(run: Row) -> Row:
     return {
-        key: run[key] for key in (
-            "role", "policy_id", "run_id", "attempt_id", "attempt_index", "intent_id",
-            "result_sha256", "evaluation_sha256", "truth",
+        key: run[key]
+        for key in (
+            "role",
+            "policy_id",
+            "run_id",
+            "attempt_id",
+            "attempt_index",
+            "intent_id",
+            "result_sha256",
+            "evaluation_sha256",
+            "truth",
         )
     }
 
 
 def _document(
-    protocol: TaggedFindingProtocol, assessment: TaggedPairAssessment,
-    pair_id: str, evidence_bindings: Row,
+    protocol: TaggedFindingProtocol,
+    assessment: TaggedPairAssessment,
+    pair_id: str,
+    evidence_bindings: Row,
 ) -> Row:
     subject = protocol.subject_protocol
     adoc = assessment.document
-    _equal(adoc["protocol_id"], subject.protocol_id, "Finding assessment belongs to a different subject")
+    _equal(
+        adoc["protocol_id"],
+        subject.protocol_id,
+        "Finding assessment belongs to a different subject",
+    )
     _equal(adoc["claim_revision_id"], subject.claim_revision_id, "Finding assessment claim differs")
     pair_bindings = exact(evidence_bindings, set(ARTIFACT_ROLES), "Finding source bindings")
     for value in pair_bindings.values():
         identity(value)
-    _equal(pair_bindings["protocol"], subject.protocol_id, "Finding protocol bytes differ from source role")
-    _equal(pair_bindings["assessment"], assessment.assessment_id, "Finding assessment bytes differ from source role")
-    _equal({role: value for role, value in pair_bindings.items() if role != "assessment"},
-           adoc["bindings"], "Finding source roles differ from assessment bindings")
+    _equal(
+        pair_bindings["protocol"],
+        subject.protocol_id,
+        "Finding protocol bytes differ from source role",
+    )
+    _equal(
+        pair_bindings["assessment"],
+        assessment.assessment_id,
+        "Finding assessment bytes differ from source role",
+    )
+    _equal(
+        {role: value for role, value in pair_bindings.items() if role != "assessment"},
+        adoc["bindings"],
+        "Finding source roles differ from assessment bindings",
+    )
     identity(pair_id)
     comparison = cast("Row", adoc["comparison"])
-    _require(comparison["ineligible_reason"] is None and comparison["same_execution_environment"] is True,
-             "Finding report requires an eligible controlled pair")
+    _require(
+        comparison["ineligible_reason"] is None
+        and comparison["same_execution_environment"] is True,
+        "Finding report requires an eligible controlled pair",
+    )
     runs = cast("list[Row]", adoc["runs"])
-    _require(all(type(run["truth"]) is bool for run in runs), "Finding report requires two boolean truths")
+    _require(
+        all(type(run["truth"]) is bool for run in runs),
+        "Finding report requires two boolean truths",
+    )
     witnesses = [_witness(run) for run in runs]
     false_witnesses = [item for item in witnesses if item["truth"] is False]
     true_witnesses = [item for item in witnesses if item["truth"] is True]
     scope = _scope(protocol, assessment, pair_id)
     findings: list[Row] = []
     if false_witnesses and true_witnesses:
-        findings.append({"type": "NOT_IDENTIFIABLE_WITHIN_MODEL", "scope": scope,
-                         "conclusion_target": "per_interpretation_predicate_truth_given_public_observations_v1",
-                         "witnesses": witnesses, "limitations": list(FINDING_LIMITATIONS)})
+        findings.append(
+            {
+                "type": "NOT_IDENTIFIABLE_WITHIN_MODEL",
+                "scope": scope,
+                "conclusion_target": "per_interpretation_predicate_truth_given_public_observations_v1",
+                "witnesses": witnesses,
+                "limitations": list(FINDING_LIMITATIONS),
+            }
+        )
     if false_witnesses:
-        findings.append({"type": "COUNTEREXAMPLE_FOUND", "scope": scope,
-                         "conclusion_target": "robust_satisfaction_across_listed_witnesses_v1",
-                         "witnesses": false_witnesses, "limitations": list(FINDING_LIMITATIONS)})
+        findings.append(
+            {
+                "type": "COUNTEREXAMPLE_FOUND",
+                "scope": scope,
+                "conclusion_target": "robust_satisfaction_across_listed_witnesses_v1",
+                "witnesses": false_witnesses,
+                "limitations": list(FINDING_LIMITATIONS),
+            }
+        )
     else:
-        findings.append({"type": "NO_COUNTEREXAMPLE_FOUND", "scope": scope,
-                         "conclusion_target": "robust_satisfaction_across_listed_witnesses_v1",
-                         "witnesses": witnesses, "limitations": list(FINDING_LIMITATIONS)})
+        findings.append(
+            {
+                "type": "NO_COUNTEREXAMPLE_FOUND",
+                "scope": scope,
+                "conclusion_target": "robust_satisfaction_across_listed_witnesses_v1",
+                "witnesses": witnesses,
+                "limitations": list(FINDING_LIMITATIONS),
+            }
+        )
     return {
-        "kind": "tagged_finding_report_v1", "schema_version": 1,
-        "report_policy": FINDING_REPORT_POLICY, "finding_protocol": protocol.document,
-        "finding_protocol_id": protocol.protocol_id, "subject_protocol_id": subject.protocol_id,
-        "claim_revision_id": subject.claim_revision_id, "source_pair_bundle_id": pair_id,
-        "assessment": adoc, "assessment_id": assessment.assessment_id,
-        "evidence_bindings": pair_bindings, "scope": scope,
-        "execution_status": "completed", "finalization": dict(_FINALIZATION), "findings": findings,
+        "kind": "tagged_finding_report_v1",
+        "schema_version": 1,
+        "report_policy": FINDING_REPORT_POLICY,
+        "finding_protocol": protocol.document,
+        "finding_protocol_id": protocol.protocol_id,
+        "subject_protocol_id": subject.protocol_id,
+        "claim_revision_id": subject.claim_revision_id,
+        "source_pair_bundle_id": pair_id,
+        "assessment": adoc,
+        "assessment_id": assessment.assessment_id,
+        "evidence_bindings": pair_bindings,
+        "scope": scope,
+        "execution_status": "completed",
+        "finalization": dict(_FINALIZATION),
+        "findings": findings,
         "completeness": {
             "planned_policy_ids": list(TAGGED_POLICY_IDS),
             "audited_policy_ids": list(TAGGED_POLICY_IDS),
@@ -190,9 +274,12 @@ def _document(
             "admissible_world_space_exhausted": False,
             "full_attempt_history_available": False,
             "unexplored_scope": [
-                "other_admissible_hidden_allocations", "other_datasets_or_claims",
-                "real_private_execution_observations", "actual_insertion_and_market_impact",
-                "confirmation_observations", "complete_attempt_history",
+                "other_admissible_hidden_allocations",
+                "other_datasets_or_claims",
+                "real_private_execution_observations",
+                "actual_insertion_and_market_impact",
+                "confirmation_observations",
+                "complete_attempt_history",
             ],
         },
         "limitations": list(FINDING_LIMITATIONS),
@@ -207,14 +294,23 @@ class TaggedFindingReport:
 
     def __post_init__(self) -> None:
         try:
-            doc = exact(parse(self.canonical_bytes, limit=MAX_TAGGED_FINDING_REPORT_BYTES),
-                        _REPORT_FIELDS, "Tagged finding report")
+            doc = exact(
+                parse(self.canonical_bytes, limit=MAX_TAGGED_FINDING_REPORT_BYTES),
+                _REPORT_FIELDS,
+                "Tagged finding report",
+            )
             protocol = load_tagged_finding_protocol(canonical(cast("Row", doc["finding_protocol"])))
             assessment = TaggedPairAssessment(canonical(cast("Row", doc["assessment"])))
-            rebuilt = _document(protocol, assessment, identity(doc["source_pair_bundle_id"]),
-                                cast("Row", doc["evidence_bindings"]))
-            _require(canonical(rebuilt) == self.canonical_bytes,
-                     "Finding report bindings, scope, findings, coverage or encoding differ")
+            rebuilt = _document(
+                protocol,
+                assessment,
+                identity(doc["source_pair_bundle_id"]),
+                cast("Row", doc["evidence_bindings"]),
+            )
+            _require(
+                canonical(rebuilt) == self.canonical_bytes,
+                "Finding report bindings, scope, findings, coverage or encoding differ",
+            )
         except EvidenceValidationError:
             raise
         except ValueError as error:
@@ -230,24 +326,34 @@ class TaggedFindingReport:
 
 
 def build_tagged_finding_report(
-    protocol: TaggedFindingProtocol, pair_artifacts: dict[str, bytes],
+    protocol: TaggedFindingProtocol,
+    pair_artifacts: dict[str, bytes],
 ) -> TaggedFindingReport:
     """Reaudit source and both native witnesses before applying the fixed authority."""
     try:
         checked = _checked_protocol(protocol)
         artifacts = _pair(pair_artifacts)
         verified = verify_tagged_pair_artifacts(artifacts)
-        _require(artifacts["protocol"] == checked.subject_protocol.canonical_bytes,
-                 "Finding evidence differs from the full frozen subject protocol")
+        _require(
+            artifacts["protocol"] == checked.subject_protocol.canonical_bytes,
+            "Finding evidence differs from the full frozen subject protocol",
+        )
         assessment = TaggedPairAssessment(artifacts["assessment"])
         pair_id = tagged_pair_bundle_id(artifacts)
         comparison = cast("Row", cast("Row", verified["assessment"])["comparison"])
         reason = comparison["ineligible_reason"]
         if reason is not None:
             raise TaggedFindingIneligibleError(cast("str", reason), pair_id)
-        return TaggedFindingReport(canonical(_document(
-            checked, assessment, pair_id, {role: digest(data) for role, data in artifacts.items()}
-        )))
+        return TaggedFindingReport(
+            canonical(
+                _document(
+                    checked,
+                    assessment,
+                    pair_id,
+                    {role: digest(data) for role, data in artifacts.items()},
+                )
+            )
+        )
     except EvidenceValidationError:
         raise
     except ValueError as error:
@@ -260,23 +366,31 @@ def load_tagged_finding_report(raw: bytes) -> TaggedFindingReport:
 
 def verify_tagged_finding_artifacts(artifacts: dict[str, bytes]) -> TaggedFindingReport:
     """Reconstruct the complete report, including its source twelve-role closure."""
-    _require(type(artifacts) is dict and artifacts.keys() == FINDING_ARTIFACT_ROLES,
-             "Finding package requires exactly fourteen fixed artifact roles")
-    _require(type(artifacts["finding_protocol"]) is bytes
-             and 0 < len(artifacts["finding_protocol"]) <= MAX_TAGGED_FINDING_PROTOCOL_BYTES,
-             "Finding protocol bytes exceed their bound")
-    _require(type(artifacts["finding_report"]) is bytes
-             and 0 < len(artifacts["finding_report"]) <= MAX_TAGGED_FINDING_REPORT_BYTES,
-             "Finding report bytes exceed their bound")
+    _require(
+        type(artifacts) is dict and artifacts.keys() == FINDING_ARTIFACT_ROLES,
+        "Finding package requires exactly fourteen fixed artifact roles",
+    )
+    _require(
+        type(artifacts["finding_protocol"]) is bytes
+        and 0 < len(artifacts["finding_protocol"]) <= MAX_TAGGED_FINDING_PROTOCOL_BYTES,
+        "Finding protocol bytes exceed their bound",
+    )
+    _require(
+        type(artifacts["finding_report"]) is bytes
+        and 0 < len(artifacts["finding_report"]) <= MAX_TAGGED_FINDING_REPORT_BYTES,
+        "Finding report bytes exceed their bound",
+    )
     try:
         protocol = load_tagged_finding_protocol(artifacts["finding_protocol"])
-        expected = build_tagged_finding_report(protocol, {
-            role: data for role, data in artifacts.items() if role in ARTIFACT_ROLES
-        })
+        expected = build_tagged_finding_report(
+            protocol, {role: data for role, data in artifacts.items() if role in ARTIFACT_ROLES}
+        )
     except EvidenceValidationError:
         raise
     except ValueError as error:
         raise EvidenceValidationError(str(error)) from error
-    _require(expected.canonical_bytes == artifacts["finding_report"],
-             "Sealed finding report does not reproduce from its authority and source evidence")
+    _require(
+        expected.canonical_bytes == artifacts["finding_report"],
+        "Sealed finding report does not reproduce from its authority and source evidence",
+    )
     return expected

@@ -73,8 +73,18 @@ FINDING_RULES: dict[str, object] = {
     "invalid_or_incomplete_evidence": "validation_error_never_a_finding_v1",
 }
 _FIELDS = {
-    "kind", "schema_version", "title", "subject_protocol", "bindings", "authority",
-    "policies", "evidence_policy", "report_policy", "scope", "rules", "limitations",
+    "kind",
+    "schema_version",
+    "title",
+    "subject_protocol",
+    "bindings",
+    "authority",
+    "policies",
+    "evidence_policy",
+    "report_policy",
+    "scope",
+    "rules",
+    "limitations",
 }
 _REQUEST_MAX_BYTES = 16 * 1024
 
@@ -89,9 +99,13 @@ def _require(condition: bool, message: str) -> None:
 
 
 def _checked_subject(subject: TaggedQueueProtocol) -> TaggedQueueProtocol:
-    _require(type(subject) is TaggedQueueProtocol, "Finding authority requires an actual tagged protocol")
+    _require(
+        type(subject) is TaggedQueueProtocol, "Finding authority requires an actual tagged protocol"
+    )
     checked = load_tagged_queue_protocol(subject.canonical_bytes)
-    _require(checked.protocol_id == subject.protocol_id, "Finding subject identity differs from content")
+    _require(
+        checked.protocol_id == subject.protocol_id, "Finding subject identity differs from content"
+    )
     return checked
 
 
@@ -100,8 +114,10 @@ def _document(title: object, subject: TaggedQueueProtocol) -> dict[str, object]:
     original = checked.document
     source_bindings = cast("dict[str, str]", original["bindings"])
     return {
-        "kind": "tagged_finding_protocol_v1", "schema_version": 1,
-        "title": text(title, "finding report title", 200), "subject_protocol": original,
+        "kind": "tagged_finding_protocol_v1",
+        "schema_version": 1,
+        "title": text(title, "finding report title", 200),
+        "subject_protocol": original,
         "bindings": {
             "subject_protocol_id": checked.protocol_id,
             "claim_revision_id": checked.claim_revision_id,
@@ -122,18 +138,28 @@ def _document(title: object, subject: TaggedQueueProtocol) -> dict[str, object]:
             "execution_authority_extended": False,
             "source_claim_authority_granted": False,
         },
-        "policies": list(TAGGED_POLICY_IDS), "evidence_policy": FINDING_EVIDENCE_POLICY,
-        "report_policy": FINDING_REPORT_POLICY, "scope": dict(FINDING_SCOPE),
-        "rules": dict(FINDING_RULES), "limitations": list(FINDING_LIMITATIONS),
+        "policies": list(TAGGED_POLICY_IDS),
+        "evidence_policy": FINDING_EVIDENCE_POLICY,
+        "report_policy": FINDING_REPORT_POLICY,
+        "scope": dict(FINDING_SCOPE),
+        "rules": dict(FINDING_RULES),
+        "limitations": list(FINDING_LIMITATIONS),
     }
 
 
 def _validated(raw: bytes) -> dict[str, object]:
     try:
-        document = exact(parse(raw, MAX_TAGGED_FINDING_PROTOCOL_BYTES), _FIELDS, "Tagged finding protocol")
-        subject = load_tagged_queue_protocol(canonical(cast("dict[str, object]", document["subject_protocol"])))
+        document = exact(
+            parse(raw, MAX_TAGGED_FINDING_PROTOCOL_BYTES), _FIELDS, "Tagged finding protocol"
+        )
+        subject = load_tagged_queue_protocol(
+            canonical(cast("dict[str, object]", document["subject_protocol"]))
+        )
         rebuilt = _document(document["title"], subject)
-        _require(canonical(rebuilt) == raw, "Finding authority, bindings, rules, scope or encoding differ")
+        _require(
+            canonical(rebuilt) == raw,
+            "Finding authority, bindings, rules, scope or encoding differ",
+        )
         return rebuilt
     except (ReplayValidationError, ProtocolValidationError) as error:
         raise TaggedFindingValidationError(str(error)) from error
@@ -146,7 +172,9 @@ class TaggedFindingProtocol:
 
     def __post_init__(self) -> None:
         _validated(self.canonical_bytes)
-        _require(self.protocol_id == digest(self.canonical_bytes), "Finding protocol identity mismatch")
+        _require(
+            self.protocol_id == digest(self.canonical_bytes), "Finding protocol identity mismatch"
+        )
 
     @property
     def document(self) -> dict[str, object]:
@@ -154,7 +182,9 @@ class TaggedFindingProtocol:
 
     @property
     def subject_protocol(self) -> TaggedQueueProtocol:
-        return load_tagged_queue_protocol(canonical(cast("dict[str, object]", self.document["subject_protocol"])))
+        return load_tagged_queue_protocol(
+            canonical(cast("dict[str, object]", self.document["subject_protocol"]))
+        )
 
 
 def load_tagged_finding_protocol(raw: bytes) -> TaggedFindingProtocol:
@@ -162,14 +192,22 @@ def load_tagged_finding_protocol(raw: bytes) -> TaggedFindingProtocol:
     return TaggedFindingProtocol(digest(raw), raw)
 
 
-def build_tagged_finding_protocol(raw: bytes, *, subject_protocol: TaggedQueueProtocol) -> TaggedFindingProtocol:
+def build_tagged_finding_protocol(
+    raw: bytes, *, subject_protocol: TaggedQueueProtocol
+) -> TaggedFindingProtocol:
     try:
-        request = exact(parse(raw, _REQUEST_MAX_BYTES), {"kind", "schema_version", "title", "authority"}, "Tagged finding request")
+        request = exact(
+            parse(raw, _REQUEST_MAX_BYTES),
+            {"kind", "schema_version", "title", "authority"},
+            "Tagged finding request",
+        )
         _require(request["kind"] == "tagged_finding_request_v1", "Unsupported finding request")
         integer(request["schema_version"], "schema_version", 1, 1)
         _require(request["authority"] == FINDING_AUTHORITY_ID, "Unsupported finding authority")
         encoded = canonical(_document(request["title"], subject_protocol))
-        _require(len(encoded) <= MAX_TAGGED_FINDING_PROTOCOL_BYTES, "Finding protocol exceeds byte bound")
+        _require(
+            len(encoded) <= MAX_TAGGED_FINDING_PROTOCOL_BYTES, "Finding protocol exceeds byte bound"
+        )
         return TaggedFindingProtocol(digest(encoded), encoded)
     except (ReplayValidationError, ProtocolValidationError) as error:
         raise TaggedFindingValidationError(str(error)) from error

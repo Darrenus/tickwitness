@@ -78,12 +78,13 @@ from tickwitness.infrastructure.queue_family_registry import (
 )
 from tickwitness.infrastructure.safe_input import InputReadError, read_jsonl, read_regular_file
 from tickwitness.infrastructure.subprocess_replay import ReplayProcessError, SubprocessReplayAdapter
+from tickwitness.infrastructure.tagged_finding_registry import (
+    TaggedFindingNotFoundError,
+    TaggedFindingRegistryError,
+)
 from tickwitness.infrastructure.tagged_queue_registry import (
     TaggedQueueNotFoundError,
     TaggedQueueRegistryError,
-)
-from tickwitness.infrastructure.tagged_finding_registry import (
-    TaggedFindingNotFoundError, TaggedFindingRegistryError,
 )
 
 
@@ -338,9 +339,20 @@ def main(argv: list[str] | None = None) -> int:
         )
         return error.exit_code
     except TaggedFindingIneligibleError as error:
-        print(json.dumps({"error": {"code": error.code, "reason": error.reason,
-            "message": str(error), "source_pair_bundle_id": error.source_pair_bundle_id,
-            "finding_issued": False}}), file=sys.stderr)
+        print(
+            json.dumps(
+                {
+                    "error": {
+                        "code": error.code,
+                        "reason": error.reason,
+                        "message": str(error),
+                        "source_pair_bundle_id": error.source_pair_bundle_id,
+                        "finding_issued": False,
+                    }
+                }
+            ),
+            file=sys.stderr,
+        )
         return error.exit_code
     except (EvaluationValidationError, EvidenceValidationError) as error:
         return _write_error("invalid_research_evidence", error, 2)

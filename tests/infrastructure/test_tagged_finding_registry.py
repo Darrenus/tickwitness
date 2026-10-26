@@ -15,11 +15,20 @@ from tickwitness.domain.research_contracts.tagged_finding_protocol import (
     load_tagged_finding_protocol,
 )
 from tickwitness.domain.research_contracts.tagged_queue_protocol import load_tagged_queue_protocol
-from tickwitness.infrastructure.executable_registry import ExecutableRegistryError, LocalExecutableProtocolRegistry
-from tickwitness.infrastructure.tagged_finding_registry import (
-    LocalTaggedFindingRegistry, TaggedFindingNotFoundError, TaggedFindingRecord, TaggedFindingRegistryError,
+from tickwitness.infrastructure.executable_registry import (
+    ExecutableRegistryError,
+    LocalExecutableProtocolRegistry,
 )
-from tickwitness.infrastructure.tagged_queue_registry import LocalTaggedQueueRegistry, TaggedQueueRegistryError
+from tickwitness.infrastructure.tagged_finding_registry import (
+    LocalTaggedFindingRegistry,
+    TaggedFindingNotFoundError,
+    TaggedFindingRecord,
+    TaggedFindingRegistryError,
+)
+from tickwitness.infrastructure.tagged_queue_registry import (
+    LocalTaggedQueueRegistry,
+    TaggedQueueRegistryError,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -27,8 +36,14 @@ ROOT = Path(__file__).resolve().parents[2]
 def finding_bytes():
     golden = json.loads((ROOT / "tests/fixtures/tagged-pair-native-golden.json").read_bytes())
     subject = load_tagged_queue_protocol(canonical(golden["cases"][0]["protocol"]))
-    request = canonical({"kind": "tagged_finding_request_v1", "schema_version": 1,
-                         "title": "Conditional tagged findings", "authority": "conditional_tagged_findings_v1"})
+    request = canonical(
+        {
+            "kind": "tagged_finding_request_v1",
+            "schema_version": 1,
+            "title": "Conditional tagged findings",
+            "authority": "conditional_tagged_findings_v1",
+        }
+    )
     return build_tagged_finding_protocol(request, subject_protocol=subject).canonical_bytes
 
 
@@ -42,7 +57,8 @@ def test_strict_namespace_idempotency_and_immutable_record(tmp_path):
     assert LocalTaggedFindingRegistry(tmp_path).get(first.protocol_id) == repeat
     assert sorted(path.name for path in tmp_path.iterdir()) == ["tagged-finding-protocols"]
     assert list((tmp_path / "tagged-finding-protocols").iterdir()) == [
-        tmp_path / "tagged-finding-protocols" / f"{first.protocol_id}.json"]
+        tmp_path / "tagged-finding-protocols" / f"{first.protocol_id}.json"
+    ]
     with pytest.raises(FrozenInstanceError):
         first.created = False
     with pytest.raises(TaggedFindingRegistryError):
@@ -86,7 +102,10 @@ def test_readonly_does_not_repair_rehashed_or_corrupted_protocol(tmp_path):
     path = tmp_path / "tagged-finding-protocols" / f"{record.protocol_id}.json"
     corrupt = record.canonical_bytes[:-1] + b"!"
     path.write_bytes(corrupt)
-    for operation in (lambda: registry.get(record.protocol_id), lambda: registry.seal(record.canonical_bytes)):
+    for operation in (
+        lambda: registry.get(record.protocol_id),
+        lambda: registry.seal(record.canonical_bytes),
+    ):
         with pytest.raises(TaggedFindingRegistryError, match="hash"):
             operation()
     assert path.read_bytes() == corrupt
@@ -105,14 +124,18 @@ def test_concurrent_publication_has_one_created_record(tmp_path):
     raw = finding_bytes()
     root = tmp_path / "nested" / "registry"
     barrier = Barrier(8)
+
     def publish():
         barrier.wait(timeout=5)
         return LocalTaggedFindingRegistry(root, create=True).seal(raw)
+
     with ThreadPoolExecutor(max_workers=8) as executor:
         records = list(executor.map(lambda _: publish(), range(8)))
     assert len({record.protocol_id for record in records}) == 1
     assert sum(record.created for record in records) == 1
-    assert [p.name for p in (root / "tagged-finding-protocols").iterdir()] == [f"{records[0].protocol_id}.json"]
+    assert [p.name for p in (root / "tagged-finding-protocols").iterdir()] == [
+        f"{records[0].protocol_id}.json"
+    ]
 
 
 @pytest.mark.parametrize("target", ["root", "namespace", "file"])
@@ -165,8 +188,10 @@ def test_digest_is_not_a_path(tmp_path, identity):
 
 def test_failed_link_cleans_stage_without_partial_publication(tmp_path, monkeypatch):
     registry = LocalTaggedFindingRegistry(tmp_path, create=True)
+
     def fail(*args, **kwargs):
         raise OSError("Injected authority publication failure")
+
     monkeypatch.setattr(os, "link", fail)
     with pytest.raises(TaggedFindingRegistryError, match="Injected authority publication"):
         registry.seal(finding_bytes())

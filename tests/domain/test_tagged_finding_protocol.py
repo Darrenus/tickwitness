@@ -23,8 +23,12 @@ from tickwitness.domain.research_contracts.tagged_queue_protocol import load_tag
 
 
 def finding_request(title="Conditional tagged findings"):
-    return {"kind": "tagged_finding_request_v1", "schema_version": 1,
-            "title": title, "authority": FINDING_AUTHORITY_ID}
+    return {
+        "kind": "tagged_finding_request_v1",
+        "schema_version": 1,
+        "title": title,
+        "authority": FINDING_AUTHORITY_ID,
+    }
 
 
 def subject():
@@ -32,13 +36,17 @@ def subject():
 
 
 def build(request=None):
-    return build_tagged_finding_protocol(canonical(finding_request() if request is None else request), subject_protocol=subject())
+    return build_tagged_finding_protocol(
+        canonical(finding_request() if request is None else request), subject_protocol=subject()
+    )
 
 
 def test_finding_authority_binds_full_unchanged_subject_and_own_rules():
     original = subject()
     before = original.canonical_bytes
-    protocol = build_tagged_finding_protocol(canonical(finding_request()), subject_protocol=original)
+    protocol = build_tagged_finding_protocol(
+        canonical(finding_request()), subject_protocol=original
+    )
     document = protocol.document
     assert protocol.subject_protocol == original
     assert document["subject_protocol"] == original.document
@@ -49,7 +57,9 @@ def test_finding_authority_binds_full_unchanged_subject_and_own_rules():
     assert document["authority"]["execution_authority_extended"] is False
     assert document["authority"]["source_claim_authority_granted"] is False
     assert document["authority"]["truth_target"] == "frozen_predicate_per_hidden_allocation_v1"
-    assert document["authority"]["counterexample_quantifier"] == "for_all_listed_policy_witnesses_v1"
+    assert (
+        document["authority"]["counterexample_quantifier"] == "for_all_listed_policy_witnesses_v1"
+    )
     assert "quantifier" not in document["authority"]
     assert document["rules"] == FINDING_RULES
     assert document["scope"] == FINDING_SCOPE
@@ -75,13 +85,33 @@ def test_authority_identity_roundtrip_and_detached_views():
         replace(protocol, protocol_id="a" * 64)
 
 
-@pytest.mark.parametrize("attack", ["allowed_type", "source_authority", "execution_authority", "scope", "rules", "evidence_policy", "report_policy", "policy_order", "binding", "subject_scope", "version_bool", "extra"])
+@pytest.mark.parametrize(
+    "attack",
+    [
+        "allowed_type",
+        "source_authority",
+        "execution_authority",
+        "scope",
+        "rules",
+        "evidence_policy",
+        "report_policy",
+        "policy_order",
+        "binding",
+        "subject_scope",
+        "version_bool",
+        "extra",
+    ],
+)
 def test_rehashed_contract_cannot_change_authority_or_source(attack):
     doc = build().document
     if attack == "allowed_type":
         doc["authority"]["allowed_finding_types"].append("INSUFFICIENT_EVIDENCE")
     elif attack in ("source_authority", "execution_authority"):
-        key = "source_claim_authority_granted" if attack == "source_authority" else "execution_authority_extended"
+        key = (
+            "source_claim_authority_granted"
+            if attack == "source_authority"
+            else "execution_authority_extended"
+        )
         doc["authority"][key] = True
     elif attack == "scope":
         doc["scope"]["market_impact_verified"] = True
@@ -104,27 +134,40 @@ def test_rehashed_contract_cannot_change_authority_or_source(attack):
         TaggedFindingProtocol(digest(raw), raw)
 
 
-@pytest.mark.parametrize("request", [
-    {**finding_request(), "schema_version": True},
-    {**finding_request(), "authority": "arbitrary_findings_v1"},
-    {**finding_request(), "kind": "tagged_queue_request_v1"},
-    {**finding_request(), "threshold": "-999"},
-    finding_request(" padded "), finding_request(""), finding_request("x" * 201),
-])
-def test_request_is_exact_bounded_and_cannot_change_claim(request):
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        {**finding_request(), "schema_version": True},
+        {**finding_request(), "authority": "arbitrary_findings_v1"},
+        {**finding_request(), "kind": "tagged_queue_request_v1"},
+        {**finding_request(), "threshold": "-999"},
+        finding_request(" padded "),
+        finding_request(""),
+        finding_request("x" * 201),
+    ],
+)
+def test_request_is_exact_bounded_and_cannot_change_claim(declaration):
     with pytest.raises(TaggedFindingValidationError):
-        build(request)
+        build(declaration)
 
 
 def test_request_duplicate_float_noncanonical_and_forged_subject_boundaries():
     source = subject()
-    for raw in (b'{"kind":"tagged_finding_request_v1","kind":"bad"}',
-                b'{"kind":"tagged_finding_request_v1","schema_version":1.0,"title":"x","authority":"conditional_tagged_findings_v1"}',
-                b"{}" * 9000):
+    for raw in (
+        b'{"kind":"tagged_finding_request_v1","kind":"bad"}',
+        b'{"kind":"tagged_finding_request_v1","schema_version":1.0,'
+        b'"title":"x","authority":"conditional_tagged_findings_v1"}',
+        b"{}" * 9000,
+    ):
         with pytest.raises(TaggedFindingValidationError):
             build_tagged_finding_protocol(raw, subject_protocol=source)
     with pytest.raises(TaggedFindingValidationError):
-        build_tagged_finding_protocol(canonical(finding_request()), subject_protocol=SimpleNamespace(canonical_bytes=source.canonical_bytes, protocol_id=source.protocol_id))
+        build_tagged_finding_protocol(
+            canonical(finding_request()),
+            subject_protocol=SimpleNamespace(
+                canonical_bytes=source.canonical_bytes, protocol_id=source.protocol_id
+            ),
+        )
     raw = json.dumps(build().document, indent=2).encode()
     with pytest.raises(TaggedFindingValidationError):
         load_tagged_finding_protocol(raw)

@@ -449,7 +449,8 @@ def test_size_filecount_manifest_and_total_budgets(tmp_path: Path) -> None:
     bundle = export_tagged_finding_bundle(destination, artifacts())
     total = len(bundle.manifest_bytes) + sum(len(data) for data in artifacts().values())
     assert (
-        read_tagged_finding_bundle(destination, limits=BundleLimits(max_total_bytes=total)) == bundle
+        read_tagged_finding_bundle(destination, limits=BundleLimits(max_total_bytes=total))
+        == bundle
     )
     for limits in (
         BundleLimits(max_total_bytes=total - 1),
@@ -557,7 +558,8 @@ def test_finding_and_pair_envelopes_are_mutually_exclusive(tmp_path):
     finding_root, pair_root = tmp_path / "finding", tmp_path / "pair"
     finding = export_tagged_finding_bundle(finding_root, artifacts())
     pair_payload = {
-        role: data for role, data in artifacts().items()
+        role: data
+        for role, data in artifacts().items()
         if role not in {"finding_protocol", "finding_report"}
     }
     pair = export_tagged_pair_bundle(pair_root, pair_payload)

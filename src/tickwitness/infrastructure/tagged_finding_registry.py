@@ -54,9 +54,9 @@ class TaggedFindingRecord:
     created: bool
 
     def __post_init__(self) -> None:
-        if type(self.created) is not bool or _protocol(self.canonical_bytes).protocol_id != _identity(
-            self.protocol_id
-        ):
+        if type(self.created) is not bool or _protocol(
+            self.canonical_bytes
+        ).protocol_id != _identity(self.protocol_id):
             raise TaggedFindingRegistryError("Record identity or created flag is invalid")
 
 
@@ -65,7 +65,9 @@ class LocalTaggedFindingRegistry:
 
     def __init__(self, root: Path, *, create: bool = False) -> None:
         if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
-            raise TaggedFindingRegistryError("Registry requires POSIX no-follow directory operations")
+            raise TaggedFindingRegistryError(
+                "Registry requires POSIX no-follow directory operations"
+            )
         if type(create) is not bool:
             raise TaggedFindingRegistryError("create must be a boolean")
         self._root = Path(root).absolute()
@@ -139,7 +141,9 @@ class LocalTaggedFindingRegistry:
                     os.mkdir("tagged-finding-protocols", mode=0o700, dir_fd=root)
                 os.fsync(root)
             directory = os.open(
-                "tagged-finding-protocols", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=root
+                "tagged-finding-protocols",
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=root,
             )
             stack.callback(os.close, directory)
             yield directory
