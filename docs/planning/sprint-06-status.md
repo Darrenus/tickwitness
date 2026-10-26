@@ -1,13 +1,13 @@
 # Sprint 6 队列约束与资格状态
 
-更新：2026-10-26（Asia/Singapore）。Owner 已合并 PR #79–85；Sprint 5、S06-01 的资格／共同预算／持久双模型执行，以及 S06-02a/b 的语义资格／守恒 tagged reconstruction 进入 `main`。本轮基线为 #85 merge `dcf38714b5ee306e9328f1ad25624fc687f036e8`。已有技术预览 `0.1.0a1` 保持原发行物，`0.2.0.dev0` 仍未发行。
+更新：2026-10-26（Asia/Singapore）。Owner 已合并 PR #79–86；Sprint 5、S06-01 的资格／共同预算／持久双模型执行，以及 S06-02a/b/c 的语义资格／守恒 tagged reconstruction／可迁移证据进入 `main`。本轮基线为 #86 merge `62fc66b563528fcd03713ec8597ddb66e4d9c870`。已有技术预览 `0.1.0a1` 保持原发行物，`0.2.0.dev0` 仍未发行。
 
-已接受的 [PR #85](https://github.com/Darrenus/tickwitness/pull/85) 实现 S06-02b；历史远端记录见下文。本轮继续 S06-02c：导出已提交双模型的固定证据闭包，移交并删除原 store 后，用 core 离线重新核对来源、守恒、账务、horizon 与配对真值。新 finding 授权保持关闭，不借 sealed 目录改写已冻结权限。
+已接受的 [PR #86](https://github.com/Darrenus/tickwitness/pull/86) 实现 S06-02c；历史远端记录见下文。本轮继续 S06-02d：独立冻结 finding 签发权限与确定性报告合同，明确有限条件见证、拒签和 FINAL 内容闭包。原执行协议／旧包权限不改写，不扩大市场或统计推断范围。
 
 | 故事 | 当前切片与接受边界 | 状态 |
 | --- | --- | --- |
 | S06-01 / #16 | S06-01a/b 已接受；冻结共同预算、持久前后模型执行与独立审计 | Owner 已合并 #83 |
-| S06-02 / #17 | S06-02a/b 已接受；S06-02c 可迁移双模型证据与离线重建通过远端验收 | In progress；[PR #86](https://github.com/Darrenus/tickwitness/pull/86) 待 owner 接受，生产 `NOT_IDENTIFIABLE_WITHIN_MODEL` 保持关闭 |
+| S06-02 / #17 | S06-02a/b/c 已接受；S06-02d 独立 finding 权限与报告实现中 | In progress；owner 已合并 #86，本轮远端验收与 owner 接受待完成 |
 | S06-03 / #18 | 真实近期问题访谈累计 8–12 次，反馈关联工作流阻力 | 未取得新增访谈证据；不虚填次数、采用或独立领域验收 |
 
 原故事验收与容量仍见 [Sprint backlog](sprint-backlog.md#s6--l2-队列解释与证据不足判定)。实际投入工时尚未登记。S06-01 原估算不因生成代码自动视为已完成；复杂执行能力需要单独可验收切片，不通过修改旧协议或跳过预算提前打开。
@@ -156,3 +156,15 @@ AI 静态交叉审查单独计为 AI 审阅：补强过提前伪称 cleanup hook
 报告与实际 sealed 目录以 `tagged-pair-core-3afd7b5d04fa047b2374b6025653cc80e3ad3f36`、`tagged-pair-evidence-<os>-3afd7b5d04fa047b2374b6025653cc80e3ad3f36`、`tagged-pair-source-wheel-3afd7b5d04fa047b2374b6025653cc80e3ad3f36` 保存30天。source-wheel 报告同时区分历史 golden 复核与3个 fresh native cases，实际脚本／样例来自 tar.gz，验证器为实际 wheel 的全新 core 安装。本机只做文本编辑、静态审查、Git／gh 和下载报告读取。
 
 AI 静态交叉复核单独记录为 AI 审阅，补强了 assessment 深层序列化校验及 exporter 返回错误合法包的边界。验证的是选定证据的来源闭包与模型内经济算术；离线不证明 native 日志真实出处、原 ledger commitment、完整尝试历史或作者身份。独立人类领域复核、真实市场和采用证据仍未取得，工时／访谈／性能记录未新增。
+
+## S06-02d：独立冻结 finding 签发与报告合同
+
+合同见 [Tagged Findings v1](../contracts/tagged-findings-v1.md)，决策见 [ADR 0020](../adr/0020-frozen-tagged-finding-authority.md)。原 tagged execution／pair assessment 的 finding 权限和完整字节不改写；新权限显式绑定完整 subject、新 claim、观测／gross／ReplaySpec、固定两政策、eligibility、真值映射与限制。冻结不读取行情、不解封确认集、不占研究 attempt，也不证明事前预注册或人类审批。
+
+预设规则为 F/F→COUNTEREXAMPLE_FOUND，T/F 或 F/T→NOT_IDENTIFIABLE_WITHIN_MODEL 与 COUNTEREXAMPLE_FOUND，T/T→已列政策范围内的 NO_COUNTEREXAMPLE_FOUND。NOTID 的目标是每个隐藏分配下谓词 P(w) 的真值能否由同一公开观测确定；COUNTER／NO_COUNTER 的目标是 U_S=∀w∈S P(w) 的已列集合稳健满足检查。相反见证已使 U_S 为 false，不能将该聚合命题称为不可识别。每份结论带明确 conclusion_target、可沿封存内容核对的 run／attempt／intent／result／evaluation 见证与同一 scope。两政策覆盖完整不等于所有 admissible worlds 穷尽；条件反例不是对真实历史实现的反驳，新命题与 source v2 原命题分开，不预测真实插单、历史所有权、市场冲击或未来收益。
+
+同环境、可评价的两份布尔见证是签发前提。有效但 ineligible 的源包保留原评价，退出9且不发布报告目录；坏证据、缺件、未完成、模型或费用矛盾不得转成 false、INSUFFICIENT_EVIDENCE 或任何 finding。
+
+十四角色新包包含原十二角色闭包和独立 finding_protocol／finding_report，旧八／十二角色 reader 保持严格。领域候选只声明 source CONTENT_CLOSED／publication UNASSERTED；应用在完整十四角色封存并复核或离线读取复核后返回 FINAL，仅表示内容闭合，不认证作者、人类领域审批、原始发布、完整 ledger 或断电持久性。撤回／更正 lifecycle 尚未实现。
+
+预设验收在前序原生配对流程中新增独立冻结的 bid100／ge0（F/T），与 F/F、T/F、T/T 共四种真值方向一起签发；F/T 的反例只应引用 front。报告流程复用这些真实 native 配对和保留的历史记录，再删除 issuer 的 source pair 副本与 finding registry，仅由独立 core 安装复核；签发自身不新增 native 运行或 attempt。完整 hash 重算后的报告与分配攻击、错误 subject／权限／pin、未知拒签、类型隔离、只读和无覆盖边界均须验证。实际 wheel、实际 sdist 脚本、两平台原生后的 core 签发链路及原始十四角色包将留存30天。本轮全部项目执行继续在远端；尚无本切片完整 CI 结果，不把预设 oracle 或静态复核记为通过。外部人类、真实市场、访谈、工时、性能及采用数据不补造。

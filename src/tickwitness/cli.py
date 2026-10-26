@@ -33,6 +33,9 @@ from tickwitness.cli_scenarios import execute as execute_scenario_command
 from tickwitness.cli_tagged_evidence import COMMANDS as TAGGED_EVIDENCE_COMMANDS
 from tickwitness.cli_tagged_evidence import add_commands as add_tagged_evidence_commands
 from tickwitness.cli_tagged_evidence import execute as execute_tagged_evidence_command
+from tickwitness.cli_tagged_findings import COMMANDS as TAGGED_FINDING_COMMANDS
+from tickwitness.cli_tagged_findings import add_commands as add_tagged_finding_commands
+from tickwitness.cli_tagged_findings import execute as execute_tagged_finding_command
 from tickwitness.cli_tagged_queue import COMMANDS as TAGGED_QUEUE_COMMANDS
 from tickwitness.cli_tagged_queue import add_commands as add_tagged_queue_commands
 from tickwitness.cli_tagged_queue import execute as execute_tagged_queue_command
@@ -41,6 +44,7 @@ from tickwitness.domain.assumptions.specs import AssumptionValidationError
 from tickwitness.domain.data_evidence.events import DataValidationError, ValidationLimits
 from tickwitness.domain.evidence.evaluation import EvaluationValidationError
 from tickwitness.domain.evidence.run_records import EvidenceValidationError
+from tickwitness.domain.evidence.tagged_finding_report import TaggedFindingIneligibleError
 from tickwitness.domain.replay.specs import ReplayValidationError
 from tickwitness.domain.research_contracts.protocols import ProtocolValidationError
 from tickwitness.infrastructure.attempt_ledger import (
@@ -78,6 +82,9 @@ from tickwitness.infrastructure.tagged_queue_registry import (
     TaggedQueueNotFoundError,
     TaggedQueueRegistryError,
 )
+from tickwitness.infrastructure.tagged_finding_registry import (
+    TaggedFindingNotFoundError, TaggedFindingRegistryError,
+)
 
 
 def _positive_integer(value: str) -> int:
@@ -109,8 +116,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="tickwitness",
         description=(
-            "TickWitness scoped protocol execution and portable accounting evidence. "
-            "Arbitrary strategy execution and search verdicts remain unsupported."
+            "TickWitness scoped execution, portable evidence and conditional tagged findings. "
+            "Arbitrary strategy execution remains unsupported."
         ),
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {version('tickwitness')}")
@@ -177,13 +184,16 @@ def main(argv: list[str] | None = None) -> int:
     add_queue_execution_commands(commands)
     add_tagged_queue_commands(commands)
     add_tagged_evidence_commands(commands)
+    add_tagged_finding_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in TAGGED_EVIDENCE_COMMANDS:
+        if arguments.command in TAGGED_FINDING_COMMANDS:
+            output, identity = execute_tagged_finding_command(arguments), ""
+        elif arguments.command in TAGGED_EVIDENCE_COMMANDS:
             output, identity = execute_tagged_evidence_command(arguments), ""
         elif arguments.command in TAGGED_QUEUE_COMMANDS:
             output, identity = execute_tagged_queue_command(arguments), ""
@@ -327,6 +337,11 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return error.exit_code
+    except TaggedFindingIneligibleError as error:
+        print(json.dumps({"error": {"code": error.code, "reason": error.reason,
+            "message": str(error), "source_pair_bundle_id": error.source_pair_bundle_id,
+            "finding_issued": False}}), file=sys.stderr)
+        return error.exit_code
     except (EvaluationValidationError, EvidenceValidationError) as error:
         return _write_error("invalid_research_evidence", error, 2)
     except AttemptBudgetExceededError as error:
@@ -337,6 +352,7 @@ def main(argv: list[str] | None = None) -> int:
         BundleNotFoundError,
         QueueFamilyNotFoundError,
         TaggedQueueNotFoundError,
+        TaggedFindingNotFoundError,
     ) as error:
         return _write_error("research_evidence_not_found", error, 4)
     except BundleDestinationExistsError as error:
@@ -349,6 +365,7 @@ def main(argv: list[str] | None = None) -> int:
         BundleError,
         QueueFamilyRegistryError,
         TaggedQueueRegistryError,
+        TaggedFindingRegistryError,
     ) as error:
         return _write_error("research_store_integrity_or_io_failure", error, 3)
     except DatasetNotFoundError as error:

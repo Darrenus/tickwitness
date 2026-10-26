@@ -1,0 +1,6 @@
+{
+  "kind": "tagged_finding_request_v1",
+  "schema_version": 1,
+  "title": "Conditional tagged inventory findings over the two frozen policies",
+  "authority": "conditional_tagged_findings_v1"
+}

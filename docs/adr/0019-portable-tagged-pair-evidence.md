@@ -1,6 +1,6 @@
 # ADR 0019：独立的可迁移 tagged 双模型证据
 
-- 状态：Proposed；S06-02c 实现切片，远端验收待完成，待 owner 审阅。
+- 状态：Accepted；owner 已合并 PR #86，S06-02c 远端验收记录见 [Sprint 6](../planning/sprint-06-status.md#s06-02c-远端验收记录)。
 - 日期：2026-10-26。
 - 基线：owner 已合并 PR #85，merge `dcf38714b5ee306e9328f1ad25624fc687f036e8`。
 - 合同：[Tagged Pair Evidence v1](../contracts/tagged-pair-evidence-v1.md)。
