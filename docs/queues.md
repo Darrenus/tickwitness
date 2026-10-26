@@ -1,6 +1,6 @@
 # 外部队列约束与原生资格
 
-本页对应 S06-01 的第一阶段：核对明示的外部排队约束，并用固定原创合成观测验证公开原生扩展。它不是任意用户数据的队列执行入口，不输出成交预测、收益、原命题真假或 `NOT_IDENTIFIABLE_WITHIN_MODEL`。实际状态见 [Sprint 6](planning/sprint-06-status.md)，精确合同见 [Queue constraints v1](contracts/queue-constraints-v1.md)。
+本页覆盖 S06-01a 的约束与固定资格，以及 S06-01b 的冻结队列族、共同预算、持久双模型执行与只读复核。执行支持满足受限合同的用户导入 development 输入，分类为 `MODEL_SENSITIVITY`；不输出成交预测、收益估值、原命题真假或 `NOT_IDENTIFIABLE_WITHIN_MODEL`。实际状态见 [Sprint 6](planning/sprint-06-status.md)，精确合同见 [Queue constraints v1](contracts/queue-constraints-v1.md) 和 [Queue Family v1](contracts/queue-family-v1.md)。
 
 ## 外部观测和模拟订单分开
 
@@ -52,4 +52,34 @@ execution_approved = false
 
 返回空 OrderBook 表示本次不授予成交量；返回 None 会回退旧撮合，因此必须专项测试。自定义 book 路径不能假定已有标准 liquidity-consumption 保护，重复 hook、非 trade 和接受前输入都不能重复或提前授予成交量。EOF 不补虚构数据，也不强制清空在途命令。
 
-只有固定案例真实远端运行后才记录通过结果。新 engine semantic 明确区别于原 v1；旧 ReplaySpec、v2 可执行协议、baseline auditor、bundle 和 S05 比较器不接纳新队列执行。下一阶段还须冻结 queue family 协议、两解释集合、共同预算、不可替换 intent、queue trace、独立账务与执行审计；用户数据上的模型调用必须占研究预算，不能借“资格检查”绕过。真实观测相容性与命题分歧仍是后续独立门。
+只有固定案例真实远端运行后才记录资格通过。生产队列执行使用独立 engine semantic，严格区别于资格 probe 和原 v1；旧 ReplaySpec、v2 可执行协议、baseline auditor、bundle 和 S05 比较器不接纳新结果。真实观测相容性与命题分歧仍是后续独立门。
+
+## 冻结并执行双模型
+
+以下命令仍只在远端执行。沿用前文已导入的 development/confirmation ID 与 source protocol，另安装 pinned native extra；每个模型调用消耗新族的一个共同预算槽。首次失败即停止，不会自动重试另一模型。
+
+```sh
+TW_QUEUE_NATIVE_ENV=/tmp/tickwitness-queue-native
+UV_PROJECT_ENVIRONMENT="$TW_QUEUE_NATIVE_ENV" uv sync --locked --extra nautilus --python 3.12
+TW="$TW_QUEUE_NATIVE_ENV/bin/tickwitness"
+"$TW" freeze-queue-family "$TW_PROTOCOL" queue-family-request.json queue-constraint-request.json --input-root examples --store .local/queue-data --registry .local/queue-registry --families .local/queue-families
+```
+
+从返回 JSON 取得 `family_id` 后设置 `TW_FAMILY`；首次双模型会消耗样例预算的全部 2 槽。重复执行不会复用结果或获得免费尝试。源 v2 原预算不授权新队列政策；冻结的新族包含完整来源与两政策，拥有一份共同预算。
+
+```sh
+"$TW" run-queue-family "$TW_FAMILY" --families .local/queue-families --store .local/queue-data --runs .local/queue-runs
+"$TW" inspect-queue-family "$TW_FAMILY" --families .local/queue-families --store .local/queue-data --runs .local/queue-runs
+```
+
+输出列出各 run/attempt/intent ID、实际成交量/费用、独立评价与模型 scope。双调用可能部分成功；JSON 明确列出成功 runs、失败模型与是否消耗预算、未尝试模型，并返回非零 exit code。第二次失败不会撤销第一份结果。仅需显式补一个模型时可用 `run-queue-model FAMILY POLICY`；仍需剩余预算，不会更换 intent 复用旧槽。
+
+将某一成功 `run_id` 设置为 `TW_RUN` 后，只读复核不运行 native，也不再消耗尝试：
+
+```sh
+"$TW" inspect-queue-run "$TW_RUN" --families .local/queue-families --store .local/queue-data --runs .local/queue-runs
+```
+
+复核核对实际 store、immutable family、reservation/intent/receipt 的持久闭包，并从源重新计算队列与金融审计。返回实际输入、队列/授予/原生订单/成交/费用/账户 trace；`native_replayed=false`。族视图展示当时可见的 committed slot 前缀，失败、超时与未结束 attempt 均消耗预算。缺失 ledger 根返回缺失证据错误，不创建空目录或假报 0 次研究。
+
+样例成功预期是 front 实际成交 1 lot、费用 1 USD；back 实际成交 0、费用 0，两者都在 capture 6 收到真实撤单回执。此预期必须由远端实际安装包验收确认。非 1 的价格/数量增量、不同数量/资金与不同最终取消 capture 也有独立原生测试。文件尾缺回执不会被标为 verified；已取得的有界原生结果保留为失败诊断。

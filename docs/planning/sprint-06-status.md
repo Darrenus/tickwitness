@@ -1,12 +1,12 @@
 # Sprint 6 队列约束与资格状态
 
-更新：2026-10-26（Asia/Singapore）。Owner 已合并 PR #79、#80、#81，Sprint 5 的声明、耦合时钟压力与只读配对能力进入 `main`。当前基线为 `ccdf7d20cdcb3787d2880eb9c352a274fee8eed1`；其 [Engineering 40252756496](https://github.com/Darrenus/tickwitness/actions/runs/40252756496) 与 [Documentation 40252756404](https://github.com/Darrenus/tickwitness/actions/runs/40252756404) 均通过。已有技术预览 `0.1.0a1` 保持原发行物，`0.2.0.dev0` 仍未发行。
+更新：2026-10-26（Asia/Singapore）。Owner 已合并 PR #79–82；Sprint 5 和 S06-01a 的资格／只读约束进入 `main`。本轮基线为 #82 merge `3dc3d28f93a5c549d675b552676d9367d930446f`。已有技术预览 `0.1.0a1` 保持原发行物，`0.2.0.dev0` 仍未发行。
 
-本轮 [PR #82](https://github.com/Darrenus/tickwitness/pull/82) 完成 S06-01 的资格与只读约束切片（S06-01a），远端验证已通过，待 owner 接受；不把它记为整条故事已交付。
+本轮 [PR #83](https://github.com/Darrenus/tickwitness/pull/83) 实现 S06-01b：独立版本的队列族、共同预算和基于实际 development store 的持久双模型执行，另有独立队列／账务审计和只读 inspect。实现的完整远端验证已通过，实际记录见下文；仍需 owner 审阅，不提前记为故事已接受。
 
 | 故事 | 当前切片与接受边界 | 状态 |
 | --- | --- | --- |
-| S06-01 / #16 | 固定原生模型资格、external FIFO shadow queue 声明与来源/约束检查已实现；下一切片做版本化队列族协议和持久双模型执行 | In progress；PR #82 待 owner 接受，不关闭整条故事 |
+| S06-01 / #16 | S06-01a 已接受；S06-01b 实现冻结共同预算、持久前后模型执行与独立审计 | In progress；PR #83 完整远端验收通过，待 owner 审阅接受 |
 | S06-02 / #17 | 两个受支持且独立验证的观测相容解释，才可进入最小真假分歧判定 | 尚未实现；`NOT_IDENTIFIABLE_WITHIN_MODEL` 保持关闭 |
 | S06-03 / #18 | 真实近期问题访谈累计 8–12 次，反馈关联工作流阻力 | 未取得新增访谈证据；不虚填次数、采用或独立领域验收 |
 
@@ -20,13 +20,13 @@
 
 新模型需要逐事件的输入引用、价位总量、gross additions/cancellations、trade 分配及队前/队后状态，以便独立检查守恒与非负。仅凭净深度下降不能知道撤单数量或位置；不能把同一成交同时扣作 trade 和 cancellation。未记录的 gross 分解属于明示模型条件，不因一份自洽的 JSON 变成观测事实。精确请求与输出见 [Queue Constraints v1](../contracts/queue-constraints-v1.md)。
 
-## 本切片的读写边界
+## 已接受 S06-01a 的读写边界
 
 `validate-queue-constraints` 读取已有 v2 protocol 和实际 development 输入，注入并核对来源绑定，再检查声明的受限 frame。确认集在请求文件或任何仓库访问前拒绝。它不运行 native、不给策略 fill/PnL、不占 attempt、不改变输入或协议，也不发布新的 catalog dataset、intent 或 outcome。
 
 一份约束检查成功仅说明来源绑定及所列算术/顺序约束成立；旧 v2 protocol 不因此授权新的 queue profile。报告必须保留模型类别、未知撤单位置及执行未批准状态。无效 frame、引用、单位、整数、来源或不可支持状态都明确拒绝，不作为亏损或反例。
 
-## 本轮验收门
+## S06-01a 验收门与历史记录
 
 | 门 | 所需实际记录 |
 | --- | --- |
@@ -54,8 +54,31 @@
 
 安装后 `validate-queue-constraints` 对真实 sealed source 重复检查身份稳定，原目录字节树不变、无 runs/ledger/worker；重复扣成交的 gross 负例被拒。所有新增测试、构建、回放和资格实验均在远端，本机仅编辑/审查文件、Git/gh 控制及读取下载报告。实际工时、性能数据、真实访谈和独立人类领域接受仍不补造。
 
-## 后续执行门
+## S06-01b 实现与验收门
 
-持久队列执行须先冻结同一观察源、队列约束／解释集合、engine/adapter semantic、策略和共同预算。每次引擎调用在同一父协议下占一次 attempt；不得克隆两个协议分别获得新预算，或借“qualify”名称在用户数据上反复观察策略结果。执行前持久不可替换 intent，失败、超时与中断不退款。
+本轮已实现先冻结同一观察源、队列约束／两政策、engine/adapter semantic、策略和共同预算。每次引擎调用在同一族下占一次 attempt；两个模型没有各自克隆的预算。执行前持久不可替换 intent，失败、超时与中断不退款。双调用逐次提交，失败即停止并明确报告 partial；未结束 reservation 仍可见且占预算。
 
-新 queue trace、receipt 与审计应显式版本化；旧 v2、baseline receipt/bundle 和 S05 比较器继续拒绝新模型，不放宽其原保证。两解释是否真正代表同观测下的可行世界，要在全部列明约束与 native 结果均可独立核验后另行接受；在此之前保持模型敏感性表述，S06-02 的不可识别 finding 不能提前打开。
+新 queue trace、reservation/intent/receipt/failure 与审计均显式版本化；旧 v2、baseline receipt/bundle 和 S05 比较器继续拒绝新模型。独立审计从 actual source 重建 flow、FIFO frontier 和分配额度，核对真实接受、实际 native fills/fees/account、终态回执。只读 inspect 重算存档，不调用 native。合同见 [Queue Family v1](../contracts/queue-family-v1.md)，决策见 [ADR 0016](../adr/0016-frozen-queue-family-execution.md)。
+
+新增验收覆盖同族末槽竞争、失败／未决不退款、先 intent 后 worker、原生结果审计失败后的持久诊断、错误来源与时钟、gross flow/重复授予/费用/现金/订单回执篡改、confirmation 提前拒绝、实际 wheel/sdist 的 CLI 闭环。所有测试、构建、格式化和 native 执行继续在远端，本机仅文件编辑、Git/gh 控制与报告读取。
+
+两解释是否真正代表同观测下的可行世界仍需另行接受；保持 `MODEL_SENSITIVITY`，不签发 valuation/claim verdict，S06-02 的不可识别 finding 关闭。共同预算不是跨协议的统计试验账本，未补齐多重检验校正。实际工时、性能数据、访谈和独立人类领域接受均不补造。
+
+### S06-01b 远端结果
+
+代码 head `0038617b8b09902424217d5214ed60a3ffff3720` 的 [Engineering 40258276638](https://github.com/Darrenus/tickwitness/actions/runs/40258276638) 与 [Documentation 40258276628](https://github.com/Darrenus/tickwitness/actions/runs/40258276628) 共 13 checks 全部通过；实际 merge checkout 为 `33ed00e0509f07c7937f7e1c85bdcd1576e9300e`。本节为该已验证实现的验收记录，随后的文档提交不冒充同一代码 head。
+
+核心 Ubuntu 24.04 / macOS 15 × Python 3.12/3.13/3.14 六组合各 **1444 passed / 49 optional-native skips**；原生 Ubuntu 24.04 与 macOS 26 / Python 3.12 各 **1491 passed / 2 core-only skips / 190 warnings**。lint、129 文件格式、61 source files 类型检查、文档链接、核心／原生回归、实际 wheel 及实际 sdist 的全新安装验收均通过。warnings 保留，不作为通过断言。初轮格式／类型门和两项新攻击测试的夹具金额字符串错误均有失败记录；修复后重新验证，未放宽 oracle 来遮盖原生差异。
+
+两平台安装后的真实 CLI 均从 sealed development store 冻结同一个族，按 front/back 执行并重新 inspect；第三份验收使用实际 source archive 内脚本／样例及实际 wheel。远端 artifacts 名为 `queue-execution-<os>-33ed00e0509f07c7937f7e1c85bdcd1576e9300e` 与 `queue-source-wheel-execution-33ed00e0509f07c7937f7e1c85bdcd1576e9300e`，保留完整 family/source/intent/receipt/result/evaluation、账户、队列／hook／实际接受和共享预算检查，保存 30 天。
+
+| 实际核验 | 结果 |
+| --- | --- |
+| 同一原创合成输入与 gross flows | front 实际成交 1 lot / 费用 1 USD；back 0 lot / 费用 0 USD；两者真实接受时目标外部量均为 5 |
+| 终态与共同预算 | 双方 capture 6 收到真实原生 OrderCanceled；使用同一 family ID 的 2 个不同 attempt，remaining=0 |
+| 无退款与部分成功 | 启动失败、超时、审计拒绝和中断消耗槽；第二模型失败保留第一模型成功并停止，CLI 返回非零；竞争末槽不双占 |
+| 来源／分配／金融审计 | 时钟／future 引用、gross flow、重复或遗漏正额度、漏成交、费用／现金／仓位／回执等篡改拒绝；取得但未通过的原生结果持久保留诊断 |
+| 超出固定样例常量 | 两政策另测非 1 的 price/size increments、不同资金／数量／价格和最终 cancel capture；gross churn、相同接收时刻及干净对照均通过 |
+| 只读与分发 | inspect 不调用 native、不消耗预算，完整文件字节树不变；耗尽重试 exit 8，不新增槽；core 安装缺 extra 明确失败并保留已耗尝试 |
+
+AI 并行静态复核单独计为 AI 审阅：发现并修复过“正容量漏成交也可能 verified”的漏洞与 worker 输入错误分类；独立人类领域复核仍待实际取得。上述结果不增加真实访谈次数或市场相容性结论，也不改变 S06-02 的关闭状态。

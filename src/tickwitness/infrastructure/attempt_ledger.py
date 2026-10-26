@@ -16,6 +16,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
+from tickwitness.domain.evidence.queue_records import (
+    MAX_QUEUE_RECORD_BYTES,
+    QueueAttemptReservation,
+    QueueRunIntent,
+    load_queue_failure,
+    load_queue_intent,
+    load_queue_run_receipt,
+)
 from tickwitness.domain.evidence.run_records import (
     AttemptReservation,
     EvidenceValidationError,
@@ -31,11 +39,21 @@ from tickwitness.domain.evidence.scenario_records import (
     load_scenario_intent,
     load_scenario_run_receipt,
 )
-from tickwitness.domain.research_contracts.executable import ExecutableProtocol
+from tickwitness.domain.research_contracts.executable import (
+    ExecutableProtocol,
+    load_executable_protocol,
+)
+from tickwitness.domain.research_contracts.protocols import ProtocolValidationError
+from tickwitness.domain.research_contracts.queue_family import (
+    QueueFamilyProtocol,
+    load_queue_family_protocol,
+)
 
 _RECORD_LIMIT = 16 * 1024
 _ARTIFACT_LIMIT = 16 * 1024 * 1024
 _ARTIFACT_COUNT = 16
+type _Owner = ExecutableProtocol | QueueFamilyProtocol
+type _Intent = ScenarioIntent | QueueRunIntent
 
 
 class AttemptLedgerError(ValueError):
@@ -59,16 +77,43 @@ def _identity(value: object) -> str:
 
 def _reservation(raw: bytes) -> AttemptReservation:
     try:
+        if parse(raw).get("kind") == "queue_attempt_reservation_v1":
+            return QueueAttemptReservation(digest(raw), raw)
         return AttemptReservation(digest(raw), raw)
     except (EvidenceValidationError, TypeError, ValueError) as error:
         raise AttemptLedgerError(f"Invalid attempt reservation: {error}") from error
 
 
-def _outcome(raw: bytes, reservation: AttemptReservation) -> ScenarioIntent | None:
+def _checked_owner(owner: _Owner) -> _Owner:
+    """Reconstruct real owners; a forged dataclass or duck type owns no slots."""
     try:
-        document = parse(raw, limit=_RECORD_LIMIT)
-        intent: ScenarioIntent | None = None
-        if document.get("kind") == "research_run_receipt_v1":
+        if type(owner) is ExecutableProtocol:
+            rebuilt: _Owner = load_executable_protocol(owner.canonical_bytes)
+        elif type(owner) is QueueFamilyProtocol:
+            rebuilt = load_queue_family_protocol(owner.canonical_bytes)
+        else:
+            raise AttemptLedgerError("Expected an actual ExecutableProtocol or QueueFamilyProtocol")
+        if rebuilt.protocol_id != owner.protocol_id:
+            raise AttemptLedgerError("Budget owner identity differs from its canonical content")
+        return rebuilt
+    except (ProtocolValidationError, EvidenceValidationError) as error:
+        raise AttemptLedgerError(f"Invalid attempt budget owner: {error}") from error
+
+
+def _outcome(raw: bytes, reservation: AttemptReservation) -> _Intent | None:
+    try:
+        document = parse(raw, limit=MAX_QUEUE_RECORD_BYTES)
+        intent: _Intent | None = None
+        queue_kind = document.get("kind") in ("queue_run_receipt_v1", "queue_attempt_failure_v1")
+        if queue_kind != isinstance(reservation, QueueAttemptReservation):
+            raise EvidenceValidationError("Outcome kind differs from the reserved execution owner")
+        if queue_kind:
+            if document["kind"] == "queue_run_receipt_v1":
+                load_queue_run_receipt(raw)
+            else:
+                load_queue_failure(raw)
+            intent = load_queue_intent(canonical(cast("dict[str, object]", document["intent"])))
+        elif document.get("kind") == "research_run_receipt_v1":
             load_run_receipt(raw)
         elif document.get("kind") in ("scenario_run_receipt_v1", "scenario_attempt_failure_v1"):
             if document["kind"] == "scenario_run_receipt_v1":
@@ -77,6 +122,7 @@ def _outcome(raw: bytes, reservation: AttemptReservation) -> ScenarioIntent | No
                 load_scenario_failure(raw)
             intent = load_scenario_intent(canonical(cast("dict[str, object]", document["intent"])))
         elif document.get("kind") == "replay_attempt_failure_v1":
+            parse(raw, limit=_RECORD_LIMIT)
             if (
                 set(document) != {"kind", "schema_version", "attempt", "protocol_id", "error"}
                 or type(document["schema_version"]) is not int
@@ -123,10 +169,9 @@ class LocalAttemptLedger:
         except OSError as error:
             raise AttemptLedgerError(f"Cannot open attempt ledger: {error}") from error
 
-    def reserve(self, protocol: ExecutableProtocol) -> AttemptReservation:
+    def reserve(self, protocol: _Owner) -> AttemptReservation:
         """Atomically consume the first available slot, before execution starts."""
-        if not isinstance(protocol, ExecutableProtocol):
-            raise AttemptLedgerError("reserve requires an actual ExecutableProtocol")
+        protocol = _checked_owner(protocol)
         budget = cast("dict[str, int]", protocol.document["budget"])
         try:
             with (
@@ -142,7 +187,11 @@ class LocalAttemptLedger:
                         pass
                     raw = canonical(
                         {
-                            "kind": "replay_attempt_reservation_v1",
+                            "kind": (
+                                "queue_attempt_reservation_v1"
+                                if isinstance(protocol, QueueFamilyProtocol)
+                                else "replay_attempt_reservation_v1"
+                            ),
                             "schema_version": 1,
                             "protocol_id": protocol.protocol_id,
                             "attempt_index": index,
@@ -172,6 +221,33 @@ class LocalAttemptLedger:
         except OSError as error:
             raise AttemptLedgerError(f"Cannot reserve attempt: {error}") from error
 
+    def list_reservations(self, owner: _Owner) -> tuple[AttemptReservation, ...]:
+        """Read the committed slot prefix without creating any owner namespace.
+
+        Concurrent writers may append after this view's first absent slot. The
+        result is a verified prefix, not a promise that no later attempt exists.
+        """
+        owner = _checked_owner(owner)
+        budget = cast("dict[str, int]", owner.document["budget"])
+        reservations: list[AttemptReservation] = []
+        try:
+            with self._directories() as (objects, slots, _):
+                try:
+                    with self._protocol_slots(slots, owner.protocol_id) as directory:
+                        for index in range(1, budget["max_attempts"] + 1):
+                            try:
+                                reservation = self._existing_slot(
+                                    objects, directory, f"{index:04}.json", owner, index
+                                )
+                            except FileNotFoundError:
+                                break
+                            reservations.append(reservation)
+                except FileNotFoundError:
+                    return ()
+            return tuple(reservations)
+        except OSError as error:
+            raise AttemptLedgerError(f"Cannot list attempt reservations: {error}") from error
+
     def publish(
         self,
         reservation: AttemptReservation,
@@ -194,7 +270,12 @@ class LocalAttemptLedger:
                     self._cas(objects, artifact)
                 outcome_id = self._cas(objects, outcome)
                 self._publish_bytes(
-                    outcomes, f"{reservation.attempt_id}.json", outcome, _RECORD_LIMIT
+                    outcomes,
+                    f"{reservation.attempt_id}.json",
+                    outcome,
+                    MAX_QUEUE_RECORD_BYTES
+                    if isinstance(reservation, QueueAttemptReservation)
+                    else _RECORD_LIMIT,
                 )
                 return outcome_id
         except OSError as error:
@@ -207,7 +288,7 @@ class LocalAttemptLedger:
         *,
         artifacts: tuple[bytes, ...] = (),
     ) -> str:
-        """Commit an immutable scenario intent before constructing a native engine.
+        """Commit an immutable execution intent before constructing a native engine.
 
         A failure cannot refund the already occupied reservation. Artifact objects
         become durable before the intent name; no execution is authorized here.
@@ -230,11 +311,16 @@ class LocalAttemptLedger:
                 with self._intents(create=True) as directory:
                     assert directory is not None
                     self._publish_bytes(
-                        directory, f"{reservation.attempt_id}.json", intent_bytes, _RECORD_LIMIT
+                        directory,
+                        f"{reservation.attempt_id}.json",
+                        intent_bytes,
+                        MAX_QUEUE_RECORD_BYTES
+                        if isinstance(reservation, QueueAttemptReservation)
+                        else _RECORD_LIMIT,
                     )
                 return intent.intent_id
         except OSError as error:
-            raise AttemptLedgerError(f"Cannot bind scenario intent: {error}") from error
+            raise AttemptLedgerError(f"Cannot bind execution intent: {error}") from error
 
     def get_intent(self, attempt_id: str) -> bytes | None:
         """Read optional durable intent and CAS closure without upgrading old roots."""
@@ -244,12 +330,12 @@ class LocalAttemptLedger:
                 if directory is None:
                     return None
                 try:
-                    raw = self._read(directory, f"{attempt_id}.json", _RECORD_LIMIT)
+                    raw = self._read(directory, f"{attempt_id}.json", MAX_QUEUE_RECORD_BYTES)
                 except FileNotFoundError:
                     return None
             intent = self._intent(raw, reservation)
             try:
-                closure = self.read_artifact(intent.intent_id, max_bytes=_RECORD_LIMIT)
+                closure = self.read_artifact(intent.intent_id, max_bytes=MAX_QUEUE_RECORD_BYTES)
             except AttemptNotFoundError as error:
                 raise AttemptLedgerError("Scenario intent CAS closure is missing") from error
             if closure != raw:
@@ -289,7 +375,7 @@ class LocalAttemptLedger:
         try:
             with self._directories() as (objects, _, outcomes):
                 try:
-                    raw = self._read(outcomes, f"{attempt_id}.json", _RECORD_LIMIT)
+                    raw = self._read(outcomes, f"{attempt_id}.json", MAX_QUEUE_RECORD_BYTES)
                 except FileNotFoundError:
                     return None
                 # A scenario terminal is committed after its immutable intent.
@@ -297,7 +383,9 @@ class LocalAttemptLedger:
                 # commits both records before this reader opens the outcome.
                 self._match_intent(_outcome(raw, reservation), self.get_intent(attempt_id))
                 try:
-                    closure = self._read(objects, digest(raw), _RECORD_LIMIT, expected=digest(raw))
+                    closure = self._read(
+                        objects, digest(raw), MAX_QUEUE_RECORD_BYTES, expected=digest(raw)
+                    )
                 except FileNotFoundError as error:
                     raise AttemptLedgerError("Outcome CAS closure is missing") from error
                 if closure != raw:
@@ -334,22 +422,33 @@ class LocalAttemptLedger:
             LocalAttemptLedger._bounded(artifact, _ARTIFACT_LIMIT)
 
     @staticmethod
-    def _intent(raw: bytes, reservation: AttemptReservation) -> ScenarioIntent:
+    def _intent(raw: bytes, reservation: AttemptReservation) -> _Intent:
         try:
-            intent = load_scenario_intent(raw)
+            intent: _Intent
+            if isinstance(reservation, QueueAttemptReservation):
+                intent = load_queue_intent(raw)
+            else:
+                intent = load_scenario_intent(raw)
             if intent.document["protocol_id"] != reservation.protocol_id:
                 raise EvidenceValidationError("Intent belongs to a different reserved protocol")
+            if isinstance(intent, QueueRunIntent):
+                budget = cast("dict[str, int]", intent.family.document["budget"])
+                if (
+                    reservation.attempt_index > budget["max_attempts"]
+                    or reservation.document["max_wall_seconds"] != budget["max_wall_seconds"]
+                ):
+                    raise EvidenceValidationError("Queue intent reservation exceeds family budget")
             return intent
         except EvidenceValidationError as error:
-            raise AttemptLedgerError(f"Invalid scenario intent: {error}") from error
+            raise AttemptLedgerError(f"Invalid execution intent: {error}") from error
 
     @staticmethod
-    def _match_intent(intended: ScenarioIntent | None, persisted: bytes | None) -> None:
+    def _match_intent(intended: _Intent | None, persisted: bytes | None) -> None:
         if intended is None:
             if persisted is not None:
                 raise AttemptLedgerError("Scenario-bound attempts cannot publish baseline outcomes")
         elif persisted != intended.canonical_bytes:
-            raise AttemptLedgerError("Scenario outcome requires its exact durable intent")
+            raise AttemptLedgerError("Execution outcome requires its exact durable intent")
 
     @contextmanager
     def _locked_attempt(self, reservation: AttemptReservation) -> Iterator[None]:
@@ -383,7 +482,7 @@ class LocalAttemptLedger:
 
     @staticmethod
     def _existing_slot(
-        objects: int, directory: int, name: str, protocol: ExecutableProtocol, index: int
+        objects: int, directory: int, name: str, protocol: _Owner, index: int
     ) -> AttemptReservation:
         raw = LocalAttemptLedger._read(directory, name, _RECORD_LIMIT)
         reservation = _reservation(raw)
@@ -392,6 +491,8 @@ class LocalAttemptLedger:
             reservation.protocol_id != protocol.protocol_id
             or reservation.attempt_index != index
             or reservation.document["max_wall_seconds"] != budget["max_wall_seconds"]
+            or isinstance(reservation, QueueAttemptReservation)
+            != isinstance(protocol, QueueFamilyProtocol)
         ):
             raise AttemptLedgerError("Occupied slot does not match protocol, index or wall budget")
         try:
