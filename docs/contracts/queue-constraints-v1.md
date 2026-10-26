@@ -111,7 +111,7 @@ import/freeze 是上述显式写入准备步骤；随后的 validate 只读已�
 
 ## 执行门与兼容边界
 
-现有 v2 仅作为来源绑定对象，不能因 constraint 检查成功授权新 queue profile。公开 `FillModel`、`SimulationModule.pre_process` 和关闭 native 内置 queue 的组合还需要固定 native 资格；即使有限案例成功，策略成交对历史外部量的反馈及无市场影响假定仍未验证，因此该阶段保持模型敏感性。
+现有 v2 仅作为来源绑定对象，不能因 constraint 检查成功授权新 queue profile。公开 `FillModel`、`SimulationModule.pre_process` 和关闭 native 内置 queue 的组合已取得固定 native 资格，9 组实际案例和确切 CI 见 [Sprint 6 状态](../planning/sprint-06-status.md)。有限案例成功仍未验证策略成交对历史外部量的反馈及无市场影响假定，因此保持模型敏感性，也不把固定资格推广为任意用户数据执行支持。
 
 后续用户数据执行需要新的冻结队列族协议，绑定同观测、约束/解释集合、adapter semantic 和共同预算，执行前持久不可替换 intent。每次引擎调用占同父协议一个 slot，失败/超时/中断不退款；不得克隆成两个协议分别重置预算，也不能用 `qualify` 名称反复观察用户策略结果而不记账。新 queue trace/receipt/auditor 必须显式版本化；旧 ReplaySpec v1、ExecutableProtocol v2、baseline bundle 和 S05 比较器保持原保证与严格拒绝。
 
