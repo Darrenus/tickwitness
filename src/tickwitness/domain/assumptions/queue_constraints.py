@@ -137,8 +137,9 @@ def _document(raw: bytes, *, request: bool) -> dict[str, object]:
             "Queue target",
         )
         for label in ("source", "instrument", "session"):
+            marker = target[label]
             _require(
-                isinstance(target[label], str) and 0 < len(target[label]) <= 128,
+                isinstance(marker, str) and 0 < len(marker) <= 128,
                 "Queue stream marker is invalid",
             )
         _equal(target["instrument"], "EUR-USD", "Unsupported queue instrument")

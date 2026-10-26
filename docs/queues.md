@@ -34,6 +34,8 @@ TW_PROTOCOL=$("$TW" freeze-experiment experiment-request.json --input-root examp
 
 输出保存 `constraint_id`、`validation_id`、canonical constraint 和两种解释的逐步 ahead/behind/external trace。成功只证明在给定输入及明示假定下引用、量守恒与非负约束通过，并固定标注：
 
+队列 trace 的虚拟入口不代表旧 v2 策略订单实际被接受、全程存活或尚未撤单；纯校验不模拟其生命周期。某种成交／深度时序被拒绝，也只说明它不满足当前声明的 profile，不能据此排除其他隐藏流动性或不同 interleaving 下的所有历史解释。
+
 ```text
 classification = MODEL_SENSITIVITY_CANDIDATE
 actual_acceptance_verified = false
