@@ -8,6 +8,14 @@ from typing import Protocol, cast
 from tickwitness.application.data_access import DataAccessError, DatasetReader, read_accepted_events
 from tickwitness.application.experiments import ExecutableReader, ExecutableRecord, ProtocolRunError
 from tickwitness.application.research import ConfirmationAccessDenied
+from tickwitness.domain.evidence.run_records import (
+    AttemptReservation,
+    EvidenceValidationError,
+    canonical,
+    digest,
+    identity,
+    parse,
+)
 from tickwitness.domain.evidence.tagged_queue_evaluation import (
     TaggedQueueReplayEvaluation,
     evaluate_tagged_queue_replay,
@@ -23,22 +31,14 @@ from tickwitness.domain.evidence.tagged_queue_records import (
     load_tagged_queue_intent,
     load_tagged_queue_run_receipt,
 )
-from tickwitness.domain.evidence.run_records import (
-    AttemptReservation,
-    EvidenceValidationError,
-    canonical,
-    digest,
-    identity,
-    parse,
-)
 from tickwitness.domain.replay.contracts import ReplayInput
+from tickwitness.domain.replay.specs import load_replay_spec
 from tickwitness.domain.replay.tagged_queue_contracts import (
     TaggedQueueReplayInput,
     TaggedQueueReplayPort,
     TaggedQueueReplayResult,
     load_tagged_queue_replay_result,
 )
-from tickwitness.domain.replay.specs import load_replay_spec
 from tickwitness.domain.research_contracts.executable import load_executable_protocol
 from tickwitness.domain.research_contracts.tagged_queue_protocol import (
     TAGGED_POLICY_IDS,
@@ -181,7 +181,10 @@ def freeze_tagged_queue(
         request, source_protocol=source, replay_input=actual, queue_request=queue_request
     )
     stored = protocols_factory().seal(protocol.canonical_bytes)
-    if stored.protocol_id != protocol.protocol_id or stored.canonical_bytes != protocol.canonical_bytes:
+    if (
+        stored.protocol_id != protocol.protocol_id
+        or stored.canonical_bytes != protocol.canonical_bytes
+    ):
         raise TaggedQueueValidationError("Registry returned conflicting queue protocol evidence")
     return TaggedQueueFreezeReceipt(protocol, stored.created)
 
@@ -208,7 +211,9 @@ def inspect_tagged_queue(
         if intent is not None and intent.protocol.canonical_bytes != protocol.canonical_bytes:
             raise EvidenceValidationError("Attempt intent differs from the inspected protocol")
         outcome_raw = ledger.get_outcome(reservation.attempt_id)
-        outcome = None if outcome_raw is None else parse(outcome_raw, limit=MAX_TAGGED_QUEUE_RECORD_BYTES)
+        outcome = (
+            None if outcome_raw is None else parse(outcome_raw, limit=MAX_TAGGED_QUEUE_RECORD_BYTES)
+        )
         attempts.append(
             {
                 "attempt_id": reservation.attempt_id,
@@ -440,12 +445,16 @@ def run_tagged_queue_pair(
         and all(run["execution_status"] == "completed" for run in runs)
     )
     truths = [
-        cast("dict[str, object]", cast("dict[str, object]", run["evaluation"])["claim_evaluation"])["truth"]
+        cast("dict[str, object]", cast("dict[str, object]", run["evaluation"])["claim_evaluation"])[
+            "truth"
+        ]
         for run in runs
     ]
     relation = (
-        "opposite_truth_values" if truths[0] != truths[1] else "same_truth_value"
-    ) if completed and len(truths) == 2 and all(type(value) is bool for value in truths) else "ineligible"
+        ("opposite_truth_values" if truths[0] != truths[1] else "same_truth_value")
+        if completed and len(truths) == 2 and all(type(value) is bool for value in truths)
+        else "ineligible"
+    )
     return {
         "protocol_id": protocol_id,
         "status": "completed" if completed else "partial" if runs else "failed",
@@ -505,7 +514,9 @@ def tagged_queue_run_evidence(
     if digest(result.canonical_bytes) != bindings["replay_result_sha256"]:
         raise EvidenceValidationError("Queue result identity differs from receipt")
     evaluation = evaluate_tagged_queue_replay(replay_input, result)
-    stored_evaluation = load_tagged_queue_evaluation(ledger.read_artifact(bindings["evaluation_sha256"]))
+    stored_evaluation = load_tagged_queue_evaluation(
+        ledger.read_artifact(bindings["evaluation_sha256"])
+    )
     if (
         evaluation.evaluation_id != bindings["evaluation_sha256"]
         or stored_evaluation.canonical_bytes != evaluation.canonical_bytes

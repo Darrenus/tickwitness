@@ -34,7 +34,9 @@ class TaggedQueueNotFoundError(TaggedQueueRegistryError):
 
 def _identity(value: object) -> str:
     if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
-        raise TaggedQueueRegistryError("Tagged protocol ID requires 64 lowercase hexadecimal characters")
+        raise TaggedQueueRegistryError(
+            "Tagged protocol ID requires 64 lowercase hexadecimal characters"
+        )
     return value
 
 
@@ -57,6 +59,7 @@ class TaggedQueueRecord:
         ):
             raise TaggedQueueRegistryError("Record identity or created flag is invalid")
 
+
 class LocalTaggedQueueRegistry:
     """Publish tagged protocol JSON with atomic no-replace hard links and fsync."""
 
@@ -76,7 +79,9 @@ class LocalTaggedQueueRegistry:
             with self._directory(create=create):
                 pass
         except OSError as error:
-            raise TaggedQueueRegistryError(f"Cannot open tagged queue protocol registry: {error}") from error
+            raise TaggedQueueRegistryError(
+                f"Cannot open tagged queue protocol registry: {error}"
+            ) from error
 
     def seal(self, canonical_bytes: bytes) -> TaggedQueueRecord:
         """Validate before publication; repeated publication verifies committed bytes."""
@@ -86,7 +91,9 @@ class LocalTaggedQueueRegistry:
                 created = self._publish(directory, family.protocol_id, canonical_bytes)
             return TaggedQueueRecord(family.protocol_id, canonical_bytes, created)
         except OSError as error:
-            raise TaggedQueueRegistryError(f"Tagged queue protocol publication failed: {error}") from error
+            raise TaggedQueueRegistryError(
+                f"Tagged queue protocol publication failed: {error}"
+            ) from error
 
     def get(self, protocol_id: str) -> TaggedQueueRecord:
         """Verify a committed family without creating directories or repairing evidence."""
@@ -143,7 +150,9 @@ class LocalTaggedQueueRegistry:
         try:
             info = os.fstat(descriptor)
             if not stat.S_ISREG(info.st_mode):
-                raise TaggedQueueRegistryError("Tagged queue protocol evidence must be a regular file")
+                raise TaggedQueueRegistryError(
+                    "Tagged queue protocol evidence must be a regular file"
+                )
             if info.st_size > MAX_TAGGED_PROTOCOL_BYTES:
                 raise TaggedQueueRegistryError("Tagged queue protocol evidence exceeds 256 KiB")
             with os.fdopen(descriptor, "rb", closefd=False) as stream:
@@ -151,7 +160,9 @@ class LocalTaggedQueueRegistry:
             if len(data) > MAX_TAGGED_PROTOCOL_BYTES:
                 raise TaggedQueueRegistryError("Tagged queue protocol evidence exceeds 256 KiB")
             if hashlib.sha256(data).hexdigest() != expected:
-                raise TaggedQueueRegistryError("Tagged queue protocol evidence hash does not match identity")
+                raise TaggedQueueRegistryError(
+                    "Tagged queue protocol evidence hash does not match identity"
+                )
             _family(data)
             if durable:
                 os.fsync(descriptor)

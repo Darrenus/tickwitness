@@ -69,10 +69,11 @@ from tickwitness.infrastructure.queue_family_registry import (
     QueueFamilyRegistryError,
 )
 from tickwitness.infrastructure.safe_input import InputReadError, read_jsonl, read_regular_file
-from tickwitness.infrastructure.tagged_queue_registry import (
-    TaggedQueueNotFoundError, TaggedQueueRegistryError,
-)
 from tickwitness.infrastructure.subprocess_replay import ReplayProcessError, SubprocessReplayAdapter
+from tickwitness.infrastructure.tagged_queue_registry import (
+    TaggedQueueNotFoundError,
+    TaggedQueueRegistryError,
+)
 
 
 def _positive_integer(value: str) -> int:
@@ -347,7 +348,10 @@ def main(argv: list[str] | None = None) -> int:
             output, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
         )
     )
-    if arguments.command in ("run-queue-family", "run-tagged-queue-pair") and output["status"] != "completed":
+    if (
+        arguments.command in ("run-queue-family", "run-tagged-queue-pair")
+        and output["status"] != "completed"
+    ):
         failures = output["failures"]
         if isinstance(failures, list) and failures and isinstance(failures[0], dict):
             return int(failures[0].get("exit_code", 7))

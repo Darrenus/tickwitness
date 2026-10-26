@@ -13,9 +13,14 @@ from tickwitness.domain.replay._validation import (
     parse,
     text,
 )
-from tickwitness.domain.replay.contracts import PreparedReplay, ReplayInput, _json_values, _source_ref
+from tickwitness.domain.replay.contracts import (
+    PreparedReplay,
+    ReplayInput,
+    _json_values,
+    _source_ref,
+)
 from tickwitness.domain.replay.preflight import preflight_replay
-from tickwitness.domain.replay.queue_contracts import _fields, _order, _rows
+from tickwitness.domain.replay.queue_contracts import _fields, _rows
 from tickwitness.domain.replay.specs import load_replay_spec
 from tickwitness.domain.replay.tagged_queue_model import TaggedQueueWitnessPair
 from tickwitness.domain.research_contracts.tagged_queue_protocol import (
@@ -41,8 +46,13 @@ class TaggedQueueReplayInput:
     policy_id: str
 
     def __post_init__(self) -> None:
-        if type(self.protocol) is not TaggedQueueProtocol or self.policy_id not in TAGGED_POLICY_IDS:
-            raise ReplayValidationError("Tagged replay requires an immutable protocol and frozen policy")
+        if (
+            type(self.protocol) is not TaggedQueueProtocol
+            or self.policy_id not in TAGGED_POLICY_IDS
+        ):
+            raise ReplayValidationError(
+                "Tagged replay requires an immutable protocol and frozen policy"
+            )
         validate_tagged_queue_input(self.protocol, self.replay_input)
 
     @property
@@ -82,7 +92,18 @@ class TaggedQueueReplayPort(Protocol):
 def _state(value: object, *, nullable: bool = False) -> None:
     if nullable and value is None:
         return
-    row = exact(value, {"ahead_lots", "own_live_lots", "behind_lots", "external_lots", "total_lots", "own_filled_lots"}, "tagged state")
+    row = exact(
+        value,
+        {
+            "ahead_lots",
+            "own_live_lots",
+            "behind_lots",
+            "external_lots",
+            "total_lots",
+            "own_filled_lots",
+        },
+        "tagged state",
+    )
     for key, item in row.items():
         integer(item, key)
 
@@ -99,7 +120,20 @@ def _trace_fields(channel: str, value: object) -> None:
     elif channel != "order_trace":
         _fields(channel, value)
     else:
-        row = exact(value, {"order_id", "event_type", "status", "quantity_lots", "filled_quantity_lots", "remaining_quantity_lots", "pending_commands", "actual_acceptance"}, "tagged order fields")
+        row = exact(
+            value,
+            {
+                "order_id",
+                "event_type",
+                "status",
+                "quantity_lots",
+                "filled_quantity_lots",
+                "remaining_quantity_lots",
+                "pending_commands",
+                "actual_acceptance",
+            },
+            "tagged order fields",
+        )
         _json_values(row)
         for key in ("order_id", "event_type"):
             text(row[key], key)
@@ -111,7 +145,11 @@ def _trace_fields(channel: str, value: object) -> None:
         for item in _rows(row["pending_commands"], "pending command IDs"):
             text(item, "pending command ID")
         if row["actual_acceptance"] is not None:
-            accepted = exact(row["actual_acceptance"], {"native_bid_lots", "queue", "target_price_ticks", "acceptance_role"}, "tagged actual acceptance")
+            accepted = exact(
+                row["actual_acceptance"],
+                {"native_bid_lots", "queue", "target_price_ticks", "acceptance_role"},
+                "tagged actual acceptance",
+            )
             integer(accepted["native_bid_lots"], "native_bid_lots")
             integer(accepted["target_price_ticks"], "target_price_ticks", 1)
             _state(accepted["queue"])
@@ -120,17 +158,53 @@ def _trace_fields(channel: str, value: object) -> None:
 
 
 def _result(document: dict[str, object]) -> None:
-    exact(document, {"kind", "schema_version", "bindings", "engine", "environment", "execution_status", "completeness", *TRACE_CHANNELS, "queue_trace", "hook_trace", "horizon_snapshot", "cleanup"}, "TaggedQueueReplayResult")
+    exact(
+        document,
+        {
+            "kind",
+            "schema_version",
+            "bindings",
+            "engine",
+            "environment",
+            "execution_status",
+            "completeness",
+            *TRACE_CHANNELS,
+            "queue_trace",
+            "hook_trace",
+            "horizon_snapshot",
+            "cleanup",
+        },
+        "TaggedQueueReplayResult",
+    )
     if document["kind"] != "tagged_queue_replay_result_v1":
         raise ReplayValidationError("Unsupported tagged replay result kind")
     integer(document["schema_version"], "schema_version", 1, 1)
-    bindings = exact(document["bindings"], {"protocol_id", "claim_revision_id", "source_protocol_id", "dataset_id", "data_sha256", "spec_id", "gross_constraint_id", "policy_id"}, "tagged bindings")
+    bindings = exact(
+        document["bindings"],
+        {
+            "protocol_id",
+            "claim_revision_id",
+            "source_protocol_id",
+            "dataset_id",
+            "data_sha256",
+            "spec_id",
+            "gross_constraint_id",
+            "policy_id",
+        },
+        "tagged bindings",
+    )
     for key, value in bindings.items():
         if key != "policy_id":
             identity(value, key)
-    if bindings["policy_id"] not in TAGGED_POLICY_IDS or canonical({"engine": document["engine"]}) != canonical({"engine": ENGINE}):
+    if bindings["policy_id"] not in TAGGED_POLICY_IDS or canonical(
+        {"engine": document["engine"]}
+    ) != canonical({"engine": ENGINE}):
         raise ReplayValidationError("Tagged engine or frozen policy differs")
-    environment = exact(document["environment"], {"python_version", "platform", "package_versions"}, "tagged environment")
+    environment = exact(
+        document["environment"],
+        {"python_version", "platform", "package_versions"},
+        "tagged environment",
+    )
     text(environment["python_version"], "python_version")
     text(environment["platform"], "platform", 512)
     packages = environment["package_versions"]
@@ -139,10 +213,19 @@ def _result(document: dict[str, object]) -> None:
     for key, value in packages.items():
         text(key, "package name")
         text(value, "package version")
-    completeness = exact(document["completeness"], {"input_records", "processed_records", "open_orders", "pending_commands", "stop_reason"}, "tagged completeness")
+    completeness = exact(
+        document["completeness"],
+        {"input_records", "processed_records", "open_orders", "pending_commands", "stop_reason"},
+        "tagged completeness",
+    )
     count = integer(completeness["input_records"], "input_records", 1, 1000)
     integer(completeness["processed_records"], "processed_records", count, count)
-    if document["execution_status"] != "completed" or completeness["open_orders"] != [] or completeness["pending_commands"] != [] or completeness["stop_reason"] != "input_exhausted":
+    if (
+        document["execution_status"] != "completed"
+        or completeness["open_orders"] != []
+        or completeness["pending_commands"] != []
+        or completeness["stop_reason"] != "input_exhausted"
+    ):
         raise ReplayValidationError("Tagged reconstruction requires completed actual cleanup")
     inputs: set[bytes] = set()
     references: list[bytes] = []
@@ -152,7 +235,11 @@ def _result(document: dict[str, object]) -> None:
         if channel == "input_trace" and len(rows) != count:
             raise ReplayValidationError("Tagged input trace omits source input")
         for ordinal, item in enumerate(rows):
-            row = exact(item, {"kind", "ordinal", "native_time_ns", "source_ref", "phase", "fields"}, channel)
+            row = exact(
+                item,
+                {"kind", "ordinal", "native_time_ns", "source_ref", "phase", "fields"},
+                channel,
+            )
             text(row["kind"], "trace kind")
             integer(row["ordinal"], "ordinal", ordinal, ordinal)
             integer(row["native_time_ns"], "native_time_ns")
@@ -162,7 +249,9 @@ def _result(document: dict[str, object]) -> None:
             if ref is not None:
                 encoded = canonical(ref)
                 if channel == "input_trace":
-                    previous_capture = integer(ref["capture_seq"], "capture_seq", previous_capture + 1)
+                    previous_capture = integer(
+                        ref["capture_seq"], "capture_seq", previous_capture + 1
+                    )
                     if ref["line"] != ordinal + 1:
                         raise ReplayValidationError("Tagged input source order differs")
                     inputs.add(encoded)
@@ -173,7 +262,23 @@ def _result(document: dict[str, object]) -> None:
     if len(queue_rows) != count:
         raise ReplayValidationError("Tagged queue trace omits source input")
     for item in queue_rows:
-        row = exact(item, {"kind", "source_ref", "receive_time_ns", "before", "flow", "after", "observed_total_lots", "own_fill_grant_lots", "granted_lots", "native_filled_lots", "accepted_here"}, "tagged queue row")
+        row = exact(
+            item,
+            {
+                "kind",
+                "source_ref",
+                "receive_time_ns",
+                "before",
+                "flow",
+                "after",
+                "observed_total_lots",
+                "own_fill_grant_lots",
+                "granted_lots",
+                "native_filled_lots",
+                "accepted_here",
+            },
+            "tagged queue row",
+        )
         references.append(canonical(cast("dict[str, object]", _source_ref(row["source_ref"]))))
         text(row["kind"], "queue row kind")
         _state(row["before"], nullable=True)
@@ -184,31 +289,75 @@ def _result(document: dict[str, object]) -> None:
             integer(row["observed_total_lots"], "observed_total_lots")
         if type(row["accepted_here"]) is not bool:
             raise ReplayValidationError("accepted_here must be boolean")
-        flow = exact(row["flow"], {"additions_lots", "cancellations_lots", "trade_lots", "cancel_ahead_lots", "cancel_behind_lots", "external_trade_ahead_lots", "own_trade_lots", "external_trade_behind_lots"}, "tagged flow")
+        flow = exact(
+            row["flow"],
+            {
+                "additions_lots",
+                "cancellations_lots",
+                "trade_lots",
+                "cancel_ahead_lots",
+                "cancel_behind_lots",
+                "external_trade_ahead_lots",
+                "own_trade_lots",
+                "external_trade_behind_lots",
+            },
+            "tagged flow",
+        )
         for key, value in flow.items():
             integer(value, key)
     for item in _rows(document["hook_trace"], "hook_trace"):
-        row = exact(item, {"source_ref", "origin", "offered_lots", "cumulative_granted_lots", "phase"}, "tagged hook")
+        row = exact(
+            item,
+            {"source_ref", "origin", "offered_lots", "cumulative_granted_lots", "phase"},
+            "tagged hook",
+        )
         references.append(canonical(cast("dict[str, object]", _source_ref(row["source_ref"]))))
         text(row["origin"], "hook origin")
         for key in ("offered_lots", "cumulative_granted_lots"):
             integer(row[key], key)
         if row["phase"] not in PHASES:
             raise ReplayValidationError("Unsupported hook phase")
-    horizon = exact(document["horizon_snapshot"], {"source_ref", "native_time_ns", "queue_state", "native_target_lots", "mark", "account"}, "tagged horizon")
+    horizon = exact(
+        document["horizon_snapshot"],
+        {"source_ref", "native_time_ns", "queue_state", "native_target_lots", "mark", "account"},
+        "tagged horizon",
+    )
     references.append(canonical(cast("dict[str, object]", _source_ref(horizon["source_ref"]))))
     _state(horizon["queue_state"])
     integer(horizon["native_time_ns"], "native_time_ns")
     integer(horizon["native_target_lots"], "native_target_lots")
-    mark = exact(horizon["mark"], {"source_ref", "price_ticks", "available_quantity_lots"}, "tagged mark")
+    mark = exact(
+        horizon["mark"], {"source_ref", "price_ticks", "available_quantity_lots"}, "tagged mark"
+    )
     references.append(canonical(cast("dict[str, object]", _source_ref(mark["source_ref"]))))
     integer(mark["price_ticks"], "price_ticks", 1)
     integer(mark["available_quantity_lots"], "available_quantity_lots", 1)
     _account(horizon["account"])
-    cleanup = exact(document["cleanup"], {"canceled_own_lots", "projected_total_after_cleanup", "projected_external_after_cleanup", "own_live_after_cleanup", "native_status", "native_unfilled_lots", "book_role"}, "tagged cleanup")
-    for key in ("canceled_own_lots", "projected_total_after_cleanup", "projected_external_after_cleanup", "own_live_after_cleanup", "native_unfilled_lots"):
+    cleanup = exact(
+        document["cleanup"],
+        {
+            "canceled_own_lots",
+            "projected_total_after_cleanup",
+            "projected_external_after_cleanup",
+            "own_live_after_cleanup",
+            "native_status",
+            "native_unfilled_lots",
+            "book_role",
+        },
+        "tagged cleanup",
+    )
+    for key in (
+        "canceled_own_lots",
+        "projected_total_after_cleanup",
+        "projected_external_after_cleanup",
+        "own_live_after_cleanup",
+        "native_unfilled_lots",
+    ):
         integer(cleanup[key], key)
-    if cleanup["book_role"] != "recorded_observation_cache" or cleanup["native_status"] not in ("CANCELED", "FILLED"):
+    if cleanup["book_role"] != "recorded_observation_cache" or cleanup["native_status"] not in (
+        "CANCELED",
+        "FILLED",
+    ):
         raise ReplayValidationError("Tagged cleanup lacks a terminal native order")
     if any(reference not in inputs for reference in references):
         raise ReplayValidationError("Tagged evidence refers to an unprocessed input")

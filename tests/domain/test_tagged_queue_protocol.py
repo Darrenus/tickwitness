@@ -53,7 +53,10 @@ def request() -> dict:
 
 
 def rows() -> list[dict]:
-    return [json.loads(line) for line in (EXAMPLES / "queue-observations.jsonl").read_bytes().splitlines()]
+    return [
+        json.loads(line)
+        for line in (EXAMPLES / "queue-observations.jsonl").read_bytes().splitlines()
+    ]
 
 
 def context(*, records=None, spec_changes=None, source_budget=None):
@@ -81,7 +84,8 @@ def build(declaration=None, *, case=None, queue_request=None):
         replay_input=case.replay_input,
         queue_request=(
             (EXAMPLES / "queue-constraint-request.json").read_bytes()
-            if queue_request is None else queue_request
+            if queue_request is None
+            else queue_request
         ),
     )
 
@@ -106,23 +110,34 @@ def test_frozen_contract_owns_claim_projection_intervention_and_shared_budget() 
     assert protocol.claim_revision_id == digest(canonical(request()["claim"]))
     assert protocol.claim_revision_id != case.protocol.claim_revision_id
     assert doc["claim"] == request()["claim"]
-    assert doc["policies"] == list(TAGGED_POLICY_IDS) == [
-        "protected_tag_front_cancel_v1", "protected_tag_back_cancel_v1"
-    ]
+    assert (
+        doc["policies"]
+        == list(TAGGED_POLICY_IDS)
+        == ["protected_tag_front_cancel_v1", "protected_tag_back_cancel_v1"]
+    )
     assert doc["engine"]["semantic_id"] == TAGGED_ENGINE_SEMANTIC_ID
     assert doc["model"] == TAGGED_MODEL
     assert doc["model"]["intervention_id"] == "relabel_existing_tail_quantity_v1"
     assert doc["model"]["projection_id"] == "inclusive_tagged_fifo_total_depth_v1"
     assert doc["model"]["terminal_policy"] == "observe_mark_then_cancel_after_horizon_v1"
     assert doc["strategy"] == {
-        "kind": "tagged_passive_order_at_entry_v1", "entry_capture_seq": 1,
-        "horizon_capture_seq": 6, "tagged_quantity_lots": 2, "target_price_ticks": 100,
+        "kind": "tagged_passive_order_at_entry_v1",
+        "entry_capture_seq": 1,
+        "horizon_capture_seq": 6,
+        "tagged_quantity_lots": 2,
+        "target_price_ticks": 100,
     }
     assert doc["scope"] == TAGGED_SCOPE
-    assert all(doc["scope"][key] is False for key in (
-        "historical_owner_verified", "literal_order_insertion", "market_impact_verified",
-        "source_claim_evaluated", "finding_issued",
-    ))
+    assert all(
+        doc["scope"][key] is False
+        for key in (
+            "historical_owner_verified",
+            "literal_order_insertion",
+            "market_impact_verified",
+            "source_claim_evaluated",
+            "finding_issued",
+        )
+    )
     assert doc["budget_policy"] == "shared_tagged_queue_budget_v1"
     assert doc["budget"] == request()["budget"]
     assert doc["gross_constraint_source"]["execution_approved"] is False
@@ -134,7 +149,9 @@ def test_canonical_determinism_identity_detached_views_and_immutable_values() ->
     reordered = json.dumps(request(), indent=2, sort_keys=False).encode()
     case = context()
     repeated = build_tagged_queue_protocol(
-        reordered, source_protocol=case.protocol, replay_input=case.replay_input,
+        reordered,
+        source_protocol=case.protocol,
+        replay_input=case.replay_input,
         queue_request=(EXAMPLES / "queue-constraint-request.json").read_bytes(),
     )
     assert protocol == repeated == load_tagged_queue_protocol(protocol.canonical_bytes)
@@ -182,11 +199,20 @@ def test_frozen_budget_is_a_single_new_owner_and_not_source_budget_clones() -> N
     assert build(declaration, case=case).protocol_id != protocol.protocol_id
 
 
-@pytest.mark.parametrize("field,value", [
-    ("max_attempts", 1), ("max_attempts", 101), ("max_attempts", True),
-    ("max_wall_seconds", 0), ("max_wall_seconds", 61), ("max_wall_seconds", True),
-    ("max_events", 0), ("max_events", 1001), ("max_events", True),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("max_attempts", 1),
+        ("max_attempts", 101),
+        ("max_attempts", True),
+        ("max_wall_seconds", 0),
+        ("max_wall_seconds", 61),
+        ("max_wall_seconds", True),
+        ("max_events", 0),
+        ("max_events", 1001),
+        ("max_events", True),
+    ],
+)
 def test_shared_budget_is_bounded_and_requires_true_integers(field, value) -> None:
     declaration = request()
     declaration["budget"][field] = value
@@ -205,11 +231,20 @@ def test_event_budget_cannot_exceed_source_and_rejects_actual_overflow_before_ex
     assert build(declaration, case=context(source_budget={"max_events": 6}))
 
 
-@pytest.mark.parametrize("field,value", [
-    ("metric", "net_marked_pnl_v1"), ("unit", "EUR"), ("comparator", "eq"),
-    ("threshold", 0), ("threshold", "NaN"), ("threshold", "1e2"),
-    ("title", " padded"), ("title", ""), ("hypothesis", "bad\nline"),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("metric", "net_marked_pnl_v1"),
+        ("unit", "EUR"),
+        ("comparator", "eq"),
+        ("threshold", 0),
+        ("threshold", "NaN"),
+        ("threshold", "1e2"),
+        ("title", " padded"),
+        ("title", ""),
+        ("hypothesis", "bad\nline"),
+    ],
+)
 def test_claim_is_distinct_and_strictly_declared(field, value) -> None:
     declaration = request()
     declaration["claim"][field] = value
@@ -217,9 +252,18 @@ def test_claim_is_distinct_and_strictly_declared(field, value) -> None:
         build(declaration)
 
 
-@pytest.mark.parametrize("field", [
-    "bindings", "source_protocol", "policies", "model", "scope", "finding", "evaluation_policy",
-])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "bindings",
+        "source_protocol",
+        "policies",
+        "model",
+        "scope",
+        "finding",
+        "evaluation_policy",
+    ],
+)
 def test_request_cannot_supply_runtime_authority_or_evidence(field) -> None:
     declaration = request()
     declaration[field] = True
@@ -227,10 +271,15 @@ def test_request_cannot_supply_runtime_authority_or_evidence(field) -> None:
         build(declaration)
 
 
-@pytest.mark.parametrize("changes", [
-    {"execution": {"insert_latency_ns": 1}}, {"execution": {"cancel_latency_ns": 1}},
-    {"strategy": {"submit_capture_seq": 2}}, {"strategy": {"cancel_after_first_fill": True}},
-])
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"execution": {"insert_latency_ns": 1}},
+        {"execution": {"cancel_latency_ns": 1}},
+        {"strategy": {"submit_capture_seq": 2}},
+        {"strategy": {"cancel_after_first_fill": True}},
+    ],
+)
 def test_acceptance_profile_rejects_unsupported_source_conditions(changes) -> None:
     with pytest.raises(TaggedQueueValidationError):
         build(case=context(spec_changes=changes))
@@ -245,13 +294,38 @@ def test_horizon_must_be_actual_last_source_target_checkpoint() -> None:
         build(case=context(records=records))
 
 
-@pytest.mark.parametrize("mutation", [
-    "kind", "schema", "read_policy", "budget_policy", "policy_order", "old_policy",
-    "engine", "strategy_entry", "strategy_quantity", "horizon", "claim_revision",
-    "gross_usage", "projection", "intervention", "terminal", "basis", "scope_phase",
-    "scope_historical", "scope_insertion", "scope_impact", "scope_source_claim", "scope_finding",
-    "source_id", "constraint_id", "source_content", "extra", "missing",
-])
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "kind",
+        "schema",
+        "read_policy",
+        "budget_policy",
+        "policy_order",
+        "old_policy",
+        "engine",
+        "strategy_entry",
+        "strategy_quantity",
+        "horizon",
+        "claim_revision",
+        "gross_usage",
+        "projection",
+        "intervention",
+        "terminal",
+        "basis",
+        "scope_phase",
+        "scope_historical",
+        "scope_insertion",
+        "scope_impact",
+        "scope_source_claim",
+        "scope_finding",
+        "source_id",
+        "constraint_id",
+        "source_content",
+        "extra",
+        "missing",
+    ],
+)
 def test_rehash_cannot_bless_changed_fixed_contract_or_embedded_identity(mutation) -> None:
     doc = build().document
     if mutation == "kind":
@@ -285,9 +359,13 @@ def test_rehash_cannot_bless_changed_fixed_contract_or_embedded_identity(mutatio
     elif mutation == "scope_phase":
         doc["scope"]["phase"] = "confirmation"
     elif mutation.startswith("scope_"):
-        key = {"scope_historical": "historical_owner_verified", "scope_insertion": "literal_order_insertion",
-               "scope_impact": "market_impact_verified", "scope_source_claim": "source_claim_evaluated",
-               "scope_finding": "finding_issued"}[mutation]
+        key = {
+            "scope_historical": "historical_owner_verified",
+            "scope_insertion": "literal_order_insertion",
+            "scope_impact": "market_impact_verified",
+            "scope_source_claim": "source_claim_evaluated",
+            "scope_finding": "finding_issued",
+        }[mutation]
         doc["scope"][key] = True
     elif mutation == "source_id":
         doc["bindings"]["source_protocol_id"] = "c" * 64
@@ -314,7 +392,9 @@ def test_loader_does_not_certify_unread_source_even_when_hashes_are_self_consist
         validate_tagged_queue_input(forged, case.replay_input)
 
 
-@pytest.mark.parametrize("mutation", ["confirmation", "bytes", "spec", "protocol_identity", "spec_identity"])
+@pytest.mark.parametrize(
+    "mutation", ["confirmation", "bytes", "spec", "protocol_identity", "spec_identity"]
+)
 def test_actual_source_and_forged_immutable_identity_are_rechecked(mutation) -> None:
     case = context()
     protocol = build(case=case)
@@ -352,15 +432,29 @@ def test_forged_source_protocol_hash_is_not_used_as_configuration_authority() ->
         build(case=case)
 
 
-@pytest.mark.parametrize("raw", [
-    None, "{}", [], b"", b"[]", b"{}", b"\xff", b'{"kind":1,"kind":2}',
-    b'{"kind":1.0}', b'{"kind":NaN}', b"{" + b" " * 16384 + b"}",
-])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        None,
+        "{}",
+        [],
+        b"",
+        b"[]",
+        b"{}",
+        b"\xff",
+        b'{"kind":1,"kind":2}',
+        b'{"kind":1.0}',
+        b'{"kind":NaN}',
+        b"{" + b" " * 16384 + b"}",
+    ],
+)
 def test_bounded_request_rejects_invalid_json_duplicates_floats_and_nonbytes(raw) -> None:
     case = context()
     with pytest.raises(TaggedQueueValidationError):
         build_tagged_queue_protocol(
-            raw, source_protocol=case.protocol, replay_input=case.replay_input,
+            raw,
+            source_protocol=case.protocol,
+            replay_input=case.replay_input,
             queue_request=(EXAMPLES / "queue-constraint-request.json").read_bytes(),
         )
 

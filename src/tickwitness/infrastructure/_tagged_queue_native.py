@@ -15,7 +15,11 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 from tickwitness.domain.replay.contracts import ReplayEvent
-from tickwitness.domain.replay.tagged_queue_contracts import ENGINE, TRACE_CHANNELS, TaggedQueueReplayInput
+from tickwitness.domain.replay.tagged_queue_contracts import (
+    ENGINE,
+    TRACE_CHANNELS,
+    TaggedQueueReplayInput,
+)
 from tickwitness.infrastructure._nautilus_native import (
     _decimal,
     _make_data,
@@ -35,7 +39,9 @@ class _TaggedQueue:
 
     def __init__(self, replay_input: TaggedQueueReplayInput, settings: _Settings) -> None:
         self.settings = settings
-        interpretations = cast("list[dict[str, Any]]", replay_input.witnesses.document["interpretations"])
+        interpretations = cast(
+            "list[dict[str, Any]]", replay_input.witnesses.document["interpretations"]
+        )
         witness = next(row for row in interpretations if row["policy_id"] == replay_input.policy_id)
         self.expected = cast("list[dict[str, Any]]", witness["trace"])
         self.horizon = cast("dict[str, Any]", witness["horizon"])
@@ -66,7 +72,12 @@ class _TaggedQueue:
         self.offer = expected["own_fill_grant_lots"]
         self.granted = self.consumed = 0
         self.grant_taken = False
-        self.current_row = {**expected, "granted_lots": 0, "native_filled_lots": 0, "accepted_here": False}
+        self.current_row = {
+            **expected,
+            "granted_lots": 0,
+            "native_filled_lots": 0,
+            "accepted_here": False,
+        }
         self.trace.append(self.current_row)
 
     def accepted(self, native_depth: int) -> None:
@@ -80,19 +91,34 @@ class _TaggedQueue:
     def take(self) -> int:
         if self.current is None:
             raise ValueError("Native fill hook has no source capture")
-        allowed = self.offer if self.active and not self.grant_taken and self.phase == "observed_window" else 0
+        allowed = (
+            self.offer
+            if self.active and not self.grant_taken and self.phase == "observed_window"
+            else 0
+        )
         if self.current.event_type != "trade":
             allowed = 0
         self.grant_taken = True
         self.granted += allowed
         self.current_row["granted_lots"] = self.granted
-        self.hooks.append({"source_ref": self.current.source_ref,
-                           "origin": "native_public_fill_simulation_hook", "offered_lots": allowed,
-                           "cumulative_granted_lots": self.granted, "phase": self.phase})
+        self.hooks.append(
+            {
+                "source_ref": self.current.source_ref,
+                "origin": "native_public_fill_simulation_hook",
+                "offered_lots": allowed,
+                "cumulative_granted_lots": self.granted,
+                "phase": self.phase,
+            }
+        )
         return allowed
 
     def fill(self, quantity: int) -> None:
-        if self.current is None or self.current.event_type != "trade" or quantity <= 0 or self.phase != "observed_window":
+        if (
+            self.current is None
+            or self.current.event_type != "trade"
+            or quantity <= 0
+            or self.phase != "observed_window"
+        ):
             raise ValueError("Native tagged fill requires a positive observed-window source trade")
         self.consumed += quantity
         if self.consumed > self.granted or self.filled + quantity > self.settings.quantity_lots:
@@ -202,7 +228,9 @@ class _Evidence:
                 "limit_price_ticks": self.settings.limit_price_ticks,
                 "quantity_lots": self.settings.quantity_lots,
                 "post_only": True,
-                "cause": "entry_tag_representation" if action == "submit" else "post_horizon_cleanup",
+                "cause": "entry_tag_representation"
+                if action == "submit"
+                else "post_horizon_cleanup",
             },
         )
 
@@ -308,7 +336,11 @@ class _Evidence:
         state = queue.queue()
         if current is None or state is None or self.horizon_snapshot is not None:
             raise ValueError("Tagged horizon requires exactly one actual source checkpoint")
-        if queue.granted != queue.offer or queue.consumed != queue.offer or queue.filled != state["own_filled_lots"]:
+        if (
+            queue.granted != queue.offer
+            or queue.consumed != queue.offer
+            or queue.filled != state["own_filled_lots"]
+        ):
             raise ValueError("Tagged horizon contains an unconsumed or missing native fill")
         book = strategy.cache.order_book(self.iid)
         if book is None or not book.bids():
@@ -317,21 +349,29 @@ class _Evidence:
         for level in book.bids():
             for order in level.orders():
                 ticks = _units(order.price, self.settings.price_increment)
-                bid_totals[ticks] = bid_totals.get(ticks, 0) + _units(order.size, self.settings.size_increment)
+                bid_totals[ticks] = bid_totals.get(ticks, 0) + _units(
+                    order.size, self.settings.size_increment
+                )
         target_total = bid_totals.get(self.settings.limit_price_ticks, 0)
         if target_total != state["total_lots"]:
             raise ValueError("Actual native horizon differs from inclusive observed depth")
         best = max(bid_totals)
-        mark = {"source_ref": current.source_ref, "price_ticks": best,
-                "available_quantity_lots": bid_totals[best]}
+        mark = {
+            "source_ref": current.source_ref,
+            "price_ticks": best,
+            "available_quantity_lots": bid_totals[best],
+        }
         if mark != queue.horizon["mark"]:
             raise ValueError("Actual native final mark differs from frozen observation projection")
         queue.phase = "claim_horizon"
         self.account(strategy, "horizon_account_snapshot")
         self.horizon_snapshot = {
-            "source_ref": current.source_ref, "native_time_ns": strategy.clock.timestamp_ns(),
-            "queue_state": state, "native_target_lots": target_total,
-            "mark": mark, "account": dict(cast("dict[str, object]", self.traces["account_trace"][-1]["fields"])),
+            "source_ref": current.source_ref,
+            "native_time_ns": strategy.clock.timestamp_ns(),
+            "queue_state": state,
+            "native_target_lots": target_total,
+            "mark": mark,
+            "account": dict(cast("dict[str, object]", self.traces["account_trace"][-1]["fields"])),
         }
         queue.phase = "post_horizon_cleanup"
 
@@ -440,7 +480,10 @@ def run_native(replay_input: TaggedQueueReplayInput) -> dict[str, object]:
                     )
                     evidence.command("submit", self.order, self.clock.timestamp_ns())
                     self.submit_order(self.order)
-                if current.capture_seq == evidence.cancel_capture and evidence.horizon_snapshot is None:
+                if (
+                    current.capture_seq == evidence.cancel_capture
+                    and evidence.horizon_snapshot is None
+                ):
                     if self.order is None:
                         raise ValueError("Tagged claim horizon has no represented native order")
                     evidence.observe_horizon(self)
@@ -579,12 +622,23 @@ def run_native(replay_input: TaggedQueueReplayInput) -> dict[str, object]:
         engine.run()
         if evidence.failure is not None:
             raise evidence.failure
-        if queue.index != len(evidence.prepared.events) or queue.granted != queue.offer or queue.consumed != queue.offer:
+        if (
+            queue.index != len(evidence.prepared.events)
+            or queue.granted != queue.offer
+            or queue.consumed != queue.offer
+        ):
             raise ValueError("Native execution did not reconcile every original source input")
         if not queue.active or len(strategy.cache.orders()) != 1:
             raise ValueError("Queue execution requires exactly one actually accepted native order")
-        if evidence.horizon_snapshot is None or strategy.order is None or not strategy.order.is_closed or evidence.pending:
-            raise ValueError("Tagged execution lacks actual precleanup horizon or native cleanup acknowledgement")
+        if (
+            evidence.horizon_snapshot is None
+            or strategy.order is None
+            or not strategy.order.is_closed
+            or evidence.pending
+        ):
+            raise ValueError(
+                "Tagged execution lacks actual precleanup horizon or native cleanup acknowledgement"
+            )
         state = cast("dict[str, int]", queue.horizon["state"])
         native_order = evidence.order(strategy.order)
         if native_order["filled_quantity_lots"] != state["own_filled_lots"]:

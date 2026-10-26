@@ -122,7 +122,8 @@ def _outcome(raw: bytes, reservation: AttemptReservation) -> _Intent | None:
         document = parse(raw, limit=MAX_TAGGED_QUEUE_RECORD_BYTES)
         intent: _Intent | None = None
         tagged_kind = document.get("kind") in (
-            "tagged_queue_run_receipt_v1", "tagged_queue_attempt_failure_v1"
+            "tagged_queue_run_receipt_v1",
+            "tagged_queue_attempt_failure_v1",
         )
         if tagged_kind != (type(reservation) is TaggedQueueAttemptReservation):
             raise EvidenceValidationError("Outcome kind differs from the reserved execution owner")
@@ -134,7 +135,9 @@ def _outcome(raw: bytes, reservation: AttemptReservation) -> _Intent | None:
                 load_tagged_queue_run_receipt(raw)
             else:
                 load_tagged_queue_failure(raw)
-            intent = load_tagged_queue_intent(canonical(cast("dict[str, object]", document["intent"])))
+            intent = load_tagged_queue_intent(
+                canonical(cast("dict[str, object]", document["intent"]))
+            )
         elif queue_kind:
             if document["kind"] == "queue_run_receipt_v1":
                 load_queue_run_receipt(raw)
@@ -234,9 +237,11 @@ class LocalAttemptLedger:
                             "kind": (
                                 "tagged_queue_attempt_reservation_v1"
                                 if type(protocol) is TaggedQueueProtocol
-                                else ("queue_attempt_reservation_v1"
-                                      if type(protocol) is QueueFamilyProtocol
-                                      else "replay_attempt_reservation_v1")
+                                else (
+                                    "queue_attempt_reservation_v1"
+                                    if type(protocol) is QueueFamilyProtocol
+                                    else "replay_attempt_reservation_v1"
+                                )
                             ),
                             "schema_version": 1,
                             "protocol_id": protocol.protocol_id,

@@ -66,9 +66,23 @@ _REQUEST_LIMIT = 16 * 1024
 _CLAIM_FIELDS = {"title", "hypothesis", "metric", "unit", "comparator", "threshold"}
 _BUDGET_FIELDS = {"max_attempts", "max_wall_seconds", "max_events"}
 _DOCUMENT_FIELDS = {
-    "kind", "schema_version", "read_policy", "budget_policy", "source_protocol",
-    "gross_constraint_source", "gross_source_usage", "bindings", "claim", "claim_revision_id",
-    "policies", "engine", "model", "strategy", "evaluation_policy", "parameter_basis", "scope",
+    "kind",
+    "schema_version",
+    "read_policy",
+    "budget_policy",
+    "source_protocol",
+    "gross_constraint_source",
+    "gross_source_usage",
+    "bindings",
+    "claim",
+    "claim_revision_id",
+    "policies",
+    "engine",
+    "model",
+    "strategy",
+    "evaluation_policy",
+    "parameter_basis",
+    "scope",
     "budget",
 }
 
@@ -87,51 +101,80 @@ def _equal(actual: object, expected: object, message: str) -> None:
 
 
 def _source(source: ExecutableProtocol) -> ExecutableProtocol:
-    _require(type(source) is ExecutableProtocol, "Tagged reconstruction requires an actual source v2 protocol")
+    _require(
+        type(source) is ExecutableProtocol,
+        "Tagged reconstruction requires an actual source v2 protocol",
+    )
     checked = load_executable_protocol(source.canonical_bytes)
-    _require((checked.protocol_id, checked.claim_revision_id) ==
-             (source.protocol_id, source.claim_revision_id), "Source protocol identities differ")
+    _require(
+        (checked.protocol_id, checked.claim_revision_id)
+        == (source.protocol_id, source.claim_revision_id),
+        "Source protocol identities differ",
+    )
     replay = cast("dict[str, object]", checked.document["replay_spec"])
     strategy = cast("dict[str, object]", replay["strategy"])
     execution = cast("dict[str, int]", replay["execution"])
-    _require(strategy["submit_capture_seq"] == 1 and strategy["cancel_after_first_fill"] is False,
-             "Tagged reconstruction requires capture 1 representation and no first-fill cancellation")
-    _require(execution["insert_latency_ns"] == execution["cancel_latency_ns"] == 0,
-             "Tagged reconstruction requires zero native insert and cancel latency")
+    _require(
+        strategy["submit_capture_seq"] == 1 and strategy["cancel_after_first_fill"] is False,
+        "Tagged reconstruction requires capture 1 representation and no first-fill cancellation",
+    )
+    _require(
+        execution["insert_latency_ns"] == execution["cancel_latency_ns"] == 0,
+        "Tagged reconstruction requires zero native insert and cancel latency",
+    )
     return checked
 
 
 def _claim(value: object) -> dict[str, object]:
     claim = exact(value, _CLAIM_FIELDS, "Tagged queue claim")
-    _equal([claim["metric"], claim["unit"]], ["tagged_inventory_net_marked_pnl_v1", "USD"],
-           "Tagged claim requires its own USD inventory marking metric")
+    _equal(
+        [claim["metric"], claim["unit"]],
+        ["tagged_inventory_net_marked_pnl_v1", "USD"],
+        "Tagged claim requires its own USD inventory marking metric",
+    )
     _require(claim["comparator"] in ("gt", "ge", "lt", "le"), "Unsupported tagged comparator")
     return {
         "title": text(claim["title"], "claim title", 200),
         "hypothesis": text(claim["hypothesis"], "claim hypothesis", 2000),
-        "metric": "tagged_inventory_net_marked_pnl_v1", "unit": "USD",
-        "comparator": claim["comparator"], "threshold": _threshold(claim["threshold"]),
+        "metric": "tagged_inventory_net_marked_pnl_v1",
+        "unit": "USD",
+        "comparator": claim["comparator"],
+        "threshold": _threshold(claim["threshold"]),
     }
 
 
-def _build_document(*, source: ExecutableProtocol, constraint: QueueConstraintSpec,
-                    claim: object, budget: object, horizon_capture_seq: object) -> dict[str, object]:
+def _build_document(
+    *,
+    source: ExecutableProtocol,
+    constraint: QueueConstraintSpec,
+    claim: object,
+    budget: object,
+    horizon_capture_seq: object,
+) -> dict[str, object]:
     source = _source(source)
     _require(type(constraint) is QueueConstraintSpec, "Expected source-bound gross declaration")
     checked_constraint = load_queue_constraint_spec(constraint.canonical_bytes)
-    _require(checked_constraint.constraint_id == constraint.constraint_id,
-             "Gross constraint identity differs from canonical content")
+    _require(
+        checked_constraint.constraint_id == constraint.constraint_id,
+        "Gross constraint identity differs from canonical content",
+    )
     constraint = checked_constraint
     source_doc, gross = source.document, constraint.document
     bindings = cast("dict[str, str]", gross["bindings"])
     datasets = cast("dict[str, str]", source_doc["datasets"])
-    _equal([bindings["protocol_id"], bindings["development_dataset_id"], bindings["replay_spec_id"]],
-           [source.protocol_id, datasets["development"], source_doc["replay_spec_id"]],
-           "Gross declaration differs from full source protocol")
+    _equal(
+        [bindings["protocol_id"], bindings["development_dataset_id"], bindings["replay_spec_id"]],
+        [source.protocol_id, datasets["development"], source_doc["replay_spec_id"]],
+        "Gross declaration differs from full source protocol",
+    )
     replay = cast("dict[str, object]", source_doc["replay_spec"])
     strategy = cast("dict[str, object]", replay["strategy"])
     target = cast("dict[str, object]", gross["target"])
-    _equal(target["price_ticks"], strategy["limit_price_ticks"], "Tagged target differs from source limit")
+    _equal(
+        target["price_ticks"],
+        strategy["limit_price_ticks"],
+        "Tagged target differs from source limit",
+    )
     horizon = integer(horizon_capture_seq, "horizon_capture_seq", 2)
     updates = cast("list[dict[str, object]]", gross["updates"])
     _equal(horizon, updates[-1]["capture_seq"], "Horizon must be the final target checkpoint")
@@ -141,41 +184,84 @@ def _build_document(*, source: ExecutableProtocol, constraint: QueueConstraintSp
     checked_budget = {
         "max_attempts": integer(limits["max_attempts"], "max_attempts", 2, 100),
         "max_wall_seconds": integer(limits["max_wall_seconds"], "max_wall_seconds", 1, 60),
-        "max_events": integer(limits["max_events"], "max_events", 1,
-                              min(source_budget["max_events"], MAX_QUEUE_EVENTS)),
+        "max_events": integer(
+            limits["max_events"],
+            "max_events",
+            1,
+            min(source_budget["max_events"], MAX_QUEUE_EVENTS),
+        ),
     }
     return {
-        "kind": "tagged_queue_reconstruction_protocol_v1", "schema_version": 1,
-        "read_policy": "development_only_v1", "budget_policy": "shared_tagged_queue_budget_v1",
-        "source_protocol": source_doc, "gross_constraint_source": gross,
+        "kind": "tagged_queue_reconstruction_protocol_v1",
+        "schema_version": 1,
+        "read_policy": "development_only_v1",
+        "budget_policy": "shared_tagged_queue_budget_v1",
+        "source_protocol": source_doc,
+        "gross_constraint_source": gross,
         "gross_source_usage": "source_and_gross_flow_lineage_only_v1",
         "bindings": {
-            "source_protocol_id": source.protocol_id, "development_dataset_id": datasets["development"],
-            "normalized_sha256": bindings["normalized_sha256"], "replay_spec_id": source_doc["replay_spec_id"],
+            "source_protocol_id": source.protocol_id,
+            "development_dataset_id": datasets["development"],
+            "normalized_sha256": bindings["normalized_sha256"],
+            "replay_spec_id": source_doc["replay_spec_id"],
             "gross_constraint_id": constraint.constraint_id,
         },
-        "claim": checked_claim, "claim_revision_id": digest(canonical(checked_claim)),
+        "claim": checked_claim,
+        "claim_revision_id": digest(canonical(checked_claim)),
         "policies": list(TAGGED_POLICY_IDS),
-        "engine": {"id": ENGINE_ID, "version": ENGINE_VERSION, "semantic_id": TAGGED_ENGINE_SEMANTIC_ID},
+        "engine": {
+            "id": ENGINE_ID,
+            "version": ENGINE_VERSION,
+            "semantic_id": TAGGED_ENGINE_SEMANTIC_ID,
+        },
         "model": dict(TAGGED_MODEL),
-        "strategy": {"kind": "tagged_passive_order_at_entry_v1", "entry_capture_seq": 1,
-                     "horizon_capture_seq": horizon, "tagged_quantity_lots": strategy["quantity_lots"],
-                     "target_price_ticks": strategy["limit_price_ticks"]},
-        "evaluation_policy": TAGGED_EVALUATION_POLICY, "parameter_basis": gross["parameter_basis"],
-        "scope": dict(TAGGED_SCOPE), "budget": checked_budget,
+        "strategy": {
+            "kind": "tagged_passive_order_at_entry_v1",
+            "entry_capture_seq": 1,
+            "horizon_capture_seq": horizon,
+            "tagged_quantity_lots": strategy["quantity_lots"],
+            "target_price_ticks": strategy["limit_price_ticks"],
+        },
+        "evaluation_policy": TAGGED_EVALUATION_POLICY,
+        "parameter_basis": gross["parameter_basis"],
+        "scope": dict(TAGGED_SCOPE),
+        "budget": checked_budget,
     }
 
 
 def _validated(raw: bytes) -> dict[str, object]:
     try:
-        doc = exact(parse(raw, MAX_TAGGED_PROTOCOL_BYTES), _DOCUMENT_FIELDS, "Tagged queue protocol")
-        source = load_executable_protocol(canonical(cast("dict[str, object]", doc["source_protocol"])))
-        constraint = load_queue_constraint_spec(canonical(cast("dict[str, object]", doc["gross_constraint_source"])))
-        strategy = exact(doc["strategy"], {"kind", "entry_capture_seq", "horizon_capture_seq",
-                                          "tagged_quantity_lots", "target_price_ticks"}, "Tagged strategy")
-        rebuilt = _build_document(source=source, constraint=constraint, claim=doc["claim"],
-                                  budget=doc["budget"], horizon_capture_seq=strategy["horizon_capture_seq"])
-        _require(canonical(rebuilt) == raw, "Tagged protocol identity, policies, scope or encoding differ")
+        doc = exact(
+            parse(raw, MAX_TAGGED_PROTOCOL_BYTES), _DOCUMENT_FIELDS, "Tagged queue protocol"
+        )
+        source = load_executable_protocol(
+            canonical(cast("dict[str, object]", doc["source_protocol"]))
+        )
+        constraint = load_queue_constraint_spec(
+            canonical(cast("dict[str, object]", doc["gross_constraint_source"]))
+        )
+        strategy = exact(
+            doc["strategy"],
+            {
+                "kind",
+                "entry_capture_seq",
+                "horizon_capture_seq",
+                "tagged_quantity_lots",
+                "target_price_ticks",
+            },
+            "Tagged strategy",
+        )
+        rebuilt = _build_document(
+            source=source,
+            constraint=constraint,
+            claim=doc["claim"],
+            budget=doc["budget"],
+            horizon_capture_seq=strategy["horizon_capture_seq"],
+        )
+        _require(
+            canonical(rebuilt) == raw,
+            "Tagged protocol identity, policies, scope or encoding differ",
+        )
         return rebuilt
     except (ReplayValidationError, ProtocolValidationError) as error:
         raise TaggedQueueValidationError(str(error)) from error
@@ -188,7 +274,9 @@ class TaggedQueueProtocol:
 
     def __post_init__(self) -> None:
         _validated(self.canonical_bytes)
-        _require(self.protocol_id == digest(self.canonical_bytes), "Tagged protocol identity mismatch")
+        _require(
+            self.protocol_id == digest(self.canonical_bytes), "Tagged protocol identity mismatch"
+        )
 
     @property
     def document(self) -> dict[str, object]:
@@ -200,12 +288,16 @@ class TaggedQueueProtocol:
 
     @property
     def source_protocol(self) -> ExecutableProtocol:
-        return load_executable_protocol(canonical(cast("dict[str, object]", self.document["source_protocol"])))
+        return load_executable_protocol(
+            canonical(cast("dict[str, object]", self.document["source_protocol"]))
+        )
 
     @property
     def constraint(self) -> QueueConstraintSpec:
         """Preserve the old declaration as source/gross lineage, never new-model permission."""
-        return load_queue_constraint_spec(canonical(cast("dict[str, object]", self.document["gross_constraint_source"])))
+        return load_queue_constraint_spec(
+            canonical(cast("dict[str, object]", self.document["gross_constraint_source"]))
+        )
 
 
 def load_tagged_queue_protocol(raw: bytes) -> TaggedQueueProtocol:
@@ -213,7 +305,9 @@ def load_tagged_queue_protocol(raw: bytes) -> TaggedQueueProtocol:
     return TaggedQueueProtocol(digest(raw), raw)
 
 
-def _checked_input(protocol: TaggedQueueProtocol, replay_input: ReplayInput) -> tuple[TaggedQueueProtocol, PreparedReplay]:
+def _checked_input(
+    protocol: TaggedQueueProtocol, replay_input: ReplayInput
+) -> tuple[TaggedQueueProtocol, PreparedReplay]:
     _require(type(protocol) is TaggedQueueProtocol, "Expected immutable tagged queue protocol")
     checked = TaggedQueueProtocol(protocol.protocol_id, protocol.canonical_bytes)
     _require(type(replay_input) is ReplayInput, "Expected actual ReplayInput")
@@ -221,16 +315,21 @@ def _checked_input(protocol: TaggedQueueProtocol, replay_input: ReplayInput) -> 
     spec = load_replay_spec(replay_input.spec.canonical_bytes)
     _require(spec.spec_id == replay_input.spec.spec_id, "Replay spec identity mismatch")
     actual = ReplayInput(replay_input.dataset_id, replay_input.normalized_bytes, spec)
-    validate_queue_constraints(checked.constraint, protocol=checked.source_protocol, replay_input=actual)
+    validate_queue_constraints(
+        checked.constraint, protocol=checked.source_protocol, replay_input=actual
+    )
     prepared = preflight_replay(actual)
     doc = checked.document
     budget = cast("dict[str, int]", doc["budget"])
     _require(len(prepared.events) <= budget["max_events"], "Tagged event budget exceeded")
     strategy = cast("dict[str, int]", doc["strategy"])
     last = prepared.events[-1]
-    _require(last.capture_seq == strategy["horizon_capture_seq"] and last.event_type == "delta"
-             and strategy["target_price_ticks"] in dict(last.bids),
-             "Tagged horizon must be the actual final target bid checkpoint")
+    _require(
+        last.capture_seq == strategy["horizon_capture_seq"]
+        and last.event_type == "delta"
+        and strategy["target_price_ticks"] in dict(last.bids),
+        "Tagged horizon must be the actual final target bid checkpoint",
+    )
     return checked, prepared
 
 
@@ -245,19 +344,37 @@ def validate_tagged_queue_input(
         raise TaggedQueueValidationError(str(error)) from error
 
 
-def build_tagged_queue_protocol(raw: bytes, *, source_protocol: ExecutableProtocol,
-                                replay_input: ReplayInput, queue_request: bytes) -> TaggedQueueProtocol:
+def build_tagged_queue_protocol(
+    raw: bytes,
+    *,
+    source_protocol: ExecutableProtocol,
+    replay_input: ReplayInput,
+    queue_request: bytes,
+) -> TaggedQueueProtocol:
     try:
-        request = exact(parse(raw, _REQUEST_LIMIT), {"kind", "schema_version", "claim", "budget"}, "Tagged queue request")
+        request = exact(
+            parse(raw, _REQUEST_LIMIT),
+            {"kind", "schema_version", "claim", "budget"},
+            "Tagged queue request",
+        )
         _equal(request["kind"], "tagged_queue_request_v1", "Unsupported tagged queue request")
         integer(request["schema_version"], "schema_version", 1, 1)
         source = _source(source_protocol)
-        constraint = build_queue_constraint_spec(queue_request, protocol=source, replay_input=replay_input)
+        constraint = build_queue_constraint_spec(
+            queue_request, protocol=source, replay_input=replay_input
+        )
         prepared = preflight_replay(replay_input)
-        doc = _build_document(source=source, constraint=constraint, claim=request["claim"],
-                              budget=request["budget"], horizon_capture_seq=prepared.events[-1].capture_seq)
+        doc = _build_document(
+            source=source,
+            constraint=constraint,
+            claim=request["claim"],
+            budget=request["budget"],
+            horizon_capture_seq=prepared.events[-1].capture_seq,
+        )
         encoded = canonical(doc)
-        _require(len(encoded) <= MAX_TAGGED_PROTOCOL_BYTES, "Tagged protocol exceeds its byte bound")
+        _require(
+            len(encoded) <= MAX_TAGGED_PROTOCOL_BYTES, "Tagged protocol exceeds its byte bound"
+        )
         protocol = TaggedQueueProtocol(digest(encoded), encoded)
         validate_tagged_queue_input(protocol, replay_input)
         return protocol

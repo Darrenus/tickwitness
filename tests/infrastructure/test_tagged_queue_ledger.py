@@ -11,14 +11,14 @@ import pytest
 
 from tickwitness.domain.assumptions.derivation import CLOCK_PROFILE_ID
 from tickwitness.domain.data_evidence import normalize_events
+from tickwitness.domain.evidence.run_records import canonical, digest
+from tickwitness.domain.evidence.scenario_records import SCENARIO_SCOPE, load_scenario_intent
 from tickwitness.domain.evidence.tagged_queue_records import (
     TaggedQueueAttemptReservation,
     build_tagged_queue_failure,
     build_tagged_queue_intent,
     build_tagged_queue_run_receipt,
 )
-from tickwitness.domain.evidence.run_records import canonical, digest
-from tickwitness.domain.evidence.scenario_records import SCENARIO_SCOPE, load_scenario_intent
 from tickwitness.domain.replay.contracts import ReplayInput
 from tickwitness.domain.replay.specs import build_replay_spec
 from tickwitness.domain.research_contracts.executable import build_executable_protocol
@@ -47,9 +47,14 @@ def family():
             {
                 "kind": "tagged_queue_request_v1",
                 "schema_version": 1,
-                "claim": {"title": "Tagged inventory", "hypothesis": "Finite marked profit",
-                          "metric": "tagged_inventory_net_marked_pnl_v1", "unit": "USD",
-                          "comparator": "gt", "threshold": "0"},
+                "claim": {
+                    "title": "Tagged inventory",
+                    "hypothesis": "Finite marked profit",
+                    "metric": "tagged_inventory_net_marked_pnl_v1",
+                    "unit": "USD",
+                    "comparator": "gt",
+                    "threshold": "0",
+                },
                 "budget": {"max_attempts": 2, "max_wall_seconds": 30, "max_events": 1000},
             }
         ),
@@ -341,14 +346,24 @@ def test_old_shadow_intent_cannot_take_authority_over_a_tagged_reservation(tmp_p
     ledger = LocalAttemptLedger(tmp_path / "runs")
     attempt = ledger.reserve(owner)
     experiment = json.loads((EXAMPLES / "experiment-request.json").read_bytes())
-    source_input = ReplayInput("a" * 64,
-                              normalize_events((EXAMPLES / "queue-observations.jsonl").read_bytes()).normalized_bytes,
-                              build_replay_spec(canonical(experiment["replay_spec"])))
-    old = build_queue_family_protocol(canonical({"kind": "queue_family_request_v1", "schema_version": 1,
-                                                "cancel_at_capture_seq": 6,
-                                                "budget": {"max_attempts": 2, "max_wall_seconds": 30, "max_events": 1000}}),
-                                      source_protocol=owner.source_protocol, replay_input=source_input,
-                                      queue_request=(EXAMPLES / "queue-constraint-request.json").read_bytes())
+    source_input = ReplayInput(
+        "a" * 64,
+        normalize_events((EXAMPLES / "queue-observations.jsonl").read_bytes()).normalized_bytes,
+        build_replay_spec(canonical(experiment["replay_spec"])),
+    )
+    old = build_queue_family_protocol(
+        canonical(
+            {
+                "kind": "queue_family_request_v1",
+                "schema_version": 1,
+                "cancel_at_capture_seq": 6,
+                "budget": {"max_attempts": 2, "max_wall_seconds": 30, "max_events": 1000},
+            }
+        ),
+        source_protocol=owner.source_protocol,
+        replay_input=source_input,
+        queue_request=(EXAMPLES / "queue-constraint-request.json").read_bytes(),
+    )
     intent = build_queue_intent(old, "cancel_front_first_v1")
     with pytest.raises(AttemptLedgerError, match="Invalid execution intent"):
         ledger.bind_intent(attempt, intent.canonical_bytes)

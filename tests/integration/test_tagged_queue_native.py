@@ -1,7 +1,6 @@
 """Conserved tagged worlds execute original user inputs through pinned native hooks."""
 
 import json
-import sys
 from decimal import Decimal
 from importlib import metadata
 from pathlib import Path
@@ -45,7 +44,10 @@ native = pytest.mark.skipif(not _native_installed(), reason="optional pinned Nau
 
 
 def context(case="standard", policy=TAGGED_POLICY_IDS[0], comparator="gt"):
-    rows = [json.loads(line) for line in (EXAMPLES / "queue-observations.jsonl").read_bytes().splitlines()]
+    rows = [
+        json.loads(line)
+        for line in (EXAMPLES / "queue-observations.jsonl").read_bytes().splitlines()
+    ]
     declaration = json.loads((EXAMPLES / "queue-constraint-request.json").read_bytes())
     experiment = json.loads((EXAMPLES / "experiment-request.json").read_bytes())
     if case == "same_time":
@@ -67,27 +69,72 @@ def context(case="standard", policy=TAGGED_POLICY_IDS[0], comparator="gt"):
                     row[side] = [[price + 300, size] for price, size in row[side]]
             if "price_ticks" in row:
                 row["price_ticks"] += 300
-        experiment["replay_spec"]["instrument"].update(price_increment="0.25", size_increment="0.01")
+        experiment["replay_spec"]["instrument"].update(
+            price_increment="0.25", size_increment="0.01"
+        )
         experiment["replay_spec"]["strategy"].update(limit_price_ticks=400, quantity_lots=3)
         experiment["replay_spec"]["account"]["starting_cash"] = "12345.67"
-    normalized = normalize_events(b"\n".join(canonical(row) for row in rows) + b"\n").normalized_bytes
-    source = build_executable_protocol(canonical(experiment), development_dataset_id="a" * 64, confirmation_dataset_id="b" * 64)
-    replay_input = ReplayInput("a" * 64, normalized, build_replay_spec(canonical(experiment["replay_spec"])))
+    normalized = normalize_events(
+        b"\n".join(canonical(row) for row in rows) + b"\n"
+    ).normalized_bytes
+    source = build_executable_protocol(
+        canonical(experiment), development_dataset_id="a" * 64, confirmation_dataset_id="b" * 64
+    )
+    replay_input = ReplayInput(
+        "a" * 64, normalized, build_replay_spec(canonical(experiment["replay_spec"]))
+    )
     protocol = build_tagged_queue_protocol(
-        canonical({"kind": "tagged_queue_request_v1", "schema_version": 1,
-                   "claim": {"title": "Tagged finite-path inventory", "hypothesis": "Tagged inventory has positive marked net value at the frozen horizon", "metric": "tagged_inventory_net_marked_pnl_v1", "unit": "USD", "comparator": comparator, "threshold": "0"},
-                   "budget": {"max_attempts": 4, "max_wall_seconds": 60, "max_events": 1000}}),
-        source_protocol=source, replay_input=replay_input, queue_request=canonical(declaration))
+        canonical(
+            {
+                "kind": "tagged_queue_request_v1",
+                "schema_version": 1,
+                "claim": {
+                    "title": "Tagged finite-path inventory",
+                    "hypothesis": (
+                        "Tagged inventory has positive marked net value at the frozen horizon"
+                    ),
+                    "metric": "tagged_inventory_net_marked_pnl_v1",
+                    "unit": "USD",
+                    "comparator": comparator,
+                    "threshold": "0",
+                },
+                "budget": {"max_attempts": 4, "max_wall_seconds": 60, "max_events": 1000},
+            }
+        ),
+        source_protocol=source,
+        replay_input=replay_input,
+        queue_request=canonical(declaration),
+    )
     return TaggedQueueReplayInput(protocol, normalized, policy)
 
 
 @native
-@pytest.mark.parametrize("case,expected_lots", [("standard", [2, 0]), ("same_time", [2, 0]), ("no_cancel", [0, 0]), ("gross_churn", [2, 0]), ("variable", [3, 1]), ("high_mark", [2, 0])])
-def test_actual_tagged_native_fills_are_single_counted_and_cleanup_is_after_mark(case, expected_lots):
+@pytest.mark.parametrize(
+    "case,expected_lots",
+    [
+        ("standard", [2, 0]),
+        ("same_time", [2, 0]),
+        ("no_cancel", [0, 0]),
+        ("gross_churn", [2, 0]),
+        ("variable", [3, 1]),
+        ("high_mark", [2, 0]),
+    ],
+)
+def test_actual_tagged_native_fills_are_single_counted_and_cleanup_is_after_mark(
+    case, expected_lots
+):
     front_input = context(case)
-    requests = [front_input, TaggedQueueReplayInput(front_input.protocol, front_input.normalized_bytes, TAGGED_POLICY_IDS[1])]
+    requests = [
+        front_input,
+        TaggedQueueReplayInput(
+            front_input.protocol, front_input.normalized_bytes, TAGGED_POLICY_IDS[1]
+        ),
+    ]
     results = [NautilusTaggedQueueReplayAdapter().run(request) for request in requests]
-    assert [sum(fill["fields"]["quantity_lots"] for fill in result.document["fill_trace"]) for result in results] == expected_lots
+    assert [
+        sum(fill["fields"]["quantity_lots"] for fill in result.document["fill_trace"])
+        for result in results
+    ] == expected_lots
     for request, result, filled in zip(requests, results, expected_lots, strict=True):
         doc = result.document
         assert doc["bindings"] == request.bindings
@@ -104,14 +151,25 @@ def test_actual_tagged_native_fills_are_single_counted_and_cleanup_is_after_mark
         assert accepted[0]["source_ref"]["capture_seq"] == 1
         assert acceptance["native_bid_lots"] == 5
         assert acceptance["acceptance_role"] == "tagged_reconstruction_proxy"
-        assert acceptance["queue"]["ahead_lots"] == 5 - request.prepared.spec.document["strategy"]["quantity_lots"]
+        assert (
+            acceptance["queue"]["ahead_lots"]
+            == 5 - request.prepared.spec.document["strategy"]["quantity_lots"]
+        )
         for row in doc["queue_trace"]:
             state, flow = row["after"], row["flow"]
-            assert state["total_lots"] == state["ahead_lots"] + state["own_live_lots"] + state["behind_lots"]
+            assert (
+                state["total_lots"]
+                == state["ahead_lots"] + state["own_live_lots"] + state["behind_lots"]
+            )
             assert state["external_lots"] == state["ahead_lots"] + state["behind_lots"]
             if row["observed_total_lots"] is not None:
                 assert state["total_lots"] == row["observed_total_lots"]
-            assert flow["external_trade_ahead_lots"] + flow["own_trade_lots"] + flow["external_trade_behind_lots"] == flow["trade_lots"]
+            assert (
+                flow["external_trade_ahead_lots"]
+                + flow["own_trade_lots"]
+                + flow["external_trade_behind_lots"]
+                == flow["trade_lots"]
+            )
             assert row["own_fill_grant_lots"] == row["granted_lots"] == row["native_filled_lots"]
         horizon = doc["horizon_snapshot"]
         state = horizon["queue_state"]
@@ -119,7 +177,9 @@ def test_actual_tagged_native_fills_are_single_counted_and_cleanup_is_after_mark
         assert horizon["native_time_ns"] == request.prepared.events[-1].receive_time_ns
         assert state["own_filled_lots"] == horizon["account"]["net_position_lots"] == filled
         assert horizon["native_target_lots"] == state["total_lots"]
-        snapshots = [row for row in doc["account_trace"] if row["kind"] == "horizon_account_snapshot"]
+        snapshots = [
+            row for row in doc["account_trace"] if row["kind"] == "horizon_account_snapshot"
+        ]
         assert len(snapshots) == 1 and snapshots[0]["phase"] == "claim_horizon"
         assert snapshots[0]["fields"] == horizon["account"]
         cleanup = doc["cleanup"]
@@ -127,14 +187,19 @@ def test_actual_tagged_native_fills_are_single_counted_and_cleanup_is_after_mark
         assert cleanup["projected_total_after_cleanup"] == state["external_lots"]
         assert cleanup["own_live_after_cleanup"] == 0
         assert cleanup["native_unfilled_lots"] == state["own_live_lots"]
-        assert cleanup["book_role"] == horizon["account"]["book_role"] == "recorded_observation_cache"
+        assert (
+            cleanup["book_role"] == horizon["account"]["book_role"] == "recorded_observation_cache"
+        )
         cancel = [row for row in doc["decision_trace"] if row["fields"]["action"] == "cancel"]
         if state["own_live_lots"]:
             assert len(cancel) == 1
             assert cancel[0]["phase"] == "post_horizon_cleanup"
             assert cancel[0]["native_time_ns"] == horizon["native_time_ns"]
             assert cleanup["native_status"] == "CANCELED"
-            assert any(row["kind"] == "OrderCanceled" and row["phase"] == "post_horizon_cleanup" for row in doc["order_trace"])
+            assert any(
+                row["kind"] == "OrderCanceled" and row["phase"] == "post_horizon_cleanup"
+                for row in doc["order_trace"]
+            )
         else:
             assert cancel == [] and cleanup["native_status"] == "FILLED"
         assert doc["account_trace"][-1]["kind"] == "final_account_snapshot"
@@ -142,8 +207,13 @@ def test_actual_tagged_native_fills_are_single_counted_and_cleanup_is_after_mark
         assert doc["account_trace"][-1]["fields"]["net_position_lots"] == filled
         assert all(fill["phase"] == "observed_window" for fill in doc["fill_trace"])
         assert all(fill["fields"]["liquidity_side"] == "MAKER" for fill in doc["fill_trace"])
-        commission = sum((Decimal(fill["fields"]["commission"]) for fill in doc["fill_trace"]), Decimal(0))
-        assert Decimal(horizon["account"]["cash_total"]) == Decimal(request.prepared.spec.document["account"]["starting_cash"]) - commission
+        commission = sum(
+            (Decimal(fill["fields"]["commission"]) for fill in doc["fill_trace"]), Decimal(0)
+        )
+        assert (
+            Decimal(horizon["account"]["cash_total"])
+            == Decimal(request.prepared.spec.document["account"]["starting_cash"]) - commission
+        )
         if case == "standard":
             assert commission == Decimal(filled)
         if case == "high_mark":
@@ -186,8 +256,13 @@ def test_repeated_hook_does_not_regrant_and_nontrade_has_no_capacity():
 
 def test_worker_request_is_strict_and_requires_the_new_protocol():
     request = context()
-    payload = {"kind": "tagged_queue_replay_worker_request_v1", "schema_version": 1,
-               "protocol": request.protocol.canonical_bytes.decode(), "normalized": request.normalized_bytes.decode(), "policy_id": request.policy_id}
+    payload = {
+        "kind": "tagged_queue_replay_worker_request_v1",
+        "schema_version": 1,
+        "protocol": request.protocol.canonical_bytes.decode(),
+        "normalized": request.normalized_bytes.decode(),
+        "policy_id": request.policy_id,
+    }
     assert _request(canonical(payload)) == request
     payload["kind"] = "queue_replay_worker_request_v1"
     with pytest.raises(ReplayValidationError):

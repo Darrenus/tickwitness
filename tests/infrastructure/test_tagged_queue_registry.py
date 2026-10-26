@@ -44,9 +44,14 @@ def family_bytes() -> bytes:
             {
                 "kind": "tagged_queue_request_v1",
                 "schema_version": 1,
-                "claim": {"title": "Tagged inventory", "hypothesis": "Finite marked profit",
-                          "metric": "tagged_inventory_net_marked_pnl_v1", "unit": "USD",
-                          "comparator": "gt", "threshold": "0"},
+                "claim": {
+                    "title": "Tagged inventory",
+                    "hypothesis": "Finite marked profit",
+                    "metric": "tagged_inventory_net_marked_pnl_v1",
+                    "unit": "USD",
+                    "comparator": "gt",
+                    "threshold": "0",
+                },
                 "budget": {"max_attempts": 2, "max_wall_seconds": 30, "max_events": 1000},
             }
         ),

@@ -21,7 +21,10 @@ EXAMPLES = Path(__file__).resolve().parents[2] / "examples"
 
 
 def rows() -> list[dict]:
-    return [json.loads(line) for line in (EXAMPLES / "queue-observations.jsonl").read_bytes().splitlines()]
+    return [
+        json.loads(line)
+        for line in (EXAMPLES / "queue-observations.jsonl").read_bytes().splitlines()
+    ]
 
 
 def declaration() -> dict:
@@ -41,13 +44,22 @@ def pair(*, records=None, gross=None, quantity=2, spec_changes=None):
     )
     actual = ReplayInput("a" * 64, data, spec)
     request = {
-        "kind": "tagged_queue_request_v1", "schema_version": 1,
-        "claim": {"title": "Tagged net mark", "hypothesis": "The conditional net mark is positive.",
-                  "metric": "tagged_inventory_net_marked_pnl_v1", "unit": "USD", "comparator": "gt", "threshold": "0"},
+        "kind": "tagged_queue_request_v1",
+        "schema_version": 1,
+        "claim": {
+            "title": "Tagged net mark",
+            "hypothesis": "The conditional net mark is positive.",
+            "metric": "tagged_inventory_net_marked_pnl_v1",
+            "unit": "USD",
+            "comparator": "gt",
+            "threshold": "0",
+        },
         "budget": {"max_attempts": 2, "max_wall_seconds": 30, "max_events": 1000},
     }
     protocol = build_tagged_queue_protocol(
-        canonical(request), source_protocol=source_protocol, replay_input=actual,
+        canonical(request),
+        source_protocol=source_protocol,
+        replay_input=actual,
         queue_request=canonical(declaration() if gross is None else gross),
     )
     return validate_tagged_queue_input(protocol, actual)
@@ -64,15 +76,24 @@ def assert_conserved(document: dict, quantity: int) -> None:
             assert after["own_live_lots"] + after["own_filled_lots"] == quantity
             assert all(type(value) is int and value >= 0 for value in after.values())
             assert flow["trade_lots"] == (
-                flow["external_trade_ahead_lots"] + flow["own_trade_lots"] + flow["external_trade_behind_lots"]
+                flow["external_trade_ahead_lots"]
+                + flow["own_trade_lots"]
+                + flow["external_trade_behind_lots"]
             )
-            assert flow["cancellations_lots"] == flow["cancel_ahead_lots"] + flow["cancel_behind_lots"]
+            assert (
+                flow["cancellations_lots"] == flow["cancel_ahead_lots"] + flow["cancel_behind_lots"]
+            )
             assert row["own_fill_grant_lots"] == flow["own_trade_lots"]
             if before is not None:
                 assert after["total_lots"] == (
-                    before["total_lots"] + flow["additions_lots"] - flow["cancellations_lots"] - flow["trade_lots"]
+                    before["total_lots"]
+                    + flow["additions_lots"]
+                    - flow["cancellations_lots"]
+                    - flow["trade_lots"]
                 )
-                assert after["own_filled_lots"] == before["own_filled_lots"] + flow["own_trade_lots"]
+                assert (
+                    after["own_filled_lots"] == before["own_filled_lots"] + flow["own_trade_lots"]
+                )
             if row["observed_total_lots"] is not None:
                 assert after["total_lots"] == row["observed_total_lots"]
             previous = after
@@ -87,8 +108,12 @@ def test_standard_witness_relabels_two_existing_lots_and_removes_double_count() 
     assert doc["kind"] == "tagged_queue_witness_pair_v1"
     front, back = doc["interpretations"]
     assert front["trace"][0]["after"] == {
-        "ahead_lots": 3, "own_live_lots": 2, "behind_lots": 0,
-        "external_lots": 3, "total_lots": 5, "own_filled_lots": 0,
+        "ahead_lots": 3,
+        "own_live_lots": 2,
+        "behind_lots": 0,
+        "external_lots": 3,
+        "total_lots": 5,
+        "own_filled_lots": 0,
     }
     assert front["trace"][2]["after"]["ahead_lots"] == 0
     assert back["trace"][2]["after"]["ahead_lots"] == 3
@@ -97,12 +122,20 @@ def test_standard_witness_relabels_two_existing_lots_and_removes_double_count() 
     assert back["trace"][3]["flow"]["own_trade_lots"] == 0
     assert back["trace"][3]["flow"]["external_trade_ahead_lots"] == 3
     assert front["horizon"]["state"] == {
-        "ahead_lots": 0, "own_live_lots": 0, "behind_lots": 2,
-        "external_lots": 2, "total_lots": 2, "own_filled_lots": 2,
+        "ahead_lots": 0,
+        "own_live_lots": 0,
+        "behind_lots": 2,
+        "external_lots": 2,
+        "total_lots": 2,
+        "own_filled_lots": 2,
     }
     assert back["horizon"]["state"] == {
-        "ahead_lots": 0, "own_live_lots": 2, "behind_lots": 0,
-        "external_lots": 0, "total_lots": 2, "own_filled_lots": 0,
+        "ahead_lots": 0,
+        "own_live_lots": 2,
+        "behind_lots": 0,
+        "external_lots": 0,
+        "total_lots": 2,
+        "own_filled_lots": 0,
     }
     assert front["horizon"]["post_horizon_cancel_lots"] == 0
     assert back["horizon"]["post_horizon_cancel_lots"] == 2
@@ -122,9 +155,15 @@ def test_single_trade_can_consume_all_three_regions_without_duplicating_a_lot() 
     gross["updates"][1]["cancellations_lots"] = 2
     doc = pair(records=records, gross=gross).document
     trade = doc["interpretations"][0]["trace"][3]["flow"]
-    assert [trade[key] for key in (
-        "external_trade_ahead_lots", "own_trade_lots", "external_trade_behind_lots", "trade_lots"
-    )] == [1, 2, 3, 6]
+    assert [
+        trade[key]
+        for key in (
+            "external_trade_ahead_lots",
+            "own_trade_lots",
+            "external_trade_behind_lots",
+            "trade_lots",
+        )
+    ] == [1, 2, 3, 6]
     assert_conserved(doc, 2)
 
 
@@ -216,7 +255,8 @@ def test_mark_uses_actual_final_best_bid_instead_of_the_tagged_target_price() ->
     for value in doc["interpretations"]:
         assert value["horizon"]["mark"] == {
             "source_ref": {"line": 6, "capture_seq": 6, "event_type": "delta"},
-            "price_ticks": 102, "available_quantity_lots": 7,
+            "price_ticks": 102,
+            "available_quantity_lots": 7,
         }
     assert_conserved(doc, 2)
 
@@ -247,12 +287,17 @@ def test_unrelated_source_updates_are_preserved_without_hidden_queue_flow() -> N
     assert_conserved(doc, 2)
 
 
-def test_same_time_inputs_remain_in_capture_order_and_units_do_not_change_lot_conservation() -> None:
+def test_same_time_inputs_remain_in_capture_order_and_units_do_not_change_lot_conservation() -> (
+    None
+):
     records = rows()
     for row in records:
         row["receive_time_ns"] = 1_700_000_000_000_000_000
         row["event_time_ns"] = 1_699_999_999_999_999_900
-    doc = pair(records=records, spec_changes={"instrument": {"price_increment": "0.01", "size_increment": "0.1"}}).document
+    doc = pair(
+        records=records,
+        spec_changes={"instrument": {"price_increment": "0.01", "size_increment": "0.1"}},
+    ).document
     for value in doc["interpretations"]:
         assert [row["source_ref"]["capture_seq"] for row in value["trace"]] == list(range(1, 7))
     assert_conserved(doc, 2)

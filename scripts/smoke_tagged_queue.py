@@ -16,38 +16,78 @@ POLICIES = ["protected_tag_front_cancel_v1", "protected_tag_back_cancel_v1"]
 
 
 def _tree(root: Path) -> dict[str, bytes]:
-    return {str(path.relative_to(root)): path.read_bytes()
-            for path in root.rglob("*") if path.is_file()}
+    return {
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
+    }
 
 
-def _case(interpreter: str, examples: Path, root: Path, *, native: bool,
-          final_mark: int) -> dict[str, object]:
+def _case(
+    interpreter: str, examples: Path, root: Path, *, native: bool, final_mark: int
+) -> dict[str, object]:
     root.mkdir()
     store, registry, ledger = [root / name for name in ("data", "registry", "ledger")]
     fixtures = root / "fixtures"
     fixtures.mkdir()
-    observations = [json.loads(line) for line in (examples / "queue-observations.jsonl").read_text().splitlines()]
+    observations = [
+        json.loads(line)
+        for line in (examples / "queue-observations.jsonl").read_text().splitlines()
+    ]
     if final_mark != 100:
         observations[-1]["bids"].append([final_mark, 2])
     (fixtures / "observations.jsonl").write_text(
-        "".join(json.dumps(row) + "\n" for row in observations), encoding="utf-8")
-    (fixtures / "confirmation.jsonl").write_bytes((examples / "replay-confirmation.jsonl").read_bytes())
+        "".join(json.dumps(row) + "\n" for row in observations), encoding="utf-8"
+    )
+    (fixtures / "confirmation.jsonl").write_bytes(
+        (examples / "replay-confirmation.jsonl").read_bytes()
+    )
 
     def run(*command: str, expected: int = 0):
-        result = subprocess.run([interpreter, "-I", "-m", "tickwitness", *command], cwd=root,
-                                capture_output=True, text=True, check=False, timeout=150)
+        result = subprocess.run(
+            [interpreter, "-I", "-m", "tickwitness", *command],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=150,
+        )
         if result.returncode != expected:
-            raise RuntimeError(f"Installed tagged CLI exited {result.returncode}: {result.stdout}\n{result.stderr}")
+            raise RuntimeError(
+                f"Installed tagged CLI exited {result.returncode}: {result.stdout}\n{result.stderr}"
+            )
         return json.loads(result.stdout if result.stdout else result.stderr)
 
-    ids = [run("import-events", name, "--input-root", str(fixtures), "--store", str(store))["dataset_id"]
-           for name in ("observations.jsonl", "confirmation.jsonl")]
-    source = run("freeze-experiment", "experiment-request.json", "--input-root", str(examples),
-                 "--development-dataset", ids[0], "--confirmation-dataset", ids[1],
-                 "--store", str(store), "--registry", str(registry))
-    freeze_args = ("freeze-tagged-queue", source["protocol_id"], "tagged-queue-request.json",
-                   "queue-constraint-request.json", "--input-root", str(examples),
-                   "--store", str(store), "--registry", str(registry))
+    ids = [
+        run("import-events", name, "--input-root", str(fixtures), "--store", str(store))[
+            "dataset_id"
+        ]
+        for name in ("observations.jsonl", "confirmation.jsonl")
+    ]
+    source = run(
+        "freeze-experiment",
+        "experiment-request.json",
+        "--input-root",
+        str(examples),
+        "--development-dataset",
+        ids[0],
+        "--confirmation-dataset",
+        ids[1],
+        "--store",
+        str(store),
+        "--registry",
+        str(registry),
+    )
+    freeze_args = (
+        "freeze-tagged-queue",
+        source["protocol_id"],
+        "tagged-queue-request.json",
+        "queue-constraint-request.json",
+        "--input-root",
+        str(examples),
+        "--store",
+        str(store),
+        "--registry",
+        str(registry),
+    )
     frozen = run(*freeze_args)
     repeated = run(*freeze_args)
     protocol_id = frozen["protocol_id"]
@@ -64,12 +104,27 @@ def _case(interpreter: str, examples: Path, root: Path, *, native: bool,
     common = ("--store", str(store), "--registry", str(registry), "--ledger", str(ledger))
     missing = root / "must-not-exist"
     for command in ("run-tagged-queue-pair", "inspect-tagged-queue", "inspect-tagged-queue-run"):
-        refused = run(command, "bad-id", "--store", str(missing / "data"), "--registry", str(missing / "registry"),
-                      "--ledger", str(missing / "ledger"), "--split", "confirmation", expected=5)
+        refused = run(
+            command,
+            "bad-id",
+            "--store",
+            str(missing / "data"),
+            "--registry",
+            str(missing / "registry"),
+            "--ledger",
+            str(missing / "ledger"),
+            "--split",
+            "confirmation",
+            expected=5,
+        )
         assert refused["error"]["code"] == "confirmation_access_denied" and not missing.exists()
     submission = run("run-tagged-queue-pair", protocol_id, *common, expected=0 if native else 6)
-    result = {"final_mark_ticks": final_mark, "source_protocol_id": source["protocol_id"],
-              "frozen": frozen, "submission": submission}
+    result = {
+        "final_mark_ticks": final_mark,
+        "source_protocol_id": source["protocol_id"],
+        "frozen": frozen,
+        "submission": submission,
+    }
     if not native:
         assert submission["status"] == "failed" and len(submission["failures"]) == 1
         failure = submission["failures"][0]
@@ -105,7 +160,9 @@ def _case(interpreter: str, examples: Path, root: Path, *, native: bool,
         assert evaluation["scope"]["finding_issued"] is False and evaluation["findings"] == []
     before = _tree(root)
     inspected = [run("inspect-tagged-queue-run", item["run_id"], *common) for item in (front, back)]
-    for item, own, external, status in zip(inspected, (0, 2), (2, 0), ("FILLED", "CANCELED"), strict=True):
+    for item, own, external, status in zip(
+        inspected, (0, 2), (2, 0), ("FILLED", "CANCELED"), strict=True
+    ):
         assert item["verification"]["native_replayed"] is False
         assert item["verification"]["queue_execution_audited"] is True
         native_result = item["result"]
@@ -130,11 +187,27 @@ def _case(interpreter: str, examples: Path, root: Path, *, native: bool,
         trades = [row for row in native_result["queue_trace"] if row["kind"] == "trade"]
         assert len(trades) == 1
         flow = trades[0]["flow"]
-        assert flow["trade_lots"] == (flow["external_trade_ahead_lots"] + flow["own_trade_lots"] + flow["external_trade_behind_lots"]) == 3
-        assert trades[0]["native_filled_lots"] == trades[0]["granted_lots"] == flow["own_trade_lots"] == 2 - own
+        assert (
+            flow["trade_lots"]
+            == (
+                flow["external_trade_ahead_lots"]
+                + flow["own_trade_lots"]
+                + flow["external_trade_behind_lots"]
+            )
+            == 3
+        )
+        assert (
+            trades[0]["native_filled_lots"]
+            == trades[0]["granted_lots"]
+            == flow["own_trade_lots"]
+            == 2 - own
+        )
         for row in native_result["queue_trace"]:
             state = row["after"]
-            assert state["total_lots"] == state["ahead_lots"] + state["own_live_lots"] + state["behind_lots"]
+            assert (
+                state["total_lots"]
+                == state["ahead_lots"] + state["own_live_lots"] + state["behind_lots"]
+            )
             if row["observed_total_lots"] is not None:
                 assert state["total_lots"] == row["observed_total_lots"]
         assert native_result["account_trace"][-2]["phase"] == "claim_horizon"
@@ -145,7 +218,10 @@ def _case(interpreter: str, examples: Path, root: Path, *, native: bool,
             assert terminal["phase"] == "post_horizon_cleanup"
             assert terminal["native_time_ns"] == horizon["native_time_ns"]
     inspection = run("inspect-tagged-queue", protocol_id, *common)
-    assert inspection["budget"]["consumed_attempts"] == 2 and inspection["budget"]["remaining_attempts"] == 0
+    assert (
+        inspection["budget"]["consumed_attempts"] == 2
+        and inspection["budget"]["remaining_attempts"] == 0
+    )
     assert {row["policy_id"] for row in inspection["attempts"]} == set(POLICIES)
     exhausted = run("run-tagged-queue-pair", protocol_id, *common, expected=8)
     assert exhausted["status"] == "failed" and exhausted["failures"][0]["budget_consumed"] is False
@@ -153,8 +229,15 @@ def _case(interpreter: str, examples: Path, root: Path, *, native: bool,
     assert run("inspect-tagged-queue-run", front["run_id"], *common) == inspected[0]
     assert run("inspect-tagged-queue-run", back["run_id"], *common) == inspected[1]
     assert before == _tree(root), "Reinspection or exhausted run changed committed bytes"
-    result.update({"inspected_runs": inspected, "budget": inspection, "exhaustion": exhausted,
-                   "read_only_tree_verified": True, "single_counted_allocation_verified": True})
+    result.update(
+        {
+            "inspected_runs": inspected,
+            "budget": inspection,
+            "exhaustion": exhausted,
+            "read_only_tree_verified": True,
+            "single_counted_allocation_verified": True,
+        }
+    )
     return result
 
 
@@ -168,17 +251,30 @@ def main() -> None:
     examples = Path(__file__).resolve().parents[1] / "examples"
     with TemporaryDirectory(prefix="tickwitness-tagged-installed-") as temporary:
         root = Path(temporary)
-        cases = [_case(interpreter, examples, root / "standard", native=args.native, final_mark=100)]
+        cases = [
+            _case(interpreter, examples, root / "standard", native=args.native, final_mark=100)
+        ]
         if args.native:
             cases.append(_case(interpreter, examples, root / "bid102", native=True, final_mark=102))
-    report = {"kind": "installed_tagged_queue_acceptance_v1", "native": args.native,
-              "fixture_kind": "original_synthetic", "source_claim_evaluated": False,
-              "finding_issued": False, "cases": cases, "accepted": True}
+    report = {
+        "kind": "installed_tagged_queue_acceptance_v1",
+        "native": args.native,
+        "fixture_kind": "original_synthetic",
+        "source_claim_evaluated": False,
+        "finding_issued": False,
+        "cases": cases,
+        "accepted": True,
+    }
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
-                               encoding="utf-8")
-    print("Installed tagged reconstruction: frozen claim, single-counted native fills, horizon/cleanup and durable shared-budget inspection passed.")
+        args.report.write_text(
+            json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    print(
+        "Installed tagged reconstruction: frozen claim, single-counted native fills, "
+        "horizon/cleanup and durable shared-budget inspection passed."
+    )
 
 
 if __name__ == "__main__":
