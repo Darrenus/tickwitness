@@ -25,14 +25,18 @@ def native_present() -> bool:
 @pytest.mark.parametrize("case_id", qualification.CASE_IDS)
 def test_actual_persistent_pair_semantics_has_independent_positive_and_negative_oracles(case_id):
     case = qualification.run_case(case_id)
-    assert case["passed"] is True, json.dumps({
-        "case_id": case_id, "error": case.get("error"),
-        "failed": [item for item in case["checks"] if not item["passed"]],
-    })
+    assert case["passed"] is True, json.dumps(
+        {
+            "case_id": case_id,
+            "error": case.get("error"),
+            "failed": [item for item in case["checks"] if not item["passed"]],
+        }
+    )
     assert [item["policy_id"] for item in case["native_calls"]] == list(qualification.POLICIES)
     assert len({item["attempt_id"] for item in case["native_calls"]}) == 2
     assert case["stages"] == [
-        "qualification_predicates_frozen", "source_and_shared_budget_family_frozen",
+        "qualification_predicates_frozen",
+        "source_and_shared_budget_family_frozen",
         "persistent_native_dual_execution_completed",
         "read_only_projection_and_predicate_diagnostics_completed",
     ]
@@ -51,7 +55,10 @@ def test_actual_persistent_pair_semantics_has_independent_positive_and_negative_
         assert [item["satisfied"] for item in diagnostic["observations"]] == [False, False]
     elif case_id == "flat_zero_comparator_boundaries":
         assert [row["observations"][0]["satisfied"] for row in case["diagnostic_predicates"]] == [
-            False, True, False, True,
+            False,
+            True,
+            False,
+            True,
         ]
 
 

@@ -145,7 +145,9 @@ def main() -> None:
             assert pair["observation_compatibility"]["status"] == "not_established"
             assert pair["predicate"]["truth_divergence"] is None
             assert pair["predicate"]["values"] == {
-                "cancel_front_first_v1": None, "cancel_back_first_v1": None}
+                "cancel_front_first_v1": None,
+                "cancel_back_first_v1": None,
+            }
             assert pair["findings"] == [] and pair["scope"]["source_claim_evaluated"] is False
             first, second = pair["models"]
             assert first["single_counted_insertion"]["status"] == "contradiction"

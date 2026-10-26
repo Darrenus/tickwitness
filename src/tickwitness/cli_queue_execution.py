@@ -12,8 +12,8 @@ from tickwitness.application.queue_execution import (
     run_queue_family,
     run_queue_model,
 )
-from tickwitness.application.research import ConfirmationAccessDenied
 from tickwitness.application.queue_semantics import inspect_queue_semantics
+from tickwitness.application.research import ConfirmationAccessDenied
 from tickwitness.domain.evidence.run_records import EvidenceValidationError, identity
 from tickwitness.domain.research_contracts.queue_family import QUEUE_POLICY_IDS
 from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger
@@ -61,7 +61,9 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
                 "qualify-queue-pair": "Check paired queue semantics without issuing a finding",
             }[name],
         )
-        parser.add_argument("run_id" if name in ("inspect-queue-run", "qualify-queue-pair") else "family_id")
+        parser.add_argument(
+            "run_id" if name in ("inspect-queue-run", "qualify-queue-pair") else "family_id"
+        )
         if name == "qualify-queue-pair":
             parser.add_argument("other_run_id")
         if name == "run-queue-model":
@@ -141,8 +143,12 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
         )
     if arguments.command == "qualify-queue-pair":
         return inspect_queue_semantics(
-            arguments.run_id, arguments.other_run_id, split=arguments.split,
-            families_factory=families, datasets_factory=datasets, ledger_factory=ledger,
+            arguments.run_id,
+            arguments.other_run_id,
+            split=arguments.split,
+            families_factory=families,
+            datasets_factory=datasets,
+            ledger_factory=ledger,
         )
     if arguments.command == "inspect-queue-family":
         return inspect_queue_family(

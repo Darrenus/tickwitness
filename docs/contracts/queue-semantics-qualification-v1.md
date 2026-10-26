@@ -54,6 +54,8 @@ findings = []
 
 调用方不能上传 `proof=true`、已相容标签或布尔真值来覆盖这些结果。两份数值／成交不同不改变上述权限。
 
+`load_queue_pair_qualification` 只校验 canonical 结构、固定 scope、内部算术和投影一致性；它不持有源内容的 preimage，不能单凭报告中合法格式的 SHA-256 或 claim revision 字符串验证来源。生产入口不接收这种报告来授予权限，每次都通过实际 store／registry／ledger 重新构造；独立消费时也必须执行来源重验，报告 hash 不是作者签名或相容性证书。
+
 ## 固定资格实验中的候选谓词
 
 `queue_qualification_predicate_v1` 是独立的 canonical、内容寻址合同。其 exact fields 为 kind、schema_version、purpose=`semantic_qualification_only`、metric=`net_marked_pnl_v1`、unit=`USD`、comparator=`gt/ge/lt/le`、有界 canonical decimal threshold 和 evaluation_policy=`qualification_flat_zero_last_visible_bid_v1`。未知字段、bool 数字、重复字段、非有限数或其他政策拒绝。
@@ -65,7 +67,7 @@ diagnostic_net_marked_value = filled_physical_quantity × final_best_bid
                               − actual_fill_notional − actual_commission
 ```
 
-这是未平仓的模型标记值，不是实际清算收益。native 费率量化歧义导致不可评价；失败或缺结果不能填零。完整终态、零成交、零仓位且零费用仅在这个显式候选 flat-zero 政策中得到值 0；旧评价器的 `no_fills` 规则保持原状。候选 predicate 在固定资格案例首次 engine 调用前构建并记录，不能拿看过结果后改的阈值冒充事先冻结的研究命题。
+这是未平仓的模型标记值，不是实际清算收益。native 费率量化歧义导致不可评价；失败或缺结果不能填零。完整终态、零成交、零仓位且零费用仅在这个显式候选 flat-zero 政策中得到值 0；旧评价器的 `no_fills` 规则保持原状。候选 predicate 在固定资格脚本首次 engine 调用前构造不可变内容身份，并写入完整资格报告；这不是持久时间注册或统计试验族证明，不能拿它冒充已接受的研究命题注册。
 
 候选 observation 重新核对真实源、原生执行审计及完整 predicate 身份，计算值和 bool；配对必须同 predicate、完整族与共同来源，恰为两政策。诊断 pair relation 只有 `DIAGNOSTIC_PREDICATE_AGREEMENT`、`DIAGNOSTIC_PREDICATE_DISAGREEMENT`、`DIAGNOSTIC_PREDICATE_NOT_EVALUABLE`，不产生生产 finding。生产 CLI 不接收这个候选政策，也不借它评估 source claim。
 

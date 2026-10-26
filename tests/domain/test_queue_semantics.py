@@ -129,6 +129,26 @@ def test_pair_order_is_normalized_and_documents_are_detached(queue_result_factor
     assert forward.document["models"][0]["single_counted_insertion"]["trades"][0]["own_filled_lots"] == 1
 
 
+def test_loader_rejects_locally_conserved_but_unsupported_cumulative_gross_flow(queue_result_factory):
+    document = report(queue_result_factory).document
+    front, back = [model["external_only_projection"]["trace"] for model in document["models"]]
+    # A 500-million-lot add/cancel churn keeps every recorded absolute volume
+    # unchanged. Every flow and state fits the per-value limit, but the gross
+    # sum exceeds the bound enforced by the actual source feasibility checker.
+    for trace in (front, back):
+        trace[1]["flow"].update(additions_lots=500_000_003, cancellations_lots=500_000_000)
+    front[1]["flow"].update(cancel_ahead_lots=5, cancel_behind_lots=499_999_995)
+    front[1]["after"] = {"ahead_lots": 0, "behind_lots": 8, "external_lots": 8}
+    front[2]["before"] = dict(front[1]["after"])
+    front[2]["flow"].update(cancel_ahead_lots=0, cancel_behind_lots=3)
+    front[2]["after"] = {"ahead_lots": 0, "behind_lots": 5, "external_lots": 5}
+    front[3]["before"] = dict(front[2]["after"])
+    back[1]["flow"].update(cancel_ahead_lots=0, cancel_behind_lots=500_000_000)
+    assert front[-1]["after"]["external_lots"] == back[-1]["after"]["external_lots"] == 2
+    with pytest.raises(QueueSemanticsValidationError, match="Cumulative gross flow"):
+        load_queue_pair_qualification(canonical(document))
+
+
 @pytest.mark.parametrize("problem", ["same_policy", "cross_family", "swapped_results", "environment", "fees", "input_clock"])
 def test_incompatible_or_invalid_execution_evidence_is_rejected_before_diagnostics(queue_result_factory, problem):
     front, back = pair_inputs()

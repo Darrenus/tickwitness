@@ -87,6 +87,7 @@ def _validate_trace(value: object, policy: str) -> list[Row]:
     previous: Row | None = None
     last_capture = last_line = 0
     last_time = 0
+    gross_total = 0
     for index, row in enumerate(rows):
         exact(row, {"kind", "source_ref", "receive_time_ns", "before", "flow", "after",
                     "recorded_external_lots"}, "External-only step")
@@ -98,6 +99,8 @@ def _validate_trace(value: object, policy: str) -> list[Row]:
         flow = exact(row["flow"], _FLOW, "external flow")
         for key, item in flow.items():
             integer(item, key, 0, MAX_QUEUE_LOTS)
+        gross_total += cast("int", flow["additions_lots"]) + cast("int", flow["cancellations_lots"])
+        _require(gross_total <= MAX_QUEUE_LOTS, "Cumulative gross flow exceeds the queue software limit")
         after = _state(row["after"])
         if index == 0:
             _equal([row["kind"], ref["event_type"], ref["capture_seq"], ref["line"], row["before"]],

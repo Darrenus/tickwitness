@@ -31,7 +31,13 @@ _LIMIT = 16 * 1024
 _OBSERVATION_LIMIT = 128 * 1024
 _POLICY = "qualification_flat_zero_last_visible_bid_v1"
 _FIELDS = {
-    "kind", "schema_version", "purpose", "metric", "unit", "comparator", "threshold",
+    "kind",
+    "schema_version",
+    "purpose",
+    "metric",
+    "unit",
+    "comparator",
+    "threshold",
     "evaluation_policy",
 }
 _SCOPE: dict[str, object] = {
@@ -58,12 +64,18 @@ def _document(raw: bytes) -> dict[str, object]:
     document = exact(parse(raw, _LIMIT), _FIELDS, "Qualification predicate")
     integer(document["schema_version"], "schema_version", 1, 1)
     _require(document["kind"] == "queue_qualification_predicate_v1", "Unsupported predicate kind")
-    _require(document["purpose"] == "semantic_qualification_only", "Predicate is qualification-only")
-    _require(document["metric"] == "net_marked_pnl_v1" and document["unit"] == "USD",
-             "Only the explicit USD marked diagnostic is supported")
+    _require(
+        document["purpose"] == "semantic_qualification_only", "Predicate is qualification-only"
+    )
+    _require(
+        document["metric"] == "net_marked_pnl_v1" and document["unit"] == "USD",
+        "Only the explicit USD marked diagnostic is supported",
+    )
     _require(document["comparator"] in ("gt", "ge", "lt", "le"), "Unsupported predicate comparator")
     threshold = decimal(document["threshold"], "threshold", precision=18)
-    _require(threshold == document["threshold"], "Predicate threshold must be canonical decimal text")
+    _require(
+        threshold == document["threshold"], "Predicate threshold must be canonical decimal text"
+    )
     _require(document["evaluation_policy"] == _POLICY, "Unsupported qualification valuation policy")
     return document
 
@@ -75,7 +87,9 @@ class QualificationPredicate:
     def __post_init__(self) -> None:
         try:
             document = _document(self.canonical_bytes)
-            _require(canonical(document) == self.canonical_bytes, "Predicate bytes must be canonical")
+            _require(
+                canonical(document) == self.canonical_bytes, "Predicate bytes must be canonical"
+            )
         except ReplayValidationError as error:
             raise QualificationPredicateValidationError(str(error)) from error
 
@@ -99,8 +113,9 @@ def load_qualification_predicate(raw: bytes) -> QualificationPredicate:
     return QualificationPredicate(raw)
 
 
-def _valuation(replay_input: QueueReplayInput, result: QueueReplayResult,
-               audit: dict[str, object]) -> dict[str, object]:
+def _valuation(
+    replay_input: QueueReplayInput, result: QueueReplayResult, audit: dict[str, object]
+) -> dict[str, object]:
     prepared = replay_input.prepared
     instrument = cast("dict[str, object]", prepared.spec.document["instrument"])
     price_increment = _number(instrument["price_increment"], "price increment")
@@ -110,9 +125,9 @@ def _valuation(replay_input: QueueReplayInput, result: QueueReplayResult,
     for event in prepared.events:
         if event.event_type == "trade":
             continue
-        for price, quantity in event.bids:
-            if quantity:
-                bids[price] = quantity
+        for price, depth in event.bids:
+            if depth:
+                bids[price] = depth
             else:
                 bids.pop(price, None)
         mark_ref = event.source_ref
@@ -131,12 +146,17 @@ def _valuation(replay_input: QueueReplayInput, result: QueueReplayResult,
     _require(total_lots == quantity_lots, "Qualification notional differs from audited position")
     fees = _money(audit["actual_commission"], "audited actual commission", nonnegative=True)
     if not total_lots:
-        _require(notional == fees == quantity == 0, "Flat-zero policy requires no fills, position or fees")
+        _require(
+            notional == fees == quantity == 0,
+            "Flat-zero policy requires no fills, position or fees",
+        )
     marked = mark * quantity
     return {
         "policy": _POLICY,
         "mark": {
-            "source_ref": mark_ref, "price_ticks": ticks, "price": _decimal(mark),
+            "source_ref": mark_ref,
+            "price_ticks": ticks,
+            "price": _decimal(mark),
             "derivation": "final_reconstructed_book_at_last_book_input",
         },
         "filled_quantity_lots": total_lots,
@@ -158,9 +178,13 @@ class QualificationPredicateObservation:
     canonical_bytes: bytes = field(init=False)
 
     def __post_init__(self) -> None:
-        _require(type(self.replay_input) is QueueReplayInput and type(self.result) is QueueReplayResult,
-                 "Predicate observation requires actual immutable queue evidence")
-        _require(type(self.predicate) is QualificationPredicate, "Expected a frozen candidate predicate")
+        _require(
+            type(self.replay_input) is QueueReplayInput and type(self.result) is QueueReplayResult,
+            "Predicate observation requires actual immutable queue evidence",
+        )
+        _require(
+            type(self.predicate) is QualificationPredicate, "Expected a frozen candidate predicate"
+        )
         predicate = load_qualification_predicate(self.predicate.canonical_bytes)
         audit = evaluate_queue_replay(self.replay_input, self.result)
         document = audit.document
@@ -173,20 +197,33 @@ class QualificationPredicateObservation:
             number = Fraction(value)
             threshold = Fraction(cast("str", predicate.document["threshold"]))
             satisfied = {
-                "gt": number > threshold, "ge": number >= threshold,
-                "lt": number < threshold, "le": number <= threshold,
+                "gt": number > threshold,
+                "ge": number >= threshold,
+                "lt": number < threshold,
+                "le": number <= threshold,
             }[cast("str", predicate.document["comparator"])]
-        encoded = canonical({
-            "kind": "queue_qualification_predicate_observation_v1", "schema_version": 1,
-            "predicate_id": predicate.predicate_id, "predicate": predicate.document,
-            "bindings": self.replay_input.bindings,
-            "replay_result_sha256": digest(self.result.canonical_bytes),
-            "evaluation_sha256": audit.evaluation_id,
-            "scope": dict(_SCOPE), "eligible": not ambiguous, "satisfied": satisfied,
-            "value": value, "reason": "ambiguous_native_fee_quantization" if ambiguous else "eligible",
-            "valuation": valuation, "audit": document, "findings": [],
-        })
-        _require(len(encoded) <= _OBSERVATION_LIMIT, "Qualification observation exceeds its byte bound")
+        encoded = canonical(
+            {
+                "kind": "queue_qualification_predicate_observation_v1",
+                "schema_version": 1,
+                "predicate_id": predicate.predicate_id,
+                "predicate": predicate.document,
+                "bindings": self.replay_input.bindings,
+                "replay_result_sha256": digest(self.result.canonical_bytes),
+                "evaluation_sha256": audit.evaluation_id,
+                "scope": dict(_SCOPE),
+                "eligible": not ambiguous,
+                "satisfied": satisfied,
+                "value": value,
+                "reason": "ambiguous_native_fee_quantization" if ambiguous else "eligible",
+                "valuation": valuation,
+                "audit": document,
+                "findings": [],
+            }
+        )
+        _require(
+            len(encoded) <= _OBSERVATION_LIMIT, "Qualification observation exceeds its byte bound"
+        )
         object.__setattr__(self, "canonical_bytes", encoded)
 
     @property
@@ -198,48 +235,71 @@ class QualificationPredicateObservation:
         return parse(self.canonical_bytes, _OBSERVATION_LIMIT)
 
 
-def qualify_predicate(replay_input: QueueReplayInput, result: QueueReplayResult,
-                      predicate: QualificationPredicate) -> QualificationPredicateObservation:
+def qualify_predicate(
+    replay_input: QueueReplayInput, result: QueueReplayResult, predicate: QualificationPredicate
+) -> QualificationPredicateObservation:
     return QualificationPredicateObservation(replay_input, result, predicate)
 
 
-def compare_qualification_predicates(front: QualificationPredicateObservation,
-                                    back: QualificationPredicateObservation) -> dict[str, object]:
+def compare_qualification_predicates(
+    front: QualificationPredicateObservation, back: QualificationPredicateObservation
+) -> dict[str, object]:
     observations = (front, back)
     checked: list[QualificationPredicateObservation] = []
     for observation in observations:
-        _require(type(observation) is QualificationPredicateObservation,
-                 "Pairing requires re-auditable observations, not supplied truth flags")
-        rebuilt = qualify_predicate(observation.replay_input, observation.result, observation.predicate)
-        _require(rebuilt.canonical_bytes == observation.canonical_bytes,
-                 "Qualification observation identity differs from recomputation")
+        _require(
+            type(observation) is QualificationPredicateObservation,
+            "Pairing requires re-auditable observations, not supplied truth flags",
+        )
+        rebuilt = qualify_predicate(
+            observation.replay_input, observation.result, observation.predicate
+        )
+        _require(
+            rebuilt.canonical_bytes == observation.canonical_bytes,
+            "Qualification observation identity differs from recomputation",
+        )
         checked.append(rebuilt)
     left, right = checked
-    _require(left.predicate.canonical_bytes == right.predicate.canonical_bytes,
-             "Diagnostic pair predicates differ")
-    _require(left.replay_input.family.canonical_bytes == right.replay_input.family.canonical_bytes,
-             "Diagnostic pair frozen families differ")
-    _require(left.replay_input.normalized_bytes == right.replay_input.normalized_bytes,
-             "Diagnostic pair source bytes differ")
-    _require(canonical(cast("dict[str, object]", left.result.document["environment"]))
-             == canonical(cast("dict[str, object]", right.result.document["environment"])),
-             "Diagnostic pair execution environments differ")
-    _require((left.replay_input.policy_id, right.replay_input.policy_id)
-             == ("cancel_front_first_v1", "cancel_back_first_v1"),
-             "Diagnostic pair requires the frozen front/back order")
+    _require(
+        left.predicate.canonical_bytes == right.predicate.canonical_bytes,
+        "Diagnostic pair predicates differ",
+    )
+    _require(
+        left.replay_input.family.canonical_bytes == right.replay_input.family.canonical_bytes,
+        "Diagnostic pair frozen families differ",
+    )
+    _require(
+        left.replay_input.normalized_bytes == right.replay_input.normalized_bytes,
+        "Diagnostic pair source bytes differ",
+    )
+    _require(
+        canonical(cast("dict[str, object]", left.result.document["environment"]))
+        == canonical(cast("dict[str, object]", right.result.document["environment"])),
+        "Diagnostic pair execution environments differ",
+    )
+    _require(
+        (left.replay_input.policy_id, right.replay_input.policy_id)
+        == ("cancel_front_first_v1", "cancel_back_first_v1"),
+        "Diagnostic pair requires the frozen front/back order",
+    )
     documents = [left.document, right.document]
     eligible = all(document["eligible"] is True for document in documents)
     status = (
-        "DIAGNOSTIC_PREDICATE_NOT_EVALUABLE" if not eligible
+        "DIAGNOSTIC_PREDICATE_NOT_EVALUABLE"
+        if not eligible
         else "DIAGNOSTIC_PREDICATE_DISAGREEMENT"
         if documents[0]["satisfied"] is not documents[1]["satisfied"]
         else "DIAGNOSTIC_PREDICATE_AGREEMENT"
     )
     return {
-        "kind": "queue_qualification_predicate_pair_v1", "schema_version": 1,
+        "kind": "queue_qualification_predicate_pair_v1",
+        "schema_version": 1,
         "predicate_id": left.predicate.predicate_id,
         "observation_ids": [left.observation_id, right.observation_id],
-        "family_id": left.replay_input.family_id, "scope": dict(_SCOPE),
-        "diagnostic_status": status, "observations": documents,
-        "findings": [], "promotion_approved": False,
+        "family_id": left.replay_input.family_id,
+        "scope": dict(_SCOPE),
+        "diagnostic_status": status,
+        "observations": documents,
+        "findings": [],
+        "promotion_approved": False,
     }

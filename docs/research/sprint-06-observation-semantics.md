@@ -12,7 +12,7 @@
 
 ## 远端资格设计
 
-固定原创 synthetic cases 先封存 source、family、共同预算和候选 predicate，随后每政策占一个 attempt，调用真实 pinned native 引擎，持久保存 intent、result、receipt 与独立 audit，再只读复核。候选谓词只用于语义资格，不评估旧 family 的 source claim。没有任意用户数据的免费 qualifier 执行入口。
+固定原创 synthetic cases 先构造不可变候选 predicate 身份并记录于报告，再持久冻结 source、family 和共同预算，随后每政策占一个 attempt，调用真实 pinned native 引擎，持久保存 intent、result、receipt 与独立 audit，再只读复核。候选对象的构造顺序不是持久时间注册或跨协议统计试验族证明；它只用于语义资格，不评估旧 family 的 source claim。没有任意用户数据的免费 qualifier 执行入口。
 
 案例覆盖原始 −1/0 的 false/false、独立 final bid 102 的 true/false、ge 等号导致 true/true、数值不同但同真值、四比较符空仓边界、无撤单对照、gross churn 和同接收时刻的 capture 顺序。核心负例覆盖来源、环境、scope／proof 标签、预算／持久闭包、错误及未完成结果；候选计算使用 Fraction，不受调用方 Decimal 精度影响。
 
