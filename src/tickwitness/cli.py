@@ -326,4 +326,9 @@ def main(argv: list[str] | None = None) -> int:
             output, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
         )
     )
+    if arguments.command == "run-queue-family" and output["status"] != "completed":
+        failures = output["failures"]
+        if isinstance(failures, list) and failures and isinstance(failures[0], dict):
+            return int(failures[0].get("exit_code", 7))
+        return 7
     return 0

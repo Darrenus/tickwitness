@@ -106,7 +106,9 @@ class LocalQueueFamilyRegistry:
                     ) from error
             return QueueFamilyRecord(protocol_id, data, False)
         except OSError as error:
-            raise QueueFamilyRegistryError(f"Cannot verify queue family evidence: {error}") from error
+            raise QueueFamilyRegistryError(
+                f"Cannot verify queue family evidence: {error}"
+            ) from error
 
     def _create_root(self) -> None:
         missing: list[Path] = []

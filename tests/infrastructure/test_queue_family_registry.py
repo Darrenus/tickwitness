@@ -168,7 +168,9 @@ def test_symlinks_are_never_followed_even_for_matching_content(tmp_path: Path, t
 
 
 @pytest.mark.parametrize("kind", ["fifo", "directory", "oversize"])
-def test_nonregular_and_oversize_evidence_is_rejected_without_blocking(tmp_path: Path, kind) -> None:
+def test_nonregular_and_oversize_evidence_is_rejected_without_blocking(
+    tmp_path: Path, kind
+) -> None:
     registry = LocalQueueFamilyRegistry(tmp_path)
     record = registry.seal(family_bytes())
     path = tmp_path / "queue-families" / f"{record.family_id}.json"

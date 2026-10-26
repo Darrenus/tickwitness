@@ -226,9 +226,7 @@ class QueueFamilyProtocol:
 
     def __post_init__(self) -> None:
         _validated(self.canonical_bytes)
-        _require(
-            self.protocol_id == digest(self.canonical_bytes), "Queue family identity mismatch"
-        )
+        _require(self.protocol_id == digest(self.canonical_bytes), "Queue family identity mismatch")
 
     @property
     def family_id(self) -> str:

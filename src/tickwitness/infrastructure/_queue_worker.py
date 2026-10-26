@@ -10,9 +10,11 @@ from tickwitness.infrastructure.subprocess_replay import MAX_REQUEST_BYTES, MAX_
 
 
 def _request(raw: bytes) -> QueueReplayInput:
-    value = exact(parse(raw, MAX_REQUEST_BYTES),
-                  {"kind", "schema_version", "family", "normalized", "policy_id"},
-                  "queue worker request")
+    value = exact(
+        parse(raw, MAX_REQUEST_BYTES),
+        {"kind", "schema_version", "family", "normalized", "policy_id"},
+        "queue worker request",
+    )
     if value["kind"] != "queue_replay_worker_request_v1":
         raise ReplayValidationError("Unsupported queue worker request kind")
     integer(value["schema_version"], "schema_version", 1, 1)
@@ -21,8 +23,9 @@ def _request(raw: bytes) -> QueueReplayInput:
     family, normalized, policy = value["family"], value["normalized"], value["policy_id"]
     assert isinstance(family, str) and isinstance(normalized, str) and isinstance(policy, str)
     try:
-        return QueueReplayInput(load_queue_family_protocol(family.encode("utf-8")),
-                                normalized.encode("utf-8"), policy)
+        return QueueReplayInput(
+            load_queue_family_protocol(family.encode("utf-8")), normalized.encode("utf-8"), policy
+        )
     except UnicodeError as error:
         raise ReplayValidationError("Queue worker artifacts must use valid UTF-8") from error
 
@@ -38,7 +41,10 @@ def main() -> int:
 
         resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_RESULT_BYTES, MAX_RESULT_BYTES))
         replay_input = _request(sys.stdin.buffer.read(MAX_REQUEST_BYTES + 1))
-        from tickwitness.infrastructure.nautilus_replay import ReplayDependencyError, ReplayEngineError
+        from tickwitness.infrastructure.nautilus_replay import (
+            ReplayDependencyError,
+            ReplayEngineError,
+        )
         from tickwitness.infrastructure.queue_replay import NautilusQueueReplayAdapter
 
         try:

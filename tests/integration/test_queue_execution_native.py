@@ -9,9 +9,15 @@ from pathlib import Path
 import pytest
 
 from tickwitness.domain.data_evidence import normalize_events
+from tickwitness.domain.evidence.evaluation import EvaluationValidationError
+from tickwitness.domain.evidence.queue_evaluation import evaluate_queue_replay
 from tickwitness.domain.replay._validation import ReplayValidationError, canonical
 from tickwitness.domain.replay.contracts import ReplayInput, load_replay_result
-from tickwitness.domain.replay.queue_contracts import QueueReplayInput, load_queue_replay_result
+from tickwitness.domain.replay.queue_contracts import (
+    QueueReplayInput,
+    build_queue_replay_result,
+    load_queue_replay_result,
+)
 from tickwitness.domain.replay.specs import build_replay_spec
 from tickwitness.domain.research_contracts.executable import build_executable_protocol
 from tickwitness.domain.research_contracts.queue_family import build_queue_family_protocol
@@ -96,6 +102,14 @@ def test_paired_native_models_keep_source_and_capture_budgets(case, front_lots) 
             for doc in documents] == [front_lots, 0]
     for request, result in zip((front_input, back_input), (front, back), strict=True):
         doc = result.document
+        evaluation = evaluate_queue_replay(request, result).document
+        assert evaluation["status"] == "verified"
+        assert evaluation["filled_quantity_lots"] == sum(
+            row["fields"]["quantity_lots"] for row in doc["fill_trace"]
+        )
+        assert Decimal(evaluation["actual_commission"]) == sum(
+            (Decimal(row["fields"]["commission"]) for row in doc["fill_trace"]), Decimal(0)
+        )
         assert doc["kind"] == "queue_replay_result_v1"
         assert load_queue_replay_result(result.canonical_bytes) == result
         with pytest.raises(ReplayValidationError):
@@ -151,6 +165,35 @@ def test_installed_queue_worker_has_distinct_result_and_semantics() -> None:
     assert result.document["bindings"] == request.bindings
     assert result.document["engine"]["semantic_id"] == "nautilus_external_fifo_shadow_queue_execution_v1"
     assert result.document["execution_status"] == "completed"
+    assert evaluate_queue_replay(request, result).document["status"] == "verified"
+
+
+@native
+@pytest.mark.parametrize("mutation", ["incomplete", "rejected", "late_acceptance", "fee", "grant"])
+def test_actual_native_evidence_mutations_cannot_pass_independent_audit(mutation) -> None:
+    request = context()
+    document = NautilusQueueReplayAdapter().run(request).document
+    if mutation == "incomplete":
+        document["execution_status"] = "incomplete"
+        document["completeness"]["stop_reason"] = "input_exhausted_with_open_orders"
+        order = document["account_trace"][-1]["fields"]["orders"][0]
+        document["completeness"]["open_orders"] = [{"order_id": order["order_id"], "status": "ACCEPTED"}]
+    elif mutation == "rejected":
+        row = next(row for row in document["order_trace"] if row["kind"] == "OrderAccepted")
+        row["kind"] = row["fields"]["event_type"] = "OrderRejected"
+        row["fields"]["status"] = "REJECTED"
+        row["fields"]["actual_acceptance"] = None
+    elif mutation == "late_acceptance":
+        row = next(row for row in document["order_trace"] if row["kind"] == "OrderAccepted")
+        row["source_ref"] = document["input_trace"][1]["source_ref"]
+        row["native_time_ns"] = document["input_trace"][1]["native_time_ns"]
+    elif mutation == "fee":
+        document["fill_trace"][0]["fields"]["commission"] = "2"
+    else:
+        document["queue_trace"][3]["granted_lots"] += 1
+    result = build_queue_replay_result(document)
+    with pytest.raises(EvaluationValidationError):
+        evaluate_queue_replay(request, result)
 
 
 def test_capture_budget_cannot_be_granted_twice_or_consumed_on_a_nontrade() -> None:
@@ -163,7 +206,7 @@ def test_capture_budget_cannot_be_granted_twice_or_consumed_on_a_nontrade() -> N
         queue.begin(event)
         if event.capture_seq == 1:
             assert queue.take() == 0
-            queue.accepted()
+            queue.accepted(5)
         if event.capture_seq == 3:
             assert queue.take() == 0
             with pytest.raises(ValueError, match="source trade"):

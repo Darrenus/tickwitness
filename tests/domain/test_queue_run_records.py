@@ -122,7 +122,9 @@ def test_intent_rejects_cross_model_and_forged_frozen_context(mutation) -> None:
     elif mutation == "extra":
         document["claim_verdict"] = True
     elif mutation == "family_engine":
-        document["family"]["engine"]["semantic_id"] = "nautilus_v1_receive_order_single_limit_buy_v1"
+        document["family"]["engine"]["semantic_id"] = (
+            "nautilus_v1_receive_order_single_limit_buy_v1"
+        )
     elif mutation == "family_scope":
         document["family"]["scope"]["impact_compatibility_verified"] = True
     else:
@@ -174,7 +176,9 @@ def test_receipt_and_failure_roundtrip_bind_complete_original_attempt_and_intent
 )
 def test_receipt_rejects_reservation_retyping_and_inconsistent_family_budget(mutation) -> None:
     owner = family()
-    document = receipt_document(reservation(owner), build_queue_intent(owner, "cancel_front_first_v1"))
+    document = receipt_document(
+        reservation(owner), build_queue_intent(owner, "cancel_front_first_v1")
+    )
     if mutation == "reservation_kind":
         document["attempt"]["kind"] = "replay_attempt_reservation_v1"
     elif mutation == "wall":
@@ -193,8 +197,12 @@ def test_receipt_rejects_reservation_retyping_and_inconsistent_family_budget(mut
         build_queue_run_receipt(document)
 
 
-@pytest.mark.parametrize("code,message", [("", "failure"), ("x" * 129, "failure"), ("x", ""), ("x", "m" * 4097)])
+@pytest.mark.parametrize(
+    "code,message", [("", "failure"), ("x" * 129, "failure"), ("x", ""), ("x", "m" * 4097)]
+)
 def test_failure_enforces_error_bounds(code, message) -> None:
     owner = family()
     with pytest.raises(EvidenceValidationError):
-        build_queue_failure(reservation(owner), build_queue_intent(owner, "cancel_front_first_v1"), code, message)
+        build_queue_failure(
+            reservation(owner), build_queue_intent(owner, "cancel_front_first_v1"), code, message
+        )

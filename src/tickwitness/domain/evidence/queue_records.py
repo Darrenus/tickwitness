@@ -90,7 +90,9 @@ class QueueRunIntent:
 
     def __post_init__(self) -> None:
         _validate_intent(self.canonical_bytes)
-        _require(identity(self.intent_id) == digest(self.canonical_bytes), "Queue intent ID mismatch")
+        _require(
+            identity(self.intent_id) == digest(self.canonical_bytes), "Queue intent ID mismatch"
+        )
 
     @property
     def document(self) -> dict[str, object]:
@@ -109,8 +111,7 @@ def build_queue_intent(family: QueueFamilyProtocol, policy_id: str) -> QueueRunI
     _require(type(family) is QueueFamilyProtocol, "Intent requires a QueueFamilyProtocol")
     rebuilt = _family(family.document)
     _require(
-        rebuilt.family_id == family.family_id
-        and rebuilt.canonical_bytes == family.canonical_bytes,
+        rebuilt.family_id == family.family_id and rebuilt.canonical_bytes == family.canonical_bytes,
         "Queue family identity does not reproduce",
     )
     raw = canonical(
@@ -135,8 +136,13 @@ def _attempt_and_intent(
     attempt = _exact(
         document["attempt"],
         {
-            "kind", "schema_version", "protocol_id", "attempt_index", "nonce",
-            "max_wall_seconds", "created_at_utc",
+            "kind",
+            "schema_version",
+            "protocol_id",
+            "attempt_index",
+            "nonce",
+            "max_wall_seconds",
+            "created_at_utc",
         },
         "Queue attempt",
     )
@@ -162,8 +168,13 @@ def _validate_receipt(raw: bytes) -> dict[str, object]:
     document = _exact(
         parse(raw, limit=MAX_QUEUE_RECORD_BYTES),
         {
-            "kind", "schema_version", "attempt", "protocol_id", "intent",
-            "execution_status", "bindings",
+            "kind",
+            "schema_version",
+            "attempt",
+            "protocol_id",
+            "intent",
+            "execution_status",
+            "bindings",
         },
         "Queue run receipt",
     )
@@ -174,7 +185,9 @@ def _validate_receipt(raw: bytes) -> dict[str, object]:
         "Queue receipts require audited completed or incomplete execution",
     )
     bindings = _exact(
-        document["bindings"], {"replay_result_sha256", "evaluation_sha256"}, "Queue receipt bindings"
+        document["bindings"],
+        {"replay_result_sha256", "evaluation_sha256"},
+        "Queue receipt bindings",
     )
     for value in bindings.values():
         identity(value)

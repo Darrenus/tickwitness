@@ -118,11 +118,13 @@ class _ShadowQueue:
         }
         self.trace.append(self.current_row)
 
-    def accepted(self) -> None:
+    def accepted(self, native_depth: int) -> None:
         if self.active or self.current is None or self.current.capture_seq != 1:
             raise ValueError("Queue execution requires one actual acceptance at capture 1")
+        if native_depth != self.external:
+            raise ValueError("Actual acceptance depth differs from the declared target")
         self.active = True
-        self.ahead, self.behind = self.external, 0
+        self.ahead, self.behind = native_depth, 0
         self.offer = 0
         self.current_row["after"] = self.queue()
         self.current_row["accepted_here"] = True
@@ -321,6 +323,9 @@ def run_native(replay_input: QueueReplayInput) -> dict[str, object]:
         def get_orderbook_for_fill_simulation(self, instrument: Any, order: Any,
                                              best_bid: Any, best_ask: Any) -> Any:
             try:
+                if (instrument.id != evidence.iid or order.side != api.OrderSide.BUY
+                        or _units(order.price, settings.price_increment) != settings.limit_price_ticks):
+                    raise ValueError("Public fill hook addressed an unexpected native order")
                 allowed = queue.take()
                 book = api.OrderBook(instrument_id=instrument.id, book_type=api.BookType.L2_MBP)
                 if allowed:
@@ -375,7 +380,6 @@ def run_native(replay_input: QueueReplayInput) -> dict[str, object]:
 
         def on_order_accepted(self, event: Any) -> None:
             try:
-                queue.accepted()
                 book = self.cache.order_book(evidence.iid)
                 if book is None:
                     raise ValueError("Actual acceptance has no public native book")
@@ -385,8 +389,7 @@ def run_native(replay_input: QueueReplayInput) -> dict[str, object]:
                     for level in book.bids() for order in level.orders()
                     if _units(order.price, settings.price_increment) == settings.limit_price_ticks
                 )
-                if actual_depth != queue.external:
-                    raise ValueError("Actual acceptance depth differs from the declared target")
+                queue.accepted(actual_depth)
                 evidence.order_event(self, event, {
                     "native_bid_lots": actual_depth, "queue": queue.queue(),
                     "target_price_ticks": settings.limit_price_ticks,

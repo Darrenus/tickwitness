@@ -81,8 +81,13 @@ def scenario_intent(owner_id):
                 "bindings": {
                     name: "d" * 64
                     for name in (
-                        "development_dataset_id", "source_normalized_sha256", "replay_spec_id",
-                        "assumption_id", "scenario_id", "derived_view_id", "derived_normalized_sha256",
+                        "development_dataset_id",
+                        "source_normalized_sha256",
+                        "replay_spec_id",
+                        "assumption_id",
+                        "scenario_id",
+                        "derived_view_id",
+                        "derived_normalized_sha256",
                     )
                 },
                 "clock_profile_id": CLOCK_PROFILE_ID,
@@ -186,7 +191,10 @@ def test_success_receipt_retains_result_evaluation_and_full_intent_closure(tmp_p
             },
         }
     )
-    assert ledger.publish(attempt, receipt.canonical_bytes, artifacts=(result, evaluation)) == receipt.run_id
+    assert (
+        ledger.publish(attempt, receipt.canonical_bytes, artifacts=(result, evaluation))
+        == receipt.run_id
+    )
     assert ledger.get_outcome(attempt.attempt_id) == receipt.canonical_bytes
     assert ledger.read_artifact(intent.intent_id) == intent.canonical_bytes
     assert ledger.read_artifact(owner.family_id) == owner.canonical_bytes
@@ -264,7 +272,9 @@ def test_failed_intent_publication_never_refunds_family_slot(tmp_path, monkeypat
 
 @pytest.mark.parametrize("owner_kind", ["family", "source"])
 @pytest.mark.parametrize("mutation", ["identity", "budget_bool", "duck"])
-def test_forged_budget_owner_is_rejected_before_namespace_creation(tmp_path, owner_kind, mutation) -> None:
+def test_forged_budget_owner_is_rejected_before_namespace_creation(
+    tmp_path, owner_kind, mutation
+) -> None:
     owner = family()
     owner = owner if owner_kind == "family" else owner.source_protocol
     original_id = owner.protocol_id
@@ -278,7 +288,9 @@ def test_forged_budget_owner_is_rejected_before_namespace_creation(tmp_path, own
         object.__setattr__(owner, "protocol_id", digest(owner.canonical_bytes))
     else:
         owner = SimpleNamespace(
-            protocol_id=owner.protocol_id, canonical_bytes=owner.canonical_bytes, document=owner.document
+            protocol_id=owner.protocol_id,
+            canonical_bytes=owner.canonical_bytes,
+            document=owner.document,
         )
     with pytest.raises(AttemptLedgerError):
         ledger.reserve(owner)

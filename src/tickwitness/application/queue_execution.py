@@ -92,7 +92,11 @@ class QueueFamilyFreezeReceipt:
 
     @property
     def document(self) -> dict[str, object]:
-        return {"family_id": self.family_id, "created": self.created, "family": self.family.document}
+        return {
+            "family_id": self.family_id,
+            "created": self.created,
+            "family": self.family.document,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,13 +272,15 @@ def _reservation_budget(reservation: AttemptReservation, family: QueueFamilyProt
 
 
 def _failure_details(error: Exception) -> tuple[str, str, int]:
+    if type(error).__name__ == "AttemptBudgetExceededError":
+        return "attempt_budget_exhausted", str(error) or "Shared family budget is exhausted", 8
     raw_code, raw_exit = getattr(error, "code", "queue_run_failed"), getattr(error, "exit_code", 7)
     code = (
         raw_code
         if isinstance(raw_code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", raw_code)
         else "queue_run_failed"
     )
-    exit_code = raw_exit if type(raw_exit) is int and raw_exit in (2, 3, 4, 6, 7) else 7
+    exit_code = raw_exit if type(raw_exit) is int and raw_exit in (2, 3, 4, 6, 7, 8) else 7
     message = (
         (str(error) or type(error).__name__)
         .encode("utf-8", errors="backslashreplace")[:4096]
@@ -301,6 +307,7 @@ def run_queue_model(
     ledger = ledger_factory()
     reservation = ledger.reserve(family)
     budget = cast("dict[str, int]", family.document["budget"])
+    diagnostic_artifacts: tuple[bytes, ...] = ()
     try:
         _reservation_budget(reservation, family)
         intent_id = ledger.bind_intent(
@@ -309,7 +316,15 @@ def run_queue_model(
         if intent_id != intent.intent_id:
             raise EvidenceValidationError("Ledger returned a conflicting queue intent")
         result = replay_factory(budget["max_wall_seconds"]).run(replay_input)
+        diagnostic_artifacts = (result.canonical_bytes,)
+        # Preserve the raw callbacks before auditing so a rejected result remains reviewable.
+        if (
+            ledger.bind_intent(reservation, intent.canonical_bytes, artifacts=diagnostic_artifacts)
+            != intent.intent_id
+        ):
+            raise EvidenceValidationError("Ledger returned a conflicting queue diagnostic binding")
         evaluation = evaluate_queue_replay(replay_input, result)
+        diagnostic_artifacts += (evaluation.canonical_bytes,)
         receipt = build_queue_run_receipt(
             {
                 "kind": "queue_run_receipt_v1",
@@ -342,8 +357,18 @@ def run_queue_model(
         )
     except Exception as error:
         code, message, exit_code = _failure_details(error)
+        if diagnostic_artifacts:
+            message = (
+                message[:3900]
+                + " Diagnostic replay_result_sha256="
+                + digest(diagnostic_artifacts[0])
+            )
         try:
-            ledger.publish(reservation, build_queue_failure(reservation, intent, code, message))
+            ledger.publish(
+                reservation,
+                build_queue_failure(reservation, intent, code, message),
+                artifacts=diagnostic_artifacts,
+            )
         except Exception as publication_error:
             raise ProtocolRunError(
                 "attempt_outcome_unconfirmed",
@@ -371,8 +396,22 @@ def run_queue_family(
     failures: list[dict[str, object]] = []
     attempted: list[str] = []
     for policy in QUEUE_POLICY_IDS:
-        attempted.append(policy)
         try:
+            consumed = ledger_factory().list_reservations(family)
+            budget = cast("dict[str, int]", family.document["budget"])
+            if len(consumed) >= budget["max_attempts"]:
+                failures.append(
+                    {
+                        "policy_id": policy,
+                        "attempt_id": None,
+                        "budget_consumed": False,
+                        "code": "attempt_budget_exhausted",
+                        "message": "All shared family attempt slots are already consumed",
+                        "exit_code": 8,
+                    }
+                )
+                break
+            attempted.append(policy)
             submission = run_queue_model(
                 family_id,
                 policy,
@@ -384,13 +423,16 @@ def run_queue_family(
             )
             runs.append(submission.document)
         except Exception as error:
-            code, message, _ = _failure_details(error)
+            code, message, exit_code = _failure_details(error)
+            attempt_id = getattr(error, "attempt_id", None)
             failures.append(
                 {
                     "policy_id": policy,
-                    "attempt_id": getattr(error, "attempt_id", None),
+                    "attempt_id": attempt_id,
+                    "budget_consumed": attempt_id is not None,
                     "code": code,
                     "message": message,
+                    "exit_code": exit_code,
                 }
             )
             break
@@ -402,6 +444,7 @@ def run_queue_family(
         "status": "completed" if completed else "partial" if runs else "failed",
         "runs": runs,
         "failures": failures,
+        "failed_policy_ids": [failure["policy_id"] for failure in failures],
         "pending_policy_ids": [policy for policy in QUEUE_POLICY_IDS if policy not in attempted],
         "scope": family.document["scope"],
     }
@@ -476,6 +519,8 @@ def inspect_queue_run(
     return {
         "run_id": evidence.receipt.run_id,
         "receipt": evidence.receipt.document,
+        "family": evidence.replay_input.family.document,
+        "result": evidence.result.document,
         "evaluation": evidence.evaluation.document,
         "verification": {
             "kind": "queue_ledger_verification_v1",
