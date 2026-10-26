@@ -39,11 +39,13 @@ def pair_inputs(*, variant="standard", threshold="0"):
         events[4]["bids"][0][1] = events[5]["bids"][0][1] = 4
     elif variant == "no_trades":
         events[3] = {
-            key: value for key, value in events[3].items()
+            key: value
+            for key, value in events[3].items()
             if key not in ("trade_id", "price_ticks", "quantity_lots", "aggressor_side")
         }
-        events[3].update(type="delta", first_sequence=13, last_sequence=13,
-                         bids=[], asks=[[103, 10]])
+        events[3].update(
+            type="delta", first_sequence=13, last_sequence=13, bids=[], asks=[[103, 10]]
+        )
         for sequence, event in enumerate(events[-2:], start=14):
             event.update(first_sequence=sequence, last_sequence=sequence)
         for event in events[-2:]:
