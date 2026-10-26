@@ -273,8 +273,11 @@ class _QueueAudit:
                 granted += offered
                 _equal(hook["cumulative_granted_lots"], granted, "Hook cumulative grant mismatch")
             filled = self.fills_by_line.get(event.line, 0)
-            _equal([filled, granted], [capacity, capacity],
-                   "Native fill/grant omitted or exceeded the deterministic queue allocation")
+            _equal(
+                [filled, granted],
+                [capacity, capacity],
+                "Native fill/grant omitted or exceeded the deterministic queue allocation",
+            )
             _equal(row["granted_lots"], granted, "Queue grants disagree with actual hooks")
             _equal(row["native_filled_lots"], filled, "Queue fills disagree with actual callbacks")
             remaining -= filled

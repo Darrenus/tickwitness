@@ -44,21 +44,41 @@ def saved_case(root: Path):
         registry_factory=lambda: registry,
         datasets_factory=lambda: data,
     )
-    (root / "family.json").write_bytes(canonical({
-        "kind": "queue_family_request_v1", "schema_version": 1,
-        "cancel_at_capture_seq": 6,
-        "budget": {"max_attempts": 2, "max_wall_seconds": 30, "max_events": 1000},
-    }))
+    (root / "family.json").write_bytes(
+        canonical(
+            {
+                "kind": "queue_family_request_v1",
+                "schema_version": 1,
+                "cancel_at_capture_seq": 6,
+                "budget": {"max_attempts": 2, "max_wall_seconds": 30, "max_events": 1000},
+            }
+        )
+    )
     (root / "queue.json").write_bytes((EXAMPLES / "queue-constraint-request.json").read_bytes())
     return SimpleNamespace(root=root, data=data, registry=registry, frozen=frozen)
 
 
-def command(root: Path, name: str, identity: str = "0" * 64,
-            *, family_request="family.json", queue_request="queue.json", input_root=None):
+def command(
+    root: Path,
+    name: str,
+    identity: str = "0" * 64,
+    *,
+    family_request="family.json",
+    queue_request="queue.json",
+    input_root=None,
+):
     args = [name, identity]
     if name == "freeze-queue-family":
-        args.extend([family_request, queue_request, "--input-root", str(input_root or root),
-                     "--registry", str(root / "registry")])
+        args.extend(
+            [
+                family_request,
+                queue_request,
+                "--input-root",
+                str(input_root or root),
+                "--registry",
+                str(root / "registry"),
+            ]
+        )
     else:
         if name == "run-queue-model":
             args.append(POLICIES[0])
@@ -74,8 +94,10 @@ def freeze(case, capsys):
 
 
 def snapshot(root: Path):
-    return {str(path.relative_to(root)): path.read_bytes() if path.is_file() else None
-            for path in root.rglob("*")}
+    return {
+        str(path.relative_to(root)): path.read_bytes() if path.is_file() else None
+        for path in root.rglob("*")
+    }
 
 
 def forbidden(*_args, **_kwargs):
@@ -83,7 +105,9 @@ def forbidden(*_args, **_kwargs):
 
 
 def test_freeze_pair_and_readonly_inspection_reaudit_committed_evidence(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
     queue_result_factory,
 ) -> None:
     case = saved_case(tmp_path)
@@ -126,14 +150,21 @@ def test_freeze_pair_and_readonly_inspection_reaudit_committed_evidence(
 
         monkeypatch.setattr(cls, "__init__", initialize)
 
-    for cls, label in ((LocalDatasetStore, "data"), (LocalQueueFamilyRegistry, "families"),
-                       (LocalAttemptLedger, "runs")):
+    for cls, label in (
+        (LocalDatasetStore, "data"),
+        (LocalQueueFamilyRegistry, "families"),
+        (LocalAttemptLedger, "runs"),
+    ):
         readonly(cls, label)
     monkeypatch.setattr(QueueSubprocessReplayAdapter, "__init__", forbidden)
     monkeypatch.setattr(LocalExecutableProtocolRegistry, "__init__", forbidden)
-    for cls, method in ((LocalDatasetStore, "publish"), (LocalQueueFamilyRegistry, "seal"),
-                        (LocalAttemptLedger, "reserve"), (LocalAttemptLedger, "bind_intent"),
-                        (LocalAttemptLedger, "publish")):
+    for cls, method in (
+        (LocalDatasetStore, "publish"),
+        (LocalQueueFamilyRegistry, "seal"),
+        (LocalAttemptLedger, "reserve"),
+        (LocalAttemptLedger, "bind_intent"),
+        (LocalAttemptLedger, "publish"),
+    ):
         monkeypatch.setattr(cls, method, forbidden)
     assert main(command(tmp_path, "inspect-queue-family", frozen["family_id"])) == 0
     output = capsys.readouterr()
@@ -162,7 +193,9 @@ def test_freeze_pair_and_readonly_inspection_reaudit_committed_evidence(
 
 
 def test_pair_and_single_model_share_budget_and_exhaustion_returns_exit_eight(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
     queue_result_factory,
 ) -> None:
     case = saved_case(tmp_path)
@@ -194,7 +227,9 @@ def test_pair_and_single_model_share_budget_and_exhaustion_returns_exit_eight(
 
 
 def test_partial_pair_preserves_success_and_failure_and_returns_worker_exit(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
     queue_result_factory,
 ) -> None:
     case = saved_case(tmp_path)
@@ -224,7 +259,9 @@ def test_partial_pair_preserves_success_and_failure_and_returns_worker_exit(
     inspected = json.loads(capsys.readouterr().out)
     assert inspected["budget"]["consumed_attempts"] == 2
     assert inspected["budget"]["remaining_attempts"] == 0
-    finalized_failure = next(row for row in inspected["attempts"] if row["attempt_id"] == failure["attempt_id"])
+    finalized_failure = next(
+        row for row in inspected["attempts"] if row["attempt_id"] == failure["attempt_id"]
+    )
     assert finalized_failure["state"] == "finalized"
     assert finalized_failure["outcome_kind"] == "queue_attempt_failure_v1"
     assert finalized_failure["error"]["code"] == "engine_unavailable"
@@ -232,16 +269,30 @@ def test_partial_pair_preserves_success_and_failure_and_returns_worker_exit(
 
 @pytest.mark.parametrize("name", COMMANDS)
 def test_confirmation_denial_precedes_request_reads_and_all_factories(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, name,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    name,
 ) -> None:
     import tickwitness.cli_queue_execution as queue_cli
 
     monkeypatch.setattr(queue_cli, "read_regular_file", forbidden)
-    for cls in (LocalDatasetStore, LocalExecutableProtocolRegistry, LocalQueueFamilyRegistry,
-                LocalAttemptLedger, QueueSubprocessReplayAdapter):
+    for cls in (
+        LocalDatasetStore,
+        LocalExecutableProtocolRegistry,
+        LocalQueueFamilyRegistry,
+        LocalAttemptLedger,
+        QueueSubprocessReplayAdapter,
+    ):
         monkeypatch.setattr(cls, "__init__", forbidden)
-    args = command(tmp_path, name, "../invalid", family_request="missing.json",
-                   queue_request="absent.json", input_root=tmp_path / "missing")
+    args = command(
+        tmp_path,
+        name,
+        "../invalid",
+        family_request="missing.json",
+        queue_request="absent.json",
+        input_root=tmp_path / "missing",
+    )
     assert main([*args, "--split", "confirmation"]) == 5
     output = capsys.readouterr()
     assert output.out == ""
@@ -252,29 +303,44 @@ def test_confirmation_denial_precedes_request_reads_and_all_factories(
 @pytest.mark.parametrize("name", COMMANDS)
 @pytest.mark.parametrize("bad_id", ["../escape", "A" * 64, "0" * 63])
 def test_bad_identity_precedes_repository_or_engine_initialization(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch,
-    name, bad_id,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    name,
+    bad_id,
 ) -> None:
     (tmp_path / "family.json").write_text("{}", encoding="utf-8")
     (tmp_path / "queue.json").write_text("{}", encoding="utf-8")
-    for cls in (LocalDatasetStore, LocalExecutableProtocolRegistry, LocalQueueFamilyRegistry,
-                LocalAttemptLedger, QueueSubprocessReplayAdapter):
+    for cls in (
+        LocalDatasetStore,
+        LocalExecutableProtocolRegistry,
+        LocalQueueFamilyRegistry,
+        LocalAttemptLedger,
+        QueueSubprocessReplayAdapter,
+    ):
         monkeypatch.setattr(cls, "__init__", forbidden)
     before = snapshot(tmp_path)
     assert main(command(tmp_path, name, bad_id)) == 2
     output = capsys.readouterr()
     assert output.out == ""
     assert json.loads(output.err)["error"]["code"] in {
-        "invalid_research_evidence", "invalid_protocol", "invalid_replay",
+        "invalid_research_evidence",
+        "invalid_protocol",
+        "invalid_replay",
     }
     assert snapshot(tmp_path) == before
 
 
 @pytest.mark.parametrize("request_field", ["family_request", "queue_request"])
-@pytest.mark.parametrize("unsafe", ["traversal", "absolute", "leaf_symlink", "directory_symlink", "suffix"])
+@pytest.mark.parametrize(
+    "unsafe", ["traversal", "absolute", "leaf_symlink", "directory_symlink", "suffix"]
+)
 def test_freeze_request_paths_are_confined_before_repository_open(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch,
-    request_field, unsafe,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    request_field,
+    unsafe,
 ) -> None:
     input_root = tmp_path / "inputs"
     input_root.mkdir()
@@ -295,11 +361,17 @@ def test_freeze_request_paths_are_confined_before_repository_open(
     else:
         (input_root / "request.txt").write_text("{}", encoding="utf-8")
         name = "request.txt"
-    for cls in (LocalDatasetStore, LocalExecutableProtocolRegistry, LocalQueueFamilyRegistry,
-                LocalAttemptLedger, QueueSubprocessReplayAdapter):
+    for cls in (
+        LocalDatasetStore,
+        LocalExecutableProtocolRegistry,
+        LocalQueueFamilyRegistry,
+        LocalAttemptLedger,
+        QueueSubprocessReplayAdapter,
+    ):
         monkeypatch.setattr(cls, "__init__", forbidden)
-    args = command(tmp_path, "freeze-queue-family", "a" * 64, input_root=input_root,
-                   **{request_field: name})
+    args = command(
+        tmp_path, "freeze-queue-family", "a" * 64, input_root=input_root, **{request_field: name}
+    )
     assert main(args) == 2
     output = capsys.readouterr()
     assert output.out == ""

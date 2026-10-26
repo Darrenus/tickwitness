@@ -78,8 +78,13 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
     # The split guard precedes paths, factories and even malformed identities.
     if arguments.split != "development":
         raise ConfirmationAccessDenied("Queue families permit development evidence only")
-    identity(getattr(arguments, "protocol_id", getattr(arguments, "family_id",
-                                                     getattr(arguments, "run_id", None))))
+    identity(
+        getattr(
+            arguments,
+            "protocol_id",
+            getattr(arguments, "family_id", getattr(arguments, "run_id", None)),
+        )
+    )
 
     def families() -> LocalQueueFamilyRegistry:
         return LocalQueueFamilyRegistry(arguments.families, create=False)
@@ -92,7 +97,9 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
 
     def replay(timeout: int) -> QueueSubprocessReplayAdapter:
         return QueueSubprocessReplayAdapter(
-            timeout_seconds=timeout, python_executable=arguments.engine_python)
+            timeout_seconds=timeout, python_executable=arguments.engine_python
+        )
+
     if arguments.command == "freeze-queue-family":
         requests = [
             read_regular_file(
@@ -116,17 +123,35 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
         ).document
     if arguments.command == "inspect-queue-run":
         return inspect_queue_run(
-            arguments.run_id, split=arguments.split, families_factory=families,
-            datasets_factory=datasets, ledger_factory=ledger,
+            arguments.run_id,
+            split=arguments.split,
+            families_factory=families,
+            datasets_factory=datasets,
+            ledger_factory=ledger,
         )
     if arguments.command == "inspect-queue-family":
         return inspect_queue_family(
-            arguments.family_id, split=arguments.split, families_factory=families,
-            datasets_factory=datasets, ledger_factory=ledger,
+            arguments.family_id,
+            split=arguments.split,
+            families_factory=families,
+            datasets_factory=datasets,
+            ledger_factory=ledger,
         )
     if arguments.command == "run-queue-model":
-        return run_queue_model(arguments.family_id, arguments.policy_id, split=arguments.split,
-                               families_factory=families, datasets_factory=datasets,
-                               ledger_factory=ledger, replay_factory=replay).document
-    return run_queue_family(arguments.family_id, split=arguments.split, families_factory=families,
-                            datasets_factory=datasets, ledger_factory=ledger, replay_factory=replay)
+        return run_queue_model(
+            arguments.family_id,
+            arguments.policy_id,
+            split=arguments.split,
+            families_factory=families,
+            datasets_factory=datasets,
+            ledger_factory=ledger,
+            replay_factory=replay,
+        ).document
+    return run_queue_family(
+        arguments.family_id,
+        split=arguments.split,
+        families_factory=families,
+        datasets_factory=datasets,
+        ledger_factory=ledger,
+        replay_factory=replay,
+    )

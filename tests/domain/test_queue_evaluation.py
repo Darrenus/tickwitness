@@ -52,8 +52,12 @@ def queue_input(policy="cancel_front_first_v1", *, spec_changes=None, gross_chur
     return QueueReplayInput(family, data, policy)
 
 
-@pytest.mark.parametrize("policy,filled", [("cancel_front_first_v1", 1), ("cancel_back_first_v1", 0)])
-def test_same_observations_have_two_audited_queue_outcomes(queue_result_factory, policy, filled) -> None:
+@pytest.mark.parametrize(
+    "policy,filled", [("cancel_front_first_v1", 1), ("cancel_back_first_v1", 0)]
+)
+def test_same_observations_have_two_audited_queue_outcomes(
+    queue_result_factory, policy, filled
+) -> None:
     replay_input = queue_input(policy)
     result = queue_result_factory(replay_input)
     evaluation = evaluate_queue_replay(replay_input, result)
@@ -95,10 +99,13 @@ def test_physical_increments_and_native_usd_fee_half_cent_rounding(queue_result_
     assert evaluation["final_cash_total"] == "9999.99"
 
 
-@pytest.mark.parametrize("policy,filled,status", [
-    ("cancel_front_first_v1", 2, "FILLED"),
-    ("cancel_back_first_v1", 0, "CANCELED"),
-])
+@pytest.mark.parametrize(
+    "policy,filled,status",
+    [
+        ("cancel_front_first_v1", 2, "FILLED"),
+        ("cancel_back_first_v1", 0, "CANCELED"),
+    ],
+)
 def test_declared_gross_churn_changes_frontier_while_public_depth_stays_the_same(
     queue_result_factory, policy, filled, status
 ) -> None:
@@ -135,7 +142,7 @@ def omitted_front_fill(queue_result_factory, *, retain_grant):
         row["own_remaining_lots"] = 2
     assert document["queue_trace"][3]["grant_limit_lots"] == 1
     assert document["fill_trace"] == []
-    assert document["account_trace"][-1]["fields"]["cash_total"] == "10000.00"
+    assert document["account_trace"][-1]["fields"]["cash_total"] == "10000"
     assert document["order_trace"][-1]["kind"] == "OrderCanceled"
     return replay_input, build_queue_replay_result(document)
 
@@ -161,18 +168,62 @@ def test_actual_positive_grant_requires_matching_fill_callbacks_and_settlement(
         evaluate_queue_replay(replay_input, result)
 
 
-@pytest.mark.parametrize("attack", [
-    "source_clock", "receive_clock", "source_sequence", "source_trade", "source_prices",
-    "callback_clock", "callback_source", "future_trade", "changed_binding", "dependency_version",
-    "queue_before", "queue_after", "gross_flow", "queue_observed", "queue_clock", "capacity",
-    "grant", "queue_fill", "queue_remaining", "acceptance_capture", "hook_origin", "duplicate_grant",
-    "missing_hook", "hook_future", "fill_units", "fill_price", "fill_fee", "fill_currency",
-    "fill_liquidity", "fill_order", "duplicate_fill", "missing_lifecycle_fill", "acceptance_depth",
-    "acceptance_queue", "acknowledgement", "lifecycle_quantity", "cancel_before_frozen_capture",
-    "cash_total", "cash_conservation", "cash_semantics", "position", "observed_fees", "account_order",
-    "account_book", "boundary_clock", "boundary_context", "missing_account", "lifecycle_terminal",
-])
-def test_source_grants_settlement_and_lifecycle_tampering_is_rejected(queue_result_factory, attack) -> None:
+@pytest.mark.parametrize(
+    "attack",
+    [
+        "source_clock",
+        "receive_clock",
+        "source_sequence",
+        "source_trade",
+        "source_prices",
+        "callback_clock",
+        "callback_source",
+        "future_trade",
+        "changed_binding",
+        "dependency_version",
+        "queue_before",
+        "queue_after",
+        "gross_flow",
+        "queue_observed",
+        "queue_clock",
+        "capacity",
+        "grant",
+        "queue_fill",
+        "queue_remaining",
+        "acceptance_capture",
+        "hook_origin",
+        "duplicate_grant",
+        "missing_hook",
+        "hook_future",
+        "fill_units",
+        "fill_price",
+        "fill_fee",
+        "fill_currency",
+        "fill_liquidity",
+        "fill_order",
+        "duplicate_fill",
+        "missing_lifecycle_fill",
+        "acceptance_depth",
+        "acceptance_queue",
+        "acknowledgement",
+        "lifecycle_quantity",
+        "cancel_before_frozen_capture",
+        "cash_total",
+        "cash_conservation",
+        "cash_semantics",
+        "position",
+        "observed_fees",
+        "account_order",
+        "account_book",
+        "boundary_clock",
+        "boundary_context",
+        "missing_account",
+        "lifecycle_terminal",
+    ],
+)
+def test_source_grants_settlement_and_lifecycle_tampering_is_rejected(
+    queue_result_factory, attack
+) -> None:
     replay_input = queue_input()
     document = queue_result_factory(replay_input).document
     inputs, queue = document["input_trace"], document["queue_trace"]
@@ -305,11 +356,15 @@ def test_true_eof_with_open_or_unacknowledged_cancel_cannot_be_a_verified_execut
         document["completeness"].update(
             stop_reason="pending_commands_at_data_end",
             open_orders=[{"order_id": decision["fields"]["order_id"], "status": "PENDING_CANCEL"}],
-            pending_commands=[{
-                "command_id": "command-1", "order_id": decision["fields"]["order_id"],
-                "command_type": "cancel", "decision_ref": "decision-1",
-                "source_ref": decision["source_ref"],
-            }],
+            pending_commands=[
+                {
+                    "command_id": "command-1",
+                    "order_id": decision["fields"]["order_id"],
+                    "command_type": "cancel",
+                    "decision_ref": "decision-1",
+                    "source_ref": decision["source_ref"],
+                }
+            ],
         )
     else:
         document["order_trace"].pop()
@@ -324,7 +379,9 @@ def test_true_eof_with_open_or_unacknowledged_cancel_cannot_be_a_verified_execut
 
 
 @pytest.mark.parametrize("mutation", ["scope", "version", "money", "extra", "modes"])
-def test_evaluation_loader_remains_strict_and_cannot_gain_a_claim_verdict(queue_result_factory, mutation) -> None:
+def test_evaluation_loader_remains_strict_and_cannot_gain_a_claim_verdict(
+    queue_result_factory, mutation
+) -> None:
     replay_input = queue_input()
     document = evaluate_queue_replay(replay_input, queue_result_factory(replay_input)).document
     if mutation == "scope":

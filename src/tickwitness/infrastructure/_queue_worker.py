@@ -5,8 +5,8 @@ import sys
 
 from tickwitness.domain.replay._validation import ReplayValidationError, exact, integer, parse
 from tickwitness.domain.replay.queue_contracts import QueueReplayInput
-from tickwitness.domain.research_contracts.queue_family import load_queue_family_protocol
 from tickwitness.domain.research_contracts.protocols import ProtocolValidationError
+from tickwitness.domain.research_contracts.queue_family import load_queue_family_protocol
 from tickwitness.infrastructure.subprocess_replay import MAX_REQUEST_BYTES, MAX_RESULT_BYTES
 
 
