@@ -199,6 +199,7 @@ def inspect_queue_family(
     ledger_factory: Callable[[], QueueLedger],
 ) -> dict[str, object]:
     _development(split)
+    identity(family_id)
     family = _load_family(family_id, families_factory())
     actual = _actual_input(family, datasets_factory())
     validation = validate_queue_family_input(family, actual)
@@ -211,9 +212,7 @@ def inspect_queue_family(
         if intent is not None and intent.family.canonical_bytes != family.canonical_bytes:
             raise EvidenceValidationError("Attempt intent differs from the inspected family")
         outcome_raw = ledger.get_outcome(reservation.attempt_id)
-        outcome = (
-            None if outcome_raw is None else parse(outcome_raw, limit=MAX_QUEUE_RECORD_BYTES)
-        )
+        outcome = None if outcome_raw is None else parse(outcome_raw, limit=MAX_QUEUE_RECORD_BYTES)
         attempts.append(
             {
                 "attempt_id": reservation.attempt_id,
@@ -300,6 +299,7 @@ def run_queue_model(
     replay_factory: Callable[[int], QueueReplayPort],
 ) -> QueueModelSubmission:
     _development(split)
+    identity(family_id)
     family = _load_family(family_id, families_factory())
     intent = build_queue_intent(family, policy_id)
     actual = _actual_input(family, datasets_factory())
@@ -390,6 +390,7 @@ def run_queue_family(
 ) -> dict[str, object]:
     """Run each frozen policy once; stop after failure and preserve partial submissions."""
     _development(split)
+    identity(family_id)
     family = _load_family(family_id, families_factory())
     _actual_input(family, datasets_factory())
     runs: list[dict[str, object]] = []
@@ -436,8 +437,10 @@ def run_queue_family(
                 }
             )
             break
-    completed = not failures and len(runs) == 2 and all(
-        run["execution_status"] == "completed" for run in runs
+    completed = (
+        not failures
+        and len(runs) == 2
+        and all(run["execution_status"] == "completed" for run in runs)
     )
     return {
         "family_id": family_id,
@@ -510,6 +513,7 @@ def inspect_queue_run(
     ledger_factory: Callable[[], QueueLedger],
 ) -> dict[str, object]:
     _development(split)
+    identity(run_id)
     evidence = queue_run_evidence(
         run_id,
         ledger=ledger_factory(),

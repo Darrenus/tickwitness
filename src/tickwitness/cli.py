@@ -56,14 +56,14 @@ from tickwitness.infrastructure.local_dataset_store import (
     DatasetStoreError,
     LocalDatasetStore,
 )
-from tickwitness.infrastructure.queue_family_registry import (
-    QueueFamilyNotFoundError,
-    QueueFamilyRegistryError,
-)
 from tickwitness.infrastructure.local_protocol_registry import (
     LocalProtocolRegistry,
     ProtocolNotFoundError,
     ProtocolRegistryError,
+)
+from tickwitness.infrastructure.queue_family_registry import (
+    QueueFamilyNotFoundError,
+    QueueFamilyRegistryError,
 )
 from tickwitness.infrastructure.safe_input import InputReadError, read_jsonl, read_regular_file
 from tickwitness.infrastructure.subprocess_replay import ReplayProcessError, SubprocessReplayAdapter
@@ -299,13 +299,23 @@ def main(argv: list[str] | None = None) -> int:
         return _write_error("invalid_research_evidence", error, 2)
     except AttemptBudgetExceededError as error:
         return _write_error("attempt_budget_exhausted", error, 8)
-    except (AttemptNotFoundError, ExecutableProtocolNotFoundError, BundleNotFoundError, QueueFamilyNotFoundError) as error:
+    except (
+        AttemptNotFoundError,
+        ExecutableProtocolNotFoundError,
+        BundleNotFoundError,
+        QueueFamilyNotFoundError,
+    ) as error:
         return _write_error("research_evidence_not_found", error, 4)
     except BundleDestinationExistsError as error:
         return _write_error("bundle_destination_exists", error, 3)
     except BundleDurabilityError as error:
         return _write_error("bundle_durability_unconfirmed", error, 3)
-    except (AttemptLedgerError, ExecutableRegistryError, BundleError, QueueFamilyRegistryError) as error:
+    except (
+        AttemptLedgerError,
+        ExecutableRegistryError,
+        BundleError,
+        QueueFamilyRegistryError,
+    ) as error:
         return _write_error("research_store_integrity_or_io_failure", error, 3)
     except DatasetNotFoundError as error:
         return _write_error("dataset_not_found", error, 4)

@@ -282,7 +282,8 @@ def synthetic_queue_result(replay_input, *, commission_override=None):
                 "receive_time_ns": event.receive_time_ns,
                 "native_id_policy": "capture_seq_batch_sequence_or_CAPTURE_trade_id",
                 "native_internal_id": (
-                    f"CAPTURE-{event.capture_seq}" if event.event_type == "trade"
+                    f"CAPTURE-{event.capture_seq}"
+                    if event.event_type == "trade"
                     else str(event.capture_seq)
                 ),
                 "native_ts_event_ns": event.receive_time_ns,
@@ -299,8 +300,11 @@ def synthetic_queue_result(replay_input, *, commission_override=None):
         before = state
         transition = transitions.get(event.line)
         flow = {
-            "additions_lots": 0, "cancellations_lots": 0, "trade_lots": 0,
-            "cancel_ahead_lots": 0, "cancel_behind_lots": 0,
+            "additions_lots": 0,
+            "cancellations_lots": 0,
+            "trade_lots": 0,
+            "cancel_ahead_lots": 0,
+            "cancel_behind_lots": 0,
         }
         if transition is not None:
             flow, state = transition["flow"], transition["after"]
@@ -340,7 +344,11 @@ def synthetic_queue_result(replay_input, *, commission_override=None):
             lifecycle("OrderInitialized", "INITIALIZED", event, 0, ["command-0"])
             lifecycle("OrderSubmitted", "SUBMITTED", event, 0, ["command-0"])
             lifecycle(
-                "OrderAccepted", "ACCEPTED", event, 0, [],
+                "OrderAccepted",
+                "ACCEPTED",
+                event,
+                0,
+                [],
                 {"native_bid_lots": observed, "queue": state, "target_price_ticks": limit},
             )
         if capacity:
@@ -354,7 +362,9 @@ def synthetic_queue_result(replay_input, *, commission_override=None):
             status = "FILLED" if not remaining else "PARTIALLY_FILLED"
             lifecycle("OrderFilled", status, event, filled, [])
             record(
-                "fill_trace", "OrderFilled", event,
+                "fill_trace",
+                "OrderFilled",
+                event,
                 {
                     "order_id": order_id,
                     "native_trade_id": f"fixture-native-trade-{event.capture_seq}",
@@ -368,13 +378,20 @@ def synthetic_queue_result(replay_input, *, commission_override=None):
                 },
             )
             account("fill_callback_account_snapshot", event, filled, fees, status)
-        if event.capture_seq == replay_input.family.document["strategy"]["cancel_at_capture_seq"] and remaining:
+        if (
+            event.capture_seq == replay_input.family.document["strategy"]["cancel_at_capture_seq"]
+            and remaining
+        ):
             decision("cancel", event)
             lifecycle("OrderPendingCancel", "PENDING_CANCEL", event, filled, ["command-1"])
             lifecycle("OrderCanceled", "CANCELED", event, filled, [])
     account(
-        "final_account_snapshot", events[-1], filled, fees,
-        "CANCELED" if remaining else "FILLED", boundary=True,
+        "final_account_snapshot",
+        events[-1],
+        filled,
+        fees,
+        "CANCELED" if remaining else "FILLED",
+        boundary=True,
     )
     return build_queue_replay_result(document)
 

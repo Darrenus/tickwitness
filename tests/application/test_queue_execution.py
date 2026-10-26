@@ -253,9 +253,7 @@ def test_batch_stops_on_failure_and_preserves_explicit_partial_evidence(
             raise RuntimeError("injected queue worker failure")
         return case.replay_factory(timeout)
 
-    result = run_queue_family(
-        case.family.family_id, **arguments(case, replay_factory=sometimes)
-    )
+    result = run_queue_family(case.family.family_id, **arguments(case, replay_factory=sometimes))
     assert result["status"] == ("failed" if fail_at == 1 else "partial")
     assert len(result["runs"]) == fail_at - 1
     assert result["failures"][0]["budget_consumed"] is True
@@ -271,8 +269,13 @@ def test_confirmation_guard_precedes_every_factory_and_input_parse(split) -> Non
 
     with pytest.raises(ConfirmationAccessDenied):
         freeze_queue_family(
-            "../bad", b"not json", b"not json", split=split,
-            registry_factory=forbidden, datasets_factory=forbidden, families_factory=forbidden,
+            "../bad",
+            b"not json",
+            b"not json",
+            split=split,
+            registry_factory=forbidden,
+            datasets_factory=forbidden,
+            families_factory=forbidden,
         )
     common = {
         "split": split,
@@ -298,7 +301,8 @@ def test_invalid_policy_never_reads_dataset_or_reserves_slot(queue_case) -> None
 
     with pytest.raises(ValueError):
         run_queue_model(
-            case.family.family_id, "best_fit_from_future",
+            case.family.family_id,
+            "best_fit_from_future",
             **arguments(case, datasets_factory=forbidden, ledger_factory=forbidden),
         )
     assert not (case.root / "runs").exists()
@@ -312,8 +316,12 @@ def test_invalid_family_request_never_opens_the_publication_registry(queue_case)
 
     with pytest.raises(QueueFamilyValidationError):
         freeze_queue_family(
-            case.source.protocol_id, b"{}", case.queue_request, split="development",
-            registry_factory=lambda: case.registry, datasets_factory=lambda: case.datasets,
+            case.source.protocol_id,
+            b"{}",
+            case.queue_request,
+            split="development",
+            registry_factory=lambda: case.registry,
+            datasets_factory=lambda: case.datasets,
             families_factory=forbidden,
         )
 
@@ -403,7 +411,8 @@ def test_outcome_disk_failure_preserves_raw_result_and_unfinalized_consumed_atte
 
     with pytest.raises(ProtocolRunError) as caught:
         run_queue_model(
-            case.family.family_id, FRONT,
+            case.family.family_id,
+            FRONT,
             **arguments(case, ledger_factory=OutcomeWriteFailure, replay_factory=callbacks),
         )
     assert caught.value.code == "attempt_outcome_unconfirmed"
@@ -437,7 +446,8 @@ def test_conflicting_reservation_budget_never_binds_intent_or_constructs_worker(
 
     with pytest.raises(ProtocolRunError):
         run_queue_model(
-            case.family.family_id, FRONT,
+            case.family.family_id,
+            FRONT,
             **arguments(case, ledger_factory=ConflictingReservation, replay_factory=forbidden),
         )
     assert boundary_calls == []

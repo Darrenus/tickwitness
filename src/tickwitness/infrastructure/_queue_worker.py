@@ -6,6 +6,7 @@ import sys
 from tickwitness.domain.replay._validation import ReplayValidationError, exact, integer, parse
 from tickwitness.domain.replay.queue_contracts import QueueReplayInput
 from tickwitness.domain.research_contracts.queue_family import load_queue_family_protocol
+from tickwitness.domain.research_contracts.protocols import ProtocolValidationError
 from tickwitness.infrastructure.subprocess_replay import MAX_REQUEST_BYTES, MAX_RESULT_BYTES
 
 
@@ -55,7 +56,7 @@ def main() -> int:
             return _error("engine_failure", str(error), 7)
         sys.stdout.buffer.write(result.canonical_bytes)
         return 0
-    except ReplayValidationError as error:
+    except (ReplayValidationError, ProtocolValidationError) as error:
         return _error("invalid_replay", str(error), 2)
     except Exception as error:
         return _error("engine_failure", f"Queue worker failed: {type(error).__name__}", 7)

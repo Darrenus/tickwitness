@@ -114,6 +114,53 @@ def test_declared_gross_churn_changes_frontier_while_public_depth_stays_the_same
     assert len(result.document["decision_trace"]) == (1 if filled == 2 else 2)
 
 
+def omitted_front_fill(queue_result_factory, *, retain_grant):
+    """Keep the front frontier but replace settlement with coherent no-fill callbacks."""
+    replay_input = queue_input()
+    document = queue_result_factory(replay_input).document
+    no_fill_input = QueueReplayInput(
+        replay_input.family, replay_input.normalized_bytes, "cancel_back_first_v1"
+    )
+    no_fill = queue_result_factory(no_fill_input).document
+    # These channels agree with one another: zero fees/position, no fill event,
+    # and a genuinely acknowledged final cancellation. The lie is the omitted
+    # deterministic matching opportunity, not an account/lifecycle inconsistency.
+    for channel in ("decision_trace", "order_trace", "fill_trace", "account_trace"):
+        document[channel] = no_fill[channel]
+    if not retain_grant:
+        document["hook_trace"] = []
+    for row in document["queue_trace"]:
+        row["granted_lots"] = row["grant_limit_lots"] if retain_grant else 0
+        row["native_filled_lots"] = 0
+        row["own_remaining_lots"] = 2
+    assert document["queue_trace"][3]["grant_limit_lots"] == 1
+    assert document["fill_trace"] == []
+    assert document["account_trace"][-1]["fields"]["cash_total"] == "10000.00"
+    assert document["order_trace"][-1]["kind"] == "OrderCanceled"
+    return replay_input, build_queue_replay_result(document)
+
+
+def test_front_opportunity_cannot_disappear_with_all_grants_fills_and_fees(
+    queue_result_factory,
+) -> None:
+    replay_input, result = omitted_front_fill(queue_result_factory, retain_grant=False)
+    assert result.document["hook_trace"] == []
+    assert result.document["queue_trace"][3]["granted_lots"] == 0
+    with pytest.raises(EvaluationValidationError, match="deterministic queue allocation"):
+        evaluate_queue_replay(replay_input, result)
+
+
+def test_actual_positive_grant_requires_matching_fill_callbacks_and_settlement(
+    queue_result_factory,
+) -> None:
+    replay_input, result = omitted_front_fill(queue_result_factory, retain_grant=True)
+    assert result.document["hook_trace"][0]["offered_lots"] == 1
+    assert result.document["queue_trace"][3]["granted_lots"] == 1
+    assert result.document["queue_trace"][3]["native_filled_lots"] == 0
+    with pytest.raises(EvaluationValidationError, match="deterministic queue allocation"):
+        evaluate_queue_replay(replay_input, result)
+
+
 @pytest.mark.parametrize("attack", [
     "source_clock", "receive_clock", "source_sequence", "source_trade", "source_prices",
     "callback_clock", "callback_source", "future_trade", "changed_binding", "dependency_version",

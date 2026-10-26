@@ -42,6 +42,8 @@ native_filled_lots <= total_granted_lots <= capacity
 
 每 capture 的多次 hook 共用额度，不得重置来重复授予。非 trade 或没有容量时返回空 OrderBook；禁止返回会回退旧撮合的 None。真实引擎决定实际成交、费用、订单状态和账户；输入结束不补 guard、不推进时钟强制结清。
 
+本 profile 的填充概率为 1，所授予 custom book 数量等于确定性的容量；`verified` 还要求实际 grant 与实际 native fill 都精确等于 capacity。少授、漏成交或只保存部分 native callback 也会审计失败，不能通过全部填零冒充另一模型。
+
 `queue_replay_result_v1` 保存 exact source/input clocks、decision/order/fill/account trace、每输入的 before/after/flow/grant/消费/剩余量及 public hook trace、engine/environment 和结束状态。独立 `queue_source_grant_margin_audit_v1` 不调用 native、也不导入执行层队列算法，而从源约束重新生成政策 trace，核对所有输入、实际接受、FIFO 容量、原生成交与唯一 trade ID、原生回执和现金/仓位前缀。费用按 pinned binary64 与 USD cent 双重量化校验，记录兼容 raw modes 和歧义；margin cash 为 starting cash 减实际费用，不按 spot notional 扣款。
 
 只有完整输入、真实已接受订单、匹配的终态回执、无 open/pending 以及全部队列/费用/账务校验通过才保存 `status=verified` 评价。full fill 不再撤单；否则必须收到冻结最终 capture 的真实 cancel receipt。EOF、拒单、缺回执和校验不一致保存为失败或未决证据，不计为策略盈亏，也不补签 finding。

@@ -13,6 +13,7 @@ from tickwitness.application.queue_execution import (
     run_queue_model,
 )
 from tickwitness.application.research import ConfirmationAccessDenied
+from tickwitness.domain.evidence.run_records import identity
 from tickwitness.domain.research_contracts.queue_family import QUEUE_POLICY_IDS
 from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger
 from tickwitness.infrastructure.executable_registry import LocalExecutableProtocolRegistry
@@ -50,8 +51,8 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
         parser = commands.add_parser(
             name,
             help={
-                "run-queue-family": "Execute the frozen front/back models, consuming one slot per call",
-                "run-queue-model": "Explicitly execute one frozen model with one shared-budget slot",
+                "run-queue-family": "Execute both models with one shared-budget slot per call",
+                "run-queue-model": "Execute one frozen model with one shared-budget slot",
                 "inspect-queue-family": "Recheck source and inspect consumed shared-budget slots",
                 "inspect-queue-run": "Re-audit committed queue evidence without native execution",
             }[name],
@@ -77,11 +78,21 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
     # The split guard precedes paths, factories and even malformed identities.
     if arguments.split != "development":
         raise ConfirmationAccessDenied("Queue families permit development evidence only")
-    common = {
-        "split": arguments.split,
-        "families_factory": lambda: LocalQueueFamilyRegistry(arguments.families, create=False),
-        "datasets_factory": lambda: LocalDatasetStore(arguments.store, create=False),
-    }
+    identity(getattr(arguments, "protocol_id", getattr(arguments, "family_id",
+                                                     getattr(arguments, "run_id", None))))
+
+    def families() -> LocalQueueFamilyRegistry:
+        return LocalQueueFamilyRegistry(arguments.families, create=False)
+
+    def datasets() -> LocalDatasetStore:
+        return LocalDatasetStore(arguments.store, create=False)
+
+    def ledger() -> LocalAttemptLedger:
+        return LocalAttemptLedger(arguments.runs, create=arguments.command.startswith("run-"))
+
+    def replay(timeout: int) -> QueueSubprocessReplayAdapter:
+        return QueueSubprocessReplayAdapter(
+            timeout_seconds=timeout, python_executable=arguments.engine_python)
     if arguments.command == "freeze-queue-family":
         requests = [
             read_regular_file(
@@ -105,23 +116,17 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
         ).document
     if arguments.command == "inspect-queue-run":
         return inspect_queue_run(
-            arguments.run_id,
-            **common,
-            ledger_factory=lambda: LocalAttemptLedger(arguments.runs, create=False),
+            arguments.run_id, split=arguments.split, families_factory=families,
+            datasets_factory=datasets, ledger_factory=ledger,
         )
     if arguments.command == "inspect-queue-family":
         return inspect_queue_family(
-            arguments.family_id,
-            **common,
-            ledger_factory=lambda: LocalAttemptLedger(arguments.runs, create=False),
+            arguments.family_id, split=arguments.split, families_factory=families,
+            datasets_factory=datasets, ledger_factory=ledger,
         )
-    execute_common = {
-        **common,
-        "ledger_factory": lambda: LocalAttemptLedger(arguments.runs),
-        "replay_factory": lambda timeout: QueueSubprocessReplayAdapter(
-            timeout_seconds=timeout, python_executable=arguments.engine_python
-        ),
-    }
     if arguments.command == "run-queue-model":
-        return run_queue_model(arguments.family_id, arguments.policy_id, **execute_common).document
-    return run_queue_family(arguments.family_id, **execute_common)
+        return run_queue_model(arguments.family_id, arguments.policy_id, split=arguments.split,
+                               families_factory=families, datasets_factory=datasets,
+                               ledger_factory=ledger, replay_factory=replay).document
+    return run_queue_family(arguments.family_id, split=arguments.split, families_factory=families,
+                            datasets_factory=datasets, ledger_factory=ledger, replay_factory=replay)
