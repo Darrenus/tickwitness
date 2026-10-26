@@ -1,0 +1,6 @@
+{
+  "kind": "scenario_request_v1",
+  "schema_version": 1,
+  "scenario_kind": "COUNTERFACTUAL_STRESS",
+  "additional_delay": {"value": 2000000000, "unit": "ns"}
+}

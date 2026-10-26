@@ -5,7 +5,7 @@
 
 Freeze a scoped quantitative research experiment, audit its replay accounting, and export independently verifiable evidence.
 
-**Status: Sprint 5 development, `0.2.0.dev0`, 2026-10-26.** The first [technical preview, v0.1.0a1](https://github.com/Darrenus/tickwitness/releases/tag/v0.1.0a1), is published with the accepted scoped evidence workflow and qualified artifacts. This development branch adds read-only assumption/scenario contract checks against frozen development inputs; it does not execute a stress scenario. The replay profile remains EUR/USD and one built-in limit buy. Arbitrary strategy source, confirmation unsealing and counterexample search remain unsupported. User interviews and independent human domain review remain outstanding; consistency checks do not certify actual market fills.
+**Status: Sprint 5 development, `0.2.0.dev0`, 2026-10-26.** The first [technical preview, v0.1.0a1](https://github.com/Darrenus/tickwitness/releases/tag/v0.1.0a1), is published with the accepted scoped evidence workflow and qualified artifacts. This development branch adds validated declarations and budgeted **coupled receive-clock stress** with independent derived-view identities and recomputed accounting. Remote fixed-fixture clock qualification precedes execution; this is not an independent venue/observer feed-delay model. The replay profile remains EUR/USD and one built-in limit buy. Arbitrary strategy source, confirmation unsealing and counterexample search remain unsupported. User interviews and independent human domain review remain outstanding; consistency checks do not certify actual market fills.
 
 Start with the [quickstart](docs/quickstart.md), [task-specific support matrix](docs/support.md), and [preview notes](docs/releases/0.1.0a1.md). The core install can verify the supplied synthetic evidence without an engine or GPU. Native replay is a separate optional installation. Run compute in a remote Linux environment or CI; Colab is suitable for temporary qualification, while persistent collection and long-lived services require their own deployment validation.
 
@@ -20,7 +20,7 @@ The initial product is a local-first research verification toolkit for quantitat
 | [Quickstart](docs/quickstart.md) | Clean installation, synthetic replay and portable offline verification |
 | [Preview support](docs/support.md) | Tested environments, trust boundaries, compatibility and maintenance scope |
 | [0.1.0a1 preview notes](docs/releases/0.1.0a1.md) | Candidate artifacts, release gates and known limitations |
-| [Scenario contracts](docs/scenarios.md) | Check researcher-defined stress proposals without executing or approving a scenario |
+| [Scenario workflow](docs/scenarios.md) | Validate declarations, reserve shared attempt budget, execute coupled-clock stress and recompute its evidence |
 | [Development entry point](docs/development.md) | Locked environment, local checks, package build and current limitations |
 | [Data import guide](docs/data-import.md) | Executable import/inspect workflow, format, limits, and trust boundaries |
 | [Frozen protocol guide](docs/research-protocols.md) | Bind actual data/source, seal a declaration, read development data and verify confirmation denial |
@@ -67,7 +67,7 @@ To export the planning source as machine-readable JSON without modifying GitHub:
 uv run --locked python scripts/export_backlog.py
 ```
 
-The CLI includes `freeze-experiment`, `replay-protocol`, `inspect-attempt`, `inspect-run`, `export-evidence`, and `verify-evidence`, alongside the earlier data/protocol/replay commands. The new development-only `validate-scenario` command checks typed constraints and their baseline bindings; its receipt always says `execution_approved=false`. V1 declarations remain non-executable; v2 binds the supported built-in profile and development-only policy. Failed or interrupted replay attempts consume budget, and ambiguous fee models produce no claim truth. The verifier recomputes source bindings, accounting and valuation without a native engine, while explicitly stating that it has not replayed matching, authenticated an author or audited a complete historical trial ledger. The remaining architecture is a proposed target.
+The CLI includes `freeze-experiment`, `replay-protocol`, `inspect-attempt`, `inspect-run`, `export-evidence`, and `verify-evidence`, alongside the earlier data/protocol/replay commands. Development-only `validate-scenario` remains a read-only input check with `execution_approved=false`. Separate `run-scenario` persists intent before native execution and consumes the original protocol's attempt budget; `inspect-scenario-run` recomputes its view and accounting without replay. Scenario receipts are distinct from baseline claim observations and cannot enter baseline evidence-bundle v1. V1 declarations remain non-executable; v2 binds the supported built-in profile and development-only policy. Failed or interrupted attempts consume budget, and ambiguous fee models produce no claim truth. Verification does not authenticate an author or audit a complete historical trial ledger. The remaining architecture is a proposed target.
 
 ## Contribute
 
