@@ -266,8 +266,11 @@ def renamed_trace_result(result, *, order_id="shifted-native-order", reason=None
             row["native_time_ns"] += 2_000_000_000
             fields = row["fields"]
             for key in (
-                "native_event_ts_ns", "native_init_ts_ns", "native_ts_event_ns",
-                "native_ts_init_ns", "receive_time_ns",
+                "native_event_ts_ns",
+                "native_init_ts_ns",
+                "native_ts_event_ns",
+                "native_ts_init_ns",
+                "receive_time_ns",
             ):
                 if key in fields:
                     fields[key] += 2_000_000_000
@@ -338,8 +341,12 @@ def test_missing_fill_retains_present_flags_raw_values_and_both_source_reference
 
 @pytest.mark.parametrize(
     ("value", "expected"),
-    [(Fraction(0), "0"), (Fraction(-1, 8), "-0.125"), (Fraction(1, 5), "0.2"),
-     (Fraction(12345678901234567890123456789, 1000000000), "12345678901234567890.123456789")],
+    [
+        (Fraction(0), "0"),
+        (Fraction(-1, 8), "-0.125"),
+        (Fraction(1, 5), "0.2"),
+        (Fraction(12345678901234567890123456789, 1000000000), "12345678901234567890.123456789"),
+    ],
 )
 def test_exact_delta_format_does_not_depend_on_decimal_precision(value, expected) -> None:
     assert _decimal(value) == expected
@@ -360,8 +367,13 @@ def test_unvalued_side_never_produces_a_numeric_zero_or_difference(side, reason)
     audited = ProtocolEvaluation(
         fixture.protocol, fixture.source_input, fixture.baseline_result
     ).document["replay_evaluation"]
-    unavailable = {**audited, "valuation_status": "not_eligible", "ineligibility_reason": reason,
-                   "valuation": None, "mark": None}
+    unavailable = {
+        **audited,
+        "valuation_status": "not_eligible",
+        "ineligibility_reason": reason,
+        "valuation": None,
+        "mark": None,
+    }
     report = (
         _numeric(unavailable, audited) if side == "baseline" else _numeric(audited, unavailable)
     )

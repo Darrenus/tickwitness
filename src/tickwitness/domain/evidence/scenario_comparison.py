@@ -131,9 +131,7 @@ def _raw_value(document: dict[str, object], pointer: str, present: bool) -> obje
     return value
 
 
-def _trace_ref(
-    document: dict[str, object], channel: str, index: int
-) -> dict[str, object] | None:
+def _trace_ref(document: dict[str, object], channel: str, index: int) -> dict[str, object] | None:
     rows = cast("list[dict[str, object]]", document[channel])
     if index >= len(rows):
         return None
@@ -212,9 +210,12 @@ def _business_projection(document: dict[str, object]) -> dict[str, object]:
                 fields.pop("native_init_ts_ns", None)
             if channel == "fill_trace":
                 fields.pop("native_trade_id", None)
-            if channel == "order_trace" and row["kind"] == "OrderCancelRejected":
-                if fields.get("reason") == f"ClientOrderId('{order_id}') not found":
-                    fields["reason"] = "ClientOrderId('order-0') not found"
+            if (
+                channel == "order_trace"
+                and row["kind"] == "OrderCancelRejected"
+                and fields.get("reason") == f"ClientOrderId('{order_id}') not found"
+            ):
+                fields["reason"] = "ClientOrderId('order-0') not found"
             if channel == "account_trace":
                 for order in cast("list[dict[str, object]]", fields.get("orders", [])):
                     _map_order(order, order_id)
@@ -366,7 +367,8 @@ class ScenarioComparison:
             _equal(document["protocol_id"], protocol.protocol_id, "Run protocol mismatch")
             _equal(document["claim_revision_id"], protocol.claim_revision_id, "Claim mismatch")
         _equal(
-            scenario_doc["intent"], build_scenario_intent(view).document,
+            scenario_doc["intent"],
+            build_scenario_intent(view).document,
             "Scenario intent differs from the derived intervention",
         )
         _equal(
@@ -394,11 +396,13 @@ class ScenarioComparison:
             )
         _equal(left.document["engine"], right.document["engine"], "Comparison engine mismatch")
         _equal(
-            left.document["environment"], right.document["environment"],
+            left.document["environment"],
+            right.document["environment"],
             "Comparison environment mismatch",
         )
         left_attempt, right_attempt = (
-            _reservation(base_doc, protocol), _reservation(scenario_doc, protocol)
+            _reservation(base_doc, protocol),
+            _reservation(scenario_doc, protocol),
         )
         _require(
             left_attempt.attempt_id != right_attempt.attempt_id

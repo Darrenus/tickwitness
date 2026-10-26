@@ -129,8 +129,9 @@ def test_real_cancel_pair_zero_control_and_uniform_translation(
     uniform_result = load_replay_result(
         ledger.read_artifact(uniform_receipt.document["bindings"]["replay_result_sha256"])
     ).document
-    assert baseline_result["decision_trace"][0]["fields"]["order_id"] != (
-        uniform_result["decision_trace"][0]["fields"]["order_id"]
+    assert (
+        baseline_result["decision_trace"][0]["fields"]["order_id"]
+        != (uniform_result["decision_trace"][0]["fields"]["order_id"])
     )
     baseline_reason = next(
         row["fields"]["reason"]

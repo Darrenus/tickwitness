@@ -179,7 +179,7 @@ def test_environment_change_is_not_silently_accepted_as_controlled_pair(experime
 
     left = baseline(case, engine_factory=lambda _timeout: DifferentMetadata())
     right = scenario(case)
-    with pytest.raises(EvidenceValidationError, match="[Ee]nvironment"):
+    with pytest.raises(EvidenceValidationError, match=r"[Ee]nvironment"):
         compare(case, left, right)
 
 

@@ -90,15 +90,31 @@ def main() -> None:
         )
         assert denied["error"]["code"] == "confirmation_access_denied" and not missing.exists()
         comparison_denied = run(
-            "compare-scenario-runs", "invalid-id", "invalid-id", "--split", "confirmation",
-            "--store", str(missing / "data"), "--registry", str(missing / "registry"),
-            "--runs", str(missing / "runs"), expected=5,
+            "compare-scenario-runs",
+            "invalid-id",
+            "invalid-id",
+            "--split",
+            "confirmation",
+            "--store",
+            str(missing / "data"),
+            "--registry",
+            str(missing / "registry"),
+            "--runs",
+            str(missing / "runs"),
+            expected=5,
         )
         assert comparison_denied["error"]["code"] == "confirmation_access_denied"
         absent_comparison = run(
-            "compare-scenario-runs", "0" * 64, "1" * 64,
-            "--store", str(missing / "data"), "--registry", str(missing / "registry"),
-            "--runs", str(missing / "runs"), expected=4,
+            "compare-scenario-runs",
+            "0" * 64,
+            "1" * 64,
+            "--store",
+            str(missing / "data"),
+            "--registry",
+            str(missing / "registry"),
+            "--runs",
+            str(missing / "runs"),
+            expected=4,
         )
         assert absent_comparison["error"]["code"] == "research_evidence_not_found"
         assert not missing.exists()
@@ -136,9 +152,9 @@ def main() -> None:
             for item in (zero, suffix)
         ]
         for item, outcome in zip(comparisons, (zero, suffix), strict=True):
-            assert run(
-                "compare-scenario-runs", baseline["run_id"], outcome["run_id"], *common
-            ) == item
+            assert (
+                run("compare-scenario-runs", baseline["run_id"], outcome["run_id"], *common) == item
+            )
             assert item["controlled_intervention"] is True
             assert item["strictly_paired"] is False
             assert item["numeric_comparison"]["status"] == "comparable"

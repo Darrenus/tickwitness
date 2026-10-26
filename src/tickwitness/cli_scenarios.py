@@ -20,7 +20,13 @@ from tickwitness.infrastructure.subprocess_replay import SubprocessReplayAdapter
 
 COMMAND = "validate-scenario"
 COMMANDS = frozenset(
-    {COMMAND, "run-scenario", "inspect-scenario-run", "inspect-scenario-attempt", "compare-scenario-runs"}
+    {
+        COMMAND,
+        "run-scenario",
+        "inspect-scenario-run",
+        "inspect-scenario-attempt",
+        "compare-scenario-runs",
+    }
 )
 
 
@@ -56,7 +62,8 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
     attempt.add_argument("attempt_id")
     attempt.add_argument("--runs", type=Path, required=True)
     comparison = commands.add_parser(
-        "compare-scenario-runs", help="Re-audit a committed baseline/scenario pair and locate changes"
+        "compare-scenario-runs",
+        help="Re-audit a committed baseline/scenario pair and locate changes",
     )
     comparison.add_argument("baseline_run_id")
     comparison.add_argument("scenario_run_id")

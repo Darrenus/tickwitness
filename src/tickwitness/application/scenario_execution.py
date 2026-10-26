@@ -29,7 +29,12 @@ from tickwitness.domain.evidence.scenario_records import (
     build_scenario_run_receipt,
     load_scenario_run_receipt,
 )
-from tickwitness.domain.replay.contracts import ReplayInput, ReplayPort, ReplayResult, load_replay_result
+from tickwitness.domain.replay.contracts import (
+    ReplayInput,
+    ReplayPort,
+    ReplayResult,
+    load_replay_result,
+)
 from tickwitness.domain.replay.specs import build_replay_spec
 from tickwitness.domain.research_contracts.executable import load_executable_protocol
 

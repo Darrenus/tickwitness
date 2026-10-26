@@ -55,9 +55,7 @@ def compare_scenario_runs(
     ):
         raise EvidenceValidationError("Runs do not share the declared development baseline")
     registry, datasets = registry_factory(), datasets_factory()
-    artifacts = run_artifacts(
-        baseline_run_id, ledger=ledger, registry=registry, datasets=datasets
-    )
+    artifacts = run_artifacts(baseline_run_id, ledger=ledger, registry=registry, datasets=datasets)
     checked = scenario_run_evidence(
         scenario_run_id, ledger=ledger, registry=registry, datasets=datasets
     )
