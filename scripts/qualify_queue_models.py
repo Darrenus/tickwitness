@@ -731,7 +731,8 @@ def run_case(case_id: str) -> dict[str, Any]:
         rows, request, prepared = _input(case_id)
         policies = (
             POLICIES
-            if case_id in (
+            if case_id
+            in (
                 "front_back_cancel",
                 "gross_churn_checkpoint",
                 "no_cancel_control",
