@@ -1,6 +1,6 @@
 # Queue Semantics Qualification v1
 
-状态：S06-02a 的语义资格切片；远端验证与 owner 审阅中。承接已接受的 [Queue Family v1](queue-family-v1.md)，不修改旧族、旧评价器、budget 或 finding 合同。
+状态：S06-02a 的语义资格切片；完整远端验收通过，待 owner 审阅。承接已接受的 [Queue Family v1](queue-family-v1.md)，不修改旧族、旧评价器、budget 或 finding 合同。实际记录见 [研究验收](../research/sprint-06-observation-semantics.md)。
 
 ## 三种对象与两个门
 

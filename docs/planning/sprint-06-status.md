@@ -7,7 +7,7 @@
 | 故事 | 当前切片与接受边界 | 状态 |
 | --- | --- | --- |
 | S06-01 / #16 | S06-01a/b 已接受；冻结共同预算、持久前后模型执行与独立审计 | Owner 已合并 #83 |
-| S06-02 / #17 | S06-02a 先验证明确投影、守恒反例、候选谓词真值表和只读配对 | In progress；生产 `NOT_IDENTIFIABLE_WITHIN_MODEL` 保持关闭 |
+| S06-02 / #17 | S06-02a 明确投影、守恒反例、候选谓词真值表和只读配对已完成远端验收 | In progress；PR #84 待 owner 接受，生产 `NOT_IDENTIFIABLE_WITHIN_MODEL` 保持关闭 |
 | S06-03 / #18 | 真实近期问题访谈累计 8–12 次，反馈关联工作流阻力 | 未取得新增访谈证据；不虚填次数、采用或独立领域验收 |
 
 原故事验收与容量仍见 [Sprint backlog](sprint-backlog.md#s6--l2-队列解释与证据不足判定)。实际投入工时尚未登记。S06-01 原估算不因生成代码自动视为已完成；复杂执行能力需要单独可验收切片，不通过修改旧协议或跳过预算提前打开。
@@ -89,4 +89,4 @@ AI 并行静态复核单独计为 AI 审阅：发现并修复过“正容量漏�
 
 硬 oracle 为原样例 −1/0 且 gt0 为 F/F；独立最终 bid102 样例 +1/0 且 gt0 为 T/F、ge0 为 T/T。正值 own fill 暴露 external 全扣 trade 后再额外 fill 的单次分配矛盾；该反例只针对明确指定投影，不否定所有 ghost 数学模型，无残差亦不构成完整世界证明。非法、未完成、未批准、费用歧义和缺证不能当 false。
 
-本切片见 [PR #84](https://github.com/Darrenus/tickwitness/pull/84)。远端验证完成后再补实际 case/check 数、head／merge SHA、完整矩阵与 wheel/sdist artifact。S06-02 整条故事尚未接受；需要后续独立冻结 queue claim、观测／干预合同及 sealed evidence 流程，才能考虑实际 finding。
+本切片见 [PR #84](https://github.com/Darrenus/tickwitness/pull/84)。实现 head `6ffdc4d45e08593af82f25786a3830f1dd16ddbd` 的 [Engineering 40260800327](https://github.com/Darrenus/tickwitness/actions/runs/40260800327) 与 [Documentation 40260800224](https://github.com/Darrenus/tickwitness/actions/runs/40260800224) 共 13 checks 全部通过，实际 merge checkout 为 `6c676acac65dcff9b5df16a73777f82cedb0d567`。核心六组合各 1534 passed / 57 skips，原生两平台各 1589 passed / 2 skips / 190 warnings；两平台、实际 wheel 与实际 source archive 均通过 8 cases / 210 checks。完整 artifact／oracle／失败修复与后续文档提交的 head 区分见 [研究验收](../research/sprint-06-observation-semantics.md)。S06-02 整条故事尚未接受；需要后续独立冻结 queue claim、观测／干预合同及 sealed evidence 流程，才能考虑实际 finding。
