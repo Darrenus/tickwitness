@@ -106,4 +106,7 @@ def export_tagged_pair(
     identity(second_run_id)
     artifacts = tagged_pair_artifacts(first_run_id, second_run_id, split=split,
         ledger=ledger_factory(), protocols=protocols_factory(), datasets=datasets_factory())
-    return verify_tagged_pair_package(exporter(artifacts))
+    package = exporter(artifacts)
+    if package.artifacts != artifacts:
+        raise EvidenceValidationError("Exporter returned a different tagged pair than requested")
+    return verify_tagged_pair_package(package)

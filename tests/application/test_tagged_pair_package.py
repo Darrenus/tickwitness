@@ -18,11 +18,12 @@ from tickwitness.infrastructure.tagged_evidence_bundles import export_tagged_pai
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.fixture
-def sealed_pair(tmp_path):
+def golden_payload(final_mark=100):
     golden = json.loads((ROOT / "tests/fixtures/tagged-pair-native-golden.json").read_bytes())
-    case = golden["cases"][0]
+    case = next(item for item in golden["cases"] if item["final_mark_ticks"] == final_mark)
     rows = [json.loads(line) for line in (ROOT / "examples/queue-observations.jsonl").read_bytes().splitlines()]
+    if final_mark != 100:
+        rows[-1]["bids"].append([final_mark, 2])
     raw = "".join(json.dumps(row) + "\n" for row in rows).encode()
     normalized = normalize_events(raw)
     artifacts = {"protocol": canonical(case["protocol"]), "raw": raw,
@@ -37,9 +38,29 @@ def sealed_pair(tmp_path):
         for role in ("result", "evaluation", "receipt"):
             artifacts[prefix + "_" + role] = canonical(run[role])
     artifacts["assessment"] = assess_tagged_pair_artifacts(artifacts).canonical_bytes
+    return artifacts
+
+
+@pytest.fixture
+def sealed_pair(tmp_path):
+    artifacts = golden_payload()
     destination = tmp_path / "bundle"
     package = export_tagged_pair_bundle(destination, artifacts)
     return destination, package
+
+
+def test_export_adapter_cannot_substitute_another_valid_pair(sealed_pair, tmp_path, monkeypatch):
+    from tickwitness.application import tagged_pair_evidence as application
+
+    _, requested = sealed_pair
+    different = export_tagged_pair_bundle(tmp_path / "different-pair", golden_payload(102))
+    assert verify_tagged_pair_package(different)["assessment"]["comparison"]["truths"] == [True, False]
+    # Isolate the publication port: source/committed-outcome auditing is covered separately.
+    monkeypatch.setattr(application, "tagged_pair_artifacts", lambda *a, **kw: requested.artifacts)
+    with pytest.raises(EvidenceValidationError, match="different tagged pair"):
+        export_tagged_pair("a" * 64, "b" * 64, split="development", ledger_factory=lambda: None,
+            protocols_factory=lambda: None, datasets_factory=lambda: None,
+            exporter=lambda _: different)
 
 
 def test_portable_receipt_distinguishes_economics_from_authorship_or_ledger(sealed_pair):

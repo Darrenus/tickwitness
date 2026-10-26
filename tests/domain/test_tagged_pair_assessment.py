@@ -37,23 +37,65 @@ def test_assessment_constructor_roundtrip_identity_and_detached_views(recorded_a
             loaded.canonical_bytes = b"{}"
 
 
-@pytest.mark.parametrize("attack", [
-    "missing_run", "extra_run", "swapped_runs", "old_policy", "extra_run_field",
-    "run_hash", "result_hash", "evaluation_hash", "invalid_identity",
-    "protocol_identity", "dataset_identity", "attempt_bool", "attempt_zero",
-    "attempt_oversize", "duplicate_attempt", "duplicate_slot", "duplicate_intent",
-    "valuation_extra", "valuation_policy", "valuation_unit", "valuation_eligibility",
-    "valuation_reason", "valuation_null_pnl", "valuation_nonnumeric_pnl",
-    "valuation_noncanonical_pnl", "truth_integer", "truth_null", "mark_price_bool",
-    "mark_reference", "mark_differs", "horizon_extra", "horizon_time_bool",
-    "horizon_target", "horizon_conservation", "horizon_negative", "horizon_own_zero",
-    "horizon_position", "horizon_account_extra", "horizon_account_type",
-    "horizon_cash", "horizon_order_leaves", "horizon_order_status", "horizon_order_count",
-    "horizon_other_observation", "comparison_extra", "comparison_truth",
-    "comparison_relation", "comparison_environment_bool", "comparison_reason",
-    "scope", "findings",
-])
-def test_standalone_assessment_rejects_incoherent_serialized_structure(recorded_assessments, attack):
+@pytest.mark.parametrize(
+    "attack",
+    [
+        "missing_run",
+        "extra_run",
+        "swapped_runs",
+        "old_policy",
+        "extra_run_field",
+        "run_hash",
+        "result_hash",
+        "evaluation_hash",
+        "invalid_identity",
+        "protocol_identity",
+        "dataset_identity",
+        "attempt_bool",
+        "attempt_zero",
+        "attempt_oversize",
+        "duplicate_attempt",
+        "duplicate_slot",
+        "duplicate_intent",
+        "valuation_extra",
+        "valuation_policy",
+        "valuation_unit",
+        "valuation_eligibility",
+        "valuation_reason",
+        "valuation_null_pnl",
+        "valuation_nonnumeric_pnl",
+        "valuation_noncanonical_pnl",
+        "truth_integer",
+        "truth_null",
+        "mark_price_bool",
+        "mark_reference",
+        "mark_differs",
+        "horizon_extra",
+        "horizon_time_bool",
+        "horizon_target",
+        "horizon_conservation",
+        "horizon_negative",
+        "horizon_own_zero",
+        "horizon_position",
+        "horizon_account_extra",
+        "horizon_account_type",
+        "horizon_cash",
+        "horizon_order_leaves",
+        "horizon_order_status",
+        "horizon_order_count",
+        "horizon_other_observation",
+        "comparison_extra",
+        "comparison_truth",
+        "comparison_relation",
+        "comparison_environment_bool",
+        "comparison_reason",
+        "scope",
+        "findings",
+    ],
+)
+def test_standalone_assessment_rejects_incoherent_serialized_structure(
+    recorded_assessments, attack
+):
     doc = recorded_assessments[1].document
     front, back = doc["runs"]
     valuation, horizon = front["valuation"], front["horizon"]
@@ -68,7 +110,13 @@ def test_standalone_assessment_rejects_incoherent_serialized_structure(recorded_
     elif attack == "extra_run_field":
         front["certified_owner"] = True
     elif attack in ("run_hash", "result_hash", "evaluation_hash"):
-        front[{"run_hash": "run_id", "result_hash": "result_sha256", "evaluation_hash": "evaluation_sha256"}[attack]] = "0" * 64
+        front[
+            {
+                "run_hash": "run_id",
+                "result_hash": "result_sha256",
+                "evaluation_hash": "evaluation_sha256",
+            }[attack]
+        ] = "0" * 64
     elif attack == "invalid_identity":
         front["intent_id"] = "../outside"
     elif attack == "protocol_identity":
@@ -76,9 +124,15 @@ def test_standalone_assessment_rejects_incoherent_serialized_structure(recorded_
     elif attack == "dataset_identity":
         doc["dataset_id"] = "0" * 64
     elif attack.startswith("attempt_"):
-        front["attempt_index"] = {"attempt_bool": True, "attempt_zero": 0, "attempt_oversize": 101}[attack]
+        front["attempt_index"] = {"attempt_bool": True, "attempt_zero": 0, "attempt_oversize": 101}[
+            attack
+        ]
     elif attack in ("duplicate_attempt", "duplicate_slot", "duplicate_intent"):
-        key = {"duplicate_attempt": "attempt_id", "duplicate_slot": "attempt_index", "duplicate_intent": "intent_id"}[attack]
+        key = {
+            "duplicate_attempt": "attempt_id",
+            "duplicate_slot": "attempt_index",
+            "duplicate_intent": "intent_id",
+        }[attack]
         front[key] = back[key]
     elif attack == "valuation_extra":
         valuation["source_claim_evaluated"] = True
@@ -162,9 +216,12 @@ def test_structural_ineligibility_requires_null_truth_and_explicit_comparison_re
     )
     doc["runs"][0]["truth"] = None
     doc["comparison"].update(
-        relation="ineligible", truths=[None, False],
+        relation="ineligible",
+        truths=[None, False],
         same_execution_environment=environment_equal,
-        ineligible_reason="claim_evaluation_ineligible" if environment_equal else "execution_environment_mismatch",
+        ineligible_reason="claim_evaluation_ineligible"
+        if environment_equal
+        else "execution_environment_mismatch",
     )
     assert TaggedPairAssessment(canonical(doc)).document == doc
     doc["comparison"]["relation"] = "opposite_truth_values"
@@ -172,7 +229,9 @@ def test_structural_ineligibility_requires_null_truth_and_explicit_comparison_re
         TaggedPairAssessment(canonical(doc))
 
 
-def test_a_structurally_coherent_self_attestation_is_not_full_semantic_verification(recorded_assessments):
+def test_a_structurally_coherent_self_attestation_is_not_full_semantic_verification(
+    recorded_assessments,
+):
     artifacts = actual_artifacts(102)
     doc = recorded_assessments[1].document
     doc["runs"][0]["truth"] = False

@@ -385,7 +385,14 @@ def test_tampered_role_bytes_fail_complete_closure(tmp_path: Path, role: str) ->
 @pytest.mark.parametrize(
     "change",
     [
-        "path", "hash", "size", "missing-role", "extra-role", "extra-field", "version", "scope",
+        "path",
+        "hash",
+        "size",
+        "missing-role",
+        "extra-role",
+        "extra-field",
+        "version",
+        "scope",
         "kind",
     ],
 )
@@ -507,10 +514,19 @@ def test_distinct_contract_cannot_be_read_as_legacy_and_does_not_accept_legacy(t
     assert set(published.manifest["roles"]) == set(ROLES)
     with pytest.raises(BundleError, match="markers"):
         safe_io.read_bundle(tagged)
-    legacy_artifacts = {name: name.encode() for name in (
-        "protocol", "dataset_manifest", "raw", "normalized", "report",
-        "replay_result", "evaluation", "attempt",
-    )}
+    legacy_artifacts = {
+        name: name.encode()
+        for name in (
+            "protocol",
+            "dataset_manifest",
+            "raw",
+            "normalized",
+            "report",
+            "replay_result",
+            "evaluation",
+            "attempt",
+        )
+    }
     safe_io.export_bundle(legacy, legacy_artifacts)
     with pytest.raises(BundleError, match="markers"):
         read_tagged_pair_bundle(legacy)

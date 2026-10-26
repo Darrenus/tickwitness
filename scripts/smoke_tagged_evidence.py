@@ -88,8 +88,9 @@ print(json.dumps(verify_tagged_pair_package(bundle), sort_keys=True))
 
 
 def _canonical(value: object) -> bytes:
-    return json.dumps(value, sort_keys=True, ensure_ascii=False, allow_nan=False,
-                      separators=(",", ":")).encode("utf-8")
+    return json.dumps(
+        value, sort_keys=True, ensure_ascii=False, allow_nan=False, separators=(",", ":")
+    ).encode("utf-8")
 
 
 def _digest(value: bytes) -> str:
@@ -97,19 +98,27 @@ def _digest(value: bytes) -> str:
 
 
 def _tree(root: Path) -> dict[str, bytes]:
-    return {str(path.relative_to(root)): path.read_bytes()
-            for path in root.rglob("*") if path.is_file()}
+    return {
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
+    }
 
 
-def _run(interpreter: str, cwd: Path, *command: str, expected: int = 0,
-         guarded: bool = False) -> dict:
-    invocation = ([interpreter, "-I", "-c", _OFFLINE_GUARD] if guarded else
-                  [interpreter, "-I", "-m", "tickwitness"])
-    completed = subprocess.run([*invocation, *command], cwd=cwd, capture_output=True,
-                               text=True, check=False, timeout=180)
+def _run(
+    interpreter: str, cwd: Path, *command: str, expected: int = 0, guarded: bool = False
+) -> dict:
+    invocation = (
+        [interpreter, "-I", "-c", _OFFLINE_GUARD]
+        if guarded
+        else [interpreter, "-I", "-m", "tickwitness"]
+    )
+    completed = subprocess.run(
+        [*invocation, *command], cwd=cwd, capture_output=True, text=True, check=False, timeout=180
+    )
     if completed.returncode != expected:
-        raise RuntimeError(f"Installed tagged evidence exited {completed.returncode}: "
-                           f"{completed.stdout}\n{completed.stderr}")
+        raise RuntimeError(
+            f"Installed tagged evidence exited {completed.returncode}: "
+            f"{completed.stdout}\n{completed.stderr}"
+        )
     return json.loads(completed.stdout if completed.stdout else completed.stderr)
 
 
@@ -126,8 +135,10 @@ def _replace(value: object, substitutions: dict[str, str]) -> object:
 def _rehash_allocation_attack(source: Path, destination: Path) -> str:
     """Keep every outer hash closed while falsifying a native trade partition."""
     manifest = json.loads((source / "manifest.json").read_bytes())
-    payload = {role: (source / reference["ref"]).read_bytes()
-               for role, reference in manifest["roles"].items()}
+    payload = {
+        role: (source / reference["ref"]).read_bytes()
+        for role, reference in manifest["roles"].items()
+    }
     substitutions: dict[str, str] = {}
     result = json.loads(payload["front_result"])
     trade = next(row for row in result["queue_trace"] if row["kind"] == "trade")
@@ -142,8 +153,11 @@ def _rehash_allocation_attack(source: Path, destination: Path) -> str:
         payload[role] = changed
     for role, data in payload.items():
         content_hash = _digest(data)
-        manifest["roles"][role] = {"sha256": content_hash, "size_bytes": len(data),
-                                    "ref": f"objects/sha256/{content_hash}"}
+        manifest["roles"][role] = {
+            "sha256": content_hash,
+            "size_bytes": len(data),
+            "ref": f"objects/sha256/{content_hash}",
+        }
     objects = destination / "objects" / "sha256"
     objects.mkdir(parents=True)
     for data in payload.values():
@@ -155,11 +169,20 @@ def _rehash_allocation_attack(source: Path, destination: Path) -> str:
 
 def _check_receipt(receipt: dict, *, relation: str, truths: list[bool]) -> None:
     assert receipt["kind"] == "tagged_queue_pair_offline_verification_v1"
-    for field in ("integrity_verified", "bindings_verified", "source_revalidated",
-                  "queue_execution_audited"):
+    for field in (
+        "integrity_verified",
+        "bindings_verified",
+        "source_revalidated",
+        "queue_execution_audited",
+    ):
         assert receipt[field] is True
-    for field in ("native_replayed", "author_signature_verified", "confirmation_reference_checked",
-                  "full_attempt_ledger_checked", "ledger_commitment_checked"):
+    for field in (
+        "native_replayed",
+        "author_signature_verified",
+        "confirmation_reference_checked",
+        "full_attempt_ledger_checked",
+        "ledger_commitment_checked",
+    ):
         assert receipt[field] is False
     assessment = receipt["assessment"]
     assert assessment["kind"] == "tagged_queue_pair_assessment_v1"
@@ -173,21 +196,33 @@ def _check_receipt(receipt: dict, *, relation: str, truths: list[bool]) -> None:
     assert assessment["comparison"]["ineligible_reason"] is None
 
 
-def _case(interpreter: str, verifier: str, examples: Path, root: Path, *, mark: int,
-          comparator: str, preserved: Path | None) -> dict:
+def _case(
+    interpreter: str,
+    verifier: str,
+    examples: Path,
+    root: Path,
+    *,
+    mark: int,
+    comparator: str,
+    preserved: Path | None,
+) -> dict:
     root.mkdir()
     state = root / "original-state"
     state.mkdir()
     fixtures = state / "fixtures"
     fixtures.mkdir()
-    observations = [json.loads(line) for line in
-                    (examples / "queue-observations.jsonl").read_text().splitlines()]
+    observations = [
+        json.loads(line)
+        for line in (examples / "queue-observations.jsonl").read_text().splitlines()
+    ]
     if mark != 100:
         observations[-1]["bids"].append([mark, 2])
     (fixtures / "observations.jsonl").write_bytes(
-        b"\n".join(_canonical(row) for row in observations) + b"\n")
+        b"\n".join(_canonical(row) for row in observations) + b"\n"
+    )
     (fixtures / "confirmation.jsonl").write_bytes(
-        (examples / "replay-confirmation.jsonl").read_bytes())
+        (examples / "replay-confirmation.jsonl").read_bytes()
+    )
     for name in ("experiment-request.json", "queue-constraint-request.json"):
         (fixtures / name).write_bytes((examples / name).read_bytes())
     request = json.loads((examples / "tagged-queue-request.json").read_bytes())
@@ -199,16 +234,37 @@ def _case(interpreter: str, verifier: str, examples: Path, root: Path, *, mark: 
         return _run(interpreter, root, *command, expected=expected)
 
     datasets = [
-        run("import-events", name, "--input-root", str(fixtures),
-            "--store", str(store))["dataset_id"]
+        run("import-events", name, "--input-root", str(fixtures), "--store", str(store))[
+            "dataset_id"
+        ]
         for name in ("observations.jsonl", "confirmation.jsonl")
     ]
-    source = run("freeze-experiment", "experiment-request.json", "--input-root", str(fixtures),
-                 "--development-dataset", datasets[0], "--confirmation-dataset", datasets[1],
-                 "--store", str(store), "--registry", str(registry))
-    frozen = run("freeze-tagged-queue", source["protocol_id"], "tagged-request.json",
-                 "queue-constraint-request.json", "--input-root", str(fixtures),
-                 "--store", str(store), "--registry", str(registry))
+    source = run(
+        "freeze-experiment",
+        "experiment-request.json",
+        "--input-root",
+        str(fixtures),
+        "--development-dataset",
+        datasets[0],
+        "--confirmation-dataset",
+        datasets[1],
+        "--store",
+        str(store),
+        "--registry",
+        str(registry),
+    )
+    frozen = run(
+        "freeze-tagged-queue",
+        source["protocol_id"],
+        "tagged-request.json",
+        "queue-constraint-request.json",
+        "--input-root",
+        str(fixtures),
+        "--store",
+        str(store),
+        "--registry",
+        str(registry),
+    )
     common = ("--store", str(store), "--registry", str(registry), "--ledger", str(ledger))
     submitted = run("run-tagged-queue-pair", frozen["protocol_id"], *common)
     assert submitted["status"] == "completed"
@@ -219,22 +275,53 @@ def _case(interpreter: str, verifier: str, examples: Path, root: Path, *, mark: 
     relation = "opposite_truth_values" if truths[0] != truths[1] else "same_truth_value"
     bundle, repeated = root / "bundle", root / "repeated"
     before = _tree(state)
-    exported = run("export-tagged-queue-pair", front["run_id"], back["run_id"],
-                   *common, "--output", str(bundle))
-    reverse = run("export-tagged-queue-pair", back["run_id"], front["run_id"],
-                  *common, "--output", str(repeated))
+    exported = run(
+        "export-tagged-queue-pair",
+        front["run_id"],
+        back["run_id"],
+        *common,
+        "--output",
+        str(bundle),
+    )
+    reverse = run(
+        "export-tagged-queue-pair",
+        back["run_id"],
+        front["run_id"],
+        *common,
+        "--output",
+        str(repeated),
+    )
     assert exported == reverse and before == _tree(state)
     _check_receipt(exported, relation=relation, truths=truths)
     destination_before = _tree(bundle)
-    refused = run("export-tagged-queue-pair", front["run_id"], back["run_id"],
-                  *common, "--output", str(bundle), expected=3)
+    refused = run(
+        "export-tagged-queue-pair",
+        front["run_id"],
+        back["run_id"],
+        *common,
+        "--output",
+        str(bundle),
+        expected=3,
+    )
     assert refused["error"]["code"] == "bundle_destination_exists"
     assert _tree(bundle) == destination_before and before == _tree(state)
     missing = root / "must-not-exist"
-    denied = run("export-tagged-queue-pair", "a" * 64, "b" * 64,
-                 "--store", str(missing / "data"), "--registry", str(missing / "registry"),
-                 "--ledger", str(missing / "ledger"), "--output", str(missing / "output"),
-                 "--split", "confirmation", expected=5)
+    denied = run(
+        "export-tagged-queue-pair",
+        "a" * 64,
+        "b" * 64,
+        "--store",
+        str(missing / "data"),
+        "--registry",
+        str(missing / "registry"),
+        "--ledger",
+        str(missing / "ledger"),
+        "--output",
+        str(missing / "output"),
+        "--split",
+        "confirmation",
+        expected=5,
+    )
     assert denied["error"]["code"] == "confirmation_access_denied" and not missing.exists()
     relocated = root / "relocated"
     bundle.rename(relocated)
@@ -253,43 +340,66 @@ def _case(interpreter: str, verifier: str, examples: Path, root: Path, *, mark: 
     )
     assert verified == exported
     _check_receipt(verified, relation=relation, truths=truths)
-    wrong_pin = offline("verify-tagged-queue-pair", str(relocated),
-                        "--expected-bundle-id", "0" * 64, expected=2)
+    wrong_pin = offline(
+        "verify-tagged-queue-pair", str(relocated), "--expected-bundle-id", "0" * 64, expected=2
+    )
     assert wrong_pin["error"]
     assert offline("verify-evidence", str(relocated), expected=3)["error"]
     assert offline("verify-tagged-queue-pair", str(examples / "evidence-demo"), expected=3)["error"]
-    denied = offline("verify-tagged-queue-pair", str(missing / "bundle"),
-                     "--split", "confirmation", expected=5)
+    denied = offline(
+        "verify-tagged-queue-pair", str(missing / "bundle"), "--split", "confirmation", expected=5
+    )
     assert denied["error"]["code"] == "confirmation_access_denied" and not missing.exists()
     assert _tree(relocated) == source_before
     attack = root / "rehashed-allocation-attack"
     attack_id = _rehash_allocation_attack(relocated, attack)
-    rejected = offline("verify-tagged-queue-pair", str(attack),
-                       "--expected-bundle-id", attack_id, expected=2)
+    rejected = offline(
+        "verify-tagged-queue-pair", str(attack), "--expected-bundle-id", attack_id, expected=2
+    )
     assert rejected["error"]
     assert _tree(relocated) == source_before
     if preserved is not None:
         shutil.copytree(relocated, preserved)
-    return {"mark_ticks": mark, "comparator": comparator, "submission": submitted,
-            "export": exported, "verification": verified,
-            "bundle_manifest": json.loads((relocated / "manifest.json").read_bytes()),
-            "original_state_deleted": True, "core_only_guard_verified": True,
-            "read_only_tree_verified": True, "reverse_export_same_identity": True,
-            "no_overwrite_verified": True, "wrong_identity_pin_rejected": True,
-            "legacy_kind_isolation_verified": True,
-            "fully_rehashed_allocation_attack_rejected": True}
+    return {
+        "mark_ticks": mark,
+        "comparator": comparator,
+        "submission": submitted,
+        "export": exported,
+        "verification": verified,
+        "bundle_manifest": json.loads((relocated / "manifest.json").read_bytes()),
+        "original_state_deleted": True,
+        "core_only_guard_verified": True,
+        "read_only_tree_verified": True,
+        "reverse_export_same_identity": True,
+        "no_overwrite_verified": True,
+        "wrong_identity_pin_rejected": True,
+        "legacy_kind_isolation_verified": True,
+        "fully_rehashed_allocation_attack_rejected": True,
+    }
 
 
-def _core_case(verifier: str, examples: Path, root: Path, *, mark: int,
-               preserved: Path | None) -> dict:
+def _core_case(
+    verifier: str, examples: Path, root: Path, *, mark: int, preserved: Path | None
+) -> dict:
     """Build portable evidence from actual recorded callbacks, without a new run."""
     root.mkdir()
     bundle = root / "bundle"
     completed = subprocess.run(
-        [verifier, "-I", "-c", _GOLDEN_BUNDLE,
-         str(examples.parent / "tests" / "fixtures" / "tagged-pair-native-golden.json"),
-         str(examples / "queue-observations.jsonl"), str(mark), str(bundle)],
-        cwd=root, capture_output=True, text=True, check=False, timeout=180,
+        [
+            verifier,
+            "-I",
+            "-c",
+            _GOLDEN_BUNDLE,
+            str(examples.parent / "tests" / "fixtures" / "tagged-pair-native-golden.json"),
+            str(examples / "queue-observations.jsonl"),
+            str(mark),
+            str(bundle),
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
     )
     if completed.returncode:
         raise RuntimeError(f"Installed core golden closure failed: {completed.stderr}")
@@ -297,24 +407,46 @@ def _core_case(verifier: str, examples: Path, root: Path, *, mark: int,
     relocated = root / "relocated"
     bundle.rename(relocated)
     before = _tree(relocated)
-    verified = _run(verifier, root, "verify-tagged-queue-pair", str(relocated),
-                    "--expected-bundle-id", exported["bundle_id"], guarded=True)
+    verified = _run(
+        verifier,
+        root,
+        "verify-tagged-queue-pair",
+        str(relocated),
+        "--expected-bundle-id",
+        exported["bundle_id"],
+        guarded=True,
+    )
     truths = [False, False] if mark == 100 else [True, False]
     relation = "same_truth_value" if mark == 100 else "opposite_truth_values"
     _check_receipt(verified, relation=relation, truths=truths)
     assert verified == exported and _tree(relocated) == before
     attack = root / "rehashed-allocation-attack"
     attack_id = _rehash_allocation_attack(relocated, attack)
-    rejected = _run(verifier, root, "verify-tagged-queue-pair", str(attack),
-                    "--expected-bundle-id", attack_id, expected=2, guarded=True)
+    rejected = _run(
+        verifier,
+        root,
+        "verify-tagged-queue-pair",
+        str(attack),
+        "--expected-bundle-id",
+        attack_id,
+        expected=2,
+        guarded=True,
+    )
     assert rejected["error"] and _tree(relocated) == before
     if preserved is not None:
         shutil.copytree(relocated, preserved)
-    return {"mark_ticks": mark, "comparator": "gt", "verification": verified,
-            "recorded_engineering_run": 40286175944, "recorded_native_job": 121450395382,
-            "fresh_native_runs": False, "original_state_absent": True,
-            "core_only_guard_verified": True, "read_only_tree_verified": True,
-            "fully_rehashed_allocation_attack_rejected": True}
+    return {
+        "mark_ticks": mark,
+        "comparator": "gt",
+        "verification": verified,
+        "recorded_engineering_run": 40286175944,
+        "recorded_native_job": 121450395382,
+        "fresh_native_runs": False,
+        "original_state_absent": True,
+        "core_only_guard_verified": True,
+        "read_only_tree_verified": True,
+        "fully_rehashed_allocation_attack_rejected": True,
+    }
 
 
 def main() -> None:
@@ -337,21 +469,42 @@ def main() -> None:
         for name, mark, comparator in profiles:
             preserved = None if arguments.bundles_dir is None else arguments.bundles_dir / name
             if arguments.core_only:
-                cases.append(_core_case(str(arguments.verifier_python.absolute()), examples,
-                                        root / name, mark=mark, preserved=preserved))
+                cases.append(
+                    _core_case(
+                        str(arguments.verifier_python.absolute()),
+                        examples,
+                        root / name,
+                        mark=mark,
+                        preserved=preserved,
+                    )
+                )
             else:
-                cases.append(_case(
-                    str(arguments.python.absolute()), str(arguments.verifier_python.absolute()),
-                    examples, root / name, mark=mark, comparator=comparator, preserved=preserved,
-                ))
-    report = {"kind": "installed_tagged_pair_evidence_acceptance_v1", "accepted": True,
-              "fixture_kind": "original_synthetic", "cases": cases,
-              "fresh_native_runs": not arguments.core_only,
-              "source_claim_evaluated": False, "finding_issued": False}
+                cases.append(
+                    _case(
+                        str(arguments.python.absolute()),
+                        str(arguments.verifier_python.absolute()),
+                        examples,
+                        root / name,
+                        mark=mark,
+                        comparator=comparator,
+                        preserved=preserved,
+                    )
+                )
+    report = {
+        "kind": "installed_tagged_pair_evidence_acceptance_v1",
+        "accepted": True,
+        "fixture_kind": "original_synthetic",
+        "cases": cases,
+        "fresh_native_runs": not arguments.core_only,
+        "source_claim_evaluated": False,
+        "finding_issued": False,
+    }
     arguments.report.parent.mkdir(parents=True, exist_ok=True)
     arguments.report.write_bytes(_canonical(report) + b"\n")
-    print("Installed tagged pair evidence: relocated bundles audited by core without original "
-          "stores, native, SQLite, network or workers; identity and rehash attacks passed.")
+    print(
+        "Installed tagged pair evidence: relocated bundles audited by core without original "
+        "stores, native, SQLite, network or workers; identity and rehash attacks passed."
+    )
 
 
 if __name__ == "__main__":

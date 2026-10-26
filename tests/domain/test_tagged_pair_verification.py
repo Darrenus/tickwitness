@@ -30,7 +30,10 @@ def actual_artifacts(final_mark=100):
     assert recorded["provenance"]["engineering_run"] == 40286175944
     assert recorded["provenance"]["job"] == 121450395382
     selected = next(case for case in recorded["cases"] if case["final_mark_ticks"] == final_mark)
-    rows = [json.loads(line) for line in (ROOT / "examples" / "queue-observations.jsonl").read_bytes().splitlines()]
+    rows = [
+        json.loads(line)
+        for line in (ROOT / "examples" / "queue-observations.jsonl").read_bytes().splitlines()
+    ]
     if final_mark != 100:
         rows[-1]["bids"].append([final_mark, 2])
     raw = "".join(json.dumps(row) + "\n" for row in rows).encode()
@@ -45,19 +48,29 @@ def actual_artifacts(final_mark=100):
         "schema_version": 1,
         "format_id": "tickwitness.normalized-events.v1",
         "objects": {
-            role: {"sha256": digest(artifacts[role]), "size_bytes": len(artifacts[role]),
-                   "ref": "objects/sha256/" + digest(artifacts[role])}
+            role: {
+                "sha256": digest(artifacts[role]),
+                "size_bytes": len(artifacts[role]),
+                "ref": "objects/sha256/" + digest(artifacts[role]),
+            }
             for role in ("raw", "normalized", "report")
         },
     }
     artifacts["dataset_manifest"] = canonical(manifest)
-    assert digest(artifacts["dataset_manifest"]) == selected["protocol"]["bindings"]["development_dataset_id"]
+    assert (
+        digest(artifacts["dataset_manifest"])
+        == selected["protocol"]["bindings"]["development_dataset_id"]
+    )
     for prefix, run in zip(("front", "back"), selected["runs"], strict=True):
         for role in ("result", "evaluation", "receipt"):
             artifacts[f"{prefix}_{role}"] = canonical(run[role])
         receipt = load_tagged_queue_run_receipt(artifacts[f"{prefix}_receipt"])
-        assert receipt.document["bindings"]["replay_result_sha256"] == digest(artifacts[f"{prefix}_result"])
-        assert receipt.document["bindings"]["evaluation_sha256"] == digest(artifacts[f"{prefix}_evaluation"])
+        assert receipt.document["bindings"]["replay_result_sha256"] == digest(
+            artifacts[f"{prefix}_result"]
+        )
+        assert receipt.document["bindings"]["evaluation_sha256"] == digest(
+            artifacts[f"{prefix}_evaluation"]
+        )
     return artifacts
 
 
@@ -70,20 +83,30 @@ def _rewrite(artifacts, role, update):
 def _rehash_run(artifacts, prefix):
     """Close hashes after an attack, so only independent semantics can reject it."""
     result_hash = digest(artifacts[f"{prefix}_result"])
-    _rewrite(artifacts, f"{prefix}_evaluation", lambda doc: doc.update(replay_result_sha256=result_hash))
+    _rewrite(
+        artifacts, f"{prefix}_evaluation", lambda doc: doc.update(replay_result_sha256=result_hash)
+    )
     evaluation_hash = digest(artifacts[f"{prefix}_evaluation"])
-    _rewrite(artifacts, f"{prefix}_receipt", lambda doc: doc["bindings"].update(
-        replay_result_sha256=result_hash, evaluation_sha256=evaluation_hash))
+    _rewrite(
+        artifacts,
+        f"{prefix}_receipt",
+        lambda doc: doc["bindings"].update(
+            replay_result_sha256=result_hash, evaluation_sha256=evaluation_hash
+        ),
+    )
 
 
 def _sealed(artifacts):
     return {**artifacts, "assessment": assess_tagged_pair_artifacts(artifacts).canonical_bytes}
 
 
-@pytest.mark.parametrize("final_mark,truths,relation,pnl", [
-    (100, [False, False], "same_truth_value", ["-2", "0"]),
-    (102, [True, False], "opposite_truth_values", ["2", "0"]),
-])
+@pytest.mark.parametrize(
+    "final_mark,truths,relation,pnl",
+    [
+        (100, [False, False], "same_truth_value", ["-2", "0"]),
+        (102, [True, False], "opposite_truth_values", ["2", "0"]),
+    ],
+)
 def test_actual_remote_native_goldens_reproduce_without_native(final_mark, truths, relation, pnl):
     artifacts = actual_artifacts(final_mark)
     assessment = assess_tagged_pair_artifacts(artifacts)
@@ -100,27 +123,42 @@ def test_actual_remote_native_goldens_reproduce_without_native(final_mark, truth
     receipt = verify_tagged_pair_artifacts({**artifacts, "assessment": assessment.canonical_bytes})
     assert receipt["assessment"] == doc
     assert receipt["assessment_id"] == assessment.assessment_id
-    for key in ("integrity_verified", "bindings_verified", "source_revalidated", "queue_execution_audited"):
+    for key in (
+        "integrity_verified",
+        "bindings_verified",
+        "source_revalidated",
+        "queue_execution_audited",
+    ):
         assert receipt[key] is True
-    for key in ("native_replayed", "author_signature_verified", "confirmation_reference_checked",
-                "full_attempt_ledger_checked", "ledger_commitment_checked"):
+    for key in (
+        "native_replayed",
+        "author_signature_verified",
+        "confirmation_reference_checked",
+        "full_attempt_ledger_checked",
+        "ledger_commitment_checked",
+    ):
         assert receipt[key] is False
 
 
 def test_fully_rehashed_false_inventory_value_is_not_certified():
     artifacts = actual_artifacts()
+
     def fake_value(doc):
         doc["valuation"]["net_marked_pnl"] = "2"
         doc["claim_evaluation"]["truth"] = True
+
     _rewrite(artifacts, "front_evaluation", fake_value)
     _rehash_run(artifacts, "front")
     with pytest.raises(ERRORS):
         assess_tagged_pair_artifacts(artifacts)
 
 
-@pytest.mark.parametrize("attack", ["trade_double_count", "clock", "acceptance", "horizon", "cleanup", "native_fee"])
+@pytest.mark.parametrize(
+    "attack", ["trade_double_count", "clock", "acceptance", "horizon", "cleanup", "native_fee"]
+)
 def test_fully_rehashed_native_evidence_requires_independent_source_audit(attack):
     artifacts = actual_artifacts()
+
     def corrupt(doc):
         if attack == "trade_double_count":
             row = next(row for row in doc["queue_trace"] if row["kind"] == "trade")
@@ -136,6 +174,7 @@ def test_fully_rehashed_native_evidence_requires_independent_source_audit(attack
             doc["cleanup"]["projected_total_after_cleanup"] += 1
         else:
             doc["fill_trace"][0]["fields"]["commission"] = "3"
+
     _rewrite(artifacts, "front_result", corrupt)
     _rehash_run(artifacts, "front")
     with pytest.raises(ERRORS):
@@ -145,8 +184,11 @@ def test_fully_rehashed_native_evidence_requires_independent_source_audit(attack
 def test_two_distinct_reservation_ids_cannot_occupy_the_same_budget_slot():
     artifacts = actual_artifacts()
     front = json.loads(artifacts["front_receipt"])
-    _rewrite(artifacts, "back_receipt", lambda doc: doc["attempt"].update(
-        attempt_index=front["attempt"]["attempt_index"]))
+    _rewrite(
+        artifacts,
+        "back_receipt",
+        lambda doc: doc["attempt"].update(attempt_index=front["attempt"]["attempt_index"]),
+    )
     assert digest(artifacts["front_receipt"]) != digest(artifacts["back_receipt"])
     with pytest.raises(ERRORS):
         assess_tagged_pair_artifacts(artifacts)
@@ -165,6 +207,7 @@ def test_reverse_execution_indices_still_keep_canonical_policy_roles():
 @pytest.mark.parametrize("attack", ["policy", "wall", "claim", "bool_index", "incomplete"])
 def test_receipt_cannot_cross_policy_claim_budget_or_execution(attack):
     artifacts = actual_artifacts()
+
     def corrupt(doc):
         if attack == "policy":
             doc["intent"]["policy_id"] = "protected_tag_front_cancel_v1"
@@ -176,6 +219,7 @@ def test_receipt_cannot_cross_policy_claim_budget_or_execution(attack):
             doc["attempt"]["attempt_index"] = True
         else:
             doc["execution_status"] = "incomplete"
+
     _rewrite(artifacts, "back_receipt", corrupt)
     with pytest.raises(ERRORS):
         assess_tagged_pair_artifacts(artifacts)
@@ -183,7 +227,11 @@ def test_receipt_cannot_cross_policy_claim_budget_or_execution(attack):
 
 def test_different_environment_seals_audited_evidence_but_withholds_comparison():
     artifacts = actual_artifacts(102)
-    _rewrite(artifacts, "back_result", lambda doc: doc["environment"].update(platform="different platform"))
+    _rewrite(
+        artifacts,
+        "back_result",
+        lambda doc: doc["environment"].update(platform="different platform"),
+    )
     _rehash_run(artifacts, "back")
     doc = assess_tagged_pair_artifacts(artifacts).document
     assert doc["comparison"]["same_execution_environment"] is False
@@ -197,6 +245,7 @@ def test_different_environment_seals_audited_evidence_but_withholds_comparison()
 @pytest.mark.parametrize("attack", ["truth", "relation", "scope", "finding", "binding", "unknown"])
 def test_rehashed_assessment_is_recomputed_not_trusted(attack):
     artifacts = _sealed(actual_artifacts(102))
+
     def corrupt(doc):
         if attack == "truth":
             doc["comparison"]["truths"] = [True, True]
@@ -210,6 +259,7 @@ def test_rehashed_assessment_is_recomputed_not_trusted(attack):
             doc["bindings"]["front_result"] = "0" * 64
         else:
             doc["extra"] = "not permitted"
+
     _rewrite(artifacts, "assessment", corrupt)
     with pytest.raises(ERRORS):
         verify_tagged_pair_artifacts(artifacts)

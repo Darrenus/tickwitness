@@ -30,12 +30,12 @@ from tickwitness.cli_queues import execute as execute_queue_command
 from tickwitness.cli_scenarios import COMMANDS as SCENARIO_COMMANDS
 from tickwitness.cli_scenarios import add_commands as add_scenario_commands
 from tickwitness.cli_scenarios import execute as execute_scenario_command
-from tickwitness.cli_tagged_queue import COMMANDS as TAGGED_QUEUE_COMMANDS
-from tickwitness.cli_tagged_queue import add_commands as add_tagged_queue_commands
-from tickwitness.cli_tagged_queue import execute as execute_tagged_queue_command
 from tickwitness.cli_tagged_evidence import COMMANDS as TAGGED_EVIDENCE_COMMANDS
 from tickwitness.cli_tagged_evidence import add_commands as add_tagged_evidence_commands
 from tickwitness.cli_tagged_evidence import execute as execute_tagged_evidence_command
+from tickwitness.cli_tagged_queue import COMMANDS as TAGGED_QUEUE_COMMANDS
+from tickwitness.cli_tagged_queue import add_commands as add_tagged_queue_commands
+from tickwitness.cli_tagged_queue import execute as execute_tagged_queue_command
 from tickwitness.domain.assumptions.queue_constraints import QueueConstraintValidationError
 from tickwitness.domain.assumptions.specs import AssumptionValidationError
 from tickwitness.domain.data_evidence.events import DataValidationError, ValidationLimits
