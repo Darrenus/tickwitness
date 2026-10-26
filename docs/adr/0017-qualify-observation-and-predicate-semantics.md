@@ -1,6 +1,6 @@
 # ADR 0017：先资格化观测与真假语义
 
-- 状态：Proposed；S06-02a 完整远端验收通过，待 owner 审阅接受。
+- 状态：Accepted；2026-10-26，owner 已合并 PR #84。S06-02a 完整远端验收记录保留，后续合同见 [ADR 0018](0018-conserved-tagged-queue-reconstruction.md)。
 - 日期：2026-10-26。
 - 合同：[Queue Semantics Qualification v1](../contracts/queue-semantics-qualification-v1.md)。
 
