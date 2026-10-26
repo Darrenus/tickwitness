@@ -98,7 +98,7 @@ net_marked_pnl = filled_lots * size_increment * (final_best_bid - fill_price) - 
 
 最终 best bid 从完整实际源重建，不能回退到目标价位或沿用已删除价格。无成交而完整终止的库存净值明确定义为零。mark 是条件库存估值，不声称按显示量实际清算或保证可退出。margin cash 为 starting cash 减实际费用，不按 spot notional 扣款。费用仍按 pinned native binary64／USD Money 量化审计；存在支持模式间费用歧义时估值和命题真值为 null，保留原因。
 
-下表是独立预设的标准 oracle，**不是已通过的远端结果**。初始 Q5／q2，新增3、撤3、trade3，两侧最终 Q2；价格100、增量1、maker fee1%。
+下表是运行前独立预设的标准 oracle；实际验收记录见 [Sprint 6](../planning/sprint-06-status.md#s06-02b-远端验收记录)。初始 Q5／q2，新增3、撤3、trade3，两侧最终 Q2；价格100、增量1、maker fee1%。
 
 | 项目 | front | back |
 | --- | --- | --- |
