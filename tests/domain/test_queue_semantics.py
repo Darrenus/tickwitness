@@ -160,7 +160,7 @@ def test_pair_order_is_normalized_and_documents_are_detached(queue_result_factor
     )
 
 
-def test_loader_rejects_locally_conserved_but_unsupported_cumulative_gross_flow(queue_result_factory):
+def test_loader_rejects_cumulative_gross_flow_beyond_source_limit(queue_result_factory):
     document = report(queue_result_factory).document
     front, back = [model["external_only_projection"]["trace"] for model in document["models"]]
     # A 500-million-lot add/cancel churn keeps every recorded absolute volume

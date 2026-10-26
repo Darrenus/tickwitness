@@ -89,4 +89,4 @@ AI 并行静态复核单独计为 AI 审阅：发现并修复过“正容量漏�
 
 硬 oracle 为原样例 −1/0 且 gt0 为 F/F；独立最终 bid102 样例 +1/0 且 gt0 为 T/F、ge0 为 T/T。正值 own fill 暴露 external 全扣 trade 后再额外 fill 的单次分配矛盾；该反例只针对明确指定投影，不否定所有 ghost 数学模型，无残差亦不构成完整世界证明。非法、未完成、未批准、费用歧义和缺证不能当 false。
 
-本切片远端验证完成后再补实际 case/check 数、head／merge SHA、完整矩阵与 wheel/sdist artifact。S06-02 整条故事尚未接受；需要后续独立冻结 queue claim、观测／干预合同及 sealed evidence 流程，才能考虑实际 finding。
+本切片见 [PR #84](https://github.com/Darrenus/tickwitness/pull/84)。远端验证完成后再补实际 case/check 数、head／merge SHA、完整矩阵与 wheel/sdist artifact。S06-02 整条故事尚未接受；需要后续独立冻结 queue claim、观测／干预合同及 sealed evidence 流程，才能考虑实际 finding。
