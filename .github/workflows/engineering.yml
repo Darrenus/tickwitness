@@ -139,6 +139,15 @@ jobs:
           python3 scripts/smoke_evidence.py --python .venv/bin/python --native
           python3 scripts/smoke_scenarios.py --python .venv/bin/python --native --report /tmp/scenario-execution.json
           python3 scripts/smoke_queue_constraints.py --python .venv/bin/python
+          .venv/bin/python -I scripts/qualify_queue_models.py --output /tmp/queue-wheel-qualification.json
+      - name: Preserve installed-wheel native queue qualification
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: queue-wheel-${{ matrix.os }}-${{ github.sha }}
+          path: /tmp/queue-wheel-qualification.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve installed-wheel scenario execution evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -185,8 +194,17 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_evidence.py" --python /tmp/tickwitness-preview-native/bin/python --native
           python3 "$TW_SOURCE/scripts/smoke_scenarios.py" --python /tmp/tickwitness-preview-native/bin/python --native
           python3 "$TW_SOURCE/scripts/smoke_queue_constraints.py" --python /tmp/tickwitness-preview-native/bin/python
+          /tmp/tickwitness-preview-native/bin/python -I "$TW_SOURCE/scripts/qualify_queue_models.py" --output /tmp/queue-source-wheel-qualification.json
           cd dist
           sha256sum --check SHA256SUMS
+      - name: Preserve qualification using actual source archive and installed wheel
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: queue-source-wheel-${{ github.sha }}
+          path: /tmp/queue-source-wheel-qualification.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve qualified preview artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
