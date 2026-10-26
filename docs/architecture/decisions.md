@@ -117,3 +117,9 @@ raw 与显式字段业务投影分别给每通道首差异，保留原始值、�
 固定原生试验使用公开模块、FillModel 与订单回调，关闭旧 queue gate、以每 capture 的 grant/consume 账本限制 shadow 容量。空 book 与 None 回退的语义、重复 hook、接受前 trade、部分成交/费用/账户及 EOF 均须远端核实；原始观测不改写。旧生产 adapter 不声明 explicit_queue_allocation 能力，旧协议及审计器严格拒绝新 semantic。
 
 生产执行另行版本化 queue family 协议、解释集合、共同预算、intent 与审计；不得克隆两个协议重置尝试预算。固定原创资格 fixture 不属于用户研究尝试；一旦使用用户数据运行模型并暴露结果，必须先占研究预算。S06-01 未完成部分和 S06-02 finding 门保留开放，不以 qualification 文件或通过个例冒充全部生产能力。
+
+## 后续队列决策记录
+
+- [ADR 0016：冻结队列族和持久执行](../adr/0016-frozen-queue-family-execution.md)：共同预算、完整 intent 和独立审计。
+- [ADR 0017：先资格化观测与真假语义](../adr/0017-qualify-observation-and-predicate-semantics.md)：owner 已合并 #84；旧 ghost 投影残差与候选谓词资格边界。
+- [ADR 0018：独立冻结标记参与者的守恒重建](../adr/0018-conserved-tagged-queue-reconstruction.md)：S06-02b，独立命题、inclusive total projection 和单次 trade 分配；远端验收待完成。

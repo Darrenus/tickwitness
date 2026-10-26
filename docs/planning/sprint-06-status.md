@@ -1,13 +1,13 @@
 # Sprint 6 队列约束与资格状态
 
-更新：2026-10-26（Asia/Singapore）。Owner 已合并 PR #79–83；Sprint 5 与 S06-01 的资格、共同预算及持久双模型执行进入 `main`。本轮基线为 #83 merge `c78714bb9fca3a3a0ce21d29ae189d9ee0e5cd1d`。已有技术预览 `0.1.0a1` 保持原发行物，`0.2.0.dev0` 仍未发行。
+更新：2026-10-26（Asia/Singapore）。Owner 已合并 PR #79–84；Sprint 5、S06-01 的资格／共同预算／持久双模型执行，以及 S06-02a 的观测与真假语义资格进入 `main`。本轮基线为 #84 merge `e018100df57e66376c810edce4fdf9ffec698e28`。已有技术预览 `0.1.0a1` 保持原发行物，`0.2.0.dev0` 仍未发行。
 
-已接受的 [PR #83](https://github.com/Darrenus/tickwitness/pull/83) 实现 S06-01b；历史远端记录见下文。本轮继续 S06-02a：先验证观测投影、单次 trade 分配与真假比较的语义，提供已提交双模型 run 的只读资格检查。资格通过不等于实际观测相容性或原命题判定已获授权。
+已接受的 [PR #84](https://github.com/Darrenus/tickwitness/pull/84) 实现 S06-02a；历史远端记录见下文。本轮继续 S06-02b：独立冻结 tagged queue claim、inclusive 观测投影及 relabel 干预，解决单笔 trade 重复分配。新合同描述有限 public 观测下的条件重建；最终 finding 和独立 sealed tagged evidence 流程仍未开放。
 
 | 故事 | 当前切片与接受边界 | 状态 |
 | --- | --- | --- |
 | S06-01 / #16 | S06-01a/b 已接受；冻结共同预算、持久前后模型执行与独立审计 | Owner 已合并 #83 |
-| S06-02 / #17 | S06-02a 明确投影、守恒反例、候选谓词真值表和只读配对已完成远端验收 | In progress；PR #84 待 owner 接受，生产 `NOT_IDENTIFIABLE_WITHIN_MODEL` 保持关闭 |
+| S06-02 / #17 | S06-02a 已接受；S06-02b 新命题、观测／干预合同、守恒分配与持久执行实现中 | In progress；owner 已合并 #84，本轮远端验收待完成，生产 `NOT_IDENTIFIABLE_WITHIN_MODEL` 保持关闭 |
 | S06-03 / #18 | 真实近期问题访谈累计 8–12 次，反馈关联工作流阻力 | 未取得新增访谈证据；不虚填次数、采用或独立领域验收 |
 
 原故事验收与容量仍见 [Sprint backlog](sprint-backlog.md#s6--l2-队列解释与证据不足判定)。实际投入工时尚未登记。S06-01 原估算不因生成代码自动视为已完成；复杂执行能力需要单独可验收切片，不通过修改旧协议或跳过预算提前打开。
@@ -90,3 +90,17 @@ AI 并行静态复核单独计为 AI 审阅：发现并修复过“正容量漏�
 硬 oracle 为原样例 −1/0 且 gt0 为 F/F；独立最终 bid102 样例 +1/0 且 gt0 为 T/F、ge0 为 T/T。正值 own fill 暴露 external 全扣 trade 后再额外 fill 的单次分配矛盾；该反例只针对明确指定投影，不否定所有 ghost 数学模型，无残差亦不构成完整世界证明。非法、未完成、未批准、费用歧义和缺证不能当 false。
 
 本切片见 [PR #84](https://github.com/Darrenus/tickwitness/pull/84)。实现 head `6ffdc4d45e08593af82f25786a3830f1dd16ddbd` 的 [Engineering 40260800327](https://github.com/Darrenus/tickwitness/actions/runs/40260800327) 与 [Documentation 40260800224](https://github.com/Darrenus/tickwitness/actions/runs/40260800224) 共 13 checks 全部通过，实际 merge checkout 为 `6c676acac65dcff9b5df16a73777f82cedb0d567`。核心六组合各 1534 passed / 57 skips，原生两平台各 1589 passed / 2 skips / 190 warnings；两平台、实际 wheel 与实际 source archive 均通过 8 cases / 210 checks。完整 artifact／oracle／失败修复与后续文档提交的 head 区分见 [研究验收](../research/sprint-06-observation-semantics.md)。S06-02 整条故事尚未接受；需要后续独立冻结 queue claim、观测／干预合同及 sealed evidence 流程，才能考虑实际 finding。
+
+## S06-02b：冻结新命题并守恒地重建标记参与者
+
+本轮合同见 [Tagged Queue v1](../contracts/tagged-queue-v1.md)，决策见 [ADR 0018](../adr/0018-conserved-tagged-queue-reconstruction.md)。源总量已含标记订单，入口仅把原有队尾 q 标记为己方，初始 `(A,R,B)=(Q-q,q,0)`。公开投影 `Q=A+R+B`；新增到 B，外部撤单跳过 R，trade 按 A→R→B 恰好分配一次。任一政策不可行均拒绝整份冻结。
+
+新协议拥有独立 claim revision、engine semantic、投影／干预／终止／估值政策和共同预算。完整 source v2 与旧约束只提供数据、单位、费率和 gross 声明 lineage；旧 claim、ghost trace 和旧 1/0 结果不改写。原生首 capture 接受标记为 reconstruction proxy，不能当成真实历史所有权或到达证据。
+
+`observed_window → claim_horizon → post_horizon_cleanup` 固定先观测与标记估值、再行政撤单；无虚构行情、时钟推进或 EOF guard。原生缓存仍标为 recorded observation cache，清理后的预测总量 Q−R 另行记录。模拟 private fills 和清理不纳入 public projection，当前并未读取或验证真实 private execution observations。
+
+预设手算 oracle 为初始 Q5／q2、add3／cancel3／trade3：front ownfill2／external1，back ownfill0／external3，双方最终 Q2。费率1%且价格100时 fee2/0、mark100 net−2/0，gt0 为 F/F；独立 mark102 时 net+2/0，gt0 为 T/F、ge0 为 T/T。此处是冻结的验收要求，**尚非实际远端通过记录**。
+
+验收门包括：严格合同／来源／预算／双侧可行性；逐事件总量与 trade 单次分配；真实接受／fill／费用／账户与 horizon 前后生命周期；失败／中断不退款及先 intent 后 worker；只读重审闭包；Linux／macOS native 与 core 矩阵；实际 wheel／sdist 安装 CLI 闭环。项目测试、构建、原生回放和格式化继续全部在远端，本机仅文件编辑、静态审查、Git／gh 与报告读取。尚无本轮 CI run／实际结果，远端验收保持待完成。
+
+即使这两条有限条件解释都通过，也不宣称实际插单预测或无冲击市场相容性。findings 始终为空；sealed tagged evidence、最终 `NOT_IDENTIFIABLE_WITHIN_MODEL`、确认集 lifecycle、跨协议试验账本和独立人类领域接受继续作为后续门。工时、访谈、性能与采用数据没有新增实证时不补造。

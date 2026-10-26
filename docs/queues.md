@@ -1,6 +1,8 @@
 # 外部队列约束与原生资格
 
-本页覆盖 S06-01a 的约束与固定资格，以及 S06-01b 的冻结队列族、共同预算、持久双模型执行与只读复核。执行支持满足受限合同的用户导入 development 输入，分类为 `MODEL_SENSITIVITY`；不输出成交预测、收益估值、原命题真假或 `NOT_IDENTIFIABLE_WITHIN_MODEL`。实际状态见 [Sprint 6](planning/sprint-06-status.md)，精确合同见 [Queue constraints v1](contracts/queue-constraints-v1.md) 和 [Queue Family v1](contracts/queue-family-v1.md)。
+本页覆盖 S06-01a 的约束与固定资格，以及 S06-01b 的冻结队列族、共同预算、持久双模型执行与只读复核。这条旧影子队列执行支持满足受限合同的用户导入 development 输入，分类为 `MODEL_SENSITIVITY`；不输出成交预测、收益估值、原命题真假或 `NOT_IDENTIFIABLE_WITHIN_MODEL`。实际状态见 [Sprint 6](planning/sprint-06-status.md)，精确合同见 [Queue constraints v1](contracts/queue-constraints-v1.md) 和 [Queue Family v1](contracts/queue-family-v1.md)。
+
+S06-02b 的新 [Tagged Queue v1](contracts/tagged-queue-v1.md) 另行冻结独立命题与观测／干预合同：初始公开总量包含标记参与者，trade 按队前、己方、队后单次分配，先保存 horizon／mark 再行政取消。它是有限 public 观测的条件重建，不把实际新插单、ownership 或市场冲击视为已验证。旧命令和结果语义不变；新命令及 2/0 守恒 oracle 见该合同，远端验收尚待完成。
 
 ## 外部观测和模拟订单分开
 
