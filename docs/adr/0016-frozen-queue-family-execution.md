@@ -1,6 +1,6 @@
 # ADR 0016：队列执行使用独立族与共同预算
 
-- 状态：Proposed；S06-01b 远端验证与 owner 审阅中。
+- 状态：Proposed；S06-01b 完整远端验证通过，待 owner 审阅接受。
 - 日期：2026-10-26。
 - 承接：[队列约束合同](../contracts/queue-constraints-v1.md)、[Queue Family v1](../contracts/queue-family-v1.md)。
 

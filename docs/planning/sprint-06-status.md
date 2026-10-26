@@ -2,11 +2,11 @@
 
 更新：2026-10-26（Asia/Singapore）。Owner 已合并 PR #79–82；Sprint 5 和 S06-01a 的资格／只读约束进入 `main`。本轮基线为 #82 merge `3dc3d28f93a5c549d675b552676d9367d930446f`。已有技术预览 `0.1.0a1` 保持原发行物，`0.2.0.dev0` 仍未发行。
 
-本轮 [PR #83](https://github.com/Darrenus/tickwitness/pull/83) 实现 S06-01b：独立版本的队列族、共同预算和基于实际 development store 的持久双模型执行，另有独立队列／账务审计和只读 inspect。验证在远端运行，完成记录后仍需 owner 审阅；不提前记为故事已接受。
+本轮 [PR #83](https://github.com/Darrenus/tickwitness/pull/83) 实现 S06-01b：独立版本的队列族、共同预算和基于实际 development store 的持久双模型执行，另有独立队列／账务审计和只读 inspect。实现的完整远端验证已通过，实际记录见下文；仍需 owner 审阅，不提前记为故事已接受。
 
 | 故事 | 当前切片与接受边界 | 状态 |
 | --- | --- | --- |
-| S06-01 / #16 | S06-01a 已接受；S06-01b 实现冻结共同预算、持久前后模型执行与独立审计 | In progress；PR #83 远端验证与 owner 审阅中 |
+| S06-01 / #16 | S06-01a 已接受；S06-01b 实现冻结共同预算、持久前后模型执行与独立审计 | In progress；PR #83 完整远端验收通过，待 owner 审阅接受 |
 | S06-02 / #17 | 两个受支持且独立验证的观测相容解释，才可进入最小真假分歧判定 | 尚未实现；`NOT_IDENTIFIABLE_WITHIN_MODEL` 保持关闭 |
 | S06-03 / #18 | 真实近期问题访谈累计 8–12 次，反馈关联工作流阻力 | 未取得新增访谈证据；不虚填次数、采用或独立领域验收 |
 
@@ -66,4 +66,19 @@
 
 ### S06-01b 远端结果
 
-首轮代码 `92a07c8735cc26733943d8115dc16f391f95241d` 的 [Engineering 40257512781](https://github.com/Darrenus/tickwitness/actions/runs/40257512781) 中核心六组合、两平台原生和分发检查通过；质量门未通过格式检查，因此不能记为整体通过。完整审计攻击、应用和 installed queue workflow 已在后续提交补齐，最终接受记录待全部远端检查完成后登记。
+代码 head `0038617b8b09902424217d5214ed60a3ffff3720` 的 [Engineering 40258276638](https://github.com/Darrenus/tickwitness/actions/runs/40258276638) 与 [Documentation 40258276628](https://github.com/Darrenus/tickwitness/actions/runs/40258276628) 共 13 checks 全部通过；实际 merge checkout 为 `33ed00e0509f07c7937f7e1c85bdcd1576e9300e`。本节为该已验证实现的验收记录，随后的文档提交不冒充同一代码 head。
+
+核心 Ubuntu 24.04 / macOS 15 × Python 3.12/3.13/3.14 六组合各 **1444 passed / 49 optional-native skips**；原生 Ubuntu 24.04 与 macOS 26 / Python 3.12 各 **1491 passed / 2 core-only skips / 190 warnings**。lint、129 文件格式、61 source files 类型检查、文档链接、核心／原生回归、实际 wheel 及实际 sdist 的全新安装验收均通过。warnings 保留，不作为通过断言。初轮格式／类型门和两项新攻击测试的夹具金额字符串错误均有失败记录；修复后重新验证，未放宽 oracle 来遮盖原生差异。
+
+两平台安装后的真实 CLI 均从 sealed development store 冻结同一个族，按 front/back 执行并重新 inspect；第三份验收使用实际 source archive 内脚本／样例及实际 wheel。远端 artifacts 名为 `queue-execution-<os>-33ed00e0509f07c7937f7e1c85bdcd1576e9300e` 与 `queue-source-wheel-execution-33ed00e0509f07c7937f7e1c85bdcd1576e9300e`，保留完整 family/source/intent/receipt/result/evaluation、账户、队列／hook／实际接受和共享预算检查，保存 30 天。
+
+| 实际核验 | 结果 |
+| --- | --- |
+| 同一原创合成输入与 gross flows | front 实际成交 1 lot / 费用 1 USD；back 0 lot / 费用 0 USD；两者真实接受时目标外部量均为 5 |
+| 终态与共同预算 | 双方 capture 6 收到真实原生 OrderCanceled；使用同一 family ID 的 2 个不同 attempt，remaining=0 |
+| 无退款与部分成功 | 启动失败、超时、审计拒绝和中断消耗槽；第二模型失败保留第一模型成功并停止，CLI 返回非零；竞争末槽不双占 |
+| 来源／分配／金融审计 | 时钟／future 引用、gross flow、重复或遗漏正额度、漏成交、费用／现金／仓位／回执等篡改拒绝；取得但未通过的原生结果持久保留诊断 |
+| 超出固定样例常量 | 两政策另测非 1 的 price/size increments、不同资金／数量／价格和最终 cancel capture；gross churn、相同接收时刻及干净对照均通过 |
+| 只读与分发 | inspect 不调用 native、不消耗预算，完整文件字节树不变；耗尽重试 exit 8，不新增槽；core 安装缺 extra 明确失败并保留已耗尝试 |
+
+AI 并行静态复核单独计为 AI 审阅：发现并修复过“正容量漏成交也可能 verified”的漏洞与 worker 输入错误分类；独立人类领域复核仍待实际取得。上述结果不增加真实访谈次数或市场相容性结论，也不改变 S06-02 的关闭状态。
