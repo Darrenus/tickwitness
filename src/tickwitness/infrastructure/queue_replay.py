@@ -102,53 +102,57 @@ class QueueSubprocessReplayAdapter:
             )
         budget = cast("dict[str, int]", checked.family.document["budget"])
         timeout = min(self.timeout_seconds, budget["max_wall_seconds"])
-        with TemporaryDirectory(prefix="tickwitness-queue-") as directory:
-            with TemporaryFile() as stdin, TemporaryFile() as stdout, TemporaryFile() as stderr:
-                stdin.write(request)
-                stdin.seek(0)
-                try:
-                    process = subprocess.Popen(
-                        [
-                            str(self.python_executable),
-                            "-I",
-                            "-m",
-                            "tickwitness.infrastructure._queue_worker",
-                        ],
-                        stdin=stdin,
-                        stdout=stdout,
-                        stderr=stderr,
-                        cwd=directory,
-                        start_new_session=True,
-                    )
-                except OSError as error:
-                    raise ReplayProcessError(
-                        "engine_unavailable", "Queue worker interpreter could not start", 6
-                    ) from error
-                deadline = time.monotonic() + timeout
-                try:
-                    while process.poll() is None:
-                        if _size(stdout) > MAX_RESULT_BYTES or _size(stderr) > MAX_STDERR_BYTES:
-                            raise ReplayProcessError(
-                                "engine_output_limit", "Queue worker output exceeded its byte bound"
-                            )
-                        if time.monotonic() >= deadline:
-                            raise ReplayProcessError(
-                                "engine_timeout", "Queue worker exceeded the frozen wall time"
-                            )
-                        time.sleep(min(0.05, max(0.001, deadline - time.monotonic())))
+        with (
+            TemporaryDirectory(prefix="tickwitness-queue-") as directory,
+            TemporaryFile() as stdin,
+            TemporaryFile() as stdout,
+            TemporaryFile() as stderr,
+        ):
+            stdin.write(request)
+            stdin.seek(0)
+            try:
+                process = subprocess.Popen(
+                    [
+                        str(self.python_executable),
+                        "-I",
+                        "-m",
+                        "tickwitness.infrastructure._queue_worker",
+                    ],
+                    stdin=stdin,
+                    stdout=stdout,
+                    stderr=stderr,
+                    cwd=directory,
+                    start_new_session=True,
+                )
+            except OSError as error:
+                raise ReplayProcessError(
+                    "engine_unavailable", "Queue worker interpreter could not start", 6
+                ) from error
+            deadline = time.monotonic() + timeout
+            try:
+                while process.poll() is None:
                     if _size(stdout) > MAX_RESULT_BYTES or _size(stderr) > MAX_STDERR_BYTES:
                         raise ReplayProcessError(
                             "engine_output_limit", "Queue worker output exceeded its byte bound"
                         )
-                    if process.returncode != 0:
-                        stderr.seek(0)
-                        SubprocessReplayAdapter._raise_worker_error(
-                            process.returncode, stderr.read(MAX_STDERR_BYTES + 1)
+                    if time.monotonic() >= deadline:
+                        raise ReplayProcessError(
+                            "engine_timeout", "Queue worker exceeded the frozen wall time"
                         )
-                    stdout.seek(0)
-                    raw = stdout.read(MAX_RESULT_BYTES + 1)
-                finally:
-                    _kill(process)
+                    time.sleep(min(0.05, max(0.001, deadline - time.monotonic())))
+                if _size(stdout) > MAX_RESULT_BYTES or _size(stderr) > MAX_STDERR_BYTES:
+                    raise ReplayProcessError(
+                        "engine_output_limit", "Queue worker output exceeded its byte bound"
+                    )
+                if process.returncode != 0:
+                    stderr.seek(0)
+                    SubprocessReplayAdapter._raise_worker_error(
+                        process.returncode, stderr.read(MAX_STDERR_BYTES + 1)
+                    )
+                stdout.seek(0)
+                raw = stdout.read(MAX_RESULT_BYTES + 1)
+            finally:
+                _kill(process)
         try:
             result = load_queue_replay_result(raw)
         except ReplayValidationError as error:
