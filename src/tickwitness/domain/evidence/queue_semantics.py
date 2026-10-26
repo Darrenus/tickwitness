@@ -190,7 +190,7 @@ def _model(replay_input: QueueReplayInput, result: QueueReplayResult) -> Row:
     for row in cast("list[Row]", selected["trace"]):
         event = events[cast("int", cast("Row", row["source_ref"])["line"])]
         recorded = None if event.event_type == "trade" else dict(event.bids).get(
-            cast("int", cast("Row", replay_input.family.constraint.document["target"])["price_ticks"])
+            cast("int", cast("Row", replay_input.family.constraint.document["target"])["price_ticks"]))
         trace.append({**row, "recorded_external_lots": recorded})
     own_by_line: dict[int, int] = {}
     for row in cast("list[Row]", result.document["fill_trace"]):

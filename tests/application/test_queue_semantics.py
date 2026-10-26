@@ -150,6 +150,9 @@ def test_actual_artifact_corruption_cannot_become_an_insufficient_evidence_findi
     class CorruptRead:
         def __getattr__(self, name):
             return getattr(case.ledger, name)
+        def get_intent(self, attempt_id):
+            raw = case.ledger.get_intent(attempt_id)
+            return raw + b" " if artifact == "intent" and attempt_id == case.front.attempt_id else raw
         def read_artifact(self, content_hash, **kwargs):
             raw = original(content_hash, **kwargs)
             return raw + b" " if content_hash == selected else raw
