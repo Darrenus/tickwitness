@@ -29,6 +29,9 @@ from tickwitness.cli_queues import execute as execute_queue_command
 from tickwitness.cli_scenarios import COMMANDS as SCENARIO_COMMANDS
 from tickwitness.cli_scenarios import add_commands as add_scenario_commands
 from tickwitness.cli_scenarios import execute as execute_scenario_command
+from tickwitness.cli_tagged_queue import COMMANDS as TAGGED_QUEUE_COMMANDS
+from tickwitness.cli_tagged_queue import add_commands as add_tagged_queue_commands
+from tickwitness.cli_tagged_queue import execute as execute_tagged_queue_command
 from tickwitness.domain.assumptions.queue_constraints import QueueConstraintValidationError
 from tickwitness.domain.assumptions.specs import AssumptionValidationError
 from tickwitness.domain.data_evidence.events import DataValidationError, ValidationLimits
@@ -66,6 +69,9 @@ from tickwitness.infrastructure.queue_family_registry import (
     QueueFamilyRegistryError,
 )
 from tickwitness.infrastructure.safe_input import InputReadError, read_jsonl, read_regular_file
+from tickwitness.infrastructure.tagged_queue_registry import (
+    TaggedQueueNotFoundError, TaggedQueueRegistryError,
+)
 from tickwitness.infrastructure.subprocess_replay import ReplayProcessError, SubprocessReplayAdapter
 
 
@@ -164,13 +170,16 @@ def main(argv: list[str] | None = None) -> int:
     add_scenario_commands(commands)
     add_queue_commands(commands)
     add_queue_execution_commands(commands)
+    add_tagged_queue_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in QUEUE_EXECUTION_COMMANDS:
+        if arguments.command in TAGGED_QUEUE_COMMANDS:
+            output, identity = execute_tagged_queue_command(arguments), ""
+        elif arguments.command in QUEUE_EXECUTION_COMMANDS:
             output, identity = execute_queue_execution_command(arguments), ""
         elif arguments.command == QUEUE_COMMAND:
             output, identity = execute_queue_command(arguments), ""
@@ -304,6 +313,7 @@ def main(argv: list[str] | None = None) -> int:
         ExecutableProtocolNotFoundError,
         BundleNotFoundError,
         QueueFamilyNotFoundError,
+        TaggedQueueNotFoundError,
     ) as error:
         return _write_error("research_evidence_not_found", error, 4)
     except BundleDestinationExistsError as error:
@@ -315,6 +325,7 @@ def main(argv: list[str] | None = None) -> int:
         ExecutableRegistryError,
         BundleError,
         QueueFamilyRegistryError,
+        TaggedQueueRegistryError,
     ) as error:
         return _write_error("research_store_integrity_or_io_failure", error, 3)
     except DatasetNotFoundError as error:
@@ -336,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
             output, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
         )
     )
-    if arguments.command == "run-queue-family" and output["status"] != "completed":
+    if arguments.command in ("run-queue-family", "run-tagged-queue-pair") and output["status"] != "completed":
         failures = output["failures"]
         if isinstance(failures, list) and failures and isinstance(failures[0], dict):
             return int(failures[0].get("exit_code", 7))
