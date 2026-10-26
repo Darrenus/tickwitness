@@ -6,11 +6,19 @@ from typing import Protocol, cast
 from tickwitness.application.data_access import DatasetReader
 from tickwitness.application.research import ConfirmationAccessDenied
 from tickwitness.application.tagged_queue_execution import (
-    TaggedQueueLedger, TaggedQueueReader, tagged_queue_run_evidence,
+    TaggedQueueLedger,
+    TaggedQueueReader,
+    tagged_queue_run_evidence,
 )
-from tickwitness.domain.evidence.run_records import EvidenceValidationError, canonical, digest, identity
+from tickwitness.domain.evidence.run_records import (
+    EvidenceValidationError,
+    canonical,
+    digest,
+    identity,
+)
 from tickwitness.domain.evidence.tagged_pair_verification import (
-    assess_tagged_pair_artifacts, verify_tagged_pair_artifacts,
+    assess_tagged_pair_artifacts,
+    verify_tagged_pair_artifacts,
 )
 from tickwitness.domain.research_contracts.tagged_queue_protocol import TAGGED_POLICY_IDS
 
@@ -34,8 +42,13 @@ def _development(split: str) -> None:
 
 
 def tagged_pair_artifacts(
-    first_run_id: str, second_run_id: str, *, split: str = "development",
-    ledger: TaggedQueueLedger, protocols: TaggedQueueReader, datasets: TaggedPairDatasetReader,
+    first_run_id: str,
+    second_run_id: str,
+    *,
+    split: str = "development",
+    ledger: TaggedQueueLedger,
+    protocols: TaggedQueueReader,
+    datasets: TaggedPairDatasetReader,
 ) -> dict[str, bytes]:
     """Reaudit actual committed outcomes before preparing any destination or manifest."""
     _development(split)
@@ -43,8 +56,10 @@ def tagged_pair_artifacts(
     identity(second_run_id)
     if first_run_id == second_run_id:
         raise EvidenceValidationError("Tagged pair requires two distinct committed runs")
-    evidence = [tagged_queue_run_evidence(run_id, ledger=ledger, protocols=protocols, datasets=datasets)
-                for run_id in (first_run_id, second_run_id)]
+    evidence = [
+        tagged_queue_run_evidence(run_id, ledger=ledger, protocols=protocols, datasets=datasets)
+        for run_id in (first_run_id, second_run_id)
+    ]
     left, right = evidence
     protocol = left.replay_input.protocol
     if protocol.canonical_bytes != right.replay_input.protocol.canonical_bytes:
@@ -59,16 +74,22 @@ def tagged_pair_artifacts(
     artifacts = dict(data, protocol=protocol.canonical_bytes)
     for role, policy in zip(("front", "back"), TAGGED_POLICY_IDS, strict=True):
         item = by_policy[policy]
-        artifacts.update({role + "_result": item.result.canonical_bytes,
-                          role + "_evaluation": item.evaluation.canonical_bytes,
-                          role + "_receipt": item.receipt.canonical_bytes})
+        artifacts.update(
+            {
+                role + "_result": item.result.canonical_bytes,
+                role + "_evaluation": item.evaluation.canonical_bytes,
+                role + "_receipt": item.receipt.canonical_bytes,
+            }
+        )
     assessment = assess_tagged_pair_artifacts(artifacts)
     artifacts["assessment"] = assessment.canonical_bytes
     return artifacts
 
 
 def verify_tagged_pair_package(
-    package: TaggedPairPackage, *, expected_bundle_id: str | None = None,
+    package: TaggedPairPackage,
+    *,
+    expected_bundle_id: str | None = None,
     split: str = "development",
 ) -> dict[str, object]:
     """A portable receipt verifies supplied bytes, never author or original ledger history."""
@@ -81,20 +102,33 @@ def verify_tagged_pair_package(
         raise EvidenceValidationError("Tagged bundle identity differs from its manifest")
     artifacts = package.artifacts
     verified = verify_tagged_pair_artifacts(artifacts)
-    expected_manifest = canonical({
-        "kind": "tagged_queue_pair_evidence_bundle_v1", "schema_version": 1,
-        "scope": "development_tagged_queue_pair_v1",
-        "roles": {role: {"sha256": digest(data), "size_bytes": len(data),
-                         "ref": f"objects/sha256/{digest(data)}"}
-                  for role, data in artifacts.items()},
-    })
+    expected_manifest = canonical(
+        {
+            "kind": "tagged_queue_pair_evidence_bundle_v1",
+            "schema_version": 1,
+            "scope": "development_tagged_queue_pair_v1",
+            "roles": {
+                role: {
+                    "sha256": digest(data),
+                    "size_bytes": len(data),
+                    "ref": f"objects/sha256/{digest(data)}",
+                }
+                for role, data in artifacts.items()
+            },
+        }
+    )
     if manifest != expected_manifest:
-        raise EvidenceValidationError("Tagged package manifest does not describe its artifact closure")
+        raise EvidenceValidationError(
+            "Tagged package manifest does not describe its artifact closure"
+        )
     return {"bundle_id": bundle_id, **verified}
 
 
 def export_tagged_pair(
-    first_run_id: str, second_run_id: str, *, split: str,
+    first_run_id: str,
+    second_run_id: str,
+    *,
+    split: str,
     ledger_factory: Callable[[], TaggedQueueLedger],
     protocols_factory: Callable[[], TaggedQueueReader],
     datasets_factory: Callable[[], TaggedPairDatasetReader],
@@ -104,8 +138,14 @@ def export_tagged_pair(
     _development(split)
     identity(first_run_id)
     identity(second_run_id)
-    artifacts = tagged_pair_artifacts(first_run_id, second_run_id, split=split,
-        ledger=ledger_factory(), protocols=protocols_factory(), datasets=datasets_factory())
+    artifacts = tagged_pair_artifacts(
+        first_run_id,
+        second_run_id,
+        split=split,
+        ledger=ledger_factory(),
+        protocols=protocols_factory(),
+        datasets=datasets_factory(),
+    )
     package = exporter(artifacts)
     if package.artifacts != artifacts:
         raise EvidenceValidationError("Exporter returned a different tagged pair than requested")
