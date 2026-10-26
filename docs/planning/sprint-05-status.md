@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | S05-01 / Issue #13 | 不可变 AssumptionSpec / ScenarioSpec、研究者设定的未校准纳秒范围、suffix anchor、真实来源绑定与只读 `validate-scenario` | PR #79 远端检查通过，待 owner 合并 |
 | S05-02 / Issue #14 | 耦合 receive-clock 后缀压力执行、独立派生身份、持久intent、共享预算及复核 | PR #80 两阶段远端验收通过，待 owner 合并；未发行 |
-| S05-03 / Issue #15 | 基线/干预配对与首次分歧、数值变化说明 | 依赖 S05-02；不能将输入时间戳/hash 不同、incomplete 或不可评价状态当作命题翻转 |
+| S05-03 / Issue #15 | 已提交基线/干预关联重验、精确数值差、raw/业务投影各通道首次分歧 | PR #81 远端验收通过，待 owner 合并；未发行 |
 
 故事范围与容量仍见 [Sprint backlog](sprint-backlog.md#s5--假设约束与首个压力情景)。实际投入时间尚未登记，不把代码生成、自审或 AI 交叉审查计为独立人类领域验收。真实访谈、外部采用和其他开放研究门继续保留原记录，不由本切片补数。
 
@@ -41,9 +41,28 @@
 
 Phase B 仅在读取上述实际报告后接入执行：原协议 reserve、engine 前持久intent/CAS、派生 view 身份、独立 scenario receipt/evaluation、`inspect-scenario-run` 重派生和账务审计。旧 baseline receipt/bundle 拒绝压力结果。场景 portable bundle 与通用配对/首次分歧仍不计完成。本机未运行测试、构建、回放或基准。
 
+S05-02 上述范围为当时验收边界；S05-03 随后单独实现 `compare-scenario-runs`，使用同一原协议下两个已提交 outcome，只读重验来源与账务，不再运行策略或占 attempt。[报告合同](../contracts/scenario-comparison-v1.md) 将 raw metadata 差异与业务投影区分，给确定性每通道位置；不声称全局因果最早，不输出新的 claim verdict。实际验收见下节；前置 PR #79/#80 尚待 owner 合并。
+
 Phase B head `101a3dc06932d1ef0f4736b0ad7fbedad64dd7f6` 的 [Engineering 40221168032](https://github.com/Darrenus/tickwitness/actions/runs/40221168032) 与 [Documentation 40221168033](https://github.com/Darrenus/tickwitness/actions/runs/40221168033) 全部通过；实际 merge checkout 为 `c751bc9a64fce85934d6fddebf88787d1474b36e`。核心六组合各 1038 passed / 27 optional-native skips；原生 Ubuntu 24.04、macOS 26 / Python 3.12 各 1063 passed / 2 core-only skips。106 个 warning 来自既有原生撮合路径，未将 warning 当通过断言。
 
 两平台实际 wheel 安装后均跑完整 CLI：独立基线、零干预、2 秒 suffix 压力分别输出 -2 / -2 / -1 USD；场景 inspect 重派生/账务核验成功且 `native_replayed=false`；三次共用预算，第四次被拒；原数据 unchanged、旧 baseline bundle 拒绝场景回执。各平台报告 artifact 为 `scenario-execution-<os>-c751bc9a64fce85934d6fddebf88787d1474b36e`。预览制品 job 另从实际 sdist 取脚本和样例，在新环境安装实际 wheel，核心及原生场景 smoke 通过；制品为未发布开发构建。
+
+## S05-03 关联与分歧报告验收
+
+[PR #81](https://github.com/Darrenus/tickwitness/pull/81) 以 PR #80 为 base。代码 head `7e8cab641fbb84f71137f67d7d5bcfeefbb4c536` 的 [Engineering 40251607821](https://github.com/Darrenus/tickwitness/actions/runs/40251607821) 与 [Documentation 40251607842](https://github.com/Darrenus/tickwitness/actions/runs/40251607842) 共 13 checks 全部通过；实际测试 merge checkout 是 `b78f991964dca3ad500612554e2184af226a5a8c`，不等同 PR head。核心六组合各 1098 passed / 29 optional-native skips；原生两组合各 1125 passed / 2 core-only skips，106 个既有 native warning 保留。
+
+真实 native 测试运行并持久化 baseline、zero、suffix +2s、uniform +2s 四个结果，再禁止 reserve/worker.run 后比较并核对 slot bytes 不变。实际观察如下：
+
+| 对照 | 数值/业务观察 |
+| --- | --- |
+| zero | delta `0` USD；业务 first divergence 为 null，不叫策略失效 |
+| capture 4 起 suffix +2s | baseline -2 / scenario -1 USD，exact delta `1`；业务首项位于 `/order_trace/5/fields/pending_command_ids/0`，左侧 ordinal 5 为 capture 5 的 `OrderFilled`，右侧 ordinal 5 为 capture 4 的 `OrderCanceled`，保留存在标记、原值和 source refs |
+| uniform +2s | 实际生成 order ID 和 cancel rejection reason 确实改变，raw change 为 true；业务投影相同、delta `0`，不将元数据变化叫业务失败 |
+| pending-submit EOF | 两边 incomplete、业务轨迹相同但不可评价，`not_comparable` / `delta=null`，不填零伪造无影响 |
+
+安装后 CLI 在三槽预算已耗尽时重复比较 baseline/zero/suffix，内容身份稳定且无新增 attempt。两平台 `scenario-execution-<os>-b78f991964dca3ad500612554e2184af226a5a8c` artifact 中保存实际报告；实际 wheel 与其实际 sdist 中的脚本/样例还在新环境完成核心/原生安装验收。报告 scope 明示：仅为完整性而重算原 baseline claim，不评价场景 claim，也不发出新的 claim verdict。基线 bundle v1 不变，独立可搬迁 scenario bundle 仍未提供。
+
+本轮所有测试、构建、原生回放和安装验收均在远端执行，本机只编辑/审查文件、Git/gh 控制及读取下载的报告。AI 交叉审查不等于独立人类领域验收；PR #81 与前置 PR 仍需 owner 接受，尚无 0.2 发行。
 
 ## 延迟执行与配对风险
 

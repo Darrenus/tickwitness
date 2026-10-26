@@ -101,3 +101,9 @@ S05-03 的 controlled intervention 配对应披露共同条件与允许变化；
 每次引擎调用占原 v2 protocol 的一个不可退 slot；不因 candidate/assumption 变更重置预算。预留后必须先持久完整 intent 及其制品才能构造引擎，中断保留候选归属；intent 绑定与终态发布串行且不可替换。新 scenario receipt/failure 与 baseline 类型严格分开；场景审计复用精确费用/账务逻辑，只输出 metric observation，不套用原 baseline claim 的 comparator 形成反例结论。
 
 S05-02 的持久化和复核依赖 data/registry/runs 三根；旧八角色 bundle v1 保持只接受 baseline。独立场景 bundle 和 S05-03 通用配对留作后续独立能力，不用放宽旧 verifier 或伪造 baseline protocol 来接纳派生数据。
+
+## ADR-014 只读受控干预关联与分层分歧报告
+
+状态：Proposed，S05-03。使用已提交 baseline/scenario 回执关联，不增加 native 调用或预算槽；重新核验双方来源、派生、终态及账务，要求原协议、数据来源、ReplaySpec、engine 和完整 environment 一致。旧 baseline receipt、bundle 与 ReplayComparison 的严格相同条件判定保持不变；新报告为 controlled intervention，不能冒充 strictly paired。
+
+raw 与显式字段业务投影分别给每通道首差异，保留原始值、指针和事件引用。订单角色映射仅定址处理，不能递归替换源 trade ID 的文本；只精确识别 pinned cancel reason 模板。固定报告顺序不建立跨通道全局时间/因果顺序。双方完整可评价且 mark/fee 定义一致才给有理数计算的十进制差值；不可比较保留 null/原因，无分歧也不叫策略失效。精确合同见[Scenario Comparison v1](../contracts/scenario-comparison-v1.md)。

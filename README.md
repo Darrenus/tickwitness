@@ -20,7 +20,7 @@ The initial product is a local-first research verification toolkit for quantitat
 | [Quickstart](docs/quickstart.md) | Clean installation, synthetic replay and portable offline verification |
 | [Preview support](docs/support.md) | Tested environments, trust boundaries, compatibility and maintenance scope |
 | [0.1.0a1 preview notes](docs/releases/0.1.0a1.md) | Candidate artifacts, release gates and known limitations |
-| [Scenario workflow](docs/scenarios.md) | Validate declarations, reserve shared attempt budget, execute coupled-clock stress and recompute its evidence |
+| [Scenario workflow](docs/scenarios.md) | Validate declarations, execute budgeted stress, re-audit baseline/scenario pairs and locate trace changes |
 | [Development entry point](docs/development.md) | Locked environment, local checks, package build and current limitations |
 | [Data import guide](docs/data-import.md) | Executable import/inspect workflow, format, limits, and trust boundaries |
 | [Frozen protocol guide](docs/research-protocols.md) | Bind actual data/source, seal a declaration, read development data and verify confirmation denial |
@@ -67,7 +67,7 @@ To export the planning source as machine-readable JSON without modifying GitHub:
 uv run --locked python scripts/export_backlog.py
 ```
 
-The CLI includes `freeze-experiment`, `replay-protocol`, `inspect-attempt`, `inspect-run`, `export-evidence`, and `verify-evidence`, alongside the earlier data/protocol/replay commands. Development-only `validate-scenario` remains a read-only input check with `execution_approved=false`. Separate `run-scenario` persists intent before native execution and consumes the original protocol's attempt budget; `inspect-scenario-run` recomputes its view and accounting without replay. Scenario receipts are distinct from baseline claim observations and cannot enter baseline evidence-bundle v1. V1 declarations remain non-executable; v2 binds the supported built-in profile and development-only policy. Failed or interrupted attempts consume budget, and ambiguous fee models produce no claim truth. Verification does not authenticate an author or audit a complete historical trial ledger. The remaining architecture is a proposed target.
+The CLI includes `freeze-experiment`, `replay-protocol`, `inspect-attempt`, `inspect-run`, `export-evidence`, and `verify-evidence`, alongside the earlier data/protocol/replay commands. Development-only `validate-scenario` remains a read-only input check with `execution_approved=false`. Separate `run-scenario` persists intent before native execution and consumes the original protocol's attempt budget; `inspect-scenario-run` recomputes its view and accounting without replay. `compare-scenario-runs` re-audits two committed runs, validates their shared source/model, and reports exact metric differences plus raw and business trace changes. It consumes no attempt and makes no global earliest-cause or baseline-claim verdict. Scenario receipts are distinct from baseline claim observations and cannot enter baseline evidence-bundle v1. V1 declarations remain non-executable; v2 binds the supported built-in profile and development-only policy. Failed or interrupted attempts consume budget, and ambiguous fee models produce no claim truth. Verification does not authenticate an author or audit a complete historical trial ledger. The remaining architecture is a proposed target.
 
 ## Contribute
 

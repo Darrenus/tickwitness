@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tickwitness.application.experiments import inspect_attempt
 from tickwitness.application.research import ConfirmationAccessDenied
+from tickwitness.application.scenario_comparison import compare_scenario_runs
 from tickwitness.application.scenario_execution import inspect_scenario_run, run_scenario
 from tickwitness.application.scenarios import validate_scenario_contracts
 from tickwitness.domain.evidence.run_records import parse
@@ -18,7 +19,15 @@ from tickwitness.infrastructure.safe_input import read_regular_file
 from tickwitness.infrastructure.subprocess_replay import SubprocessReplayAdapter
 
 COMMAND = "validate-scenario"
-COMMANDS = frozenset({COMMAND, "run-scenario", "inspect-scenario-run", "inspect-scenario-attempt"})
+COMMANDS = frozenset(
+    {
+        COMMAND,
+        "run-scenario",
+        "inspect-scenario-run",
+        "inspect-scenario-attempt",
+        "compare-scenario-runs",
+    }
+)
 
 
 def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -52,9 +61,33 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
     )
     attempt.add_argument("attempt_id")
     attempt.add_argument("--runs", type=Path, required=True)
+    comparison = commands.add_parser(
+        "compare-scenario-runs",
+        help="Re-audit a committed baseline/scenario pair and locate changes",
+    )
+    comparison.add_argument("baseline_run_id")
+    comparison.add_argument("scenario_run_id")
+    comparison.add_argument("--runs", type=Path, required=True)
+    comparison.add_argument("--registry", type=Path, required=True)
+    comparison.add_argument("--store", type=Path, required=True)
+    comparison.add_argument(
+        "--split", choices=("development", "confirmation"), default="development"
+    )
 
 
 def execute(arguments: argparse.Namespace) -> dict[str, object]:
+    if arguments.command == "compare-scenario-runs":
+        comparison = compare_scenario_runs(
+            arguments.baseline_run_id,
+            arguments.scenario_run_id,
+            split=arguments.split,
+            ledger_factory=lambda: LocalAttemptLedger(arguments.runs, create=False),
+            registry_factory=lambda: LocalExecutableProtocolRegistry(
+                arguments.registry, create=False
+            ),
+            datasets_factory=lambda: LocalDatasetStore(arguments.store, create=False),
+        )
+        return {"comparison_id": comparison.comparison_id, **comparison.document}
     if arguments.command == "inspect-scenario-attempt":
         ledger = LocalAttemptLedger(arguments.runs, create=False)
         output = inspect_attempt(arguments.attempt_id, ledger)

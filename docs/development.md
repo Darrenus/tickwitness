@@ -1,6 +1,6 @@
 # TickWitness 开发入口
 
-状态：Sprint 5 开发，2026-10-26。PR#78已接受，`v0.1.0a1`技术预览[已发布](https://github.com/Darrenus/tickwitness/releases/tag/v0.1.0a1)；当前`0.2.0.dev0`新增[场景校验与耦合回放时钟压力执行](scenarios.md)，仍待对应PR验收。既有v2协议、预算、账务、导出和离线核验见[证据工作流](evidence-workflow.md)，发行版安装入口见[quickstart](quickstart.md)。v1仍不可执行，回放profile仅EUR/USD内置买单；任意源码、确认解封、独立venue/observer feed-delay、搜索判定和完整公共SDK尚未提供。
+状态：Sprint 5 开发，2026-10-26。PR#78已接受，`v0.1.0a1`技术预览[已发布](https://github.com/Darrenus/tickwitness/releases/tag/v0.1.0a1)；当前`0.2.0.dev0`新增[场景校验、耦合回放时钟压力执行及只读配对报告](scenarios.md)，远端证据见 [Sprint 5 状态](planning/sprint-05-status.md)，仍待对应PR的owner接受。既有v2协议、预算、账务、导出和离线核验见[证据工作流](evidence-workflow.md)，发行版安装入口见[quickstart](quickstart.md)。v1仍不可执行，回放profile仅EUR/USD内置买单；任意源码、确认解封、独立venue/observer feed-delay、搜索判定和完整公共SDK尚未提供。
 
 ## 从干净 checkout 开始
 
