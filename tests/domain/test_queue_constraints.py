@@ -30,7 +30,10 @@ def request() -> dict:
 
 
 def observations() -> list[dict]:
-    return [json.loads(line) for line in (EXAMPLES / "queue-observations.jsonl").read_bytes().splitlines()]
+    return [
+        json.loads(line)
+        for line in (EXAMPLES / "queue-observations.jsonl").read_bytes().splitlines()
+    ]
 
 
 def context(*, records=None, spec_changes=None, budget=1000):
@@ -75,8 +78,10 @@ def test_two_cancel_allocations_share_external_observations_and_have_no_fill_cla
     assert doc["classification"] == CLASSIFICATION == "MODEL_SENSITIVITY_CANDIDATE"
     assert doc["source_bindings_verified"] is doc["flow_conservation_verified"] is True
     for key in (
-        "actual_acceptance_verified", "impact_compatibility_verified",
-        "native_execution_verified", "execution_approved",
+        "actual_acceptance_verified",
+        "impact_compatibility_verified",
+        "native_execution_verified",
+        "execution_approved",
     ):
         assert doc[key] is False
         assert constraint.document[key] is False
@@ -95,7 +100,13 @@ def test_two_cancel_allocations_share_external_observations_and_have_no_fill_cla
     assert front["trace"][4]["flow"]["cancellations_lots"] == 0
     assert front["trace"][3]["source_ref"] == {"line": 4, "capture_seq": 4, "event_type": "trade"}
     assert case.replay_input.normalized_bytes == source
-    for absent in (b'"fills"', b'"capacity"', b'"valuation"', b'"claim_observation"', b'"findings"'):
+    for absent in (
+        b'"fills"',
+        b'"capacity"',
+        b'"valuation"',
+        b'"claim_observation"',
+        b'"findings"',
+    ):
         assert absent not in pair.canonical_bytes
 
 
@@ -103,7 +114,9 @@ def test_source_bindings_target_identity_and_detached_frozen_documents() -> None
     case = context()
     first = build(case=case)
     reordered = json.dumps(request(), sort_keys=False, indent=2).encode()
-    repeated = build_queue_constraint_spec(reordered, protocol=case.protocol, replay_input=case.replay_input)
+    repeated = build_queue_constraint_spec(
+        reordered, protocol=case.protocol, replay_input=case.replay_input
+    )
     assert first == repeated == load_queue_constraint_spec(first.canonical_bytes)
     assert first.constraint_id == digest(first.canonical_bytes)
     assert first.document["bindings"] == {
@@ -113,8 +126,11 @@ def test_source_bindings_target_identity_and_detached_frozen_documents() -> None
         "replay_spec_id": case.replay_input.spec.spec_id,
     }
     assert first.document["target"] == {
-        "source": "synthetic", "instrument": "EUR-USD", "session": "replay-fixture-v1",
-        "side": "bid", "price_ticks": 100,
+        "source": "synthetic",
+        "instrument": "EUR-USD",
+        "session": "replay-fixture-v1",
+        "side": "bid",
+        "price_ticks": 100,
     }
     pair = validate(first, case)
     assert pair.validation_id == digest(pair.canonical_bytes)
@@ -147,9 +163,15 @@ def test_no_cancel_negative_control_has_identical_queue_states_for_both_policies
     pair = validate(build(declaration, case=context(records=rows)), context(records=rows)).document
     front, back = pair["interpretations"]
     assert front["trace"] == back["trace"]
-    assert front["final_state"] == back["final_state"] == {
-        "ahead_lots": 2, "behind_lots": 3, "external_lots": 5,
-    }
+    assert (
+        front["final_state"]
+        == back["final_state"]
+        == {
+            "ahead_lots": 2,
+            "behind_lots": 3,
+            "external_lots": 5,
+        }
+    )
 
 
 def test_same_time_inputs_keep_capture_order_without_resorting() -> None:
@@ -159,11 +181,15 @@ def test_same_time_inputs_keep_capture_order_without_resorting() -> None:
         row["event_time_ns"] = 1_699_999_999_999_999_900
     case = context(records=rows)
     pair = validate(build(case=case), case).document
-    assert [row["source_ref"]["capture_seq"] for row in pair["interpretations"][0]["trace"]] == list(range(1, 7))
+    assert [
+        row["source_ref"]["capture_seq"] for row in pair["interpretations"][0]["trace"]
+    ] == list(range(1, 7))
     assert pair["interpretations"][0]["final_state"]["external_lots"] == 2
 
 
-@pytest.mark.parametrize("change", ["unknown", "classification", "bindings", "target", "finding", "execute"])
+@pytest.mark.parametrize(
+    "change", ["unknown", "classification", "bindings", "target", "finding", "execute"]
+)
 def test_requests_cannot_self_supply_bindings_labels_or_execution(change) -> None:
     declaration = request()
     declaration[change] = "OBSERVATION_COMPATIBLE" if change == "classification" else True
@@ -171,10 +197,15 @@ def test_requests_cannot_self_supply_bindings_labels_or_execution(change) -> Non
         build(declaration)
 
 
-@pytest.mark.parametrize("field,value", [
-    ("priority", "pro_rata"), ("hidden_liquidity", "possible"),
-    ("impact", "verified"), ("flow_timing", "cancels_then_adds"),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("priority", "pro_rata"),
+        ("hidden_liquidity", "possible"),
+        ("impact", "verified"),
+        ("flow_timing", "cancels_then_adds"),
+    ],
+)
 def test_unsupported_assumption_cannot_silently_change_model(field, value) -> None:
     declaration = request()
     declaration["assumptions"][field] = value
@@ -195,10 +226,16 @@ def test_parameter_basis_does_not_upgrade_itself_to_observation_evidence(mutatio
         build(declaration)
 
 
-@pytest.mark.parametrize("field,value", [
-    ("entry_capture_seq", True), ("entry_capture_seq", 2), ("schema_version", True),
-    ("schema_version", 2), ("model_profile_id", "native_queue_front"),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("entry_capture_seq", True),
+        ("entry_capture_seq", 2),
+        ("schema_version", True),
+        ("schema_version", 2),
+        ("model_profile_id", "native_queue_front"),
+    ],
+)
 def test_strict_markers_and_true_integer_entry(field, value) -> None:
     declaration = request()
     declaration[field] = value
@@ -206,11 +243,18 @@ def test_strict_markers_and_true_integer_entry(field, value) -> None:
         build(declaration)
 
 
-@pytest.mark.parametrize("field,value", [
-    ("capture_seq", True), ("capture_seq", 1), ("additions_lots", -1),
-    ("cancellations_lots", True), ("additions_lots", MAX_QUEUE_LOTS + 1),
-    ("trade_capture_seqs", [True]), ("trade_capture_seqs", [4, 4]),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("capture_seq", True),
+        ("capture_seq", 1),
+        ("additions_lots", -1),
+        ("cancellations_lots", True),
+        ("additions_lots", MAX_QUEUE_LOTS + 1),
+        ("trade_capture_seqs", [True]),
+        ("trade_capture_seqs", [4, 4]),
+    ],
+)
 def test_update_integer_ranges_and_duplicate_trade_references(field, value) -> None:
     declaration = request()
     declaration["updates"][2][field] = value
@@ -218,13 +262,23 @@ def test_update_integer_ranges_and_duplicate_trade_references(field, value) -> N
         build(declaration)
 
 
-@pytest.mark.parametrize("mutation", ["missing", "extra", "unsorted", "wrong_interval", "omit_trade", "double_count"])
+@pytest.mark.parametrize(
+    "mutation", ["missing", "extra", "unsorted", "wrong_interval", "omit_trade", "double_count"]
+)
 def test_complete_checkpoint_partition_and_trade_reconciliation(mutation) -> None:
     declaration = request()
     if mutation == "missing":
         declaration["updates"].pop()
     elif mutation == "extra":
-        declaration["updates"].insert(2, {"capture_seq": 4, "additions_lots": 0, "cancellations_lots": 0, "trade_capture_seqs": []})
+        declaration["updates"].insert(
+            2,
+            {
+                "capture_seq": 4,
+                "additions_lots": 0,
+                "cancellations_lots": 0,
+                "trade_capture_seqs": [],
+            },
+        )
     elif mutation == "unsorted":
         declaration["updates"].reverse()
     elif mutation == "wrong_interval":
@@ -262,11 +316,14 @@ def test_trade_cannot_be_financed_by_addition_at_a_later_checkpoint() -> None:
         build(declaration, case=context(records=rows))
 
 
-@pytest.mark.parametrize("changes", [
-    {"execution": {"insert_latency_ns": 1}},
-    {"strategy": {"submit_capture_seq": 2}},
-    {"strategy": {"limit_price_ticks": 98}},
-])
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"execution": {"insert_latency_ns": 1}},
+        {"strategy": {"submit_capture_seq": 2}},
+        {"strategy": {"limit_price_ticks": 98}},
+    ],
+)
 def test_native_acceptance_is_not_assumed_for_unsupported_entry_conditions(changes) -> None:
     with pytest.raises(QueueConstraintValidationError):
         build(case=context(spec_changes=changes))
@@ -277,7 +334,9 @@ def test_frozen_event_budget_is_enforced_without_engine_or_attempt() -> None:
         build(case=context(budget=5))
 
 
-@pytest.mark.parametrize("binding", ["protocol_id", "development_dataset_id", "normalized_sha256", "replay_spec_id"])
+@pytest.mark.parametrize(
+    "binding", ["protocol_id", "development_dataset_id", "normalized_sha256", "replay_spec_id"]
+)
 def test_self_consistent_rehashed_wrong_source_binding_is_rejected(binding) -> None:
     document = build().document
     document["bindings"][binding] = "c" * 64
@@ -293,7 +352,15 @@ def test_target_is_rederived_from_the_actual_protocol_and_source() -> None:
         validate(load_queue_constraint_spec(canonical(document)))
 
 
-@pytest.mark.parametrize("flag", ["actual_acceptance_verified", "impact_compatibility_verified", "native_execution_verified", "execution_approved"])
+@pytest.mark.parametrize(
+    "flag",
+    [
+        "actual_acceptance_verified",
+        "impact_compatibility_verified",
+        "native_execution_verified",
+        "execution_approved",
+    ],
+)
 def test_loaders_cannot_bless_native_or_market_proofs(flag) -> None:
     document = build().document
     document[flag] = True
@@ -312,10 +379,24 @@ def test_frozen_identity_tampering_is_rechecked_when_validating() -> None:
         replace(original, constraint_id="0" * 64)
 
 
-@pytest.mark.parametrize("raw", [b"", b"{}", b"[]", b"\xff", b"{" + b" " * 65536 + b"}", b'{"kind":1,"kind":2}', b'{"kind":1.0}', b'{"kind":NaN}'])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"",
+        b"{}",
+        b"[]",
+        b"\xff",
+        b"{" + b" " * 65536 + b"}",
+        b'{"kind":1,"kind":2}',
+        b'{"kind":1.0}',
+        b'{"kind":NaN}',
+    ],
+)
 def test_bounded_json_rejects_bad_encoding_duplicates_floats_and_nonfinite(raw) -> None:
     with pytest.raises(QueueConstraintValidationError):
-        build_queue_constraint_spec(raw, protocol=context().protocol, replay_input=context().replay_input)
+        build_queue_constraint_spec(
+            raw, protocol=context().protocol, replay_input=context().replay_input
+        )
 
 
 @pytest.mark.parametrize("raw", [None, "{}", [], b"", b"{} "])

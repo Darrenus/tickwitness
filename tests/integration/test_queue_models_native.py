@@ -26,6 +26,9 @@ def native_present() -> bool:
 def test_public_native_shadow_queue_extension(case_id: str) -> None:
     case = qualification.run_case(case_id)
     assert case["passed"] is True, json.dumps(
-        {"case_id": case_id, "error": case.get("error"),
-         "failed": [item for item in case["checks"] if not item["passed"]]}
+        {
+            "case_id": case_id,
+            "error": case.get("error"),
+            "failed": [item for item in case["checks"] if not item["passed"]],
+        }
     )

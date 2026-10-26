@@ -108,16 +108,6 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked --extra nautilus
-      - name: Qualify public queue-model extensions on fixed synthetic observations
-        run: uv run --locked --extra nautilus python -I scripts/qualify_queue_models.py --output /tmp/queue-model-qualification.json
-      - name: Preserve queue allocation and native execution qualification
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: queue-models-${{ matrix.os }}-${{ github.sha }}
-          path: /tmp/queue-model-qualification.json
-          if-no-files-found: error
-          retention-days: 30
       - name: Qualify step-coupled receive clocks before scenario execution
         run: uv run --locked --extra nautilus python -I scripts/qualify_scenario_clocks.py --output /tmp/scenario-clock-qualification.json
       - name: Preserve clock hypotheses and observed native evidence
@@ -126,6 +116,16 @@ jobs:
         with:
           name: scenario-clocks-${{ matrix.os }}-${{ github.sha }}
           path: /tmp/scenario-clock-qualification.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Qualify public queue-model extensions on fixed synthetic observations
+        run: uv run --locked --extra nautilus python -I scripts/qualify_queue_models.py --output /tmp/queue-model-qualification.json
+      - name: Preserve queue allocation and native execution qualification
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: queue-models-${{ matrix.os }}-${{ github.sha }}
+          path: /tmp/queue-model-qualification.json
           if-no-files-found: error
           retention-days: 30
       - run: uv run --locked --extra nautilus pytest

@@ -51,8 +51,13 @@ def case(root: Path):
         datasets_factory=lambda: data,
     )
     return SimpleNamespace(
-        root=root, data=data, registry=registry, frozen=frozen,
-        development=development, confirmation=confirmation_id, protocol_request=request,
+        root=root,
+        data=data,
+        registry=registry,
+        frozen=frozen,
+        development=development,
+        confirmation=confirmation_id,
+        protocol_request=request,
     )
 
 
@@ -131,22 +136,34 @@ def test_real_source_two_shadow_allocations_remain_read_only_and_unapproved(
         assert value["execution_approved"] is False
     interpretations = validation["interpretations"]
     assert [value["policy_id"] for value in interpretations] == [
-        "cancel_front_first_v1", "cancel_back_first_v1"
+        "cancel_front_first_v1",
+        "cancel_back_first_v1",
     ]
     assert interpretations[0]["final_state"] == {
-        "ahead_lots": 0, "behind_lots": 2, "external_lots": 2
+        "ahead_lots": 0,
+        "behind_lots": 2,
+        "external_lots": 2,
     }
     assert interpretations[1]["final_state"] == {
-        "ahead_lots": 2, "behind_lots": 0, "external_lots": 2
+        "ahead_lots": 2,
+        "behind_lots": 0,
+        "external_lots": 2,
     }
     for interpretation in interpretations:
         assert [row["source_ref"]["capture_seq"] for row in interpretation["trace"]] == list(
             range(1, 7)
         )
-    assert not {
-        "fill_trace", "account_trace", "valuation", "metric_observation",
-        "claim_observation", "findings",
-    } & validation.keys()
+    assert (
+        not {
+            "fill_trace",
+            "account_trace",
+            "valuation",
+            "metric_observation",
+            "claim_observation",
+            "findings",
+        }
+        & validation.keys()
+    )
     assert accesses and set(accesses) == {saved.development}
     assert snapshot(tmp_path) == before
     assert not (tmp_path / "runs").exists()
@@ -178,8 +195,11 @@ def test_denied_split_precedes_identity_request_and_repository_factories(split: 
 
     with pytest.raises(ConfirmationAccessDenied):
         validate_queue_contracts(
-            "../bad-id", b"invalid JSON", split=split,
-            registry_factory=forbidden, datasets_factory=forbidden,
+            "../bad-id",
+            b"invalid JSON",
+            split=split,
+            registry_factory=forbidden,
+            datasets_factory=forbidden,
         )
 
 
@@ -190,8 +210,11 @@ def test_invalid_identity_precedes_repository_factories(protocol_id) -> None:
 
     with pytest.raises(QueueConstraintValidationError):
         validate_queue_contracts(
-            protocol_id, b"{}", split="development",
-            registry_factory=forbidden, datasets_factory=forbidden,
+            protocol_id,
+            b"{}",
+            split="development",
+            registry_factory=forbidden,
+            datasets_factory=forbidden,
         )
 
 
@@ -215,8 +238,11 @@ def test_conflicting_protocol_fails_before_source_factory(tmp_path: Path, confli
         ProtocolValidationError if conflict == "invalid_content" else QueueConstraintValidationError
     ):
         validate_queue_contracts(
-            requested, json.dumps(request()).encode(), split="development",
-            registry_factory=Registry, datasets_factory=forbidden,
+            requested,
+            json.dumps(request()).encode(),
+            split="development",
+            registry_factory=Registry,
+            datasets_factory=forbidden,
         )
 
 
@@ -287,8 +313,11 @@ def test_source_revalidation_enforces_frozen_event_budget(tmp_path: Path) -> Non
     saved.registry.seal(protocol.canonical_bytes)
     with pytest.raises(QueueConstraintValidationError):
         validate_queue_contracts(
-            protocol.protocol_id, json.dumps(request()).encode(), split="development",
-            registry_factory=lambda: saved.registry, datasets_factory=lambda: saved.data,
+            protocol.protocol_id,
+            json.dumps(request()).encode(),
+            split="development",
+            registry_factory=lambda: saved.registry,
+            datasets_factory=lambda: saved.data,
         )
     assert not (tmp_path / "runs").exists()
 
@@ -299,7 +328,9 @@ def test_missing_registry_is_not_created_and_precedes_source_factory(tmp_path: P
 
     with pytest.raises(ExecutableProtocolNotFoundError):
         validate_queue_contracts(
-            "0" * 64, b"{}", split="development",
+            "0" * 64,
+            b"{}",
+            split="development",
             registry_factory=lambda: LocalExecutableProtocolRegistry(
                 tmp_path / "absent", create=False
             ),

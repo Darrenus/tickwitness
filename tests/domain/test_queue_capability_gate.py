@@ -32,11 +32,16 @@ def test_existing_replay_spec_rejects_a_silently_added_queue_policy() -> None:
 
 def test_existing_accounting_auditor_rejects_the_new_probe_semantic() -> None:
     spec = build_replay_spec((FIXTURES / "evidence-replay-spec.json").read_bytes())
-    normalized = normalize_events((FIXTURES / "evidence-events.jsonl").read_bytes()).normalized_bytes
+    normalized = normalize_events(
+        (FIXTURES / "evidence-events.jsonl").read_bytes()
+    ).normalized_bytes
     source = ReplayInput("a" * 64, normalized, spec)
     document = json.loads((FIXTURES / "evidence-result.json").read_bytes())
     document["dataset_id"] = source.dataset_id
-    assert evaluate_replay(source, build_replay_result(document)).document["audit_status"] == "verified"
+    assert (
+        evaluate_replay(source, build_replay_result(document)).document["audit_status"]
+        == "verified"
+    )
     document["engine"]["semantic_id"] = "nautilus_public_shadow_fifo_queue_probe_v1"
     result = build_replay_result(document)
     with pytest.raises(EvaluationValidationError):

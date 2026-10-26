@@ -31,8 +31,13 @@ MAX_QUEUE_LOTS = 1_000_000_000
 _SPEC_LIMIT = 65_536
 _PAIR_LIMIT = 2 * 1024 * 1024
 _REQUEST_FIELDS = {
-    "kind", "schema_version", "model_profile_id", "entry_capture_seq", "parameter_basis",
-    "assumptions", "updates",
+    "kind",
+    "schema_version",
+    "model_profile_id",
+    "entry_capture_seq",
+    "parameter_basis",
+    "assumptions",
+    "updates",
 }
 _ASSUMPTIONS: dict[str, object] = {
     "priority": "fifo",
@@ -79,10 +84,17 @@ def _document(raw: bytes, *, request: bool) -> dict[str, object]:
     integer(document["schema_version"], "schema_version", 1, 1)
     _equal(document["model_profile_id"], PROFILE_ID, "Unsupported queue model profile")
     integer(document["entry_capture_seq"], "entry_capture_seq", 1, 1)
-    _equal(document["parameter_basis"], _BASIS, "Queue basis must remain researcher-defined and uncalibrated")
+    _equal(
+        document["parameter_basis"],
+        _BASIS,
+        "Queue basis must remain researcher-defined and uncalibrated",
+    )
     _equal(document["assumptions"], _ASSUMPTIONS, "Unsupported queue assumptions")
     updates = document["updates"]
-    _require(type(updates) is list and 0 < len(updates) < MAX_QUEUE_EVENTS, "Queue updates must be a bounded nonempty list")
+    _require(
+        type(updates) is list and 0 < len(updates) < MAX_QUEUE_EVENTS,
+        "Queue updates must be a bounded nonempty list",
+    )
     previous = 1
     total = 0
     used_trades: set[int] = set()
@@ -94,11 +106,16 @@ def _document(raw: bytes, *, request: bool) -> dict[str, object]:
         )
         capture = integer(update["capture_seq"], "update capture_seq", previous + 1)
         additions = integer(update["additions_lots"], "additions_lots", 0, MAX_QUEUE_LOTS)
-        cancellations = integer(update["cancellations_lots"], "cancellations_lots", 0, MAX_QUEUE_LOTS)
+        cancellations = integer(
+            update["cancellations_lots"], "cancellations_lots", 0, MAX_QUEUE_LOTS
+        )
         total += additions + cancellations
         _require(total <= MAX_QUEUE_LOTS, "Declared gross flow exceeds the queue software limit")
         trades = update["trade_capture_seqs"]
-        _require(type(trades) is list and len(trades) <= MAX_QUEUE_EVENTS, "Trade references must be a bounded list")
+        _require(
+            type(trades) is list and len(trades) <= MAX_QUEUE_EVENTS,
+            "Trade references must be a bounded list",
+        )
         last_trade = previous
         for trade in cast("list[object]", trades):
             capture_trade = integer(trade, "trade capture_seq", last_trade + 1, capture - 1)
@@ -114,14 +131,25 @@ def _document(raw: bytes, *, request: bool) -> dict[str, object]:
         )
         for label, value in bindings.items():
             identity(value, label)
-        target = exact(document["target"], {"source", "instrument", "session", "side", "price_ticks"}, "Queue target")
+        target = exact(
+            document["target"],
+            {"source", "instrument", "session", "side", "price_ticks"},
+            "Queue target",
+        )
         for label in ("source", "instrument", "session"):
-            _require(isinstance(target[label], str) and 0 < len(target[label]) <= 128, "Queue stream marker is invalid")
+            _require(
+                isinstance(target[label], str) and 0 < len(target[label]) <= 128,
+                "Queue stream marker is invalid",
+            )
         _equal(target["instrument"], "EUR-USD", "Unsupported queue instrument")
         _equal(target["side"], "bid", "Only the external bid queue is supported")
         integer(target["price_ticks"], "queue price_ticks", 1)
         for key, expected in _FLAGS.items():
-            _equal(document[key], expected, "Queue constraint cannot approve execution or compatibility")
+            _equal(
+                document[key],
+                expected,
+                "Queue constraint cannot approve execution or compatibility",
+            )
     return document
 
 
@@ -133,8 +161,13 @@ class QueueConstraintSpec:
     def __post_init__(self) -> None:
         try:
             document = _document(self.canonical_bytes, request=False)
-            _require(canonical(document) == self.canonical_bytes, "QueueConstraintSpec must be canonical")
-            _require(identity(self.constraint_id, "constraint_id") == digest(self.canonical_bytes), "Queue constraint identity mismatch")
+            _require(
+                canonical(document) == self.canonical_bytes, "QueueConstraintSpec must be canonical"
+            )
+            _require(
+                identity(self.constraint_id, "constraint_id") == digest(self.canonical_bytes),
+                "Queue constraint identity mismatch",
+            )
         except ReplayValidationError as error:
             raise QueueConstraintValidationError(str(error)) from error
 
@@ -146,24 +179,52 @@ class QueueConstraintSpec:
 def _context(
     protocol: ExecutableProtocol, replay_input: ReplayInput
 ) -> tuple[ExecutableProtocol, PreparedReplay, dict[str, object], dict[str, object]]:
-    _require(isinstance(protocol, ExecutableProtocol) and isinstance(replay_input, ReplayInput) and isinstance(replay_input.spec, ReplaySpec), "Queue constraints require actual immutable protocol and input")
-    checked_protocol = ExecutableProtocol(protocol.protocol_id, protocol.claim_revision_id, protocol.canonical_bytes)
+    _require(
+        isinstance(protocol, ExecutableProtocol)
+        and isinstance(replay_input, ReplayInput)
+        and isinstance(replay_input.spec, ReplaySpec),
+        "Queue constraints require actual immutable protocol and input",
+    )
+    checked_protocol = ExecutableProtocol(
+        protocol.protocol_id, protocol.claim_revision_id, protocol.canonical_bytes
+    )
     checked_spec = ReplaySpec(replay_input.spec.spec_id, replay_input.spec.canonical_bytes)
-    checked_input = ReplayInput(replay_input.dataset_id, replay_input.normalized_bytes, checked_spec)
+    checked_input = ReplayInput(
+        replay_input.dataset_id, replay_input.normalized_bytes, checked_spec
+    )
     document = checked_protocol.document
     datasets = cast("dict[str, str]", document["datasets"])
-    _require(checked_input.dataset_id == datasets["development"], "Queue input differs from the protocol development dataset")
-    _equal(checked_spec.spec_id, document["replay_spec_id"], "Queue ReplaySpec differs from the frozen protocol")
+    _require(
+        checked_input.dataset_id == datasets["development"],
+        "Queue input differs from the protocol development dataset",
+    )
+    _equal(
+        checked_spec.spec_id,
+        document["replay_spec_id"],
+        "Queue ReplaySpec differs from the frozen protocol",
+    )
     prepared = preflight_replay(checked_input)
     budget = cast("dict[str, int]", document["budget"])
-    _require(len(prepared.events) <= min(budget["max_events"], MAX_QUEUE_EVENTS), "Queue input exceeds the declared event budget or software limit")
+    _require(
+        len(prepared.events) <= min(budget["max_events"], MAX_QUEUE_EVENTS),
+        "Queue input exceeds the declared event budget or software limit",
+    )
     strategy = cast("dict[str, object]", checked_spec.document["strategy"])
     execution = cast("dict[str, int]", checked_spec.document["execution"])
-    _require(strategy["submit_capture_seq"] == 1 and prepared.events[0].capture_seq == 1, "Declared entry must be the initial capture 1 snapshot")
-    _require(execution["insert_latency_ns"] == 0, "Queue qualification requires zero insert latency; acceptance remains unverified")
+    _require(
+        strategy["submit_capture_seq"] == 1 and prepared.events[0].capture_seq == 1,
+        "Declared entry must be the initial capture 1 snapshot",
+    )
+    _require(
+        execution["insert_latency_ns"] == 0,
+        "Queue qualification requires zero insert latency; acceptance remains unverified",
+    )
     target: dict[str, object] = {
-        "source": prepared.stream[0], "instrument": prepared.stream[1], "session": prepared.stream[2],
-        "side": "bid", "price_ticks": strategy["limit_price_ticks"],
+        "source": prepared.stream[0],
+        "instrument": prepared.stream[1],
+        "session": prepared.stream[2],
+        "side": "bid",
+        "price_ticks": strategy["limit_price_ticks"],
     }
     bindings: dict[str, object] = {
         "protocol_id": checked_protocol.protocol_id,
@@ -179,42 +240,64 @@ def _source_constraints(
 ) -> tuple[int, dict[int, dict[str, object]]]:
     price = cast("int", cast("dict[str, object]", document["target"])["price_ticks"])
     initial = dict(prepared.events[0].bids).get(price)
-    _require(initial is not None and initial > 0, "The initial snapshot must expose the target bid queue")
+    _require(
+        initial is not None and initial > 0, "The initial snapshot must expose the target bid queue"
+    )
     _require(cast("int", initial) <= MAX_QUEUE_LOTS, "Initial queue exceeds the software limit")
     updates = {
         cast("int", update["capture_seq"]): update
         for update in cast("list[dict[str, object]]", document["updates"])
     }
     checkpoints = [
-        event.capture_seq for event in prepared.events[1:]
+        event.capture_seq
+        for event in prepared.events[1:]
         if event.event_type == "delta" and price in dict(event.bids)
     ]
-    _equal(list(updates), checkpoints, "Every target-price checkpoint requires exactly one ordered update")
+    _equal(
+        list(updates),
+        checkpoints,
+        "Every target-price checkpoint requires exactly one ordered update",
+    )
     previous_volume = cast("int", initial)
     pending: list[int] = []
     trade_total = 0
     gross_total = previous_volume
     for event in prepared.events[1:]:
         if event.event_type == "trade":
-            _require(event.aggressor_side == "sell" and event.price_ticks == price, "Queue qualification supports only target-price sell trades")
+            _require(
+                event.aggressor_side == "sell" and event.price_ticks == price,
+                "Queue qualification supports only target-price sell trades",
+            )
             pending.append(event.capture_seq)
             trade_total += cast("int", event.quantity_lots)
             gross_total += cast("int", event.quantity_lots)
-            _require(gross_total <= MAX_QUEUE_LOTS, "Observed queue flow exceeds the software limit")
+            _require(
+                gross_total <= MAX_QUEUE_LOTS, "Observed queue flow exceeds the software limit"
+            )
         elif event.capture_seq in updates:
             update = updates[event.capture_seq]
-            _equal(update["trade_capture_seqs"], pending, "Trade references must equal the complete ordered checkpoint interval")
+            _equal(
+                update["trade_capture_seqs"],
+                pending,
+                "Trade references must equal the complete ordered checkpoint interval",
+            )
             additions = cast("int", update["additions_lots"])
             cancellations = cast("int", update["cancellations_lots"])
             observed = dict(event.bids)[price]
             expected = previous_volume + additions - cancellations - trade_total
-            _require(0 <= expected <= MAX_QUEUE_LOTS and expected == observed, "External queue conservation failed; trades must not be counted twice")
+            _require(
+                0 <= expected <= MAX_QUEUE_LOTS and expected == observed,
+                "External queue conservation failed; trades must not be counted twice",
+            )
             gross_total += additions + cancellations
             _require(gross_total <= MAX_QUEUE_LOTS, "Total queue flow exceeds the software limit")
             previous_volume = observed
             pending = []
             trade_total = 0
-    _require(not pending, "Every target trade requires a later absolute checkpoint; EOF reconciliation is pending")
+    _require(
+        not pending,
+        "Every target trade requires a later absolute checkpoint; EOF reconciliation is pending",
+    )
     return cast("int", initial), updates
 
 
@@ -223,25 +306,40 @@ def _state(ahead: int, behind: int) -> dict[str, object]:
 
 
 def _interpretation(
-    prepared: PreparedReplay, initial: int, updates: dict[int, dict[str, object]], *, front_first: bool
+    prepared: PreparedReplay,
+    initial: int,
+    updates: dict[int, dict[str, object]],
+    *,
+    front_first: bool,
 ) -> dict[str, object]:
     ahead, behind = initial, 0
     zero: dict[str, object] = {
-        "additions_lots": 0, "cancellations_lots": 0, "trade_lots": 0,
-        "cancel_ahead_lots": 0, "cancel_behind_lots": 0,
+        "additions_lots": 0,
+        "cancellations_lots": 0,
+        "trade_lots": 0,
+        "cancel_ahead_lots": 0,
+        "cancel_behind_lots": 0,
     }
     entry = prepared.events[0]
-    trace: list[dict[str, object]] = [{
-        "kind": "declared_entry", "source_ref": entry.source_ref,
-        "receive_time_ns": entry.receive_time_ns, "before": None, "flow": dict(zero),
-        "after": _state(ahead, behind),
-    }]
+    trace: list[dict[str, object]] = [
+        {
+            "kind": "declared_entry",
+            "source_ref": entry.source_ref,
+            "receive_time_ns": entry.receive_time_ns,
+            "before": None,
+            "flow": dict(zero),
+            "after": _state(ahead, behind),
+        }
+    ]
     for event in prepared.events[1:]:
         before = _state(ahead, behind)
         flow = dict(zero)
         if event.event_type == "trade":
             quantity = cast("int", event.quantity_lots)
-            _require(quantity <= ahead + behind, "Target trade exceeds the declared visible external queue")
+            _require(
+                quantity <= ahead + behind,
+                "Target trade exceeds the declared visible external queue",
+            )
             consumed_ahead = min(quantity, ahead)
             ahead -= consumed_ahead
             behind -= quantity - consumed_ahead
@@ -250,7 +348,8 @@ def _interpretation(
         elif event.capture_seq in updates:
             update = updates[event.capture_seq]
             additions, cancellations = (
-                cast("int", update["additions_lots"]), cast("int", update["cancellations_lots"])
+                cast("int", update["additions_lots"]),
+                cast("int", update["cancellations_lots"]),
             )
             behind += additions
             _require(cancellations <= ahead + behind, "Cancellation exceeds the external queue")
@@ -262,21 +361,35 @@ def _interpretation(
                 cancel_ahead = cancellations - cancel_behind
             ahead -= cancel_ahead
             behind -= cancel_behind
-            flow.update({
-                "additions_lots": additions, "cancellations_lots": cancellations,
-                "cancel_ahead_lots": cancel_ahead, "cancel_behind_lots": cancel_behind,
-            })
+            flow.update(
+                {
+                    "additions_lots": additions,
+                    "cancellations_lots": cancellations,
+                    "cancel_ahead_lots": cancel_ahead,
+                    "cancel_behind_lots": cancel_behind,
+                }
+            )
             kind = "checkpoint"
         else:
             continue
-        _require(ahead >= 0 and behind >= 0 and ahead + behind <= MAX_QUEUE_LOTS, "Queue state is negative or exceeds its software limit")
-        trace.append({
-            "kind": kind, "source_ref": event.source_ref, "receive_time_ns": event.receive_time_ns,
-            "before": before, "flow": flow, "after": _state(ahead, behind),
-        })
+        _require(
+            ahead >= 0 and behind >= 0 and ahead + behind <= MAX_QUEUE_LOTS,
+            "Queue state is negative or exceeds its software limit",
+        )
+        trace.append(
+            {
+                "kind": kind,
+                "source_ref": event.source_ref,
+                "receive_time_ns": event.receive_time_ns,
+                "before": before,
+                "flow": flow,
+                "after": _state(ahead, behind),
+            }
+        )
     return {
         "policy_id": "cancel_front_first_v1" if front_first else "cancel_back_first_v1",
-        "trace": trace, "final_state": _state(ahead, behind),
+        "trace": trace,
+        "final_state": _state(ahead, behind),
     }
 
 
@@ -289,25 +402,38 @@ class QueueFeasibilityPair:
 
     def __post_init__(self) -> None:
         try:
-            _require(isinstance(self.constraint, QueueConstraintSpec), "Expected QueueConstraintSpec")
-            constraint = QueueConstraintSpec(self.constraint.constraint_id, self.constraint.canonical_bytes)
+            _require(
+                isinstance(self.constraint, QueueConstraintSpec), "Expected QueueConstraintSpec"
+            )
+            constraint = QueueConstraintSpec(
+                self.constraint.constraint_id, self.constraint.canonical_bytes
+            )
             _, prepared, bindings, target = _context(self.protocol, self.replay_input)
             document = constraint.document
             _equal(document["bindings"], bindings, "Queue source bindings mismatch")
-            _equal(document["target"], target, "Queue target differs from actual source and strategy")
+            _equal(
+                document["target"], target, "Queue target differs from actual source and strategy"
+            )
             initial, updates = _source_constraints(document, prepared)
-            raw = canonical({
-                "kind": "queue_feasibility_pair_v1", "schema_version": 1,
-                "constraint_id": constraint.constraint_id, "model_profile_id": PROFILE_ID,
-                "bindings": bindings, "target": target,
-                "parameter_basis": document["parameter_basis"], "assumptions": document["assumptions"],
-                **_FLAGS,
-                "source_bindings_verified": True, "flow_conservation_verified": True,
-                "interpretations": [
-                    _interpretation(prepared, initial, updates, front_first=True),
-                    _interpretation(prepared, initial, updates, front_first=False),
-                ],
-            })
+            raw = canonical(
+                {
+                    "kind": "queue_feasibility_pair_v1",
+                    "schema_version": 1,
+                    "constraint_id": constraint.constraint_id,
+                    "model_profile_id": PROFILE_ID,
+                    "bindings": bindings,
+                    "target": target,
+                    "parameter_basis": document["parameter_basis"],
+                    "assumptions": document["assumptions"],
+                    **_FLAGS,
+                    "source_bindings_verified": True,
+                    "flow_conservation_verified": True,
+                    "interpretations": [
+                        _interpretation(prepared, initial, updates, front_first=True),
+                        _interpretation(prepared, initial, updates, front_first=False),
+                    ],
+                }
+            )
             _require(len(raw) <= _PAIR_LIMIT, "Queue pair exceeds its 2 MiB report limit")
             object.__setattr__(self, "canonical_bytes", raw)
         except (ReplayValidationError, ProtocolValidationError) as error:
@@ -328,10 +454,15 @@ def build_queue_constraint_spec(
     try:
         request = _document(raw, request=True)
         _, _, bindings, target = _context(protocol, replay_input)
-        encoded = canonical({
-            **request, "kind": "queue_constraint_spec_v1", "bindings": bindings, "target": target,
-            **_FLAGS,
-        })
+        encoded = canonical(
+            {
+                **request,
+                "kind": "queue_constraint_spec_v1",
+                "bindings": bindings,
+                "target": target,
+                **_FLAGS,
+            }
+        )
         constraint = QueueConstraintSpec(digest(encoded), encoded)
         validate_queue_constraints(constraint, protocol=protocol, replay_input=replay_input)
         return constraint
@@ -341,7 +472,10 @@ def build_queue_constraint_spec(
 
 def load_queue_constraint_spec(raw: bytes) -> QueueConstraintSpec:
     """Validate canonical structure and identity; external source is not yet verified."""
-    _require(isinstance(raw, bytes) and 0 < len(raw) <= _SPEC_LIMIT, "Queue spec must be immutable bytes within 64 KiB")
+    _require(
+        isinstance(raw, bytes) and 0 < len(raw) <= _SPEC_LIMIT,
+        "Queue spec must be immutable bytes within 64 KiB",
+    )
     return QueueConstraintSpec(digest(raw), raw)
 
 

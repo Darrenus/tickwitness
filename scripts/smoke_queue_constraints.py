@@ -38,25 +38,44 @@ def main() -> None:
             for name in ("queue-observations.jsonl", "replay-confirmation.jsonl")
         ]
         frozen = run(
-            "freeze-experiment", "experiment-request.json", "--input-root", str(examples),
-            "--development-dataset", ids[0], "--confirmation-dataset", ids[1],
-            "--store", str(store), "--registry", str(registry),
+            "freeze-experiment",
+            "experiment-request.json",
+            "--input-root",
+            str(examples),
+            "--development-dataset",
+            ids[0],
+            "--confirmation-dataset",
+            ids[1],
+            "--store",
+            str(store),
+            "--registry",
+            str(registry),
         )
         before = {
             str(path.relative_to(directory)): path.read_bytes()
-            for path in directory.rglob("*") if path.is_file()
+            for path in directory.rglob("*")
+            if path.is_file()
         }
         command = (
-            "validate-queue-constraints", frozen["protocol_id"], "queue-constraint-request.json",
-            "--input-root", str(examples), "--store", str(store), "--registry", str(registry),
+            "validate-queue-constraints",
+            frozen["protocol_id"],
+            "queue-constraint-request.json",
+            "--input-root",
+            str(examples),
+            "--store",
+            str(store),
+            "--registry",
+            str(registry),
         )
         receipt = run(*command)
         assert run(*command) == receipt
         validation = receipt["validation"]
         assert validation["classification"] == "MODEL_SENSITIVITY_CANDIDATE"
         for key in (
-            "actual_acceptance_verified", "impact_compatibility_verified",
-            "native_execution_verified", "execution_approved",
+            "actual_acceptance_verified",
+            "impact_compatibility_verified",
+            "native_execution_verified",
+            "execution_approved",
         ):
             assert validation[key] is False
         assert validation["source_bindings_verified"] is True
@@ -69,22 +88,39 @@ def main() -> None:
         assert back["final_state"] == {"ahead_lots": 2, "behind_lots": 0, "external_lots": 2}
         after = {
             str(path.relative_to(directory)): path.read_bytes()
-            for path in directory.rglob("*") if path.is_file()
+            for path in directory.rglob("*")
+            if path.is_file()
         }
         assert before == after and not (directory / "runs").exists()
         missing = directory / "never-created"
         denied = run(
-            "validate-queue-constraints", "invalid-id", "absent.json", "--split", "confirmation",
-            "--input-root", str(missing), "--store", str(missing / "data"),
-            "--registry", str(missing / "registry"), expected=5,
+            "validate-queue-constraints",
+            "invalid-id",
+            "absent.json",
+            "--split",
+            "confirmation",
+            "--input-root",
+            str(missing),
+            "--store",
+            str(missing / "data"),
+            "--registry",
+            str(missing / "registry"),
+            expected=5,
         )
         assert denied["error"]["code"] == "confirmation_access_denied" and not missing.exists()
         invalid_request = json.loads((examples / "queue-constraint-request.json").read_bytes())
         invalid_request["updates"][2]["cancellations_lots"] = 3
         (directory / "double-count.json").write_text(json.dumps(invalid_request), encoding="utf-8")
         invalid = run(
-            "validate-queue-constraints", frozen["protocol_id"], "double-count.json",
-            "--input-root", str(directory), "--store", str(store), "--registry", str(registry),
+            "validate-queue-constraints",
+            frozen["protocol_id"],
+            "double-count.json",
+            "--input-root",
+            str(directory),
+            "--store",
+            str(store),
+            "--registry",
+            str(registry),
             expected=2,
         )
         assert invalid["error"]["code"] == "invalid_queue_constraints"

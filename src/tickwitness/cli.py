@@ -26,8 +26,8 @@ from tickwitness.cli_queues import execute as execute_queue_command
 from tickwitness.cli_scenarios import COMMANDS as SCENARIO_COMMANDS
 from tickwitness.cli_scenarios import add_commands as add_scenario_commands
 from tickwitness.cli_scenarios import execute as execute_scenario_command
-from tickwitness.domain.assumptions.specs import AssumptionValidationError
 from tickwitness.domain.assumptions.queue_constraints import QueueConstraintValidationError
+from tickwitness.domain.assumptions.specs import AssumptionValidationError
 from tickwitness.domain.data_evidence.events import DataValidationError, ValidationLimits
 from tickwitness.domain.evidence.evaluation import EvaluationValidationError
 from tickwitness.domain.evidence.run_records import EvidenceValidationError

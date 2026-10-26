@@ -39,10 +39,15 @@ def saved_case(root: Path):
 
 def command(root: Path, protocol_id: str = "0" * 64, *, source=None, name=None) -> list[str]:
     return [
-        "validate-queue-constraints", protocol_id,
+        "validate-queue-constraints",
+        protocol_id,
         "queue-constraint-request.json" if name is None else name,
-        "--input-root", str(EXAMPLES if source is None else source),
-        "--store", str(root / "data"), "--registry", str(root / "registry"),
+        "--input-root",
+        str(EXAMPLES if source is None else source),
+        "--store",
+        str(root / "data"),
+        "--registry",
+        str(root / "registry"),
     ]
 
 
@@ -92,8 +97,10 @@ def test_cli_two_allocations_are_stable_native_free_and_read_only(
     assert document["validation_id"] == digest(canonical(document["validation"]))
     assert document["validation"]["classification"] == "MODEL_SENSITIVITY_CANDIDATE"
     for field in (
-        "actual_acceptance_verified", "impact_compatibility_verified",
-        "native_execution_verified", "execution_approved",
+        "actual_acceptance_verified",
+        "impact_compatibility_verified",
+        "native_execution_verified",
+        "execution_approved",
     ):
         assert document["validation"][field] is False
     front, back = document["validation"]["interpretations"]
@@ -110,7 +117,12 @@ def test_cli_confirmation_denial_precedes_missing_request_and_all_adapters(
     def forbidden(*_args, **_kwargs):
         raise AssertionError("Confirmation request cannot initialize storage or execution")
 
-    for cls in (LocalDatasetStore, LocalExecutableProtocolRegistry, LocalAttemptLedger, SubprocessReplayAdapter):
+    for cls in (
+        LocalDatasetStore,
+        LocalExecutableProtocolRegistry,
+        LocalAttemptLedger,
+        SubprocessReplayAdapter,
+    ):
         monkeypatch.setattr(cls, "__init__", forbidden)
     args = command(tmp_path, "../invalid", source=tmp_path / "missing", name="absent.json")
     assert main([*args, "--split", "confirmation"]) == 5
@@ -136,7 +148,9 @@ def test_cli_bad_identity_rejects_before_storage_initialization(
     assert list(tmp_path.iterdir()) == []
 
 
-def test_cli_missing_roots_are_not_created(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_missing_roots_are_not_created(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     assert main(command(tmp_path)) == 4
     output = capsys.readouterr()
     assert output.out == ""
@@ -144,7 +158,19 @@ def test_cli_missing_roots_are_not_created(tmp_path: Path, capsys: pytest.Captur
     assert list(tmp_path.iterdir()) == []
 
 
-@pytest.mark.parametrize("mutation", ["double_count", "missing_trade", "duplicate_trade", "bool", "limit", "unit", "self_binding", "observation_label"])
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "double_count",
+        "missing_trade",
+        "duplicate_trade",
+        "bool",
+        "limit",
+        "unit",
+        "self_binding",
+        "observation_label",
+    ],
+)
 def test_cli_illegal_gross_flow_or_proof_claim_is_a_validation_error(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], mutation: str
 ) -> None:
