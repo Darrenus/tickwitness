@@ -23,12 +23,13 @@ from tickwitness.domain.evidence.run_records import (
 )
 from tickwitness.domain.evidence.scenario_records import (
     ScenarioEvaluation,
+    ScenarioRunReceipt,
     build_scenario_failure,
     build_scenario_intent,
     build_scenario_run_receipt,
     load_scenario_run_receipt,
 )
-from tickwitness.domain.replay.contracts import ReplayInput, ReplayPort, load_replay_result
+from tickwitness.domain.replay.contracts import ReplayInput, ReplayPort, ReplayResult, load_replay_result
 from tickwitness.domain.replay.specs import build_replay_spec
 from tickwitness.domain.research_contracts.executable import load_executable_protocol
 
@@ -53,6 +54,14 @@ class ScenarioSubmission:
     derived_view_id: str
     execution_status: str
     evaluation: dict[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioRunEvidence:
+    receipt: ScenarioRunReceipt
+    view: DerivedReplayView
+    result: ReplayResult
+    evaluation: ScenarioEvaluation
 
 
 def _artifacts(view: DerivedReplayView) -> tuple[bytes, ...]:
@@ -163,13 +172,13 @@ def run_scenario(
         raise ProtocolRunError(code, message, reservation.attempt_id, exit_code) from error
 
 
-def inspect_scenario_run(
+def scenario_run_evidence(
     run_id: str,
     *,
     ledger: ScenarioLedger,
     registry: ExecutableReader,
     datasets: DatasetReader,
-) -> dict[str, object]:
+) -> ScenarioRunEvidence:
     """Recompute the view and accounting from committed evidence, without native replay."""
     identity(run_id)
     raw = ledger.read_artifact(run_id, max_bytes=16 * 1024)
@@ -238,11 +247,23 @@ def inspect_scenario_run(
         raise EvidenceValidationError("Scenario accounting differs from recomputation")
     if document["execution_status"] != result.document["execution_status"]:
         raise EvidenceValidationError("Scenario execution status differs from audited result")
+    return ScenarioRunEvidence(receipt, view, result, evaluation)
+
+
+def inspect_scenario_run(
+    run_id: str,
+    *,
+    ledger: ScenarioLedger,
+    registry: ExecutableReader,
+    datasets: DatasetReader,
+) -> dict[str, object]:
+    """Expose the existing inspection document using reusable audited domain values."""
+    evidence = scenario_run_evidence(run_id, ledger=ledger, registry=registry, datasets=datasets)
     return {
-        "run_id": receipt.run_id,
-        "receipt": document,
-        "derivation": view.document,
-        "evaluation": evaluation.document,
+        "run_id": evidence.receipt.run_id,
+        "receipt": evidence.receipt.document,
+        "derivation": evidence.view.document,
+        "evaluation": evidence.evaluation.document,
         "verification": {
             "kind": "scenario_ledger_verification_v1",
             "integrity_verified": True,

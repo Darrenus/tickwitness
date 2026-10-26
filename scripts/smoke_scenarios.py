@@ -89,6 +89,19 @@ def main() -> None:
             expected=5,
         )
         assert denied["error"]["code"] == "confirmation_access_denied" and not missing.exists()
+        comparison_denied = run(
+            "compare-scenario-runs", "invalid-id", "invalid-id", "--split", "confirmation",
+            "--store", str(missing / "data"), "--registry", str(missing / "registry"),
+            "--runs", str(missing / "runs"), expected=5,
+        )
+        assert comparison_denied["error"]["code"] == "confirmation_access_denied"
+        absent_comparison = run(
+            "compare-scenario-runs", "0" * 64, "1" * 64,
+            "--store", str(missing / "data"), "--registry", str(missing / "registry"),
+            "--runs", str(missing / "runs"), expected=4,
+        )
+        assert absent_comparison["error"]["code"] == "research_evidence_not_found"
+        assert not missing.exists()
         if not arguments.native:
             failed = scenario("suffix", expected=6)["error"]
             assert failed["budget_consumed"] is True
@@ -118,6 +131,27 @@ def main() -> None:
         assert baseline["evaluation"]["claim_observation"]["value"] == "-2"
         assert "claim_observation" not in suffix["evaluation"]
         assert scenario("suffix", expected=8)["error"]["code"] == "attempt_budget_exhausted"
+        comparisons = [
+            run("compare-scenario-runs", baseline["run_id"], item["run_id"], *common)
+            for item in (zero, suffix)
+        ]
+        for item, outcome in zip(comparisons, (zero, suffix), strict=True):
+            assert run(
+                "compare-scenario-runs", baseline["run_id"], outcome["run_id"], *common
+            ) == item
+            assert item["controlled_intervention"] is True
+            assert item["strictly_paired"] is False
+            assert item["numeric_comparison"]["status"] == "comparable"
+        assert comparisons[0]["numeric_comparison"]["delta"] == "0"
+        assert comparisons[0]["trace_comparison"]["business_trace_changed"] is False
+        assert comparisons[0]["trace_comparison"]["business"]["first_divergence"] is None
+        assert comparisons[1]["numeric_comparison"]["delta"] == "1"
+        assert comparisons[1]["trace_comparison"]["business_trace_changed"] is True
+        divergence = comparisons[1]["trace_comparison"]["business"]["first_divergence"]
+        assert divergence["section"] == "order_trace"
+        assert divergence["left_trace_ref"]["source_ref"]["capture_seq"] == 5
+        assert divergence["right_trace_ref"]["source_ref"]["capture_seq"] == 4
+        assert scenario("suffix", expected=8)["error"]["code"] == "attempt_budget_exhausted"
         destination = directory / "unsupported-baseline-export"
         rejected = run("export-evidence", suffix["run_id"], str(destination), *common, expected=2)
         assert rejected["error"]["code"] == "invalid_research_evidence" and not destination.exists()
@@ -128,6 +162,7 @@ def main() -> None:
             "baseline": baseline,
             "zero": audited[0],
             "suffix": audited[1],
+            "comparisons": comparisons,
             "shared_budget_exhaustion_verified": True,
             "source_unchanged_verified": True,
             "baseline_bundle_rejection_verified": True,
@@ -136,7 +171,7 @@ def main() -> None:
             arguments.report.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
         print(
             "Installed native scenario workflow: zero control, nonzero stress, "
-            "audits and budget passed."
+            "audits, read-only comparisons and budget passed."
         )
 
 

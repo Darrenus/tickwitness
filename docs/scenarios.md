@@ -103,6 +103,26 @@ TW_PROTOCOL=$("$TW" freeze-experiment stress-experiment-request.json --input-roo
 
 启动 worker 前，reservation、完整 scenario intent、assumption/scenario、派生描述及派生字节先持久化。来源数据仓库和协议不被改写；派生 input 使用 `derived_view_not_catalog_manifest_v1` 身份，不能冒充原 sealed dataset。`inspect-scenario-attempt` 读取已消耗 slot 与场景身份，缺终态显示 `reserved_unfinalized`；intent 持久化失败时不会启动引擎，该 slot 仍然消耗。运行失败返回带 `attempt_id`、`budget_consumed=true` 的错误；持久化终态无法确认时返回 `attempt_outcome_unconfirmed`，先检查 attempt，不能盲目重跑。
 
-`inspect-scenario-run` 不启动 native：重新读取原 development 闭包、校验声明、重新派生字节和身份、核对 CAS/intent/终态，再重算账务与估值。只在完整且费用可审计时输出 `metric_observation.eligible=true`；否则值为 null。它不输出原 baseline claim 的真假、反例、搜索覆盖或历史相容性。完整的基线/干预关联和首次分歧报告仍属于 S05-03。
+`inspect-scenario-run` 不启动 native：重新读取原 development 闭包、校验声明、重新派生字节和身份、核对 CAS/intent/终态，再重算账务与估值。只在完整且费用可审计时输出 `metric_observation.eligible=true`；否则值为 null。它不输出原 baseline claim 的真假、反例、搜索覆盖或历史相容性。S05-03 的基线/干预关联和首次分歧命令见下节。
 
 本切片的场景证据保存在三个持久根（data、registry、runs）中，需一起保留。独立可搬迁的场景 bundle 尚未提供；旧 `export-evidence`/`verify-evidence` 八角色 v1 仍只接受 baseline，场景回执进入旧导出路径应被拒绝。查询失败不会创建缺失的仓库根。
+
+## 配对已有运行并定位分歧
+
+从上述运行输出中取得真实 baseline `run_id` 和一个 scenario `run_id`。在远端原持久根上执行，用实际身份替换占位符：
+
+```sh
+"$TW" compare-scenario-runs BASELINE_RUN_ID SCENARIO_RUN_ID --store .local/stress-data --registry .local/stress-experiments --runs .local/stress-runs --split development
+```
+
+该命令没有 engine 参数，不启动 worker、不预留 attempt，也不写 ledger。三槽预算耗尽后仍可重复比较已有的两条 run。CLI 以 JSON 输出 `comparison_id` 和报告文档；需要保存时可由调用者将标准输出存为报告文件。身份是报告文档的 canonical JSON SHA-256，计算不包含外层 `comparison_id` 字段，不能直接将缩进后的整个输出文件 hash 当作该身份。
+
+只允许 baseline 在左、scenario 在右，且必须同原 protocol/claim/development/source hash/ReplaySpec/engine/environment。基线八角色闭包和场景 intent/派生闭包分别重新核验，再重算双方账务。反向参数、不同协议/环境、未提交结果、失败 outcome 和损坏证据会明确拒绝；`--split confirmation` 先于任何仓库 IO 拒绝。它不会通过重跑来补齐缺失结果。
+
+报告主要看三部分：
+
+- `bindings` 保存两条 run/attempt/result/evaluation 以及 assumption/scenario/view 的身份。`controlled_intervention=true`、`strictly_paired=false` 说明这是已声明干预下的关联，不放宽旧比较器对完全相同条件的定义。
+- `numeric_comparison` 只在双方完整可评价、mark/fee 定义一致时输出精确十进制 `delta = scenario - baseline`。不可评价的一侧保留 null，`status=not_comparable` 时 delta 为 null，不用零伪装无影响。
+- `trace_comparison.raw` 保留原始时间/生成 ID 等差异；`business` 使用明确的字段投影，排除允许改变的 native 时钟/生成 ID。各通道给 first difference 的 JSON Pointer、原值、ordinal、kind、native 时间及 `source_ref`。固定展示顺序不是跨通道全局最早因果，`global_earliest_claimed=false`。
+
+已知合成撤单案例的业务分歧应定位到 order 通道：基线 capture 5 的后续成交，对应场景 capture 4 的撤单；精确净 mark 差为 +1 USD。零干预和全流常数平移应没有业务分歧；金额相同但路径不同则仍保留 trace change。这些观察都不输出策略失效、原命题翻转或反例结论。精确投影与报告合同见 [Scenario Comparison v1](contracts/scenario-comparison-v1.md)，实际远端验收见 [Sprint 5 状态](planning/sprint-05-status.md)。
