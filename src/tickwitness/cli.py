@@ -20,6 +20,9 @@ from tickwitness.application.research import (
 from tickwitness.cli_experiments import COMMANDS as EXPERIMENT_COMMANDS
 from tickwitness.cli_experiments import add_commands as add_experiment_commands
 from tickwitness.cli_experiments import execute as execute_experiment_command
+from tickwitness.cli_queue_execution import COMMANDS as QUEUE_EXECUTION_COMMANDS
+from tickwitness.cli_queue_execution import add_commands as add_queue_execution_commands
+from tickwitness.cli_queue_execution import execute as execute_queue_execution_command
 from tickwitness.cli_queues import COMMAND as QUEUE_COMMAND
 from tickwitness.cli_queues import add_commands as add_queue_commands
 from tickwitness.cli_queues import execute as execute_queue_command
@@ -52,6 +55,10 @@ from tickwitness.infrastructure.local_dataset_store import (
     DatasetNotFoundError,
     DatasetStoreError,
     LocalDatasetStore,
+)
+from tickwitness.infrastructure.queue_family_registry import (
+    QueueFamilyNotFoundError,
+    QueueFamilyRegistryError,
 )
 from tickwitness.infrastructure.local_protocol_registry import (
     LocalProtocolRegistry,
@@ -156,13 +163,16 @@ def main(argv: list[str] | None = None) -> int:
     add_experiment_commands(commands)
     add_scenario_commands(commands)
     add_queue_commands(commands)
+    add_queue_execution_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command == QUEUE_COMMAND:
+        if arguments.command in QUEUE_EXECUTION_COMMANDS:
+            output, identity = execute_queue_execution_command(arguments), ""
+        elif arguments.command == QUEUE_COMMAND:
             output, identity = execute_queue_command(arguments), ""
         elif arguments.command in SCENARIO_COMMANDS:
             output, identity = execute_scenario_command(arguments), ""
@@ -289,13 +299,13 @@ def main(argv: list[str] | None = None) -> int:
         return _write_error("invalid_research_evidence", error, 2)
     except AttemptBudgetExceededError as error:
         return _write_error("attempt_budget_exhausted", error, 8)
-    except (AttemptNotFoundError, ExecutableProtocolNotFoundError, BundleNotFoundError) as error:
+    except (AttemptNotFoundError, ExecutableProtocolNotFoundError, BundleNotFoundError, QueueFamilyNotFoundError) as error:
         return _write_error("research_evidence_not_found", error, 4)
     except BundleDestinationExistsError as error:
         return _write_error("bundle_destination_exists", error, 3)
     except BundleDurabilityError as error:
         return _write_error("bundle_durability_unconfirmed", error, 3)
-    except (AttemptLedgerError, ExecutableRegistryError, BundleError) as error:
+    except (AttemptLedgerError, ExecutableRegistryError, BundleError, QueueFamilyRegistryError) as error:
         return _write_error("research_store_integrity_or_io_failure", error, 3)
     except DatasetNotFoundError as error:
         return _write_error("dataset_not_found", error, 4)

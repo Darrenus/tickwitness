@@ -1,0 +1,10 @@
+{
+  "kind": "queue_family_request_v1",
+  "schema_version": 1,
+  "cancel_at_capture_seq": 6,
+  "budget": {
+    "max_attempts": 2,
+    "max_wall_seconds": 60,
+    "max_events": 1000
+  }
+}
