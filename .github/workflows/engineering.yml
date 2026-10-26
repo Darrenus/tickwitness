@@ -83,6 +83,7 @@ jobs:
           python3 scripts/smoke_distribution.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_evidence.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_scenarios.py --python /tmp/tickwitness-wheel/bin/python
+          python3 scripts/smoke_queue_constraints.py --python /tmp/tickwitness-wheel/bin/python
       - name: Install wheel in a separate environment and working directory
         run: |
           cd /tmp
@@ -117,6 +118,16 @@ jobs:
           path: /tmp/scenario-clock-qualification.json
           if-no-files-found: error
           retention-days: 30
+      - name: Qualify public queue-model extensions on fixed synthetic observations
+        run: uv run --locked --extra nautilus python -I scripts/qualify_queue_models.py --output /tmp/queue-model-qualification.json
+      - name: Preserve queue allocation and native execution qualification
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: queue-models-${{ matrix.os }}-${{ github.sha }}
+          path: /tmp/queue-model-qualification.json
+          if-no-files-found: error
+          retention-days: 30
       - run: uv run --locked --extra nautilus pytest
       - name: Build and replace editable package with wheel
         run: |
@@ -127,6 +138,16 @@ jobs:
           python3 scripts/smoke_distribution.py --python .venv/bin/python --native
           python3 scripts/smoke_evidence.py --python .venv/bin/python --native
           python3 scripts/smoke_scenarios.py --python .venv/bin/python --native --report /tmp/scenario-execution.json
+          python3 scripts/smoke_queue_constraints.py --python .venv/bin/python
+          .venv/bin/python -I scripts/qualify_queue_models.py --output /tmp/queue-wheel-qualification.json
+      - name: Preserve installed-wheel native queue qualification
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: queue-wheel-${{ matrix.os }}-${{ github.sha }}
+          path: /tmp/queue-wheel-qualification.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve installed-wheel scenario execution evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -164,6 +185,7 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_distribution.py" --python /tmp/tickwitness-preview-core/bin/python
           python3 "$TW_SOURCE/scripts/smoke_evidence.py" --python /tmp/tickwitness-preview-core/bin/python
           python3 "$TW_SOURCE/scripts/smoke_scenarios.py" --python /tmp/tickwitness-preview-core/bin/python
+          python3 "$TW_SOURCE/scripts/smoke_queue_constraints.py" --python /tmp/tickwitness-preview-core/bin/python
           uv venv /tmp/tickwitness-preview-native --python 3.12
           uv pip install --python /tmp/tickwitness-preview-native/bin/python --only-binary nautilus-trader --no-deps dist/*.whl
           uv export --locked --extra nautilus --no-dev --no-emit-project --format requirements-txt --output-file /tmp/tickwitness-preview-native-requirements.txt
@@ -171,8 +193,18 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_distribution.py" --python /tmp/tickwitness-preview-native/bin/python --native
           python3 "$TW_SOURCE/scripts/smoke_evidence.py" --python /tmp/tickwitness-preview-native/bin/python --native
           python3 "$TW_SOURCE/scripts/smoke_scenarios.py" --python /tmp/tickwitness-preview-native/bin/python --native
+          python3 "$TW_SOURCE/scripts/smoke_queue_constraints.py" --python /tmp/tickwitness-preview-native/bin/python
+          /tmp/tickwitness-preview-native/bin/python -I "$TW_SOURCE/scripts/qualify_queue_models.py" --output /tmp/queue-source-wheel-qualification.json
           cd dist
           sha256sum --check SHA256SUMS
+      - name: Preserve qualification using actual source archive and installed wheel
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: queue-source-wheel-${{ github.sha }}
+          path: /tmp/queue-source-wheel-qualification.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve qualified preview artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

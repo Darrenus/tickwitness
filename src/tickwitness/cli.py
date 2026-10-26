@@ -20,9 +20,13 @@ from tickwitness.application.research import (
 from tickwitness.cli_experiments import COMMANDS as EXPERIMENT_COMMANDS
 from tickwitness.cli_experiments import add_commands as add_experiment_commands
 from tickwitness.cli_experiments import execute as execute_experiment_command
+from tickwitness.cli_queues import COMMAND as QUEUE_COMMAND
+from tickwitness.cli_queues import add_commands as add_queue_commands
+from tickwitness.cli_queues import execute as execute_queue_command
 from tickwitness.cli_scenarios import COMMANDS as SCENARIO_COMMANDS
 from tickwitness.cli_scenarios import add_commands as add_scenario_commands
 from tickwitness.cli_scenarios import execute as execute_scenario_command
+from tickwitness.domain.assumptions.queue_constraints import QueueConstraintValidationError
 from tickwitness.domain.assumptions.specs import AssumptionValidationError
 from tickwitness.domain.data_evidence.events import DataValidationError, ValidationLimits
 from tickwitness.domain.evidence.evaluation import EvaluationValidationError
@@ -151,13 +155,16 @@ def main(argv: list[str] | None = None) -> int:
     comparison.add_argument("--input-root", required=True, type=Path)
     add_experiment_commands(commands)
     add_scenario_commands(commands)
+    add_queue_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in SCENARIO_COMMANDS:
+        if arguments.command == QUEUE_COMMAND:
+            output, identity = execute_queue_command(arguments), ""
+        elif arguments.command in SCENARIO_COMMANDS:
             output, identity = execute_scenario_command(arguments), ""
         elif arguments.command in EXPERIMENT_COMMANDS:
             output, identity = execute_experiment_command(arguments)
@@ -255,6 +262,8 @@ def main(argv: list[str] | None = None) -> int:
         return _write_error("invalid_data", error, 2)
     except AssumptionValidationError as error:
         return _write_error("invalid_scenario_contract", error, 2)
+    except QueueConstraintValidationError as error:
+        return _write_error("invalid_queue_constraints", error, 2)
     except ProtocolValidationError as error:
         return _write_error("invalid_protocol", error, 2)
     except ReplayValidationError as error:

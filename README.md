@@ -5,7 +5,7 @@
 
 Freeze a scoped quantitative research experiment, audit its replay accounting, and export independently verifiable evidence.
 
-**Status: Sprint 5 development, `0.2.0.dev0`, 2026-10-26.** The first [technical preview, v0.1.0a1](https://github.com/Darrenus/tickwitness/releases/tag/v0.1.0a1), is published with the accepted scoped evidence workflow and qualified artifacts. This development branch adds validated declarations and budgeted **coupled receive-clock stress** with independent derived-view identities and recomputed accounting. Remote fixed-fixture clock qualification precedes execution; this is not an independent venue/observer feed-delay model. The replay profile remains EUR/USD and one built-in limit buy. Arbitrary strategy source, confirmation unsealing and counterexample search remain unsupported. User interviews and independent human domain review remain outstanding; consistency checks do not certify actual market fills.
+**Status: Sprint 6 queue qualification, `0.2.0.dev0`, 2026-10-26.** The first [technical preview, v0.1.0a1](https://github.com/Darrenus/tickwitness/releases/tag/v0.1.0a1), is published. Sprint 5 declarations, budgeted coupled-clock stress and audited comparisons were accepted through PRs #79–81. This branch adds strict external-queue constraint checks and fixed synthetic native extension qualification. Queue allocations remain **model sensitivity candidates**: real queue position, market impact and historical compatibility are unverified. User-data queue execution and non-identifiability findings remain unavailable until a new frozen family protocol, shared budget and execution audit are implemented. The accepted replay profile remains EUR/USD and one built-in limit buy. User interviews and independent human domain review remain outstanding; consistency checks do not certify actual market fills.
 
 Start with the [quickstart](docs/quickstart.md), [task-specific support matrix](docs/support.md), and [preview notes](docs/releases/0.1.0a1.md). The core install can verify the supplied synthetic evidence without an engine or GPU. Native replay is a separate optional installation. Run compute in a remote Linux environment or CI; Colab is suitable for temporary qualification, while persistent collection and long-lived services require their own deployment validation.
 
@@ -21,6 +21,7 @@ The initial product is a local-first research verification toolkit for quantitat
 | [Preview support](docs/support.md) | Tested environments, trust boundaries, compatibility and maintenance scope |
 | [0.1.0a1 preview notes](docs/releases/0.1.0a1.md) | Candidate artifacts, release gates and known limitations |
 | [Scenario workflow](docs/scenarios.md) | Validate declarations, execute budgeted stress, re-audit baseline/scenario pairs and locate trace changes |
+| [Queue constraints](docs/queues.md) | Verify explicit external flow and front/back cancellation allocations without authorizing execution |
 | [Development entry point](docs/development.md) | Locked environment, local checks, package build and current limitations |
 | [Data import guide](docs/data-import.md) | Executable import/inspect workflow, format, limits, and trust boundaries |
 | [Frozen protocol guide](docs/research-protocols.md) | Bind actual data/source, seal a declaration, read development data and verify confirmation denial |

@@ -16,6 +16,7 @@ class ReplayCapability(StrEnum):
     ORDER_LIFECYCLE = "order_lifecycle"
     FILL_TRACE = "fill_trace"
     ACCOUNT_LEDGER = "account_ledger"
+    EXPLICIT_QUEUE_ALLOCATION = "explicit_queue_allocation"
     CHECKPOINT = "checkpoint"
 
 
