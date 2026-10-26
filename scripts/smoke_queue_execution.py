@@ -140,6 +140,21 @@ def main() -> None:
                 for path in root.rglob("*")
                 if path.is_file()
             }
+            pair = run("qualify-queue-pair", front["run_id"], back["run_id"], *common)
+            assert run("qualify-queue-pair", back["run_id"], front["run_id"], *common) == pair
+            assert pair["observation_compatibility"]["status"] == "not_established"
+            assert pair["predicate"]["truth_divergence"] is None
+            assert pair["predicate"]["values"] == {
+                "cancel_front_first_v1": None,
+                "cancel_back_first_v1": None,
+            }
+            assert pair["findings"] == [] and pair["scope"]["source_claim_evaluated"] is False
+            first, second = pair["models"]
+            assert first["single_counted_insertion"]["status"] == "contradiction"
+            assert second["single_counted_insertion"]["status"] == "necessary_checks_passed"
+            assert first["single_counted_insertion"]["trades"][0]["over_allocation_lots"] == 1
+            assert pair["verification"]["native_replayed"] is False
+            report["pair_semantics"] = pair
             ledger = run("inspect-queue-family", family_id, *common)
             assert (
                 ledger["budget"]["consumed_attempts"] == 2
