@@ -1,13 +1,13 @@
 # Sprint 6 队列约束与资格状态
 
-更新：2026-10-26（Asia/Singapore）。Owner 已合并 PR #79–84；Sprint 5、S06-01 的资格／共同预算／持久双模型执行，以及 S06-02a 的观测与真假语义资格进入 `main`。本轮基线为 #84 merge `e018100df57e66376c810edce4fdf9ffec698e28`。已有技术预览 `0.1.0a1` 保持原发行物，`0.2.0.dev0` 仍未发行。
+更新：2026-10-26（Asia/Singapore）。Owner 已合并 PR #79–85；Sprint 5、S06-01 的资格／共同预算／持久双模型执行，以及 S06-02a/b 的语义资格／守恒 tagged reconstruction 进入 `main`。本轮基线为 #85 merge `dcf38714b5ee306e9328f1ad25624fc687f036e8`。已有技术预览 `0.1.0a1` 保持原发行物，`0.2.0.dev0` 仍未发行。
 
-已接受的 [PR #84](https://github.com/Darrenus/tickwitness/pull/84) 实现 S06-02a；历史远端记录见下文。本轮继续 S06-02b：独立冻结 tagged queue claim、inclusive 观测投影及 relabel 干预，解决单笔 trade 重复分配。新合同描述有限 public 观测下的条件重建；最终 finding 和独立 sealed tagged evidence 流程仍未开放。
+已接受的 [PR #85](https://github.com/Darrenus/tickwitness/pull/85) 实现 S06-02b；历史远端记录见下文。本轮继续 S06-02c：导出已提交双模型的固定证据闭包，移交并删除原 store 后，用 core 离线重新核对来源、守恒、账务、horizon 与配对真值。新 finding 授权保持关闭，不借 sealed 目录改写已冻结权限。
 
 | 故事 | 当前切片与接受边界 | 状态 |
 | --- | --- | --- |
 | S06-01 / #16 | S06-01a/b 已接受；冻结共同预算、持久前后模型执行与独立审计 | Owner 已合并 #83 |
-| S06-02 / #17 | S06-02a 已接受；S06-02b 新命题、观测／干预合同、守恒分配与持久执行通过远端验收 | In progress；[PR #85](https://github.com/Darrenus/tickwitness/pull/85) 待 owner 接受，生产 `NOT_IDENTIFIABLE_WITHIN_MODEL` 保持关闭 |
+| S06-02 / #17 | S06-02a/b 已接受；S06-02c 可迁移双模型证据与离线重建实现中 | In progress；owner 已合并 #85，本轮远端验收待完成，生产 `NOT_IDENTIFIABLE_WITHIN_MODEL` 保持关闭 |
 | S06-03 / #18 | 真实近期问题访谈累计 8–12 次，反馈关联工作流阻力 | 未取得新增访谈证据；不虚填次数、采用或独立领域验收 |
 
 原故事验收与容量仍见 [Sprint backlog](sprint-backlog.md#s6--l2-队列解释与证据不足判定)。实际投入工时尚未登记。S06-01 原估算不因生成代码自动视为已完成；复杂执行能力需要单独可验收切片，不通过修改旧协议或跳过预算提前打开。
@@ -124,3 +124,15 @@ AI 并行静态复核单独计为 AI 审阅：发现并修复过“正容量漏�
 实际安装报告保存原始 synthetic observations、冻结协议、intent／receipt、native result／独立 evaluation、horizon／cleanup、共享预算和只读检查。Artifacts 为 `tagged-queue-execution-<os>-9e33d7dfd51a47eb12ea6ca996708ca90f189923`、`tagged-queue-source-wheel-9e33d7dfd51a47eb12ea6ca996708ca90f189923` 和 core 缺 extra 报告，保留30天。源包验收使用实际 tar.gz 内的脚本／样例及实际安装的 wheel，没有用 checkout 替代发行物。
 
 AI 静态交叉审查单独计为 AI 审阅：补强过提前伪称 cleanup hook、已占槽后异常误报未消耗，以及配对环境不一致时仍报告真假关系的问题。独立人类领域复核与真实市场／采用证据仍未取得；本轮不据此增加访谈或工时记录。
+
+## S06-02c：移交双模型证据并由 core 独立重建
+
+合同见 [Tagged Pair Evidence v1](../contracts/tagged-pair-evidence-v1.md)，决策见 [ADR 0019](../adr/0019-portable-tagged-pair-evidence.md)。新固定十二角色目录同时包含完整 tagged protocol、development 原始来源闭包、两份真实 result／evaluation／receipt，以及确定性 assessment。旧 baseline 八角色 reader 保持严格，不通过改 kind 或放宽原 loader 接纳新模型。
+
+导出前重新审计实际 committed run、accepted development 数据和两份独立 reservation；导出本身不启动 worker、不占新 attempt、不退款。相反参数顺序按 policy 排列后应产生同一 bundle ID；已有目标不覆盖，发布后 parent fsync 未确认时保留完整目标并报告持久性未知。
+
+离线核验在无 native、数据库、原 registry／ledger 或网络的 core 环境，从 raw 重新生成 normalized／quality report、两侧 witness／实际回调审计和 assessment。源、单位、gross flow、分配、费用、账户、回执、horizon 或 claim 不能靠重算外层 hash 洗成 verified。两份 attempt ID／index 必须不同且符合冻结共同预算，但包不宣称证明完整 attempt 历史、原 ledger commitment 或作者身份。
+
+预设验收包含 F/F、T/F、T/T 的独立冻结案例、原生生成后移交并删除原状态、core 环境拦截 native／SQLite／network／worker／store 构造仍能复核、严格类型隔离、可信 bundle ID pin、不改文件字节，以及完全重算 hash 后的守恒攻击拒绝。实际 wheel 和实际 sdist 中的脚本／样例均须执行同一链路，报告及原始 sealed bundles 保存30天。
+
+本轮测试、构建、格式化和原生执行继续全部在远端；尚无本切片完整远端结果，不把预设 oracle 或静态审查记为通过。findings 保持空数组，模型范围仍限于声明的有限 public 路径下 tagged reconstruction；最终 finding、确认集 lifecycle、跨协议试验账本、外部人类复核与真实采用证据仍是后续门。
