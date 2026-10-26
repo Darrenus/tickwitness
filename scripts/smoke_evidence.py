@@ -71,7 +71,45 @@ def main() -> None:
         )
         assert repeated["protocol_id"] == frozen["protocol_id"] and repeated["created"] is False
         protocol_id = frozen["protocol_id"]
+        scenario_command = (
+            "validate-scenario",
+            protocol_id,
+            "assumption-request.json",
+            "scenario-request.json",
+            "--input-root",
+            str(examples),
+            "--store",
+            str(store),
+            "--registry",
+            str(registry),
+        )
+        scenario = run(*scenario_command)
+        assert run(*scenario_command) == scenario
+        assert scenario["validation"]["source_bindings_verified"] is True
+        assert scenario["validation"]["input_constraints_verified"] is True
+        assert scenario["validation"]["execution_approved"] is False
+        assert scenario["validation"]["calibration_status"] == "uncalibrated"
+        assert scenario["validation"]["bindings"]["protocol_id"] == protocol_id
+        assert scenario["validation"]["additional_delay"] == {"unit": "ns", "value": 20_000_000}
+        assert not runs.exists()
         missing = directory / "never-created"
+        scenario_denied = run(
+            "validate-scenario",
+            protocol_id,
+            "absent-assumptions.json",
+            "absent-scenario.json",
+            "--input-root",
+            str(missing / "inputs"),
+            "--split",
+            "confirmation",
+            "--store",
+            str(missing / "data"),
+            "--registry",
+            str(missing / "registry"),
+            expected=5,
+        )
+        assert scenario_denied["error"]["code"] == "confirmation_access_denied"
+        assert not missing.exists()
         denied = run(
             "replay-protocol",
             protocol_id,
@@ -143,8 +181,8 @@ def main() -> None:
             verified = run("verify-evidence", str(sample))
             assert verified["accounting_verified"] is True and verified["native_replayed"] is False
     print(
-        "Installed evidence workflow: versioned freeze, budgeted replay, "
-        "portable offline verification passed."
+        "Installed evidence workflow: versioned freeze, read-only stress-contract checks, "
+        "budgeted replay, portable offline verification passed."
     )
 
 

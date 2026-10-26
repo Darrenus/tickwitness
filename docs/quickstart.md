@@ -1,19 +1,18 @@
-# 0.1.0a1 候选快速开始
+# 0.1.0a1 技术预览快速开始
 
-这是技术预览候选，尚不表示 owner 已合并、tag 已创建或 PyPI 已发布。先查看[候选发布记录](releases/0.1.0a1.md)和[支持范围](support.md)。以下命令在**远端受支持主机**运行，首选原生矩阵中的 Ubuntu 24.04 / Python 3.12；不要求 GPU。Colab 仅适合临时验收，不承担长期任务和持久存储。
+`v0.1.0a1`技术预览已在[GitHub Releases](https://github.com/Darrenus/tickwitness/releases/tag/v0.1.0a1)发布，没有上传PyPI。先查看[发布记录](releases/0.1.0a1.md)和[支持范围](support.md)。以下命令固定发行tag，在**远端受支持主机**运行，首选原生矩阵中的Ubuntu 24.04 / Python 3.12；不要求GPU。Colab仅适合临时验收，不承担长期任务和持久存储。当前开发分支的新增场景检查另见[场景指南](scenarios.md)。
 
-## 选择固定候选代码
+## 选择固定发行代码
 
-安装 uv 0.12.13 和 Git。候选 commit 必须从发布记录或对应 PR/CI 获取；下面的 `REPLACE_WITH_CANDIDATE_COMMIT_SHA` 是需要替换的占位，不是已存在的 tag。记录尚未给出完整 SHA 和通过的 CI 时，不应把这次安装记作发布验收。
+安装uv 0.12.13和Git。发行tag指向已接受且通过远端检查的`a84edddef00db8af69c7e6e67be31f0763310dca`，不要用移动中的main替代：
 
 ```sh
-TW_CANDIDATE_COMMIT=REPLACE_WITH_CANDIDATE_COMMIT_SHA
-git clone https://github.com/Darrenus/tickwitness.git
+git clone --branch v0.1.0a1 https://github.com/Darrenus/tickwitness.git
 cd tickwitness
-git checkout --detach "$TW_CANDIDATE_COMMIT"
+git checkout --detach a84edddef00db8af69c7e6e67be31f0763310dca
 ```
 
-本页使用固定 checkout 中的 `uv.lock` 和原创 `examples/`。wheel 仅包含 Python 包，安装 wheel 不会自动创建这些样例；候选源码包另包含锁文件、样例、文档与开发脚本。只拿到 wheel 时，应同时取得候选记录指定的源码包/样例来源，不能从移动中的 main 混搭文件。不要使用尚未发布的 `pip install tickwitness==0.1.0a1` 命令。
+本页使用固定checkout中的`uv.lock`和原创`examples/`。wheel仅包含Python包，安装wheel不会自动创建这些样例；发行源码包另包含锁文件、样例、文档与开发脚本。只拿到wheel时，应同时取得发行记录指定的源码包/样例来源，不能从移动中的main混搭文件。PyPI没有对应发行，不使用`pip install tickwitness==0.1.0a1`作为取得方式。
 
 ## 核心安装与离线核验
 
@@ -26,7 +25,7 @@ UV_PROJECT_ENVIRONMENT="$TW_CORE_ENV" uv sync --locked --python 3.12
 "$TW_CORE_ENV/bin/python" -I -m tickwitness verify-evidence examples/evidence-demo
 ```
 
-版本应为 `tickwitness 0.1.0a1`。核验命令直接使用已安装环境，不进行 uv 依赖同步；完成安装和样例取得后，此核验不需要网络、Nautilus、原始 catalog 或原 attempt ledger。输出的 `bundle_id` 应与候选发布记录固定的样例 ID 相同。哈希自洽不能替代从可信来源取得预期 ID。
+版本应为`tickwitness 0.1.0a1`。核验命令直接使用已安装环境，不进行uv依赖同步；完成安装和样例取得后，此核验不需要网络、Nautilus、原始catalog或原attempt ledger。输出的`bundle_id`应与发行记录固定的样例ID相同。哈希自洽不能替代从可信来源取得预期ID。
 
 样例来自本仓库原创合成行情和固定 native 回放，预期回执为 `accounting_verified=true`、`native_replayed=false`。它证明该 profile 内的输入绑定和账务复算一致，不证明日志来自真实交易所、作者身份或撮合已重新执行。不要向严格 bundle 目录加入 README、隐藏文件或其他对象。
 

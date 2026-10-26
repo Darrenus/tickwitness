@@ -1,0 +1,19 @@
+{
+  "kind": "assumption_request_v1",
+  "schema_version": 1,
+  "scenario_kind": "COUNTERFACTUAL_STRESS",
+  "transform": {
+    "semantic_id": "replay_receive_suffix_shift_v1",
+    "from_capture_seq": 2
+  },
+  "additional_delay": {
+    "minimum": 0,
+    "maximum": 20000000,
+    "unit": "ns"
+  },
+  "parameter_basis": {
+    "kind": "researcher_defined",
+    "calibration_status": "uncalibrated",
+    "calibration_evidence_refs": []
+  }
+}
