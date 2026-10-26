@@ -159,6 +159,16 @@ def synthetic_queue_result(replay_input, *, commission_override=None):
         if row["policy_id"] == replay_input.policy_id
     )
     transitions = {row["source_ref"]["line"]: row for row in selected["trace"]}
+    book_counts = {}
+    bids, asks = {}, {}
+    for event in events:
+        for book, updates in ((bids, event.bids), (asks, event.asks)):
+            for price, depth in updates:
+                if depth:
+                    book[price] = depth
+                else:
+                    book.pop(price, None)
+        book_counts[event.line] = len(bids), len(asks)
     document = {
         "kind": "queue_replay_result_v1",
         "schema_version": 1,
@@ -240,8 +250,8 @@ def synthetic_queue_result(replay_input, *, commission_override=None):
                 "money_rounding_policy": "native_v1_f64_notional_then_USD_Money_precision_2",
                 "cash_semantics": "native_margin_balance_not_spot_notional_debit",
                 "book_type": "L2_MBP",
-                "bid_levels": 0 if initial else 2,
-                "ask_levels": 0 if initial else 2,
+                "bid_levels": 0 if initial else book_counts[event.line][0],
+                "ask_levels": 0 if initial else book_counts[event.line][1],
                 "orders": [] if initial else [order(status, filled)],
             },
             boundary=boundary,
