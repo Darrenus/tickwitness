@@ -1,6 +1,6 @@
 # ADR 0021：先冻结搜索候选序列与提议记录
 
-- 状态：Proposed；S07-01a 实现，远端验收及 owner 审阅待完成。
+- 状态：Proposed；S07-01a 实现通过[远端验收](../planning/sprint-07-status.md#s07-01a-远端验收记录)，[PR #88](https://github.com/Darrenus/tickwitness/pull/88) 待 owner 审阅。
 - 日期：2026-10-27。
 - 基线：owner 已合并 [PR #87](https://github.com/Darrenus/tickwitness/pull/87)，merge `2c2e0e39ccb4332afd87f4134d7fa6bf1e5801c6`。
 - 合同：[Search Plan v1](../contracts/search-plan-v1.md)。
