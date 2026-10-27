@@ -8,6 +8,7 @@ Root parents/owner are trusted. This is not a statistical trial-family ledger.
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import stat
 from collections.abc import Iterator
@@ -78,6 +79,9 @@ class AttemptNotFoundError(AttemptLedgerError):
 
 class AttemptBudgetExceededError(AttemptLedgerError):
     """All immutable slots in this protocol's attempt budget are occupied."""
+
+    code = "attempt_budget_exhausted"
+    exit_code = 8
 
 
 def _identity(value: object) -> str:
@@ -218,6 +222,34 @@ class LocalAttemptLedger:
 
     def reserve(self, protocol: _Owner) -> AttemptReservation:
         """Atomically consume the first available slot, before execution starts."""
+        return self._reserve(protocol)
+
+    def reserve_with_nonce(
+        self, protocol: ExecutableProtocol, nonce: str
+    ) -> AttemptReservation:
+        """Consume an original v2 slot using a nonce already sealed in a dispatch.
+
+        Named calls serialize so the same dispatch nonce cannot consume two
+        slots. A committed nonce is rejected, never returned for free replay.
+        Ordinary reservations still compete for the same immutable slots.
+        An exception after slot publication does not establish non-consumption.
+        """
+        if type(protocol) is not ExecutableProtocol:
+            raise AttemptLedgerError("Named search reservations require ExecutableProtocol v2")
+        if not isinstance(nonce, str) or re.fullmatch(r"[0-9a-f]{32}", nonce) is None:
+            raise AttemptLedgerError(
+                "Search reservation nonce requires 32 lowercase hex characters"
+            )
+        checked = _checked_owner(protocol)
+        try:
+            with self._named_reservation_lock():
+                if any(item.document["nonce"] == nonce for item in self.list_reservations(checked)):
+                    raise AttemptLedgerError("Search reservation nonce is already committed")
+                return self._reserve(checked, nonce=nonce)
+        except OSError as error:
+            raise AttemptLedgerError(f"Cannot reserve named search attempt: {error}") from error
+
+    def _reserve(self, protocol: _Owner, *, nonce: str | None = None) -> AttemptReservation:
         protocol = _checked_owner(protocol)
         budget = cast("dict[str, int]", protocol.document["budget"])
         try:
@@ -246,7 +278,7 @@ class LocalAttemptLedger:
                             "schema_version": 1,
                             "protocol_id": protocol.protocol_id,
                             "attempt_index": index,
-                            "nonce": secrets.token_hex(16),
+                            "nonce": nonce if nonce is not None else secrets.token_hex(16),
                             "max_wall_seconds": budget["max_wall_seconds"],
                             "created_at_utc": datetime.now(UTC).isoformat(timespec="microseconds"),
                         }
@@ -271,6 +303,30 @@ class LocalAttemptLedger:
             )
         except OSError as error:
             raise AttemptLedgerError(f"Cannot reserve attempt: {error}") from error
+
+    @contextmanager
+    def _named_reservation_lock(self) -> Iterator[None]:
+        import fcntl
+
+        with ExitStack() as stack:
+            root = os.open(self._root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            stack.callback(os.close, root)
+            descriptor = os.open(
+                ".search-reservation.lock",
+                os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
+                mode=0o600,
+                dir_fd=root,
+            )
+            stack.callback(os.close, descriptor)
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise AttemptLedgerError("Search reservation lock must be a regular file")
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            try:
+                os.fsync(descriptor)
+                os.fsync(root)
+                yield
+            finally:
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
 
     def list_reservations(self, owner: _Owner) -> tuple[AttemptReservation, ...]:
         """Read the committed slot prefix without creating any owner namespace.

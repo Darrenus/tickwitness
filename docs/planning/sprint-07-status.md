@@ -1,13 +1,13 @@
 # Sprint 7 固定预算搜索状态
 
-更新：2026-10-27（Asia/Singapore）。Owner 已合并 [PR #87](https://github.com/Darrenus/tickwitness/pull/87)，S06-02 的最小 conditional tagged finding 能力已接受。Sprint 7 基线 merge 为 `2c2e0e39ccb4332afd87f4134d7fa6bf1e5801c6`；`0.2.0.dev0` 保持未发行。真实访谈、采用和独立人类领域复核没有新增证据。
+更新：2026-10-27（Asia/Singapore）。Owner 已合并 [PR #88](https://github.com/Darrenus/tickwitness/pull/88)，S07-01a 的候选规划能力已接受。当前 Sprint 7 基线 merge 为 `373d08a5c2196662c5116e02ea7b7fe3a98dc167`；`0.2.0.dev0` 保持未发行。真实访谈、采用和独立人类领域复核没有新增证据。
 
 ## 本轮切片与后续门
 
 | 故事 | 切片与实际边界 | 状态 |
 | --- | --- | --- |
-| S07-01 / #19 | S07-01a 冻结网格／随机候选、来源、种子与完整 proposal journal；重建去重／拒绝及 source 派生预检 | [PR #88](https://github.com/Darrenus/tickwitness/pull/88) 远端验收通过，待 owner 接受 |
-| S07-01 / #19 | S07-01b 自动评估、候选与真实 attempt/outcome 关联；原协议预算不重置 | 尚未实现；不以 proposal journal 代替执行账本 |
+| S07-01 / #19 | S07-01a 冻结网格／随机候选、来源、种子与完整 proposal journal；重建去重／拒绝及 source 派生预检 | Owner 已合并 #88 |
+| S07-01 / #19 | S07-01b 自动评估、候选与真实 attempt/outcome 关联；原协议预算不重置 | 本轮接入，远端验收待完成 |
 | S07-02 / #20 | Campaign 评估次数／时间／存储硬限额及完整停止原因 | 尚未实现 |
 | S07-03 / #21 | 有范围的反例／预算内未发现／不可评价输出 | 尚未实现；本轮 findings 关闭 |
 
@@ -52,3 +52,13 @@ S07-01a 远端结果、代码 head、实际 merge checkout 与 artifact 身份�
 初轮远端发现新 CLI 在 Python 3.12 运行时求值 argparse 泛型注解而阻断导入；增加延迟注解并应用远端格式补丁后重验，未修改候选或拒绝 oracle 掩盖问题。AI 并行静态复核单独计为 AI 审阅，独立人类领域接受仍未取得。
 
 S07-01a 的提议计划可供 owner 审阅；#19 保持打开，自动评估及 durable attempt／outcome 关联、campaign 硬限额、搜索 finding、确认集 lifecycle 和完整统计试验历史仍由后续切片交付。未新增实际工时、真实访谈、性能或采用数据。
+
+## S07-01b 实现边界与验收门
+
+合同见 [Search Execution v1](../contracts/search-execution-v1.md)，决策见 [ADR 0022](../adr/0022-persistent-search-execution.md)。同一 plan／runs 根只启动一次串行 campaign；后续调用只重审已有记录，不自动恢复、重跑或退还槽位。每个 eligible 候选先持久 dispatch 与 reservation nonce，再从原 v2 协议共同 slots 占槽、保存 link 和旧 scenario intent，最后构造原生 worker。Baseline、其它 plan 和失败尝试共同消费原预算，不把 SearchPlan 当新预算 owner。
+
+每份实际 result 在独立账务审计前保存；不通过审计的原始结果保持诊断状态，不变成反例。只读 inspect 重验实际 source／plan／dispatch、原 reservation／nonce／intent／outcome 与账户；失败、未完成、预算耗尽、占槽或发布不确定均停止后缀。未知 nonce 分配不误报未消耗，槽位可见而 link 缺失时保留已占未决状态。
+
+验收包含：基线先占槽后自动0／非0场景执行、duplicate／rejected不占槽、同plan重复调用不重放、并发末槽和同nonce拒复用、reserve提交后异常按nonce恢复、success outcome提交后回执丢失不改成failure、审计拒绝raw保留、KeyboardInterrupt未决与真实native EOF incomplete停止，以及实际wheel／sdist安装和core-only只读重审。新增测试、构建、格式化和原生执行全部远端。
+
+本轮仍不签 search finding、不认证完整统计trial历史或真实市场概率；原scenario receipt的search_performed=false与tagged finding权限不改写。S07-02的campaign总时间／存储硬限额、S07-03的结论规则、S10恢复能力及真实访谈继续分别验收，工时与采用证据不补造。远端实际记录待回填。

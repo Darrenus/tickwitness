@@ -128,4 +128,6 @@ raw 与显式字段业务投影分别给每通道首差异，保留原始值、�
 
 ## 搜索计划决策记录
 
-- [ADR 0021：先冻结搜索候选序列与提议记录](../adr/0021-frozen-search-candidate-plans.md)：S07-01a，独立种子、固定生成算法、原始提议预算及完整 journal；自动执行与搜索判定保留后续门。
+- [ADR 0021：先冻结搜索候选序列与提议记录](../adr/0021-frozen-search-candidate-plans.md)：owner 已合并 #88；独立种子、固定生成算法、原始提议预算及完整 journal。
+
+- [ADR 0022：以原协议预算执行候选并持久关联尝试](../adr/0022-persistent-search-execution.md)：S07-01b，事前 dispatch nonce、原槽位预算、结果保留、停止与只读重审；搜索 finding 与完整作业恢复仍保留后续门。

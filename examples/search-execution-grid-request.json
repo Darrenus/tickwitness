@@ -1,0 +1,10 @@
+{
+  "kind": "search_plan_request_v1",
+  "schema_version": 1,
+  "search_seed": 17,
+  "max_proposals": 4,
+  "generator": {
+    "kind": "grid",
+    "values_ns": [0, 0, 2000000000, 3000000000]
+  }
+}
