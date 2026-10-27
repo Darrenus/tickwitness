@@ -1,6 +1,8 @@
 # 从冻结协议到可迁移证据
 
-S06-02c 另新增 [Tagged Pair Evidence v1](contracts/tagged-pair-evidence-v1.md)，用于已接受的 tagged reconstruction 双模型证据。新十二角色包、`export-tagged-queue-pair` 和 `verify-tagged-queue-pair` 与本文原 baseline 八角色工作流独立；旧命令不接收新 kind。它在原生环境导出已提交的两份 witness，移交后仅用 core 从 raw 重新核对来源、守恒、回调账务、horizon／cleanup 和真假关系，不读取原 store／registry／ledger。当前新切片远端验收待完成；新协议的 finding 权限未被改写。
+Owner 已合并 #86 的 [Tagged Pair Evidence v1](contracts/tagged-pair-evidence-v1.md)，用于已接受的 tagged reconstruction 双模型证据。十二角色包、`export-tagged-queue-pair` 和 `verify-tagged-queue-pair` 与本文原 baseline 八角色工作流独立；旧命令不接收新 kind。它在原生环境导出已提交的两份 witness，移交后仅用 core 从 raw 重新核对来源、守恒、回调账务、horizon／cleanup 和真假关系，不读取原 store／registry／ledger。
+
+本轮 S06-02d 的 [Tagged Findings v1](contracts/tagged-findings-v1.md) 另行冻结报告权限，不改变旧执行协议的 finding 标记。`freeze-tagged-finding-protocol`／`inspect-tagged-finding-protocol` 管理独立权限；`issue-tagged-findings` 显式 pin 源包并封存十四角色报告，`verify-tagged-findings` 仅用 core 重建来源和结论。权限只覆盖列出的两种条件解释，F/F、T/F、T/T 各有固定映射；费用或环境不满足条件则退出9、无报告，坏证据不能成为 finding。本轮远端验收待完成。作者、审批、原始发布、native 重放和完整历史认证不因 FINAL 内容状态而获得。
 
 `import → freeze → replay → export → verify`已接为同一application链路，并随`v0.1.0a1`技术预览发行；实际制品见[预览说明](releases/0.1.0a1.md)。当前分支`0.2.0.dev0`开发版保留该链路，另新增只读[场景契约校验](scenarios.md)，不把它当作场景执行。回放支持范围仍是EUR/USD、内置post-only限价买单、开发集baseline与最后观测bid估值，不执行任意Python策略，不解封确认集，也不进行反例搜索或全市场收益认证。发行版安装请看[quickstart](quickstart.md)，环境边界见[支持矩阵](support.md)。
 

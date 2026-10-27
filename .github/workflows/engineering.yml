@@ -93,6 +93,17 @@ jobs:
           python3 scripts/smoke_queue_execution.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_tagged_queue.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/tagged-queue-core.json
           python3 scripts/smoke_tagged_evidence.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/tagged-pair-core.json --bundles-dir /tmp/tagged-pair-core-bundles
+          python3 scripts/smoke_tagged_findings.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --pairs-dir /tmp/tagged-pair-core-bundles --source-report /tmp/tagged-pair-core.json --report /tmp/tagged-findings-core.json --bundles-dir /tmp/tagged-findings-core-bundles
+      - name: Preserve installed-core frozen authority and finding evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tagged-findings-core-${{ github.sha }}
+          path: |
+            /tmp/tagged-findings-core.json
+            /tmp/tagged-findings-core-bundles
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve installed-core tagged missing-extra and budget evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -185,6 +196,19 @@ jobs:
           uv venv /tmp/tickwitness-tagged-verifier --python 3.12
           uv pip install --python /tmp/tickwitness-tagged-verifier/bin/python --no-index --no-deps dist/*.whl
           python3 scripts/smoke_tagged_evidence.py --python .venv/bin/python --verifier-python /tmp/tickwitness-tagged-verifier/bin/python --report /tmp/tagged-pair-evidence.json --bundles-dir /tmp/tagged-pair-evidence-bundles
+      - name: Issue scoped findings and verify them in a core-only environment
+        run: |
+          python3 scripts/smoke_tagged_findings.py --python /tmp/tickwitness-tagged-verifier/bin/python --verifier-python /tmp/tickwitness-tagged-verifier/bin/python --pairs-dir /tmp/tagged-pair-evidence-bundles --source-report /tmp/tagged-pair-evidence.json --report /tmp/tagged-findings.json --bundles-dir /tmp/tagged-findings-bundles
+      - name: Preserve frozen finding authority and final content evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tagged-findings-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            /tmp/tagged-findings.json
+            /tmp/tagged-findings-bundles
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve portable tagged pair bundles and offline verification evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -268,6 +292,7 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_queue_execution.py" --python /tmp/tickwitness-preview-core/bin/python
           python3 "$TW_SOURCE/scripts/smoke_tagged_queue.py" --python /tmp/tickwitness-preview-core/bin/python --report /tmp/tagged-queue-source-wheel-core.json
           python3 "$TW_SOURCE/scripts/smoke_tagged_evidence.py" --python /tmp/tickwitness-preview-core/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --core-only --report /tmp/tagged-pair-source-wheel-core.json --bundles-dir /tmp/tagged-pair-source-wheel-core-bundles
+          python3 "$TW_SOURCE/scripts/smoke_tagged_findings.py" --python /tmp/tickwitness-preview-core/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --pairs-dir /tmp/tagged-pair-source-wheel-core-bundles --source-report /tmp/tagged-pair-source-wheel-core.json --report /tmp/tagged-findings-source-wheel-core.json --bundles-dir /tmp/tagged-findings-source-wheel-core-bundles
           uv venv /tmp/tickwitness-preview-native --python 3.12
           uv pip install --python /tmp/tickwitness-preview-native/bin/python --only-binary nautilus-trader --no-deps dist/*.whl
           uv export --locked --extra nautilus --no-dev --no-emit-project --format requirements-txt --output-file /tmp/tickwitness-preview-native-requirements.txt
@@ -279,10 +304,23 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_queue_execution.py" --python /tmp/tickwitness-preview-native/bin/python --native --report /tmp/queue-source-wheel-execution.json
           python3 "$TW_SOURCE/scripts/smoke_tagged_queue.py" --python /tmp/tickwitness-preview-native/bin/python --native --report /tmp/tagged-queue-source-wheel-execution.json
           python3 "$TW_SOURCE/scripts/smoke_tagged_evidence.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/tagged-pair-source-wheel-evidence.json --bundles-dir /tmp/tagged-pair-source-wheel-bundles
+          python3 "$TW_SOURCE/scripts/smoke_tagged_findings.py" --python /tmp/tickwitness-preview-core/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --pairs-dir /tmp/tagged-pair-source-wheel-bundles --source-report /tmp/tagged-pair-source-wheel-evidence.json --report /tmp/tagged-findings-source-wheel.json --bundles-dir /tmp/tagged-findings-source-wheel-bundles
           /tmp/tickwitness-preview-native/bin/python -I "$TW_SOURCE/scripts/qualify_queue_models.py" --output /tmp/queue-source-wheel-qualification.json
           /tmp/tickwitness-preview-native/bin/python -I "$TW_SOURCE/scripts/qualify_queue_semantics.py" --output /tmp/queue-semantics-source-wheel.json
           cd dist
           sha256sum --check SHA256SUMS
+      - name: Preserve finding authority and reports from actual source archive and core wheel
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tagged-findings-source-wheel-${{ github.sha }}
+          path: |
+            /tmp/tagged-findings-source-wheel-core.json
+            /tmp/tagged-findings-source-wheel-core-bundles
+            /tmp/tagged-findings-source-wheel.json
+            /tmp/tagged-findings-source-wheel-bundles
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve qualification using actual source archive and installed wheel
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

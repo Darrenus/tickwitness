@@ -271,7 +271,12 @@ def _case(
     front, back = submitted["runs"]
     assert front["attempt_id"] != back["attempt_id"]
     assert [item["evaluation"]["filled_quantity_lots"] for item in (front, back)] == [2, 0]
-    truths = [False, False] if mark == 100 else [True, comparator == "ge"]
+    truths = {
+        (100, "gt"): [False, False],
+        (102, "gt"): [True, False],
+        (102, "ge"): [True, True],
+        (100, "ge"): [False, True],
+    }[(mark, comparator)]
     relation = "opposite_truth_values" if truths[0] != truths[1] else "same_truth_value"
     bundle, repeated = root / "bundle", root / "repeated"
     before = _tree(state)
@@ -465,7 +470,7 @@ def main() -> None:
         cases = []
         profiles = (("standard-gt", 100, "gt"), ("bid102-gt", 102, "gt"))
         if not arguments.core_only:
-            profiles += (("bid102-ge", 102, "ge"),)
+            profiles += (("bid102-ge", 102, "ge"), ("standard-ge", 100, "ge"))
         for name, mark, comparator in profiles:
             preserved = None if arguments.bundles_dir is None else arguments.bundles_dir / name
             if arguments.core_only:
