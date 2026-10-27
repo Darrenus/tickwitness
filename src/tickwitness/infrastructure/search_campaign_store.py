@@ -120,8 +120,10 @@ class LocalSearchCampaignStore:
         try:
             with self._campaign(plan_id, create=True) as directory:
                 descriptor = os.open(
-                    ".lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
-                    mode=0o600, dir_fd=directory,
+                    ".lock",
+                    os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
+                    mode=0o600,
+                    dir_fd=directory,
                 )
                 try:
                     if not stat.S_ISREG(os.fstat(descriptor).st_mode):
@@ -146,7 +148,9 @@ class LocalSearchCampaignStore:
     def check_tree(self, plan_id: str) -> dict[str, tuple[int, ...]]:
         """Reject unrecognized or unsafe entries without deleting crash staging."""
         inventory: dict[str, tuple[int, ...]] = {
-            "dispatches": (), "links": (), "results": (),
+            "dispatches": (),
+            "links": (),
+            "results": (),
         }
         try:
             with ExitStack() as campaign_stack:
@@ -210,14 +214,13 @@ class LocalSearchCampaignStore:
     def _get(self, plan_id: str, category: str | None, name: str, limit: int) -> bytes | None:
         _identity(plan_id)
         try:
-            with self._campaign(plan_id) as directory:
-                with ExitStack() as stack:
-                    parent = (
-                        directory
-                        if category is None
-                        else self._directory(stack, directory, category, False)
-                    )
-                    return self._read(parent, name, limit)
+            with self._campaign(plan_id) as directory, ExitStack() as stack:
+                parent = (
+                    directory
+                    if category is None
+                    else self._directory(stack, directory, category, False)
+                )
+                return self._read(parent, name, limit)
         except FileNotFoundError:
             return None
         except OSError as error:
@@ -253,9 +256,8 @@ class LocalSearchCampaignStore:
     @contextmanager
     def _campaign(self, plan_id: str, *, create: bool = False) -> Iterator[int]:
         _identity(plan_id)
-        with self._namespace() as directory:
-            with ExitStack() as stack:
-                yield self._directory(stack, directory, plan_id, create)
+        with self._namespace() as directory, ExitStack() as stack:
+            yield self._directory(stack, directory, plan_id, create)
 
     @staticmethod
     def _directory(stack: ExitStack, parent: int, name: str, create: bool) -> int:
@@ -321,8 +323,10 @@ class LocalSearchCampaignStore:
             pass
         temporary = f".pending-{secrets.token_hex(16)}"
         descriptor = os.open(
-            temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-            mode=0o600, dir_fd=directory,
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            mode=0o600,
+            dir_fd=directory,
         )
         try:
             with os.fdopen(descriptor, "wb") as stream:
@@ -331,7 +335,10 @@ class LocalSearchCampaignStore:
                 os.fsync(stream.fileno())
             try:
                 os.link(
-                    temporary, name, src_dir_fd=directory, dst_dir_fd=directory,
+                    temporary,
+                    name,
+                    src_dir_fd=directory,
+                    dst_dir_fd=directory,
                     follow_symlinks=False,
                 )
             except FileExistsError as error:

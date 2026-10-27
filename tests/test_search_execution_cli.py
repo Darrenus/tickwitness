@@ -11,38 +11,61 @@ from tickwitness.infrastructure.subprocess_replay import ReplayProcessError, Sub
 
 
 def args(case, command, plan_id):
-    return [command, plan_id, "--plans", str(case.root / "plans"),
-            "--store", str(case.root / "data"), "--registry", str(case.root / "registry"),
-            "--runs", str(case.root / "runs")]
+    return [
+        command,
+        plan_id,
+        "--plans",
+        str(case.root / "plans"),
+        "--store",
+        str(case.root / "data"),
+        "--registry",
+        str(case.root / "registry"),
+        "--runs",
+        str(case.root / "runs"),
+    ]
 
 
 def setup_plan(case):
     root = case.root
     assumption = {
-        "kind": "assumption_request_v1", "schema_version": 1, "scenario_kind": "COUNTERFACTUAL_STRESS",
+        "kind": "assumption_request_v1",
+        "schema_version": 1,
+        "scenario_kind": "COUNTERFACTUAL_STRESS",
         "transform": {"semantic_id": "replay_receive_suffix_shift_v1", "from_capture_seq": 2},
         "additional_delay": {"minimum": 0, "maximum": 20_000_000, "unit": "ns"},
-        "parameter_basis": {"kind": "researcher_defined", "calibration_status": "uncalibrated",
-                            "calibration_evidence_refs": []},
+        "parameter_basis": {
+            "kind": "researcher_defined",
+            "calibration_status": "uncalibrated",
+            "calibration_evidence_refs": [],
+        },
     }
-    request = {"kind": "search_plan_request_v1", "schema_version": 1, "search_seed": 3,
-               "max_proposals": 3, "generator": {"kind": "grid", "values_ns": [0, 0, 1]}}
+    request = {
+        "kind": "search_plan_request_v1",
+        "schema_version": 1,
+        "search_seed": 3,
+        "max_proposals": 3,
+        "generator": {"kind": "grid", "values_ns": [0, 0, 1]},
+    }
     (root / "assumption.json").write_text(json.dumps(assumption))
     (root / "search.json").write_text(json.dumps(request))
     from tickwitness.application.search_planning import freeze_search_plan
     from tickwitness.infrastructure.search_plan_registry import LocalSearchPlanRegistry
 
     return freeze_search_plan(
-        case.frozen.protocol_id, json.dumps(assumption).encode(), json.dumps(request).encode(),
-        split="development", registry_factory=lambda: case.registry,
+        case.frozen.protocol_id,
+        json.dumps(assumption).encode(),
+        json.dumps(request).encode(),
+        split="development",
+        registry_factory=lambda: case.registry,
         datasets_factory=lambda: case.data,
         plans_factory=lambda: LocalSearchPlanRegistry(root / "plans", create=True),
     )["plan_id"]
 
 
 def tree(root):
-    return {str(path.relative_to(root)): path.read_bytes()
-            for path in root.rglob("*") if path.is_file()}
+    return {
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
+    }
 
 
 def forbidden(*_args, **_kwargs):
@@ -54,25 +77,61 @@ def test_confirmation_fails_before_ids_io_and_factories(tmp_path, capsys, monkey
     root = tmp_path / "never-created"
     monkeypatch.setattr(LocalAttemptLedger, "__init__", forbidden)
     monkeypatch.setattr(LocalSearchCampaignStore, "__init__", forbidden)
-    assert main([command, "invalid-id", "--plans", str(root / "plans"),
-                 "--store", str(root / "store"), "--registry", str(root / "registry"),
-                 "--runs", str(root / "runs"), "--split", "confirmation"]) == 5
+    assert (
+        main(
+            [
+                command,
+                "invalid-id",
+                "--plans",
+                str(root / "plans"),
+                "--store",
+                str(root / "store"),
+                "--registry",
+                str(root / "registry"),
+                "--runs",
+                str(root / "runs"),
+                "--split",
+                "confirmation",
+            ]
+        )
+        == 5
+    )
     output = capsys.readouterr()
-    assert not output.out and json.loads(output.err)["error"]["code"] == "confirmation_access_denied"
+    assert (
+        not output.out and json.loads(output.err)["error"]["code"] == "confirmation_access_denied"
+    )
     assert not root.exists()
 
 
 def test_missing_plan_does_not_construct_runs(tmp_path, capsys):
     root = tmp_path / "absent"
-    assert main(["run-search-plan", "0" * 64, "--plans", str(root / "plans"),
-                 "--store", str(root / "store"), "--registry", str(root / "registry"),
-                 "--runs", str(root / "runs")]) == 4
+    assert (
+        main(
+            [
+                "run-search-plan",
+                "0" * 64,
+                "--plans",
+                str(root / "plans"),
+                "--store",
+                str(root / "store"),
+                "--registry",
+                str(root / "registry"),
+                "--runs",
+                str(root / "runs"),
+            ]
+        )
+        == 4
+    )
     output = capsys.readouterr()
-    assert not output.out and json.loads(output.err)["error"]["code"] == "research_evidence_not_found"
+    assert (
+        not output.out and json.loads(output.err)["error"]["code"] == "research_evidence_not_found"
+    )
     assert not root.exists()
 
 
-def test_failure_report_uses_stdout_and_repeat_inspection_never_reexecutes(experiment_case, capsys, monkeypatch):
+def test_failure_report_uses_stdout_and_repeat_inspection_never_reexecutes(
+    experiment_case, capsys, monkeypatch
+):
     case = experiment_case
     plan_id = setup_plan(case)
 
@@ -100,7 +159,9 @@ def test_failure_report_uses_stdout_and_repeat_inspection_never_reexecutes(exper
     assert tree(case.root) == before
 
 
-def test_repeated_run_does_not_recreate_deleted_ledger_directory(experiment_case, capsys, monkeypatch):
+def test_repeated_run_does_not_recreate_deleted_ledger_directory(
+    experiment_case, capsys, monkeypatch
+):
     case = experiment_case
     plan_id = setup_plan(case)
 

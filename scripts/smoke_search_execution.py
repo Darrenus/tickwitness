@@ -123,44 +123,90 @@ def main() -> None:
         frozen = run(
             "freeze-experiment",
             "stress-experiment-request.json",
-            "--input-root", str(inputs),
-            "--development-dataset", ids[0],
-            "--confirmation-dataset", ids[1],
-            "--store", str(store), "--registry", str(registry),
+            "--input-root",
+            str(inputs),
+            "--development-dataset",
+            ids[0],
+            "--confirmation-dataset",
+            ids[1],
+            "--store",
+            str(store),
+            "--registry",
+            str(registry),
         )
         plan = run(
-            "freeze-search-plan", frozen["protocol_id"],
-            "stress-assumption-request.json", "search-execution-grid-request.json",
-            "--input-root", str(inputs),
-            "--store", str(store), "--registry", str(registry), "--plans", str(plans),
+            "freeze-search-plan",
+            frozen["protocol_id"],
+            "stress-assumption-request.json",
+            "search-execution-grid-request.json",
+            "--input-root",
+            str(inputs),
+            "--store",
+            str(store),
+            "--registry",
+            str(registry),
+            "--plans",
+            str(plans),
         )
         journal = plan["plan"]["journal"]
         assert [row["status"] for row in journal] == [
-            "ELIGIBLE", "DUPLICATE", "ELIGIBLE", "REJECTED",
+            "ELIGIBLE",
+            "DUPLICATE",
+            "ELIGIBLE",
+            "REJECTED",
         ]
         sources_before = (_tree(store), _tree(registry), _tree(plans))
         common = (
-            "--store", str(store), "--registry", str(registry),
-            "--plans", str(plans), "--runs", str(runs),
+            "--store",
+            str(store),
+            "--registry",
+            str(registry),
+            "--plans",
+            str(plans),
+            "--runs",
+            str(runs),
         )
         replay_common = (
-            "--store", str(store), "--registry", str(registry), "--runs", str(runs),
+            "--store",
+            str(store),
+            "--registry",
+            str(registry),
+            "--runs",
+            str(runs),
         )
         missing = directory / "never-created"
         for command in ("run-search-plan", "inspect-search-campaign"):
             denied = run(
-                command, "invalid-id", "--split", "confirmation",
-                "--plans", str(missing / "plans"), "--store", str(missing / "data"),
-                "--registry", str(missing / "registry"), "--runs", str(missing / "runs"),
-                expected=5, readonly=True,
+                command,
+                "invalid-id",
+                "--split",
+                "confirmation",
+                "--plans",
+                str(missing / "plans"),
+                "--store",
+                str(missing / "data"),
+                "--registry",
+                str(missing / "registry"),
+                "--runs",
+                str(missing / "runs"),
+                expected=5,
+                readonly=True,
             )
             assert denied["error"]["code"] == "confirmation_access_denied"
         assert not missing.exists()
         absent = run(
-            "inspect-search-campaign", plan["plan_id"],
-            "--plans", str(plans), "--store", str(store),
-            "--registry", str(registry), "--runs", str(missing / "runs"),
-            expected=4, readonly=True,
+            "inspect-search-campaign",
+            plan["plan_id"],
+            "--plans",
+            str(plans),
+            "--store",
+            str(store),
+            "--registry",
+            str(registry),
+            "--runs",
+            str(missing / "runs"),
+            expected=4,
+            readonly=True,
         )
         assert absent["error"]["code"] == "research_evidence_not_found"
         assert not missing.exists()
@@ -170,9 +216,17 @@ def main() -> None:
         corrupt.write_bytes(b"preserved-invalid-original")
         invalid_runs = directory / "invalid-runs"
         rejected = run(
-            "run-search-plan", plan["plan_id"],
-            "--plans", str(corrupt_plans), "--store", str(store),
-            "--registry", str(registry), "--runs", str(invalid_runs), expected=3,
+            "run-search-plan",
+            plan["plan_id"],
+            "--plans",
+            str(corrupt_plans),
+            "--store",
+            str(store),
+            "--registry",
+            str(registry),
+            "--runs",
+            str(invalid_runs),
+            expected=3,
         )
         assert rejected["error"]["code"] == "research_store_integrity_or_io_failure"
         assert not invalid_runs.exists()
@@ -183,8 +237,11 @@ def main() -> None:
             baseline = run("replay-protocol", frozen["protocol_id"], *replay_common)
         expected_exit = 0 if arguments.native else 6
         executed = run(
-            "run-search-plan", plan["plan_id"], *common,
-            expected=expected_exit, campaign_report=True,
+            "run-search-plan",
+            plan["plan_id"],
+            *common,
+            expected=expected_exit,
+            campaign_report=True,
         )
         assert executed["kind"] == "search_campaign_report_v1"
         assert executed["plan_id"] == plan["plan_id"]
@@ -209,8 +266,12 @@ def main() -> None:
         inspected = run("inspect-search-campaign", plan["plan_id"], *common, readonly=True)
         assert inspected == executed
         repeated = run(
-            "run-search-plan", plan["plan_id"], *common,
-            expected=expected_exit, readonly=True, campaign_report=True,
+            "run-search-plan",
+            plan["plan_id"],
+            *common,
+            expected=expected_exit,
+            readonly=True,
+            campaign_report=True,
         )
         assert repeated == inspected
         assert before_inspect == (_tree(store), _tree(registry), _tree(plans), _tree(runs))
@@ -243,7 +304,10 @@ def main() -> None:
             assert baseline["evaluation"]["claim_observation"]["value"] == "-2"
             for row in candidates:
                 audited = run(
-                    "inspect-scenario-run", row["run_id"], *replay_common, readonly=True,
+                    "inspect-scenario-run",
+                    row["run_id"],
+                    *replay_common,
+                    readonly=True,
                 )
                 assert audited["receipt"]["scope"]["search_performed"] is False
                 assert audited["verification"]["accounting_verified"] is True
@@ -253,25 +317,43 @@ def main() -> None:
             other_request["search_seed"] += 1
             (inputs / "other-plan.json").write_bytes(_canonical(other_request))
             other = run(
-                "freeze-search-plan", frozen["protocol_id"],
-                "stress-assumption-request.json", "other-plan.json",
-                "--input-root", str(inputs),
-                "--store", str(store), "--registry", str(registry), "--plans", str(plans),
+                "freeze-search-plan",
+                frozen["protocol_id"],
+                "stress-assumption-request.json",
+                "other-plan.json",
+                "--input-root",
+                str(inputs),
+                "--store",
+                str(store),
+                "--registry",
+                str(registry),
+                "--plans",
+                str(plans),
             )
             budget_stop = run(
-                "run-search-plan", other["plan_id"], *common,
-                expected=8, campaign_report=True,
+                "run-search-plan",
+                other["plan_id"],
+                *common,
+                expected=8,
+                campaign_report=True,
             )
             assert budget_stop["status"] == "stopped"
             assert budget_stop["stop_reason"] == "attempt_budget_exhausted"
             assert [row["status"] for row in budget_stop["candidates"]] == [
-                "BUDGET_EXHAUSTED", "NOT_DISPATCHED",
+                "BUDGET_EXHAUSTED",
+                "NOT_DISPATCHED",
             ]
             assert all(row["attempt_id"] is None for row in budget_stop["candidates"])
             budget_tree = _tree(runs)
-            assert run(
-                "inspect-search-campaign", other["plan_id"], *common, readonly=True,
-            ) == budget_stop
+            assert (
+                run(
+                    "inspect-search-campaign",
+                    other["plan_id"],
+                    *common,
+                    readonly=True,
+                )
+                == budget_stop
+            )
             assert _tree(runs) == budget_tree
         else:
             budget_stop = None
@@ -290,8 +372,11 @@ def main() -> None:
                 "unfinalized": 0,
             }
             failure = run(
-                "inspect-scenario-attempt", candidates[0]["attempt_id"],
-                "--runs", str(runs), readonly=True,
+                "inspect-scenario-attempt",
+                candidates[0]["attempt_id"],
+                "--runs",
+                str(runs),
+                readonly=True,
             )
             assert failure["budget_consumed"] is True
             assert failure["outcome"]["kind"] == "scenario_attempt_failure_v1"

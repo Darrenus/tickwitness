@@ -154,7 +154,10 @@ def test_real_pending_submit_eof_stops_campaign_and_repeat_only_reaudits(
     assert first["reservation_link_present"] is True
     assert first["raw_result_audited"] is True
     assert first["evaluation"]["metric_observation"] == {
-        "metric": "net_marked_pnl_v1", "unit": "USD", "eligible": False, "value": None,
+        "metric": "net_marked_pnl_v1",
+        "unit": "USD",
+        "eligible": False,
+        "value": None,
     }
     assert "claim_observation" not in first["evaluation"]
     assert first["evaluation"]["scope"]["search_performed"] is False
@@ -191,7 +194,8 @@ def test_real_pending_submit_eof_stops_campaign_and_repeat_only_reaudits(
     monkeypatch.setattr(SubprocessReplayAdapter, "__init__", forbidden)
     before = {
         str(path.relative_to(tmp_path)): path.read_bytes()
-        for path in tmp_path.rglob("*") if path.is_file()
+        for path in tmp_path.rglob("*")
+        if path.is_file()
     }
     repeated = run_search_plan(
         plan["plan_id"],
@@ -217,11 +221,17 @@ def test_real_pending_submit_eof_stops_campaign_and_repeat_only_reaudits(
     assert repeated == inspected == report
     assert inspected["verification"]["native_replayed"] is False
     assert inspected["verification"]["outcomes_reaudited"] is True
-    assert len(ledger.list_reservations(
-        load_executable_protocol(registry.get(frozen.protocol_id).canonical_bytes)
-    )) == 1
+    assert (
+        len(
+            ledger.list_reservations(
+                load_executable_protocol(registry.get(frozen.protocol_id).canonical_bytes)
+            )
+        )
+        == 1
+    )
     assert {
         str(path.relative_to(tmp_path)): path.read_bytes()
-        for path in tmp_path.rglob("*") if path.is_file()
+        for path in tmp_path.rglob("*")
+        if path.is_file()
     } == before
     assert data.read_normalized(development) == source

@@ -9,12 +9,16 @@ from tickwitness.application.experiments import run_experiment
 from tickwitness.application.research import ConfirmationAccessDenied
 from tickwitness.application.search_execution import inspect_search_campaign, run_search_plan
 from tickwitness.application.search_planning import freeze_search_plan
-from tickwitness.domain.evidence.run_records import EvidenceValidationError, canonical, digest, parse
+from tickwitness.domain.evidence.run_records import (
+    EvidenceValidationError,
+    canonical,
+    digest,
+    parse,
+)
 from tickwitness.domain.replay.contracts import build_replay_result
 from tickwitness.domain.research_contracts.executable import load_executable_protocol
 from tickwitness.domain.search.execution import SearchExecutionValidationError
-from tickwitness.infrastructure.attempt_ledger import AttemptLedgerError
-from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger
+from tickwitness.infrastructure.attempt_ledger import AttemptLedgerError, LocalAttemptLedger
 from tickwitness.infrastructure.search_campaign_store import LocalSearchCampaignStore
 from tickwitness.infrastructure.search_plan_registry import LocalSearchPlanRegistry
 from tickwitness.infrastructure.subprocess_replay import ReplayProcessError
@@ -22,19 +26,32 @@ from tickwitness.infrastructure.subprocess_replay import ReplayProcessError
 
 def prepare(case, *, values=None, seed=17):
     assumption = {
-        "kind": "assumption_request_v1", "schema_version": 1,
+        "kind": "assumption_request_v1",
+        "schema_version": 1,
         "scenario_kind": "COUNTERFACTUAL_STRESS",
         "transform": {"semantic_id": "replay_receive_suffix_shift_v1", "from_capture_seq": 2},
         "additional_delay": {"minimum": 0, "maximum": 20_000_000, "unit": "ns"},
-        "parameter_basis": {"kind": "researcher_defined", "calibration_status": "uncalibrated",
-                            "calibration_evidence_refs": []},
+        "parameter_basis": {
+            "kind": "researcher_defined",
+            "calibration_status": "uncalibrated",
+            "calibration_evidence_refs": [],
+        },
     }
     candidates = [0, 0, 30_000_000] if values is None else values
-    request = {"kind": "search_plan_request_v1", "schema_version": 1, "search_seed": seed,
-               "max_proposals": len(candidates), "generator": {"kind": "grid", "values_ns": candidates}}
+    request = {
+        "kind": "search_plan_request_v1",
+        "schema_version": 1,
+        "search_seed": seed,
+        "max_proposals": len(candidates),
+        "generator": {"kind": "grid", "values_ns": candidates},
+    }
     return freeze_search_plan(
-        case.frozen.protocol_id, canonical(assumption), canonical(request), split="development",
-        registry_factory=lambda: case.registry, datasets_factory=lambda: case.data,
+        case.frozen.protocol_id,
+        canonical(assumption),
+        canonical(request),
+        split="development",
+        registry_factory=lambda: case.registry,
+        datasets_factory=lambda: case.data,
         plans_factory=lambda: LocalSearchPlanRegistry(case.root / "plans", create=True),
     )["plan_id"]
 
@@ -43,11 +60,13 @@ def factories(case):
     return {
         "split": "development",
         "plans_factory": lambda: LocalSearchPlanRegistry(case.root / "plans"),
-        "registry_factory": lambda: case.registry, "datasets_factory": lambda: case.data,
+        "registry_factory": lambda: case.registry,
+        "datasets_factory": lambda: case.data,
         "ledger_factory": case.ledger_factory,
         "ledger_reader_factory": lambda: LocalAttemptLedger(case.root / "runs", create=False),
         "campaigns_factory": lambda: LocalSearchCampaignStore(case.root / "runs", create=True),
-        "engine_factory": case.engine_factory, "nonce_factory": lambda: secrets.token_hex(16),
+        "engine_factory": case.engine_factory,
+        "nonce_factory": lambda: secrets.token_hex(16),
     }
 
 
@@ -69,8 +88,9 @@ def inspect(case, plan_id, **changes):
 
 
 def tree(root):
-    return {str(path.relative_to(root)): path.read_bytes()
-            for path in root.rglob("*") if path.is_file()}
+    return {
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
+    }
 
 
 def forbidden(*_args, **_kwargs):
@@ -81,15 +101,25 @@ def test_completed_campaign_reuses_original_budget_and_repeat_never_executes(exp
     case = experiment_case
     plan_id = prepare(case)
     baseline = run_experiment(
-        case.frozen.protocol_id, split="development", registry_factory=lambda: case.registry,
-        datasets_factory=lambda: case.data, ledger_factory=case.ledger_factory,
+        case.frozen.protocol_id,
+        split="development",
+        registry_factory=lambda: case.registry,
+        datasets_factory=lambda: case.data,
+        ledger_factory=case.ledger_factory,
         engine_factory=case.engine_factory,
     )
     report = run(case, plan_id)
     assert report["status"] == "completed" and report["exit_code"] == 0
     assert report["stop_reason"] == "planned_candidates_exhausted"
-    assert report["counts"] == {"eligible": 1, "dispatched": 1, "reserved": 1,
-                                "completed": 1, "failed": 0, "incomplete": 0, "unfinalized": 0}
+    assert report["counts"] == {
+        "eligible": 1,
+        "dispatched": 1,
+        "reserved": 1,
+        "completed": 1,
+        "failed": 0,
+        "incomplete": 0,
+        "unfinalized": 0,
+    }
     candidate = report["candidates"][0]
     assert candidate["attempt_index"] == 2
     assert candidate["attempt_id"] != baseline.attempt_id
@@ -145,7 +175,11 @@ def test_second_candidate_failure_preserves_first_and_stops_suffix(experiment_ca
 
     report = run(case, plan_id, engine_factory=engine)
     assert report["status"] == "stopped" and report["exit_code"] == 7
-    assert [row["status"] for row in report["candidates"]] == ["COMPLETED", "FAILED", "NOT_DISPATCHED"]
+    assert [row["status"] for row in report["candidates"]] == [
+        "COMPLETED",
+        "FAILED",
+        "NOT_DISPATCHED",
+    ]
     assert report["counts"]["reserved"] == 2 and len(calls) == 2
     assert report["candidates"][0]["evaluation"]["metric_observation"]["value"] == "-2"
     assert inspect(case, plan_id) == report
@@ -167,7 +201,9 @@ def test_missing_engine_is_committed_failure_not_a_candidate_refusal(experiment_
 
 
 @pytest.mark.parametrize("committed", [False, True])
-def test_reservation_exception_uses_nonce_recovery_and_never_claims_no_consumption(experiment_case, committed):
+def test_reservation_exception_uses_nonce_recovery_and_never_claims_no_consumption(
+    experiment_case, committed
+):
     case = experiment_case
     plan_id = prepare(case, values=[0, 1])
     actual = case.ledger_factory()
@@ -185,7 +221,9 @@ def test_reservation_exception_uses_nonce_recovery_and_never_claims_no_consumpti
     candidate = report["candidates"][0]
     assert report["exit_code"] == 3 and report["stop_reason"] == "reservation_unconfirmed"
     assert candidate["budget_consumed"] is (True if committed else None)
-    assert candidate["status"] == ("RESERVED_UNFINALIZED" if committed else "RESERVATION_UNCONFIRMED")
+    assert candidate["status"] == (
+        "RESERVED_UNFINALIZED" if committed else "RESERVATION_UNCONFIRMED"
+    )
     assert candidate["reservation_link_present"] is False
     assert report["candidates"][1]["status"] == "NOT_DISPATCHED"
     assert inspect(case, plan_id) == report
@@ -266,7 +304,10 @@ def test_interrupt_leaves_reserved_unfinalized_and_repeat_does_not_resume(experi
         run(case, plan_id, engine_factory=interrupt)
     report = inspect(case, plan_id)
     assert report["status"] == "unfinalized" and report["stop"] is None
-    assert [row["status"] for row in report["candidates"]] == ["RESERVED_UNFINALIZED", "NOT_DISPATCHED"]
+    assert [row["status"] for row in report["candidates"]] == [
+        "RESERVED_UNFINALIZED",
+        "NOT_DISPATCHED",
+    ]
     assert report["candidates"][0]["budget_consumed"] is True
     assert run(case, plan_id, engine_factory=forbidden) == report
 
@@ -282,11 +323,19 @@ def test_zero_eligible_plan_still_has_no_findings_or_budget_reservation(experime
 
 @pytest.mark.parametrize("operation", ["run", "inspect"])
 def test_confirmation_and_bad_ids_fail_before_factories(operation):
-    options = {"split": "confirmation", "plans_factory": forbidden, "registry_factory": forbidden,
-               "datasets_factory": forbidden, "ledger_factory": forbidden, "campaigns_factory": forbidden}
+    options = {
+        "split": "confirmation",
+        "plans_factory": forbidden,
+        "registry_factory": forbidden,
+        "datasets_factory": forbidden,
+        "ledger_factory": forbidden,
+        "campaigns_factory": forbidden,
+    }
     call = run_search_plan if operation == "run" else inspect_search_campaign
     if operation == "run":
-        options.update(engine_factory=forbidden, nonce_factory=forbidden, ledger_reader_factory=forbidden)
+        options.update(
+            engine_factory=forbidden, nonce_factory=forbidden, ledger_reader_factory=forbidden
+        )
     with pytest.raises(ConfirmationAccessDenied):
         call("bad", **options)
     options["split"] = "development"
@@ -295,13 +344,20 @@ def test_confirmation_and_bad_ids_fail_before_factories(operation):
 
 
 @pytest.mark.parametrize("role", ["dispatch", "link", "result", "stop", "header"])
-def test_inspect_rejects_changed_execution_artifacts_even_with_canonical_rehash(experiment_case, role):
+def test_inspect_rejects_changed_execution_artifacts_even_with_canonical_rehash(
+    experiment_case, role
+):
     case = experiment_case
     plan_id = prepare(case)
     run(case, plan_id)
     root = case.root / "runs" / "search-campaigns" / plan_id
-    paths = {"dispatch": root / "dispatches" / "0001.json", "link": root / "links" / "0001.json",
-             "result": root / "results" / "0001.json", "stop": root / "stop.json", "header": root / "campaign.json"}
+    paths = {
+        "dispatch": root / "dispatches" / "0001.json",
+        "link": root / "links" / "0001.json",
+        "result": root / "results" / "0001.json",
+        "stop": root / "stop.json",
+        "header": root / "campaign.json",
+    }
     path = paths[role]
     document = json.loads(path.read_bytes())
     if role == "dispatch":
@@ -326,7 +382,9 @@ def test_unknown_candidate_file_cannot_be_ignored(experiment_case):
     plan_id = prepare(case)
     run(case, plan_id)
     root = case.root / "runs" / "search-campaigns" / plan_id
-    (root / "dispatches" / "0002.json").write_bytes((root / "dispatches" / "0001.json").read_bytes())
+    (root / "dispatches" / "0002.json").write_bytes(
+        (root / "dispatches" / "0001.json").read_bytes()
+    )
     with pytest.raises(SearchExecutionValidationError, match="extra"):
         inspect(case, plan_id)
 
@@ -337,11 +395,19 @@ def test_source_corruption_before_run_never_creates_execution_root(experiment_ca
     path = case.root / "data" / "objects" / "sha256" / digest(case.raw)
     path.write_bytes(case.raw + b" ")
     with pytest.raises(ValueError):
-        run(case, plan_id, engine_factory=forbidden, campaigns_factory=forbidden, ledger_factory=forbidden)
+        run(
+            case,
+            plan_id,
+            engine_factory=forbidden,
+            campaigns_factory=forbidden,
+            ledger_factory=forbidden,
+        )
     assert not (case.root / "runs").exists()
 
 
-def test_failure_inspection_requires_committed_intent_even_from_a_substituting_port(experiment_case):
+def test_failure_inspection_requires_committed_intent_even_from_a_substituting_port(
+    experiment_case,
+):
     case = experiment_case
     plan_id = prepare(case)
 
@@ -362,7 +428,9 @@ def test_failure_inspection_requires_committed_intent_even_from_a_substituting_p
         inspect(case, plan_id, ledger_factory=MissingIntentPort)
 
 
-def test_intent_publication_failure_preserves_consumed_slot_without_starting_worker(experiment_case):
+def test_intent_publication_failure_preserves_consumed_slot_without_starting_worker(
+    experiment_case,
+):
     case = experiment_case
     plan_id = prepare(case)
     actual = case.ledger_factory()
@@ -380,3 +448,20 @@ def test_intent_publication_failure_preserves_consumed_slot_without_starting_wor
     assert report["candidates"][0]["budget_consumed"] is True
     assert report["candidates"][0]["outcome_id"] is None
     assert inspect(case, plan_id) == report
+
+
+def test_orphaned_records_before_campaign_header_cannot_start_a_worker_or_reserve(experiment_case):
+    case = experiment_case
+    plan_id = prepare(case)
+    store = LocalSearchCampaignStore(case.root / "runs", create=True)
+    store.write_result(plan_id, 1, b"preserved orphan evidence")
+    with pytest.raises(SearchExecutionValidationError, match="orphaned"):
+        run(
+            case,
+            plan_id,
+            campaigns_factory=lambda: store,
+            ledger_factory=forbidden,
+            engine_factory=forbidden,
+        )
+    assert store.get_campaign(plan_id) is None
+    assert store.get_result(plan_id, 1) == b"preserved orphan evidence"

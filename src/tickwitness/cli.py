@@ -7,6 +7,7 @@ import sys
 from dataclasses import asdict
 from importlib.metadata import version
 from pathlib import Path
+from typing import cast
 
 from tickwitness.application.datasets import import_events, inspect_dataset
 from tickwitness.application.experiments import ProtocolRunError
@@ -84,13 +85,13 @@ from tickwitness.infrastructure.queue_family_registry import (
     QueueFamilyRegistryError,
 )
 from tickwitness.infrastructure.safe_input import InputReadError, read_jsonl, read_regular_file
-from tickwitness.infrastructure.search_plan_registry import (
-    SearchPlanNotFoundError,
-    SearchPlanRegistryError,
-)
 from tickwitness.infrastructure.search_campaign_store import (
     SearchCampaignNotFoundError,
     SearchCampaignStoreError,
+)
+from tickwitness.infrastructure.search_plan_registry import (
+    SearchPlanNotFoundError,
+    SearchPlanRegistryError,
 )
 from tickwitness.infrastructure.subprocess_replay import ReplayProcessError, SubprocessReplayAdapter
 from tickwitness.infrastructure.tagged_finding_registry import (
@@ -437,5 +438,5 @@ def main(argv: list[str] | None = None) -> int:
             return int(failures[0].get("exit_code", 7))
         return 7
     if arguments.command == "run-search-plan":
-        return int(output["exit_code"])
+        return cast("int", output["exit_code"])
     return 0

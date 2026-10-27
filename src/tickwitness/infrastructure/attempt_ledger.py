@@ -224,9 +224,7 @@ class LocalAttemptLedger:
         """Atomically consume the first available slot, before execution starts."""
         return self._reserve(protocol)
 
-    def reserve_with_nonce(
-        self, protocol: ExecutableProtocol, nonce: str
-    ) -> AttemptReservation:
+    def reserve_with_nonce(self, protocol: ExecutableProtocol, nonce: str) -> AttemptReservation:
         """Consume an original v2 slot using a nonce already sealed in a dispatch.
 
         Named calls serialize so the same dispatch nonce cannot consume two

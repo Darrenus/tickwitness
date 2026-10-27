@@ -29,7 +29,6 @@ from tickwitness.domain.search.execution import (
 )
 from tickwitness.domain.search.plans import build_search_plan
 
-
 CAMPAIGN_NONCE = "a" * 32
 RESERVATION_NONCE = "b" * 32
 
@@ -170,8 +169,18 @@ def test_dispatch_rejects_duplicate_rejected_unlisted_and_wrong_scenario_ordinal
 @pytest.mark.parametrize(
     "change",
     [
-        "campaign", "plan", "protocol", "scenario", "ordinal", "assumption", "source", "spec",
-        "claim", "scope", "version", "extra",
+        "campaign",
+        "plan",
+        "protocol",
+        "scenario",
+        "ordinal",
+        "assumption",
+        "source",
+        "spec",
+        "claim",
+        "scope",
+        "version",
+        "extra",
     ],
 )
 def test_dispatch_context_rejects_rehashed_bindings_and_privilege_changes(change):
@@ -226,8 +235,16 @@ def test_link_roundtrip_binds_full_original_reservation_and_committed_nonce():
 @pytest.mark.parametrize(
     "change",
     [
-        "nonce", "protocol", "attempt_id", "dispatch_id", "ordinal", "scenario", "campaign",
-        "plan", "version", "extra",
+        "nonce",
+        "protocol",
+        "attempt_id",
+        "dispatch_id",
+        "ordinal",
+        "scenario",
+        "campaign",
+        "plan",
+        "version",
+        "extra",
     ],
 )
 def test_link_cannot_reassign_the_attempt_or_dispatch_when_all_hashes_are_recomputed(change):
@@ -267,8 +284,11 @@ def test_link_cannot_reassign_the_attempt_or_dispatch_when_all_hashes_are_recomp
 @pytest.mark.parametrize(
     "reason",
     [
-        "attempt_budget_exhausted", "candidate_failed", "candidate_incomplete",
-        "reservation_unconfirmed", "publication_unconfirmed",
+        "attempt_budget_exhausted",
+        "candidate_failed",
+        "candidate_incomplete",
+        "reservation_unconfirmed",
+        "publication_unconfirmed",
     ],
 )
 def test_candidate_stop_is_a_diagnostic_bound_to_an_eligible_ordinal(reason):
@@ -289,9 +309,12 @@ def test_candidate_stop_is_a_diagnostic_bound_to_an_eligible_ordinal(reason):
 
 def test_exhaustion_and_empty_eligible_set_have_separate_nonfinding_stops():
     _, campaign, _ = values()
-    assert load_stop(
-        build_stop(campaign, "planned_candidates_exhausted"), campaign=campaign
-    )["ordinal"] is None
+    assert (
+        load_stop(build_stop(campaign, "planned_candidates_exhausted"), campaign=campaign)[
+            "ordinal"
+        ]
+        is None
+    )
     _, empty, _ = values(only_rejected=True)
     assert load_stop(build_stop(empty, "no_eligible_candidates"), campaign=empty)["reason"] == (
         "no_eligible_candidates"
@@ -304,9 +327,10 @@ def test_exhaustion_and_empty_eligible_set_have_separate_nonfinding_stops():
         build_stop(campaign, "planned_candidates_exhausted", ordinal=1)
     with pytest.raises(SearchExecutionValidationError):
         build_stop(campaign, "planned_candidates_exhausted", error_code="false_success")
-    assert load_stop(
-        build_stop(campaign, "publication_unconfirmed"), campaign=campaign
-    )["ordinal"] is None
+    assert (
+        load_stop(build_stop(campaign, "publication_unconfirmed"), campaign=campaign)["ordinal"]
+        is None
+    )
 
 
 @pytest.mark.parametrize(
@@ -318,11 +342,20 @@ def test_stop_never_accepts_research_finding_or_unknown_reason(reason):
         build_stop(campaign, reason)
 
 
-@pytest.mark.parametrize("key,value", [
-    ("error_code", ""), ("error_code", "Upper"), ("error_code", "a" * 129),
-    ("error_code", True), ("message", ""), ("message", "a" * 4_097),
-    ("message", "line\nbreak"), ("message", "\ud800"), ("message", True),
-])
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("error_code", ""),
+        ("error_code", "Upper"),
+        ("error_code", "a" * 129),
+        ("error_code", True),
+        ("message", ""),
+        ("message", "a" * 4_097),
+        ("message", "line\nbreak"),
+        ("message", "\ud800"),
+        ("message", True),
+    ],
+)
 def test_stop_diagnostic_details_are_strict_and_bounded(key, value):
     _, campaign, _ = values()
     with pytest.raises(SearchExecutionValidationError):
@@ -356,8 +389,11 @@ def test_campaign_input_is_bounded_and_immutable(raw):
 @pytest.mark.parametrize(
     "raw",
     [
-        b"", bytearray(b"{}"), b" " * (MAX_SEARCH_EXECUTION_RECORD_BYTES + 1),
-        b'{"schema_version":1,"schema_version":1}', b'{"schema_version":1.0}',
+        b"",
+        bytearray(b"{}"),
+        b" " * (MAX_SEARCH_EXECUTION_RECORD_BYTES + 1),
+        b'{"schema_version":1,"schema_version":1}',
+        b'{"schema_version":1.0}',
         b'{"schema_version":NaN}',
     ],
 )

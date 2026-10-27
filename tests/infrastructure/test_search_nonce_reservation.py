@@ -65,9 +65,7 @@ def test_same_named_nonce_concurrency_consumes_only_one_slot(experiment_case):
         results = list(executor.map(allocate, range(4)))
     assert sum(not isinstance(item, Exception) for item in results) == 1
     assert len(LocalAttemptLedger(root, create=False).list_reservations(protocol)) == 1
-    assert all(
-        "already committed" in str(item) for item in results if isinstance(item, Exception)
-    )
+    assert all("already committed" in str(item) for item in results if isinstance(item, Exception))
 
 
 def test_ordinary_and_named_reservations_compete_for_the_same_last_slot(experiment_case):
@@ -84,7 +82,8 @@ def test_ordinary_and_named_reservations_compete_for_the_same_last_slot(experime
         try:
             return (
                 participant.reserve_with_nonce(protocol, "d" * 32)
-                if named else participant.reserve(protocol)
+                if named
+                else participant.reserve(protocol)
             )
         except AttemptBudgetExceededError as error:
             return error

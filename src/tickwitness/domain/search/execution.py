@@ -38,24 +38,54 @@ _SCOPE: dict[str, object] = {
     "statistical_trial_history_certified": False,
 }
 _CAMPAIGN_FIELDS = {
-    "kind", "schema_version", "plan_id", "protocol_id", "campaign_nonce", "plan",
-    "execution_policy", "scope",
+    "kind",
+    "schema_version",
+    "plan_id",
+    "protocol_id",
+    "campaign_nonce",
+    "plan",
+    "execution_policy",
+    "scope",
 }
 _DISPATCH_FIELDS = {
-    "kind", "schema_version", "campaign_id", "plan_id", "protocol_id", "ordinal",
-    "scenario_id", "reservation_nonce", "intent",
+    "kind",
+    "schema_version",
+    "campaign_id",
+    "plan_id",
+    "protocol_id",
+    "ordinal",
+    "scenario_id",
+    "reservation_nonce",
+    "intent",
 }
 _LINK_FIELDS = {
-    "kind", "schema_version", "dispatch_id", "campaign_id", "plan_id", "ordinal",
-    "scenario_id", "reservation",
+    "kind",
+    "schema_version",
+    "dispatch_id",
+    "campaign_id",
+    "plan_id",
+    "ordinal",
+    "scenario_id",
+    "reservation",
 }
 _STOP_FIELDS = {
-    "kind", "schema_version", "campaign_id", "plan_id", "protocol_id", "reason", "ordinal",
-    "error_code", "message",
+    "kind",
+    "schema_version",
+    "campaign_id",
+    "plan_id",
+    "protocol_id",
+    "reason",
+    "ordinal",
+    "error_code",
+    "message",
 }
 _STOP_REASONS = {
-    "planned_candidates_exhausted", "no_eligible_candidates", "attempt_budget_exhausted",
-    "candidate_failed", "candidate_incomplete", "reservation_unconfirmed",
+    "planned_candidates_exhausted",
+    "no_eligible_candidates",
+    "attempt_budget_exhausted",
+    "candidate_failed",
+    "candidate_incomplete",
+    "reservation_unconfirmed",
     "publication_unconfirmed",
 }
 _NORMAL_REASONS = {"planned_candidates_exhausted", "no_eligible_candidates"}
@@ -391,9 +421,7 @@ def build_stop(
     elif ordinal is not None:
         _eligible_row(campaign, ordinal)
     else:
-        _require(
-            reason == "publication_unconfirmed", "Candidate stop requires an eligible ordinal"
-        )
+        _require(reason == "publication_unconfirmed", "Candidate stop requires an eligible ordinal")
     return _encode(
         {
             "kind": "search_campaign_stop_v1",

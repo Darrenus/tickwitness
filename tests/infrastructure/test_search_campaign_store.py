@@ -22,8 +22,7 @@ def root_for(tmp_path):
 
 def contents(root):
     return {
-        str(path.relative_to(root)): path.read_bytes()
-        for path in root.rglob("*") if path.is_file()
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
     }
 
 
@@ -85,9 +84,8 @@ def test_same_plan_lock_is_nonblocking_but_other_plans_are_independent(tmp_path)
     one = LocalSearchCampaignStore(root, create=True)
     two = LocalSearchCampaignStore(root, create=True)
     with one.lock(_PLAN):
-        with pytest.raises(SearchCampaignBusyError):
-            with two.lock(_PLAN):
-                raise AssertionError("Concurrent coordinator must not enter")
+        with pytest.raises(SearchCampaignBusyError), two.lock(_PLAN):
+            raise AssertionError("Concurrent coordinator must not enter")
         with two.lock("b" * 64):
             two.start("b" * 64, b"different plan")
     with two.lock(_PLAN):
@@ -265,9 +263,7 @@ def test_postcommit_fsync_uncertainty_preserves_committed_record(tmp_path, monke
 
 
 @pytest.mark.parametrize("location", ["plan", "category"])
-def test_disappearing_staging_does_not_skip_later_unknown_entries(
-    tmp_path, monkeypatch, location
-):
+def test_disappearing_staging_does_not_skip_later_unknown_entries(tmp_path, monkeypatch, location):
     root = root_for(tmp_path)
     store = LocalSearchCampaignStore(root, create=True)
     store.start(_PLAN, b"header")
@@ -284,9 +280,11 @@ def test_disappearing_staging_does_not_skip_later_unknown_entries(
     def list_pending_first(descriptor):
         names = original_list(descriptor)
         if pending_name in names:
-            return [pending_name, "unknown.json", *(
-                name for name in names if name not in (pending_name, "unknown.json")
-            )]
+            return [
+                pending_name,
+                "unknown.json",
+                *(name for name in names if name not in (pending_name, "unknown.json")),
+            ]
         return names
 
     def disappear(descriptor, name, limit):

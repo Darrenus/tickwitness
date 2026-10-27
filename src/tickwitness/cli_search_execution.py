@@ -19,8 +19,12 @@ COMMANDS = frozenset({"run-search-plan", "inspect-search-campaign"})
 
 
 def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    run = commands.add_parser("run-search-plan", help="Evaluate unique candidates using original protocol slots")
-    inspect = commands.add_parser("inspect-search-campaign", help="Re-audit candidate/attempt/outcome associations")
+    run = commands.add_parser(
+        "run-search-plan", help="Evaluate unique candidates using original protocol slots"
+    )
+    inspect = commands.add_parser(
+        "inspect-search-campaign", help="Re-audit candidate/attempt/outcome associations"
+    )
     run.add_argument("--engine-python", type=Path)
     for command in (run, inspect):
         command.add_argument("plan_id")
@@ -28,7 +32,9 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
         command.add_argument("--store", required=True, type=Path)
         command.add_argument("--registry", required=True, type=Path)
         command.add_argument("--runs", required=True, type=Path)
-        command.add_argument("--split", choices=("development", "confirmation"), default="development")
+        command.add_argument(
+            "--split", choices=("development", "confirmation"), default="development"
+        )
 
 
 def execute(arguments: argparse.Namespace) -> dict[str, object]:
@@ -36,15 +42,19 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
         raise ConfirmationAccessDenied("Search execution permits development evidence only")
     if arguments.command == "inspect-search-campaign":
         return inspect_search_campaign(
-            arguments.plan_id, split=arguments.split,
+            arguments.plan_id,
+            split=arguments.split,
             plans_factory=lambda: LocalSearchPlanRegistry(arguments.plans, create=False),
-            registry_factory=lambda: LocalExecutableProtocolRegistry(arguments.registry, create=False),
+            registry_factory=lambda: LocalExecutableProtocolRegistry(
+                arguments.registry, create=False
+            ),
             datasets_factory=lambda: LocalDatasetStore(arguments.store, create=False),
             ledger_factory=lambda: LocalAttemptLedger(arguments.runs, create=False),
             campaigns_factory=lambda: LocalSearchCampaignStore(arguments.runs, create=False),
         )
     return run_search_plan(
-        arguments.plan_id, split=arguments.split,
+        arguments.plan_id,
+        split=arguments.split,
         plans_factory=lambda: LocalSearchPlanRegistry(arguments.plans, create=False),
         registry_factory=lambda: LocalExecutableProtocolRegistry(arguments.registry, create=False),
         datasets_factory=lambda: LocalDatasetStore(arguments.store, create=False),
@@ -52,7 +62,8 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
         ledger_reader_factory=lambda: LocalAttemptLedger(arguments.runs, create=False),
         campaigns_factory=lambda: LocalSearchCampaignStore(arguments.runs, create=True),
         engine_factory=lambda timeout: SubprocessReplayAdapter(
-            timeout_seconds=timeout, python_executable=arguments.engine_python,
+            timeout_seconds=timeout,
+            python_executable=arguments.engine_python,
         ),
         nonce_factory=lambda: secrets.token_hex(16),
     )
