@@ -15,7 +15,7 @@ def arguments(command, root):
     if command == "evaluate-search-findings":
         for name in ("plans", "store", "registry", "runs"):
             result += [f"--{name}", str(root / name)]
-    return result + ["--finding-registry", str(root / "findings")]
+    return [*result, "--finding-registry", str(root / "findings")]
 
 
 @pytest.mark.parametrize(
@@ -76,16 +76,37 @@ def prepare_authority(case, tmp_path, capsys):
     for name, value in (("assumption", assumption), ("search", search), ("finding", request)):
         (inputs / f"{name}.json").write_bytes(canonical(value))
     plans = case.root / "plans"
-    assert main([
-        "freeze-search-plan", case.frozen.protocol_id, "assumption.json", "search.json",
-        "--input-root", str(inputs), "--plans", str(plans), "--store", str(case.root / "data"),
-        "--registry", str(case.root / "registry"),
-    ]) == 0
+    assert (
+        main(
+            [
+                "freeze-search-plan",
+                case.frozen.protocol_id,
+                "assumption.json",
+                "search.json",
+                "--input-root",
+                str(inputs),
+                "--plans",
+                str(plans),
+                "--store",
+                str(case.root / "data"),
+                "--registry",
+                str(case.root / "registry"),
+            ]
+        )
+        == 0
+    )
     plan_id = json.loads(capsys.readouterr().out)["plan_id"]
     findings = case.root / "findings"
     freeze = [
-        "freeze-search-finding-protocol", plan_id, "finding.json", "--input-root", str(inputs),
-        "--plans", str(plans), "--finding-registry", str(findings),
+        "freeze-search-finding-protocol",
+        plan_id,
+        "finding.json",
+        "--input-root",
+        str(inputs),
+        "--plans",
+        str(plans),
+        "--finding-registry",
+        str(findings),
     ]
     assert main(freeze) == 0
     frozen = json.loads(capsys.readouterr().out)
@@ -93,7 +114,9 @@ def prepare_authority(case, tmp_path, capsys):
 
 
 def tree(root):
-    return {str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+    return {
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
+    }
 
 
 def test_freeze_inspect_repeat_and_no_execution(experiment_case, tmp_path, capsys):
@@ -101,8 +124,17 @@ def test_freeze_inspect_repeat_and_no_execution(experiment_case, tmp_path, capsy
     frozen, freeze, findings, _inputs = prepare_authority(case, tmp_path, capsys)
     assert frozen["created"] is True
     before = tree(case.root)
-    assert main(["inspect-search-finding-protocol", frozen["protocol_id"],
-                 "--finding-registry", str(findings)]) == 0
+    assert (
+        main(
+            [
+                "inspect-search-finding-protocol",
+                frozen["protocol_id"],
+                "--finding-registry",
+                str(findings),
+            ]
+        )
+        == 0
+    )
     inspected = json.loads(capsys.readouterr().out)
     assert inspected["protocol"] == frozen["protocol"]
     assert inspected["created"] is False
@@ -116,10 +148,18 @@ def test_freeze_inspect_repeat_and_no_execution(experiment_case, tmp_path, capsy
 def test_valid_authority_does_not_create_a_missing_campaign(experiment_case, tmp_path, capsys):
     case = experiment_case
     frozen, _freeze, findings, _inputs = prepare_authority(case, tmp_path, capsys)
-    command = ["evaluate-search-findings", frozen["protocol_id"],
-               "--finding-registry", str(findings)]
-    for option, path in (("plans", "plans"), ("store", "data"),
-                         ("registry", "registry"), ("runs", "runs")):
+    command = [
+        "evaluate-search-findings",
+        frozen["protocol_id"],
+        "--finding-registry",
+        str(findings),
+    ]
+    for option, path in (
+        ("plans", "plans"),
+        ("store", "data"),
+        ("registry", "registry"),
+        ("runs", "runs"),
+    ):
         command += [f"--{option}", str(case.root / path)]
     before = tree(case.root)
     assert main(command) == 4

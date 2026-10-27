@@ -42,10 +42,15 @@ def frozen_plan(*, comparator="gt", threshold="0", values=None):
     assumptions = load_assumption_spec(canonical(assumptions_doc))
     proposals = [0, 1] if values is None else values
     return build_search_plan(
-        canonical({
-            "kind": "search_plan_request_v1", "schema_version": 1, "search_seed": 7,
-            "max_proposals": len(proposals), "generator": {"kind": "grid", "values_ns": proposals},
-        }),
+        canonical(
+            {
+                "kind": "search_plan_request_v1",
+                "schema_version": 1,
+                "search_seed": 7,
+                "max_proposals": len(proposals),
+                "generator": {"kind": "grid", "values_ns": proposals},
+            }
+        ),
         protocol=protocol,
         assumptions=assumptions,
     )
@@ -66,7 +71,10 @@ def test_protocol_preserves_plan_and_creates_a_distinct_conditional_predicate():
     assert protocol.plan == plan and plan.canonical_bytes == before
     assert doc["plan"]["scope"]["findings_issued"] is False
     assert doc["predicate"]["criterion"] == {
-        "metric": "net_marked_pnl_v1", "unit": "USD", "comparator": "gt", "threshold": "0",
+        "metric": "net_marked_pnl_v1",
+        "unit": "USD",
+        "comparator": "gt",
+        "threshold": "0",
     }
     assert doc["predicate"]["criterion_origin"] == "source_claim_numeric_criterion_only_v1"
     assert doc["predicate_id"] == digest(canonical(doc["predicate"]))
@@ -95,7 +103,21 @@ def test_protocol_roundtrip_identity_and_detached_document():
         replace(protocol, protocol_id="a" * 64)
 
 
-@pytest.mark.parametrize("attack", ["criterion", "predicate_id", "scope", "rules", "binding", "owner", "execution", "preregistration", "version_bool", "extra"])
+@pytest.mark.parametrize(
+    "attack",
+    [
+        "criterion",
+        "predicate_id",
+        "scope",
+        "rules",
+        "binding",
+        "owner",
+        "execution",
+        "preregistration",
+        "version_bool",
+        "extra",
+    ],
+)
 def test_rehashed_protocol_cannot_promote_scope_or_choose_a_different_criterion(attack):
     doc = authority().document
     if attack == "criterion":
@@ -124,17 +146,26 @@ def test_rehashed_protocol_cannot_promote_scope_or_choose_a_different_criterion(
         SearchFindingProtocol(digest(raw), raw)
 
 
-@pytest.mark.parametrize("changes", [
-    {"authority": "conditional_tagged_findings_v1"}, {"schema_version": True},
-    {"title": " padded "}, {"title": ""}, {"title": "a" * 201},
-    {"threshold": "-100"}, {"predicate": {"comparator": "lt"}},
-])
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"authority": "conditional_tagged_findings_v1"},
+        {"schema_version": True},
+        {"title": " padded "},
+        {"title": ""},
+        {"title": "a" * 201},
+        {"threshold": "-100"},
+        {"predicate": {"comparator": "lt"}},
+    ],
+)
 def test_request_cannot_extend_authority_or_select_a_favorable_threshold(changes):
     with pytest.raises(SearchFindingValidationError):
         build_search_finding_protocol(canonical(finding_request(**changes)), plan=frozen_plan())
 
 
-@pytest.mark.parametrize("raw", [b"", b"{}", b'{"title":"x","title":"y"}', b'{"schema_version":NaN}', b" " * 16_385])
+@pytest.mark.parametrize(
+    "raw", [b"", b"{}", b'{"title":"x","title":"y"}', b'{"schema_version":NaN}', b" " * 16_385]
+)
 def test_request_rejects_malformed_or_oversized_json(raw):
     with pytest.raises(SearchFindingValidationError):
         build_search_finding_protocol(raw, plan=frozen_plan())
@@ -143,7 +174,10 @@ def test_request_rejects_malformed_or_oversized_json(raw):
 def test_protocol_rejects_a_duck_type_or_forged_plan_identity():
     plan = frozen_plan()
     with pytest.raises(SearchFindingValidationError):
-        build_search_finding_protocol(canonical(finding_request()), plan=SimpleNamespace(canonical_bytes=plan.canonical_bytes, plan_id=plan.plan_id))
+        build_search_finding_protocol(
+            canonical(finding_request()),
+            plan=SimpleNamespace(canonical_bytes=plan.canonical_bytes, plan_id=plan.plan_id),
+        )
     forged = object.__new__(type(plan))
     object.__setattr__(forged, "canonical_bytes", plan.canonical_bytes)
     object.__setattr__(forged, "plan_id", "a" * 64)

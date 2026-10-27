@@ -250,9 +250,7 @@ def test_precommit_failure_leaves_no_committed_or_staged_authority(experiment_ca
     assert list((root / "search-finding-protocols").iterdir()) == []
 
 
-def test_postcommit_sync_failure_preserves_authority_for_reinspection(
-    experiment_case, monkeypatch
-):
+def test_postcommit_sync_failure_preserves_authority_for_reinspection(experiment_case, monkeypatch):
     root = experiment_case.root / "findings"
     registry = LocalSearchFindingRegistry(root, create=True)
     authority = protocol(experiment_case)

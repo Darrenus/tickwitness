@@ -103,8 +103,12 @@ def main() -> None:
             executable = verifier if readonly else interpreter
             entry = ["-c", _READONLY_GUARD] if readonly else ["-m", "tickwitness"]
             completed = subprocess.run(
-                [executable, "-I", *entry, *command], cwd=directory,
-                text=True, capture_output=True, check=False, timeout=180,
+                [executable, "-I", *entry, *command],
+                cwd=directory,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=180,
             )
             use_stdout = expected == 0 or report
             payload = completed.stdout if use_stdout else completed.stderr
@@ -118,26 +122,47 @@ def main() -> None:
 
         def common(records: Path, runs: Path) -> tuple[str, ...]:
             return (
-                "--plans", str(records / "plans"), "--store", str(records / "data"),
-                "--registry", str(records / "registry"), "--runs", str(runs),
+                "--plans",
+                str(records / "plans"),
+                "--store",
+                str(records / "data"),
+                "--registry",
+                str(records / "registry"),
+                "--runs",
+                str(runs),
             )
 
         def freeze(plan_id: str, records: Path) -> dict:
             receipt = run(
-                "freeze-search-finding-protocol", plan_id, "finding.json", "--input-root",
-                str(inputs), "--plans", str(records / "plans"),
-                "--finding-registry", str(findings),
+                "freeze-search-finding-protocol",
+                plan_id,
+                "finding.json",
+                "--input-root",
+                str(inputs),
+                "--plans",
+                str(records / "plans"),
+                "--finding-registry",
+                str(findings),
             )
             assert receipt["kind"] == "search_finding_protocol_receipt_v1"
             inspected = run(
-                "inspect-search-finding-protocol", receipt["protocol_id"],
-                "--finding-registry", str(findings), readonly=True,
+                "inspect-search-finding-protocol",
+                receipt["protocol_id"],
+                "--finding-registry",
+                str(findings),
+                readonly=True,
             )
             assert inspected["protocol"] == receipt["protocol"]
             repeated = run(
-                "freeze-search-finding-protocol", plan_id, "finding.json", "--input-root",
-                str(inputs), "--plans", str(records / "plans"),
-                "--finding-registry", str(findings),
+                "freeze-search-finding-protocol",
+                plan_id,
+                "finding.json",
+                "--input-root",
+                str(inputs),
+                "--plans",
+                str(records / "plans"),
+                "--finding-registry",
+                str(findings),
             )
             assert repeated["created"] is False
             assert repeated["protocol_id"] == receipt["protocol_id"]
@@ -146,8 +171,11 @@ def main() -> None:
         def assess(name, authority, records, runs, expected_outcome):
             before = (_tree(records), _tree(findings))
             command = (
-                "evaluate-search-findings", authority["protocol_id"],
-                *common(records, runs), "--finding-registry", str(findings),
+                "evaluate-search-findings",
+                authority["protocol_id"],
+                *common(records, runs),
+                "--finding-registry",
+                str(findings),
             )
             receipt = run(*command, readonly=True)
             assert receipt == run(*command, readonly=True)
@@ -166,21 +194,49 @@ def main() -> None:
                 assert report["planned_predicate_truth"] is None
             else:
                 assert report["conclusion_target"] == "no_false_witness_in_exact_audited_subset_v1"
-            for key in ("source_claim_evaluated", "continuous_delay_space_exhausted",
-                        "market_probability_inferred", "future_returns_guaranteed",
-                        "preregistration_verified", "full_trial_history_certified"):
+            for key in (
+                "source_claim_evaluated",
+                "continuous_delay_space_exhausted",
+                "market_probability_inferred",
+                "future_returns_guaranteed",
+                "preregistration_verified",
+                "full_trial_history_certified",
+            ):
                 assert report["scope"][key] is False
+            for key, expected in (
+                ("finding_protocol_id", authority["protocol_id"]),
+                ("plan_id", report["plan_id"]),
+                ("source_protocol_id", report["source_protocol_id"]),
+                ("source_claim_revision_id", report["source_claim_revision_id"]),
+                ("predicate_id", report["predicate_id"]),
+                ("campaign_budget_id", report["budget"]["campaign_budget_id"]),
+            ):
+                assert report["scope"][key] == expected
+            assert report["scope"]["eligible_candidates"] == [
+                {"ordinal": row["ordinal"], "scenario_id": row["scenario_id"]}
+                for row in report["candidate_assessments"]
+            ]
+            assert report["scope"]["evaluated_candidates"] == [
+                {"ordinal": row["ordinal"], "scenario_id": row["scenario_id"]}
+                for row in report["candidate_assessments"]
+                if type(row["truth"]) is bool
+            ]
             coverage = report["coverage"]
             assert coverage["eligible_ordinals"] == [1, 3]
             assert coverage["continuous_delay_space_exhausted"] is False
             assert coverage["proposal_counts"] == {
-                "proposed": 4, "eligible": 2, "duplicate": 1, "rejected": 1,
+                "proposed": 4,
+                "eligible": 2,
+                "duplicate": 1,
+                "rejected": 1,
             }
             source_claim = authority["protocol"]["bindings"]["source_claim_revision_id"]
             assert report["predicate_id"] != source_claim
             bounded = run(
-                "inspect-bounded-search-campaign", authority["protocol"]["bindings"]["plan_id"],
-                *common(records, runs), readonly=True,
+                "inspect-bounded-search-campaign",
+                authority["protocol"]["bindings"]["plan_id"],
+                *common(records, runs),
+                readonly=True,
             )
             snapshot_hash = hashlib.sha256(_canonical(bounded)).hexdigest()
             assert report["source_snapshot_sha256"] == snapshot_hash
@@ -190,18 +246,33 @@ def main() -> None:
             assert bounded["scope"]["claim_evaluated"] is False
             assert bounded["scope"]["finding_issued"] is False
             verified = receipt["verification"]
-            for key in ("authority_recomputed", "source_revalidated", "findings_recomputed",
-                        "budget_bindings_verified", "quota_reservations_verified"):
+            for key in (
+                "authority_recomputed",
+                "source_revalidated",
+                "findings_recomputed",
+                "budget_bindings_verified",
+                "quota_reservations_verified",
+            ):
                 assert verified[key] is True
-            for key in ("native_replayed", "attempt_reserved", "portable_evidence_verified",
-                        "author_signature_verified", "preregistration_verified",
-                        "full_attempt_history_verified"):
+            for key in (
+                "native_replayed",
+                "attempt_reserved",
+                "portable_evidence_verified",
+                "author_signature_verified",
+                "preregistration_verified",
+                "full_attempt_history_verified",
+            ):
                 assert verified[key] is False
-            cases.append({
-                "name": name, "receipt": receipt, "bounded": bounded,
-                "core_only_readonly_reaudit": True,
-                "same_report_on_repeat": True, "byte_tree_preserved": True,
-            })
+            cases.append(
+                {
+                    "name": name,
+                    "receipt": receipt,
+                    "bounded": bounded,
+                    "core_only_readonly_reaudit": True,
+                    "same_report_on_repeat": True,
+                    "byte_tree_preserved": True,
+                }
+            )
             return report
 
         source_plan = source["cases"][0]["execution"]["plan_id"]
@@ -213,23 +284,35 @@ def main() -> None:
                 else "NOT_EVALUABLE"
             )
             result = assess(
-                "source-" + item["name"], source_authority, source_records,
-                source_records / ("runs-" + item["name"]), expected,
+                "source-" + item["name"],
+                source_authority,
+                source_records,
+                source_records / ("runs-" + item["name"]),
+                expected,
             )
             if expected == "COUNTEREXAMPLE_FOUND":
                 assert result["coverage"]["false_ordinals"]
         if arguments.native:
             original = source["original_budget_exhaustion"]
             other_authority = freeze(original["plan_id"], source_records)
-            assess("empty-original-budget", other_authority, source_records,
-                   source_records / "runs-normal", "NOT_EVALUABLE")
+            assess(
+                "empty-original-budget",
+                other_authority,
+                source_records,
+                source_records / "runs-normal",
+                "NOT_EVALUABLE",
+            )
 
             # Freeze the negative-control numeric criterion before executing it.
             # The finding request cannot substitute a favorable threshold later.
             records = directory / "true-criterion"
             records.mkdir()
-            for name in ("replay-partials.jsonl", "replay-confirmation.jsonl",
-                         "stress-assumption-request.json", "search-execution-grid-request.json"):
+            for name in (
+                "replay-partials.jsonl",
+                "replay-confirmation.jsonl",
+                "stress-assumption-request.json",
+                "search-execution-grid-request.json",
+            ):
                 shutil.copyfile(examples / name, inputs / name)
             request = json.loads((examples / "stress-experiment-request.json").read_bytes())
             request["claim"].update(
@@ -246,17 +329,34 @@ def main() -> None:
                 for name in ("replay-partials.jsonl", "replay-confirmation.jsonl")
             ]
             protocol = run(
-                "freeze-experiment", "true-experiment.json", "--input-root", str(inputs),
-                "--development-dataset", ids[0], "--confirmation-dataset", ids[1],
-                "--store", str(data), "--registry", str(records / "registry"),
+                "freeze-experiment",
+                "true-experiment.json",
+                "--input-root",
+                str(inputs),
+                "--development-dataset",
+                ids[0],
+                "--confirmation-dataset",
+                ids[1],
+                "--store",
+                str(data),
+                "--registry",
+                str(records / "registry"),
             )
 
             def plan(filename):
                 return run(
-                    "freeze-search-plan", protocol["protocol_id"],
-                    "stress-assumption-request.json", filename, "--input-root", str(inputs),
-                    "--store", str(data), "--registry", str(records / "registry"),
-                    "--plans", str(records / "plans"),
+                    "freeze-search-plan",
+                    protocol["protocol_id"],
+                    "stress-assumption-request.json",
+                    filename,
+                    "--input-root",
+                    str(inputs),
+                    "--store",
+                    str(data),
+                    "--registry",
+                    str(records / "registry"),
+                    "--plans",
+                    str(records / "plans"),
                 )
 
             planned = plan("search-execution-grid-request.json")
@@ -267,9 +367,14 @@ def main() -> None:
                 (inputs / filename).write_bytes(_canonical(budget))
                 runs = records / ("runs-" + name)
                 receipt = run(
-                    "run-bounded-search-plan", selected_plan["plan_id"], filename,
-                    "--input-root", str(inputs), *common(records, runs),
-                    expected=expected, report=True,
+                    "run-bounded-search-plan",
+                    selected_plan["plan_id"],
+                    filename,
+                    "--input-root",
+                    str(inputs),
+                    *common(records, runs),
+                    expected=expected,
+                    report=True,
                 )
                 return runs, receipt
 
@@ -283,8 +388,13 @@ def main() -> None:
                 ("storage", _budget(max_storage_bytes=96 * 1024 * 1024)),
             ):
                 limited_runs, _ = execute(name, planned, limits, 8)
-                prefix = assess(name + "-true-prefix", authority, records, limited_runs,
-                                "NO_COUNTEREXAMPLE_FOUND")
+                prefix = assess(
+                    name + "-true-prefix",
+                    authority,
+                    records,
+                    limited_runs,
+                    "NO_COUNTEREXAMPLE_FOUND",
+                )
                 assert prefix["coverage"]["audited_ordinals"] == [1]
                 assert prefix["coverage"]["unevaluated_ordinals"] == [3]
                 assert prefix["coverage"]["coverage_complete_for_plan"] is False
@@ -296,31 +406,59 @@ def main() -> None:
             second_authority = freeze(second_plan["plan_id"], records)
             (inputs / "normal-budget.json").write_bytes(_canonical(_budget()))
             exhausted = run(
-                "run-bounded-search-plan", second_plan["plan_id"], "normal-budget.json",
-                "--input-root", str(inputs), *common(records, runs), expected=8, report=True,
+                "run-bounded-search-plan",
+                second_plan["plan_id"],
+                "normal-budget.json",
+                "--input-root",
+                str(inputs),
+                *common(records, runs),
+                expected=8,
+                report=True,
             )
             assert exhausted["execution"]["stop_reason"] == "attempt_budget_exhausted"
             attempts = [row["attempt_index"] for row in exhausted["execution"]["candidates"]]
             assert attempts == [3, None]
-            prefix = assess("original-budget-true-prefix", second_authority, records, runs,
-                            "NO_COUNTEREXAMPLE_FOUND")
+            prefix = assess(
+                "original-budget-true-prefix",
+                second_authority,
+                records,
+                runs,
+                "NO_COUNTEREXAMPLE_FOUND",
+            )
             assert prefix["coverage"]["audited_ordinals"] == [1]
             assert prefix["planned_predicate_truth"] is None
 
         missing = directory / "absent"
         for command, positional, options in (
-            ("freeze-search-finding-protocol", ("invalid", "missing.json"),
-             ("--input-root", str(missing), "--plans", str(missing / "plans"))),
+            (
+                "freeze-search-finding-protocol",
+                ("invalid", "missing.json"),
+                ("--input-root", str(missing), "--plans", str(missing / "plans")),
+            ),
             ("inspect-search-finding-protocol", ("invalid",), ()),
             ("evaluate-search-findings", ("invalid",), common(missing, missing / "runs")),
         ):
-            denied = run(command, *positional, *options, "--finding-registry",
-                         str(missing / "findings"), "--split", "confirmation", expected=5,
-                         readonly=True)
+            denied = run(
+                command,
+                *positional,
+                *options,
+                "--finding-registry",
+                str(missing / "findings"),
+                "--split",
+                "confirmation",
+                expected=5,
+                readonly=True,
+            )
             assert denied["error"]["code"] == "confirmation_access_denied"
         assert not missing.exists()
-        run("inspect-search-finding-protocol", source_authority["protocol_id"],
-            "--finding-registry", str(missing / "findings"), expected=4, readonly=True)
+        run(
+            "inspect-search-finding-protocol",
+            source_authority["protocol_id"],
+            "--finding-registry",
+            str(missing / "findings"),
+            expected=4,
+            readonly=True,
+        )
         assert not missing.exists()
         corrupted = directory / "corrupted-data"
         shutil.copytree(source_records / "data", corrupted)
@@ -329,20 +467,35 @@ def main() -> None:
         raw = corrupted / manifest["objects"]["raw"]["ref"]
         raw.write_bytes(raw.read_bytes() + b"\n")
         rejected = run(
-            "evaluate-search-findings", source_authority["protocol_id"],
-            "--plans", str(source_records / "plans"), "--store", str(corrupted),
-            "--registry", str(source_records / "registry"),
-            "--runs", str(source_records / "runs-normal"),
-            "--finding-registry", str(findings), expected=3, readonly=True,
+            "evaluate-search-findings",
+            source_authority["protocol_id"],
+            "--plans",
+            str(source_records / "plans"),
+            "--store",
+            str(corrupted),
+            "--registry",
+            str(source_records / "registry"),
+            "--runs",
+            str(source_records / "runs-normal"),
+            "--finding-registry",
+            str(findings),
+            expected=3,
+            readonly=True,
         )
         assert "error" in rejected and "report" not in rejected
         assert source_before == _tree(source_records)
         report = {
-            "kind": "installed_search_finding_acceptance_v1", "accepted": True,
-            "synthetic_data": True, "native_execution": arguments.native, "cases": cases,
-            "source_records_unchanged": True, "core_only_readonly_reaudit": True,
-            "source_claim_scope_unchanged": True, "confirmation_refused_before_io": True,
-            "missing_roots_not_created": True, "corrupt_source_is_error_not_not_evaluable": True,
+            "kind": "installed_search_finding_acceptance_v1",
+            "accepted": True,
+            "synthetic_data": True,
+            "native_execution": arguments.native,
+            "cases": cases,
+            "source_records_unchanged": True,
+            "core_only_readonly_reaudit": True,
+            "source_claim_scope_unchanged": True,
+            "confirmation_refused_before_io": True,
+            "missing_roots_not_created": True,
+            "corrupt_source_is_error_not_not_evaluable": True,
             "criterion_frozen_before_negative_control_execution": arguments.native,
             "reporting_does_not_reserve_attempts": True,
         }
@@ -356,7 +509,8 @@ def main() -> None:
             str(path.relative_to(arguments.records_dir)): hashlib.sha256(
                 path.read_bytes()
             ).hexdigest()
-            for path in arguments.records_dir.rglob("*") if path.is_file()
+            for path in arguments.records_dir.rglob("*")
+            if path.is_file()
         }
         (arguments.records_dir / "artifact-files.json").write_bytes(_canonical(files))
         print(

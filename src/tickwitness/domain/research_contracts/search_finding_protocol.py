@@ -60,10 +60,22 @@ FINDING_RULES: dict[str, object] = {
     "outer_terminal_required": True,
     "partial_no_counterexample_never_asserts_full_predicate": True,
 }
-_FIELDS = frozenset({
-    "kind", "schema_version", "title", "plan", "bindings", "predicate",
-    "predicate_id", "authority", "report_policy", "scope", "rules", "limitations",
-})
+_FIELDS = frozenset(
+    {
+        "kind",
+        "schema_version",
+        "title",
+        "plan",
+        "bindings",
+        "predicate",
+        "predicate_id",
+        "authority",
+        "report_policy",
+        "scope",
+        "rules",
+        "limitations",
+    }
+)
 
 
 class SearchFindingValidationError(ProtocolValidationError):
@@ -130,7 +142,9 @@ def _document(title: object, plan: SearchPlan) -> dict[str, object]:
 
 
 def _validated(raw: bytes) -> dict[str, object]:
-    value = _object(parse(raw, limit=MAX_SEARCH_FINDING_PROTOCOL_BYTES), _FIELDS, "Search finding protocol")
+    value = _object(
+        parse(raw, limit=MAX_SEARCH_FINDING_PROTOCOL_BYTES), _FIELDS, "Search finding protocol"
+    )
     plan = load_search_plan(canonical(cast("dict[str, object]", value["plan"])))
     expected = _document(value["title"], plan)
     _require(canonical(expected) == raw, "Finding authority, predicate, bindings or scope differ")
@@ -145,7 +159,10 @@ class SearchFindingProtocol:
     def __post_init__(self) -> None:
         try:
             _validated(self.canonical_bytes)
-            _require(identity(self.protocol_id) == digest(self.canonical_bytes), "Finding protocol identity mismatch")
+            _require(
+                identity(self.protocol_id) == digest(self.canonical_bytes),
+                "Finding protocol identity mismatch",
+            )
         except ValueError as error:
             raise SearchFindingValidationError(str(error)) from error
 
@@ -167,12 +184,23 @@ def load_search_finding_protocol(raw: bytes) -> SearchFindingProtocol:
 
 def build_search_finding_protocol(raw: bytes, *, plan: SearchPlan) -> SearchFindingProtocol:
     try:
-        request = _object(_parse(raw, max_bytes=16 * 1024), frozenset({"kind", "schema_version", "title", "authority"}), "Search finding request")
-        _require(request["kind"] == "search_finding_request_v1", "Unsupported search finding request")
+        request = _object(
+            _parse(raw, max_bytes=16 * 1024),
+            frozenset({"kind", "schema_version", "title", "authority"}),
+            "Search finding request",
+        )
+        _require(
+            request["kind"] == "search_finding_request_v1", "Unsupported search finding request"
+        )
         _integer(request["schema_version"], "schema_version", 1, 1)
-        _require(request["authority"] == FINDING_AUTHORITY_ID, "Unsupported search finding authority")
+        _require(
+            request["authority"] == FINDING_AUTHORITY_ID, "Unsupported search finding authority"
+        )
         encoded = canonical(_document(request["title"], plan))
-        _require(len(encoded) <= MAX_SEARCH_FINDING_PROTOCOL_BYTES, "Search finding protocol exceeds byte bound")
+        _require(
+            len(encoded) <= MAX_SEARCH_FINDING_PROTOCOL_BYTES,
+            "Search finding protocol exceeds byte bound",
+        )
         return SearchFindingProtocol(digest(encoded), encoded)
     except ValueError as error:
         raise SearchFindingValidationError(str(error)) from error

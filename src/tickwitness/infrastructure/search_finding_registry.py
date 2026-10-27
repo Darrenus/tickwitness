@@ -53,9 +53,7 @@ class LocalSearchFindingRegistry:
 
     def __init__(self, root: Path, *, create: bool = False) -> None:
         if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
-            raise SearchFindingStoreError(
-                "Registry requires POSIX no-follow directory operations"
-            )
+            raise SearchFindingStoreError("Registry requires POSIX no-follow directory operations")
         if type(create) is not bool:
             raise SearchFindingStoreError("create must be a boolean")
         self._root = Path(root).absolute()

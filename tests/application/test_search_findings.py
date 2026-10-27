@@ -164,7 +164,7 @@ def execute(case, plan_id, *, evaluations=2, mode="normal", engine_factory=None)
     def supervise(budget):
         now = [1]
         deadline = budget.document["limits"]["max_wall_time_ms"] * 1_000_000 + 1
-        budgets = LocalCampaignBudgetStore(case.root / "runs")
+        budgets = LocalCampaignBudgetStore(case.root / "runs", create=True)
         guard = CampaignResourceGuard(budget, budgets, lambda: now[0], deadline)
         calls = []
 
@@ -180,7 +180,7 @@ def execute(case, plan_id, *, evaluations=2, mode="normal", engine_factory=None)
                     now[0] = deadline
                     raise CampaignLimitReached("time_limit")
                 if mode == "second-failure":
-                    raise RuntimeError("Injected second worker failure")
+                    raise RuntimeError("Injected second worker failure\nwith detail\tretained")
             return (engine_factory or case.engine_factory)(timeout)
 
         try:
@@ -299,9 +299,7 @@ def test_completed_positive_scope_reuses_baseline_budget_and_is_strictly_readonl
 def test_clean_budget_prefix_can_report_only_its_actual_positive_subset(experiment_case, mode):
     case = experiment_case
     plan_id, authority_id = prepare(case, values=[0, 1])
-    campaign = execute(
-        case, plan_id, evaluations=1 if mode == "evaluation" else 2, mode=mode
-    )
+    campaign = execute(case, plan_id, evaluations=1 if mode == "evaluation" else 2, mode=mode)
     assert campaign["status"] == "stopped" and campaign["exit_code"] == 8
     receipt = evaluate(case, authority_id)
     report = receipt["report"]
@@ -347,6 +345,9 @@ def test_later_failure_never_erases_a_false_witness_or_invents_a_positive_conclu
     assert report["outcome"] == expected
     assert report["coverage"]["audited_ordinals"] == [1]
     assert report["coverage"]["coverage_complete_for_plan"] is False
+    assert report["candidate_assessments"][1]["error"]["message"] == (
+        "Injected second worker failure\nwith detail\tretained"
+    )
     assert [row["ordinal"] for row in report["witnesses"]] == (
         [1] if expected == "COUNTEREXAMPLE_FOUND" else []
     )
@@ -365,9 +366,9 @@ def ambiguous_engine(_timeout):
                 (Path(__file__).parents[1] / "fixtures" / "evidence-result.json").read_bytes()
             )
             document.update(dataset_id=replay_input.dataset_id, spec_id=replay_input.spec.spec_id)
-            assert document["data_sha256"] == hashlib.sha256(
-                replay_input.normalized_bytes
-            ).hexdigest()
+            assert (
+                document["data_sha256"] == hashlib.sha256(replay_input.normalized_bytes).hexdigest()
+            )
             for fill in document["fill_trace"]:
                 fill["fields"].update(
                     price="10000.065",
