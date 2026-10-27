@@ -91,11 +91,23 @@ jobs:
           python3 scripts/smoke_scenarios.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_search_plans.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/search-plans-core.json
           python3 scripts/smoke_search_execution.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/search-execution-core.json --records-dir /tmp/search-execution-core-records
+          python3 scripts/smoke_campaign_budgets.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/campaign-budgets-core.json --records-dir /tmp/campaign-budgets-core-records
           python3 scripts/smoke_queue_constraints.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_queue_execution.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_tagged_queue.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/tagged-queue-core.json
           python3 scripts/smoke_tagged_evidence.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/tagged-pair-core.json --bundles-dir /tmp/tagged-pair-core-bundles
           python3 scripts/smoke_tagged_findings.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --pairs-dir /tmp/tagged-pair-core-bundles --source-report /tmp/tagged-pair-core.json --report /tmp/tagged-findings-core.json --bundles-dir /tmp/tagged-findings-core-bundles
+      - name: Preserve installed-core campaign resource stops and original budget links
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: campaign-budgets-core-${{ github.sha }}
+          path: |
+            /tmp/campaign-budgets-core.json
+            /tmp/campaign-budgets-core-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve installed-core search failure and persistent candidate associations
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -223,6 +235,20 @@ jobs:
       - name: Verify installed sequential search with the original shared attempt budget
         run: |
           python3 scripts/smoke_search_execution.py --python .venv/bin/python --verifier-python /tmp/tickwitness-tagged-verifier/bin/python --native --report /tmp/search-execution.json --records-dir /tmp/search-execution-records
+      - name: Verify supervised campaign time and storage admission limits
+        run: |
+          python3 scripts/smoke_campaign_budgets.py --python .venv/bin/python --verifier-python /tmp/tickwitness-tagged-verifier/bin/python --native --report /tmp/campaign-budgets.json --records-dir /tmp/campaign-budgets-records
+      - name: Preserve supervised resource budgets and core-only inspection evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: campaign-budgets-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            /tmp/campaign-budgets.json
+            /tmp/campaign-budgets-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve candidate dispatch, original ledger and core-only search inspection
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -325,6 +351,7 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_scenarios.py" --python /tmp/tickwitness-preview-core/bin/python
           python3 "$TW_SOURCE/scripts/smoke_search_plans.py" --python /tmp/tickwitness-preview-core/bin/python --report /tmp/search-plans-source-wheel.json
           python3 "$TW_SOURCE/scripts/smoke_search_execution.py" --python /tmp/tickwitness-preview-core/bin/python --report /tmp/search-execution-source-wheel-core.json --records-dir /tmp/search-execution-source-wheel-core-records
+          python3 "$TW_SOURCE/scripts/smoke_campaign_budgets.py" --python /tmp/tickwitness-preview-core/bin/python --report /tmp/campaign-budgets-source-wheel-core.json --records-dir /tmp/campaign-budgets-source-wheel-core-records
           python3 "$TW_SOURCE/scripts/smoke_queue_constraints.py" --python /tmp/tickwitness-preview-core/bin/python
           python3 "$TW_SOURCE/scripts/smoke_queue_execution.py" --python /tmp/tickwitness-preview-core/bin/python
           python3 "$TW_SOURCE/scripts/smoke_tagged_queue.py" --python /tmp/tickwitness-preview-core/bin/python --report /tmp/tagged-queue-source-wheel-core.json
@@ -338,6 +365,7 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_evidence.py" --python /tmp/tickwitness-preview-native/bin/python --native
           python3 "$TW_SOURCE/scripts/smoke_scenarios.py" --python /tmp/tickwitness-preview-native/bin/python --native
           python3 "$TW_SOURCE/scripts/smoke_search_execution.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --native --report /tmp/search-execution-source-wheel.json --records-dir /tmp/search-execution-source-wheel-records
+          python3 "$TW_SOURCE/scripts/smoke_campaign_budgets.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --native --report /tmp/campaign-budgets-source-wheel.json --records-dir /tmp/campaign-budgets-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_queue_constraints.py" --python /tmp/tickwitness-preview-native/bin/python
           python3 "$TW_SOURCE/scripts/smoke_queue_execution.py" --python /tmp/tickwitness-preview-native/bin/python --native --report /tmp/queue-source-wheel-execution.json
           python3 "$TW_SOURCE/scripts/smoke_tagged_queue.py" --python /tmp/tickwitness-preview-native/bin/python --native --report /tmp/tagged-queue-source-wheel-execution.json
@@ -347,6 +375,19 @@ jobs:
           /tmp/tickwitness-preview-native/bin/python -I "$TW_SOURCE/scripts/qualify_queue_semantics.py" --output /tmp/queue-semantics-source-wheel.json
           cd dist
           sha256sum --check SHA256SUMS
+      - name: Preserve campaign budgets from actual source archive and installed wheels
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: campaign-budgets-source-wheel-${{ github.sha }}
+          path: |
+            /tmp/campaign-budgets-source-wheel-core.json
+            /tmp/campaign-budgets-source-wheel-core-records
+            /tmp/campaign-budgets-source-wheel.json
+            /tmp/campaign-budgets-source-wheel-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve sequential search from actual source archive and installed wheels
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

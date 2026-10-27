@@ -610,6 +610,7 @@ def run_search_plan(
     campaigns_factory: Callable[[], CampaignStore],
     engine_factory: Callable[[int], ReplayPort],
     nonce_factory: Callable[[], str],
+    candidate_gate: Callable[[int], None] | None = None,
 ) -> dict[str, object]:
     _development(split)
     identity(plan_id)
@@ -641,6 +642,8 @@ def run_search_plan(
         rows = _eligible(plan)
         for row in rows:
             ordinal = cast("int", row["ordinal"])
+            if candidate_gate is not None:
+                candidate_gate(ordinal)
             expected = _expected_intent(
                 plan, row, registry_factory=registry_factory, datasets_factory=datasets_factory
             )

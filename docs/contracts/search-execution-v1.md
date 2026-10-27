@@ -1,6 +1,6 @@
 # Search Execution v1
 
-状态：S07-01b 实现合同，[远端验收已通过](../planning/sprint-07-status.md#s07-01b-远端验收记录)，[PR #89](https://github.com/Darrenus/tickwitness/pull/89) 待 owner 接受。基线为 owner 已合并的 [S07-01a / PR #88](https://github.com/Darrenus/tickwitness/pull/88)，merge `373d08a5c2196662c5116e02ea7b7fe3a98dc167`；本轮不发行新版本。
+状态：Accepted；S07-01b [远端验收已通过](../planning/sprint-07-status.md#s07-01b-远端验收记录)，owner 已合并 [PR #89](https://github.com/Darrenus/tickwitness/pull/89)，S07-01／[#19](https://github.com/Darrenus/tickwitness/issues/19) 已在此受限 profile 范围接受并关闭。实施时基线为 owner 已合并的 [S07-01a / PR #88](https://github.com/Darrenus/tickwitness/pull/88)，merge `373d08a5c2196662c5116e02ea7b7fe3a98dc167`；该切片未发行新版本。
 
 ## 用途与边界
 
