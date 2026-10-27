@@ -470,10 +470,19 @@ def _report(
 
 class _DispatchLedger:
     def __init__(
-        self, ledger: SearchLedger, store: CampaignStore, plan: SearchPlan, dispatch: SearchDispatch
+        self,
+        ledger: SearchLedger,
+        store: CampaignStore,
+        plan: SearchPlan,
+        dispatch: SearchDispatch,
+        engine_factory: Callable[[int], ReplayPort],
     ) -> None:
         self.ledger, self.store, self.plan, self.dispatch = ledger, store, plan, dispatch
+        self.engine_factory = engine_factory
         self.reservation: AttemptReservation | None = None
+
+    def as_ledger(self) -> ScenarioLedger:
+        return self
 
     def reserve(self, protocol: ExecutableProtocol) -> AttemptReservation:
         if protocol.canonical_bytes != _subject(self.plan).canonical_bytes:
@@ -530,7 +539,7 @@ class _DispatchLedger:
     def get_reservation(self, attempt_id: str) -> AttemptReservation:
         return self.ledger.get_reservation(attempt_id)
 
-    def engine(self, timeout: int, factory: Callable[[int], ReplayPort]) -> ReplayPort:
+    def engine(self, timeout: int) -> ReplayPort:
         ordinal = cast("int", self.dispatch.document["ordinal"])
         reservation = self.reservation
         link = self.store.get_link(self.plan.plan_id, ordinal)
@@ -545,7 +554,7 @@ class _DispatchLedger:
             raise SearchExecutionValidationError(
                 "Worker requires durable dispatch, slot, link and intent"
             )
-        underlying = factory(timeout)
+        underlying = self.engine_factory(timeout)
         store, plan_id = self.store, self.plan.plan_id
 
         class RecordingReplay:
@@ -644,7 +653,7 @@ def run_search_plan(
                 store.write_dispatch(plan_id, ordinal, dispatch.canonical_bytes)
                 if store.get_dispatch(plan_id, ordinal) != dispatch.canonical_bytes:
                     raise SearchExecutionValidationError("Campaign dispatch publication differs")
-                wrapper = _DispatchLedger(ledger, store, plan, dispatch)
+                wrapper = _DispatchLedger(ledger, store, plan, dispatch, engine_factory)
                 phase = "reservation"
                 submission = run_scenario(
                     _subject(plan).protocol_id,
@@ -652,8 +661,8 @@ def run_search_plan(
                     split="development",
                     registry_factory=registry_factory,
                     datasets_factory=datasets_factory,
-                    ledger_factory=lambda: wrapper,
-                    engine_factory=lambda timeout: wrapper.engine(timeout, engine_factory),
+                    ledger_factory=wrapper.as_ledger,
+                    engine_factory=wrapper.engine,
                 )
                 if submission.execution_status != "completed":
                     reason, code, message = (

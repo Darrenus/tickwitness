@@ -233,14 +233,13 @@ class LocalSearchCampaignStore:
         _bounded(raw, limit)
         self._write_allowed()
         try:
-            with self._campaign(plan_id, create=True) as directory:
-                with ExitStack() as stack:
-                    parent = (
-                        directory
-                        if category is None
-                        else self._directory(stack, directory, category, True)
-                    )
-                    self._publish(parent, name, raw, limit)
+            with self._campaign(plan_id, create=True) as directory, ExitStack() as stack:
+                parent = (
+                    directory
+                    if category is None
+                    else self._directory(stack, directory, category, True)
+                )
+                self._publish(parent, name, raw, limit)
         except OSError as error:
             raise SearchCampaignStoreError(
                 f"Campaign publication unconfirmed; inspect existing evidence before retry: {error}"

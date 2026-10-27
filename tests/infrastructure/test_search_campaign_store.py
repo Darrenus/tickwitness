@@ -91,9 +91,11 @@ def test_same_plan_lock_is_nonblocking_but_other_plans_are_independent(tmp_path)
     with two.lock(_PLAN):
         two.start(_PLAN, b"completed lock cycle")
     assert one.get_campaign(_PLAN) == b"completed lock cycle"
-    with pytest.raises(SearchCampaignStoreError, match="read-only"):
-        with LocalSearchCampaignStore(root).lock(_PLAN):
-            raise AssertionError("Read-only opening cannot construct a lock")
+    with (
+        pytest.raises(SearchCampaignStoreError, match="read-only"),
+        LocalSearchCampaignStore(root).lock(_PLAN),
+    ):
+        raise AssertionError("Read-only opening cannot construct a lock")
 
 
 def test_concurrent_same_bytes_publication_is_idempotent(tmp_path):
