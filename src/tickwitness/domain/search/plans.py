@@ -37,9 +37,7 @@ _MAX_RANDOM_DRAWS = _MAX_PROPOSALS * 1_024
 _RANDOM_DOMAIN = b"TickWitness/search-delay/sha256-counter-rejection/v1\0"
 _GENERATION_POLICY = "bounded_receive_delay_proposals_v1"
 _RANDOM_POLICY = "sha256_counter_rejection_v1"
-_REQUEST_FIELDS = frozenset(
-    {"kind", "schema_version", "search_seed", "max_proposals", "generator"}
-)
+_REQUEST_FIELDS = frozenset({"kind", "schema_version", "search_seed", "max_proposals", "generator"})
 _PLAN_FIELDS = frozenset(
     {
         "kind",
@@ -96,9 +94,7 @@ def _encode(document: dict[str, object]) -> bytes:
 
 def _request(document: dict[str, object]) -> dict[str, object]:
     _object(document, _REQUEST_FIELDS, "search plan request")
-    _require(
-        document["kind"] == "search_plan_request_v1", "Unsupported search plan request kind"
-    )
+    _require(document["kind"] == "search_plan_request_v1", "Unsupported search plan request kind")
     _integer(document["schema_version"], "schema_version", 1, 1)
     _integer(document["search_seed"], "search_seed", 0, (1 << 63) - 1)
     _integer(document["max_proposals"], "max_proposals", 1, _MAX_PROPOSALS)
@@ -171,16 +167,12 @@ def _random_values(seed: int, count: int, minimum: int, maximum: int) -> list[in
     prefix = _RANDOM_DOMAIN + seed.to_bytes(8, "big")
     values: list[int] = []
     for counter in range(_MAX_RANDOM_DRAWS):
-        sample = int.from_bytes(
-            hashlib.sha256(prefix + counter.to_bytes(8, "big")).digest(), "big"
-        )
+        sample = int.from_bytes(hashlib.sha256(prefix + counter.to_bytes(8, "big")).digest(), "big")
         if sample < cutoff:
             values.append(minimum + sample % span)
             if len(values) == count:
                 return values
-    raise SearchPlanValidationError(
-        "Random rejection stream exceeded its raw-draw safety limit"
-    )
+    raise SearchPlanValidationError("Random rejection stream exceeded its raw-draw safety limit")
 
 
 def _build_document(
@@ -274,20 +266,14 @@ def _validated(raw: bytes) -> str:
     _require(isinstance(document["protocol"], dict), "Search subject must be an object")
     _require(isinstance(document["assumptions"], dict), "Search assumptions must be an object")
     _require(isinstance(document["request"], dict), "Search request must be an object")
-    protocol = load_executable_protocol(
-        _encode(cast("dict[str, object]", document["protocol"]))
-    )
-    assumptions = load_assumption_spec(
-        _encode(cast("dict[str, object]", document["assumptions"]))
-    )
+    protocol = load_executable_protocol(_encode(cast("dict[str, object]", document["protocol"])))
+    assumptions = load_assumption_spec(_encode(cast("dict[str, object]", document["assumptions"])))
     rebuilt = _build_document(
         cast("dict[str, object]", document["request"]),
         protocol=protocol,
         assumptions=assumptions,
     )
-    _require(
-        _encode(rebuilt) == raw, "Frozen search plan does not reproduce from its declarations"
-    )
+    _require(_encode(rebuilt) == raw, "Frozen search plan does not reproduce from its declarations")
     return _digest(raw)
 
 

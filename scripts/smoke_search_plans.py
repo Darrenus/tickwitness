@@ -95,7 +95,12 @@ def main() -> None:
 
         ids = [
             run(
-                "import-events", name, "--input-root", str(inputs), "--store", str(store),
+                "import-events",
+                name,
+                "--input-root",
+                str(inputs),
+                "--store",
+                str(store),
                 guarded=False,
             )["dataset_id"]
             for name in ("replay-partials.jsonl", "replay-confirmation.jsonl")
@@ -103,26 +108,47 @@ def main() -> None:
         frozen = run(
             "freeze-experiment",
             "stress-experiment-request.json",
-            "--input-root", str(inputs),
-            "--development-dataset", ids[0],
-            "--confirmation-dataset", ids[1],
-            "--store", str(store), "--registry", str(registry),
+            "--input-root",
+            str(inputs),
+            "--development-dataset",
+            ids[0],
+            "--confirmation-dataset",
+            ids[1],
+            "--store",
+            str(store),
+            "--registry",
+            str(registry),
             guarded=False,
         )
         sources_before = (_tree(store), _tree(registry))
+
         def freeze(name: str, *, expected: int = 0, root: Path = plans) -> dict:
             return run(
-                "freeze-search-plan", frozen["protocol_id"],
-                "stress-assumption-request.json", name,
-                "--input-root", str(inputs),
-                "--store", str(store), "--registry", str(registry), "--plans", str(root),
+                "freeze-search-plan",
+                frozen["protocol_id"],
+                "stress-assumption-request.json",
+                name,
+                "--input-root",
+                str(inputs),
+                "--store",
+                str(store),
+                "--registry",
+                str(registry),
+                "--plans",
+                str(root),
                 expected=expected,
             )
 
         def inspect(plan_id: str, *, expected: int = 0, root: Path = plans) -> dict:
             return run(
-                "inspect-search-plan", plan_id,
-                "--store", str(store), "--registry", str(registry), "--plans", str(root),
+                "inspect-search-plan",
+                plan_id,
+                "--store",
+                str(store),
+                "--registry",
+                str(registry),
+                "--plans",
+                str(root),
                 expected=expected,
             )
 
@@ -153,7 +179,10 @@ def main() -> None:
             cases.append({"request": name, "receipt": first, "verification": audited})
         grid = cases[0]["receipt"]["plan"]
         assert [item["status"] for item in grid["journal"]] == [
-            "ELIGIBLE", "DUPLICATE", "ELIGIBLE", "REJECTED",
+            "ELIGIBLE",
+            "DUPLICATE",
+            "ELIGIBLE",
+            "REJECTED",
         ]
         assert grid["journal"][1]["duplicate_of"] == 1
         assert grid["journal"][3]["reason"] == "outside_assumption_range"
@@ -178,10 +207,16 @@ def main() -> None:
         (inputs / "singleton.json").write_bytes(_canonical(singleton_request))
         singleton = freeze("singleton.json")
         assert [item["status"] for item in singleton["plan"]["journal"]] == [
-            "REJECTED", "DUPLICATE", "DUPLICATE", "DUPLICATE",
+            "REJECTED",
+            "DUPLICATE",
+            "DUPLICATE",
+            "DUPLICATE",
         ]
         assert singleton["plan"]["counts"] == {
-            "proposed": 4, "eligible": 0, "duplicate": 3, "rejected": 1,
+            "proposed": 4,
+            "eligible": 0,
+            "duplicate": 3,
+            "rejected": 1,
         }
         golden_vectors = []
         for seed in (0, 1, (1 << 63) - 1):
@@ -198,25 +233,37 @@ def main() -> None:
             (inputs / filename).write_bytes(_canonical(golden_request))
             golden = freeze(filename)
             check_receipt(golden)
-            golden_vectors.append({
-                "search_seed": seed,
-                "minimum_ns": 0,
-                "maximum_ns": 60000000000,
-                "delays_ns": [item["delay_ns"] for item in golden["plan"]["journal"]],
-                "receipt": golden,
-            })
+            golden_vectors.append(
+                {
+                    "search_seed": seed,
+                    "minimum_ns": 0,
+                    "maximum_ns": 60000000000,
+                    "delays_ns": [item["delay_ns"] for item in golden["plan"]["journal"]],
+                    "receipt": golden,
+                }
+            )
 
         missing = directory / "never-created"
         for command in ("freeze-search-plan", "inspect-search-plan"):
             positionals = (
                 ("invalid-id", "absent.json", "absent.json")
-                if command == "freeze-search-plan" else ("invalid-id",)
+                if command == "freeze-search-plan"
+                else ("invalid-id",)
             )
             extra = ("--input-root", str(missing)) if command == "freeze-search-plan" else ()
             denied = run(
-                command, *positionals, *extra, "--split", "confirmation",
-                "--store", str(missing / "data"), "--registry", str(missing / "registry"),
-                "--plans", str(missing / "plans"), expected=5,
+                command,
+                *positionals,
+                *extra,
+                "--split",
+                "confirmation",
+                "--store",
+                str(missing / "data"),
+                "--registry",
+                str(missing / "registry"),
+                "--plans",
+                str(missing / "plans"),
+                expected=5,
             )
             assert denied["error"]["code"] == "confirmation_access_denied"
         absent = inspect("0" * 64, root=missing / "plans", expected=4)

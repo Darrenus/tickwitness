@@ -15,18 +15,22 @@ from tickwitness.infrastructure.subprocess_replay import SubprocessReplayAdapter
 
 def write_requests(root):
     assumption = {
-        "kind": "assumption_request_v1", "schema_version": 1,
+        "kind": "assumption_request_v1",
+        "schema_version": 1,
         "scenario_kind": "COUNTERFACTUAL_STRESS",
         "transform": {"semantic_id": "replay_receive_suffix_shift_v1", "from_capture_seq": 2},
         "additional_delay": {"minimum": 0, "maximum": 20_000_000, "unit": "ns"},
         "parameter_basis": {
-            "kind": "researcher_defined", "calibration_status": "uncalibrated",
+            "kind": "researcher_defined",
+            "calibration_status": "uncalibrated",
             "calibration_evidence_refs": [],
         },
     }
     search = {
-        "kind": "search_plan_request_v1", "schema_version": 1,
-        "search_seed": 17, "max_proposals": 4,
+        "kind": "search_plan_request_v1",
+        "schema_version": 1,
+        "search_seed": 17,
+        "max_proposals": 4,
         "generator": {"kind": "grid", "values_ns": [0, 0, 10_000_000, 30_000_000]},
     }
     for name, value in (("assumption.json", assumption), ("search.json", search)):
@@ -34,17 +38,32 @@ def write_requests(root):
 
 
 def common(root):
-    return ["--store", str(root / "data"), "--registry", str(root / "registry"),
-            "--plans", str(root / "plans")]
+    return [
+        "--store",
+        str(root / "data"),
+        "--registry",
+        str(root / "registry"),
+        "--plans",
+        str(root / "plans"),
+    ]
 
 
 def freeze_command(case):
-    return ["freeze-search-plan", case.frozen.protocol_id, "assumption.json", "search.json",
-            "--input-root", str(case.root), *common(case.root)]
+    return [
+        "freeze-search-plan",
+        case.frozen.protocol_id,
+        "assumption.json",
+        "search.json",
+        "--input-root",
+        str(case.root),
+        *common(case.root),
+    ]
 
 
 def snapshot(root):
-    return {str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+    return {
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
+    }
 
 
 def forbidden(*_args, **_kwargs):

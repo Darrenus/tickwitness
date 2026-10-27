@@ -30,7 +30,9 @@ def encoded(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
 
-def declaration(*, count: int = 6, seed: int = 7, values: list[int] | None = None) -> dict[str, Any]:
+def declaration(
+    *, count: int = 6, seed: int = 7, values: list[int] | None = None
+) -> dict[str, Any]:
     return {
         "kind": "search_plan_request_v1",
         "schema_version": 1,
@@ -55,11 +57,21 @@ def test_grid_keeps_order_duplicates_and_rejections_without_refill() -> None:
     journal = document["journal"]
     assert [row["delay_ns"] for row in journal] == [3, 0, 3, 20_000_001, 20_000_001, 9]
     assert [row["status"] for row in journal] == [
-        "ELIGIBLE", "ELIGIBLE", "DUPLICATE", "REJECTED", "DUPLICATE", "ELIGIBLE"
+        "ELIGIBLE",
+        "ELIGIBLE",
+        "DUPLICATE",
+        "REJECTED",
+        "DUPLICATE",
+        "ELIGIBLE",
     ]
     assert [row["duplicate_of"] for row in journal] == [None, None, 1, None, 4, None]
     assert [row["reason"] for row in journal] == [
-        None, None, "duplicate_proposal", "outside_assumption_range", "duplicate_proposal", None
+        None,
+        None,
+        "duplicate_proposal",
+        "outside_assumption_range",
+        "duplicate_proposal",
+        None,
     ]
     assert journal[2]["scenario_id"] == journal[0]["scenario_id"]
     assert journal[3]["scenario_id"] is None
@@ -182,7 +194,12 @@ def test_random_is_with_replacement_and_duplicates_count_against_raw_limit() -> 
     assert [row["delay_ns"] for row in journal] == [3] * 5
     assert [row["status"] for row in journal] == ["ELIGIBLE"] + ["DUPLICATE"] * 4
     assert [row["duplicate_of"] for row in journal] == [None, 1, 1, 1, 1]
-    assert frozen.document["counts"] == {"proposed": 5, "eligible": 1, "duplicate": 4, "rejected": 0}
+    assert frozen.document["counts"] == {
+        "proposed": 5,
+        "eligible": 1,
+        "duplicate": 4,
+        "rejected": 0,
+    }
 
 
 def test_random_rejection_advances_raw_counter_without_creating_a_proposal(monkeypatch) -> None:
@@ -248,9 +265,22 @@ def test_pathological_random_stream_fails_closed_at_fixed_raw_draw_bound(monkeyp
         ("generator", {"kind": "grid", "values_ns": [60_000_000_001]}),
         ("generator", {"kind": "grid", "values_ns": [0] * 1_025}),
         ("generator", {"kind": "grid", "values_ns": [0], "sort": True}),
-        ("generator", {"kind": "random_integer_with_replacement", "minimum_ns": 2, "maximum_ns": 1}),
-        ("generator", {"kind": "random_integer_with_replacement", "minimum_ns": False, "maximum_ns": 2}),
-        ("generator", {"kind": "random_integer_with_replacement", "minimum_ns": 0, "maximum_ns": 60_000_000_001}),
+        (
+            "generator",
+            {"kind": "random_integer_with_replacement", "minimum_ns": 2, "maximum_ns": 1},
+        ),
+        (
+            "generator",
+            {"kind": "random_integer_with_replacement", "minimum_ns": False, "maximum_ns": 2},
+        ),
+        (
+            "generator",
+            {
+                "kind": "random_integer_with_replacement",
+                "minimum_ns": 0,
+                "maximum_ns": 60_000_000_001,
+            },
+        ),
     ],
 )
 def test_request_rejects_unsupported_missing_and_unbounded_values(field, value) -> None:
@@ -260,7 +290,9 @@ def test_request_rejects_unsupported_missing_and_unbounded_values(field, value) 
         plan(request_value)
 
 
-@pytest.mark.parametrize("change", ["extra", "missing", "float", "duplicate", "nan", "oversized", "empty", "mutable"])
+@pytest.mark.parametrize(
+    "change", ["extra", "missing", "float", "duplicate", "nan", "oversized", "empty", "mutable"]
+)
 def test_request_parser_rejects_nonexact_or_unsafe_json(change: str) -> None:
     request_value = declaration()
     raw = encoded(request_value)
@@ -287,13 +319,28 @@ def test_request_parser_rejects_nonexact_or_unsafe_json(change: str) -> None:
         build_search_plan(raw, protocol=validated.protocol, assumptions=validated.assumptions)
 
 
-@pytest.mark.parametrize("change", ["protocol", "dataset", "spec", "assumption_identity", "protocol_identity", "subject_type", "assumption_type"])
+@pytest.mark.parametrize(
+    "change",
+    [
+        "protocol",
+        "dataset",
+        "spec",
+        "assumption_identity",
+        "protocol_identity",
+        "subject_type",
+        "assumption_type",
+    ],
+)
 def test_context_is_revalidated_without_trusting_old_identity_markers(change: str) -> None:
     validated = context()
     subject, assumptions = validated.protocol, validated.assumptions
     if change in {"protocol", "dataset", "spec"}:
         document = assumptions.document
-        key = {"protocol": "protocol_id", "dataset": "development_dataset_id", "spec": "replay_spec_id"}[change]
+        key = {
+            "protocol": "protocol_id",
+            "dataset": "development_dataset_id",
+            "spec": "replay_spec_id",
+        }[change]
         document["bindings"][key] = "f" * 64
         assumptions = load_assumption_spec(encoded(document))
     elif change == "assumption_identity":
@@ -311,9 +358,21 @@ def test_context_is_revalidated_without_trusting_old_identity_markers(change: st
 @pytest.mark.parametrize(
     "change",
     [
-        "journal_value", "scenario_id", "duplicate", "status", "counts", "stop",
-        "scope", "policy", "seed", "id", "assumption_id", "schema_version",
-        "budget", "extra", "newline",
+        "journal_value",
+        "scenario_id",
+        "duplicate",
+        "status",
+        "counts",
+        "stop",
+        "scope",
+        "policy",
+        "seed",
+        "id",
+        "assumption_id",
+        "schema_version",
+        "budget",
+        "extra",
+        "newline",
     ],
 )
 def test_loader_recomputes_proposals_instead_of_trusting_all_rehashed_content(change: str) -> None:
@@ -420,7 +479,9 @@ def test_boundaries_and_nonzero_assumption_lower_bound_are_explicit() -> None:
         assumptions=assumptions,
     )
     assert [row["status"] for row in frozen.document["journal"]] == [
-        "REJECTED", "ELIGIBLE", "ELIGIBLE"
+        "REJECTED",
+        "ELIGIBLE",
+        "ELIGIBLE",
     ]
     # These are declaration-only bindings; actual source horizon validation is
     # deliberately the application boundary, not a misleading domain marker.

@@ -1,5 +1,7 @@
 """Development-only proposal planning; no replay, attempt ledger or search verdict."""
 
+from __future__ import annotations
+
 import argparse
 from pathlib import Path
 
@@ -15,13 +17,16 @@ COMMANDS = frozenset({"freeze-search-plan", "inspect-search-plan"})
 
 
 def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    freeze = commands.add_parser("freeze-search-plan", help="Freeze a receive-delay proposal journal")
+    freeze = commands.add_parser(
+        "freeze-search-plan", help="Freeze a receive-delay proposal journal"
+    )
     freeze.add_argument("protocol_id")
     freeze.add_argument("assumption_request")
     freeze.add_argument("search_request")
     freeze.add_argument("--input-root", required=True, type=Path)
     inspect = commands.add_parser(
-        "inspect-search-plan", help="Rebuild proposals and revalidate their actual development source"
+        "inspect-search-plan",
+        help="Rebuild proposals and revalidate their actual development source",
     )
     inspect.add_argument("plan_id")
     for command in (freeze, inspect):
@@ -40,14 +45,18 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
         return inspect_search_plan(
             arguments.plan_id,
             split=arguments.split,
-            registry_factory=lambda: LocalExecutableProtocolRegistry(arguments.registry, create=False),
+            registry_factory=lambda: LocalExecutableProtocolRegistry(
+                arguments.registry, create=False
+            ),
             datasets_factory=lambda: LocalDatasetStore(arguments.store, create=False),
             plans_factory=lambda: LocalSearchPlanRegistry(arguments.plans, create=False),
         )
     identity(arguments.protocol_id)
     assumption, search = (
         read_regular_file(
-            arguments.input_root, name, max_bytes=64 * 1024,
+            arguments.input_root,
+            name,
+            max_bytes=64 * 1024,
             allowed_suffixes=frozenset({".json"}),
         )
         for name in (arguments.assumption_request, arguments.search_request)

@@ -44,9 +44,8 @@ def freeze(case, *, assumption=None, search=None, plans_factory=None, **override
         "split": "development",
         "registry_factory": lambda: case.registry,
         "datasets_factory": lambda: case.data,
-        "plans_factory": plans_factory or (
-            lambda: LocalSearchPlanRegistry(case.root / "plans", create=True)
-        ),
+        "plans_factory": plans_factory
+        or (lambda: LocalSearchPlanRegistry(case.root / "plans", create=True)),
     }
     arguments.update(overrides)
     return freeze_search_plan(
@@ -69,7 +68,9 @@ def inspect(case, plan_id, **overrides):
 
 
 def tree(root):
-    return {str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+    return {
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
+    }
 
 
 def forbidden():
@@ -83,15 +84,22 @@ def test_freeze_and_inspect_revalidate_source_without_creating_attempts(experime
     assert result["created"] is True
     assert result["plan"]["counts"] == {"proposed": 4, "eligible": 2, "duplicate": 1, "rejected": 1}
     assert [row["status"] for row in result["plan"]["journal"]] == [
-        "ELIGIBLE", "DUPLICATE", "ELIGIBLE", "REJECTED"
+        "ELIGIBLE",
+        "DUPLICATE",
+        "ELIGIBLE",
+        "REJECTED",
     ]
     assert result["scope"] == {
-        "execution_started": False, "attempt_reserved": False,
-        "search_performed": False, "finding_issued": False,
+        "execution_started": False,
+        "attempt_reserved": False,
+        "search_performed": False,
+        "finding_issued": False,
     }
     assert result["verification"] == {
-        "plan_recomputed": True, "source_revalidated": True,
-        "derived_candidates_checked": True, "native_replayed": False,
+        "plan_recomputed": True,
+        "source_revalidated": True,
+        "derived_candidates_checked": True,
+        "native_replayed": False,
     }
     after = tree(case.root)
     repeated = freeze(case)
@@ -108,13 +116,21 @@ def test_confirmation_refused_before_identity_and_all_factories(operation):
     with pytest.raises(ConfirmationAccessDenied):
         if operation == "freeze":
             freeze_search_plan(
-                "bad", b"bad", b"bad", split="confirmation",
-                registry_factory=forbidden, datasets_factory=forbidden, plans_factory=forbidden,
+                "bad",
+                b"bad",
+                b"bad",
+                split="confirmation",
+                registry_factory=forbidden,
+                datasets_factory=forbidden,
+                plans_factory=forbidden,
             )
         else:
             inspect_search_plan(
-                "bad", split="confirmation", registry_factory=forbidden,
-                datasets_factory=forbidden, plans_factory=forbidden,
+                "bad",
+                split="confirmation",
+                registry_factory=forbidden,
+                datasets_factory=forbidden,
+                plans_factory=forbidden,
             )
 
 
@@ -123,13 +139,21 @@ def test_bad_identity_does_not_open_factories(operation):
     with pytest.raises(EvidenceValidationError):
         if operation == "freeze":
             freeze_search_plan(
-                "bad", b"{}", b"{}", split="development",
-                registry_factory=forbidden, datasets_factory=forbidden, plans_factory=forbidden,
+                "bad",
+                b"{}",
+                b"{}",
+                split="development",
+                registry_factory=forbidden,
+                datasets_factory=forbidden,
+                plans_factory=forbidden,
             )
         else:
             inspect_search_plan(
-                "bad", split="development", registry_factory=forbidden,
-                datasets_factory=forbidden, plans_factory=forbidden,
+                "bad",
+                split="development",
+                registry_factory=forbidden,
+                datasets_factory=forbidden,
+                plans_factory=forbidden,
             )
 
 
@@ -186,7 +210,9 @@ def test_work_bound_rejects_before_any_derivation_or_publication(experiment_case
 def test_all_rejected_plan_is_not_search_completion(experiment_case):
     assumption, search = requests()
     search["generator"] = {
-        "kind": "random_integer_with_replacement", "minimum_ns": 30_000_000, "maximum_ns": 30_000_000,
+        "kind": "random_integer_with_replacement",
+        "minimum_ns": 30_000_000,
+        "maximum_ns": 30_000_000,
     }
     result = freeze(experiment_case, assumption=assumption, search=search)
     assert result["plan"]["counts"] == {"proposed": 4, "eligible": 0, "duplicate": 3, "rejected": 1}
@@ -240,15 +266,20 @@ def test_inspect_cannot_substitute_another_valid_plan(experiment_case):
 def test_subject_registry_cannot_substitute_valid_protocol(experiment_case):
     case = experiment_case
     plan = freeze(case)
-    changed = dict(case.request, budget={"max_attempts": 3, "max_wall_seconds": 60, "max_events": 100})
+    changed = dict(
+        case.request, budget={"max_attempts": 3, "max_wall_seconds": 60, "max_events": 100}
+    )
     other = build_executable_protocol(
-        json.dumps(changed).encode(), development_dataset_id=case.development,
+        json.dumps(changed).encode(),
+        development_dataset_id=case.development,
         confirmation_dataset_id=case.confirmation,
     )
 
     class WrongSubject:
         def get(self, _identity):
-            return SimpleNamespace(protocol_id=other.protocol_id, canonical_bytes=other.canonical_bytes)
+            return SimpleNamespace(
+                protocol_id=other.protocol_id, canonical_bytes=other.canonical_bytes
+            )
 
     with pytest.raises(SearchPlanValidationError, match="conflicting evidence"):
         inspect(case, plan["plan_id"], registry_factory=WrongSubject, datasets_factory=forbidden)

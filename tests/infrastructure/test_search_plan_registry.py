@@ -186,9 +186,7 @@ def test_concurrent_publication_has_one_created_record(tmp_path, experiment_case
 
 
 @pytest.mark.parametrize("target", ["root", "namespace", "file"])
-def test_symlinks_are_rejected_even_when_external_bytes_match(
-    tmp_path, experiment_case, target
-):
+def test_symlinks_are_rejected_even_when_external_bytes_match(tmp_path, experiment_case, target):
     root = tmp_path / "plans"
     registry = LocalSearchPlanRegistry(root, create=True)
     record = registry.seal(plan_bytes(experiment_case))
@@ -213,9 +211,7 @@ def test_symlinks_are_rejected_even_when_external_bytes_match(
 
 
 @pytest.mark.parametrize("kind", ["fifo", "directory", "oversize"])
-def test_nonregular_or_oversize_evidence_fails_without_waiting(
-    tmp_path, experiment_case, kind
-):
+def test_nonregular_or_oversize_evidence_fails_without_waiting(tmp_path, experiment_case, kind):
     root = tmp_path / "plans"
     registry = LocalSearchPlanRegistry(root, create=True)
     record = registry.seal(plan_bytes(experiment_case))
