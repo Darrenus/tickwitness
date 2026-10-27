@@ -1,13 +1,13 @@
 # Sprint 6 队列约束与资格状态
 
-更新：2026-10-26（Asia/Singapore）。Owner 已合并 PR #79–86；Sprint 5、S06-01 的资格／共同预算／持久双模型执行，以及 S06-02a/b/c 的语义资格／守恒 tagged reconstruction／可迁移证据进入 `main`。本轮基线为 #86 merge `62fc66b563528fcd03713ec8597ddb66e4d9c870`。已有技术预览 `0.1.0a1` 保持原发行物，`0.2.0.dev0` 仍未发行。
+更新：2026-10-27（Asia/Singapore）。Owner 已合并 PR #79–87；Sprint 5、S06-01 的资格／共同预算／持久双模型执行，以及 S06-02a/b/c/d 的语义资格／守恒 tagged reconstruction／可迁移证据／独立 finding 权限进入 `main`。当前接受基线为 #87 merge `2c2e0e39ccb4332afd87f4134d7fa6bf1e5801c6`。已有技术预览 `0.1.0a1` 保持原发行物，`0.2.0.dev0` 仍未发行。
 
-已接受的 [PR #86](https://github.com/Darrenus/tickwitness/pull/86) 实现 S06-02c；历史远端记录见下文。本轮继续 S06-02d：独立冻结 finding 签发权限与确定性报告合同，明确有限条件见证、拒签和 FINAL 内容闭包。原执行协议／旧包权限不改写，不扩大市场或统计推断范围。
+已接受的 [PR #87](https://github.com/Darrenus/tickwitness/pull/87) 实现 S06-02d：独立冻结 finding 签发权限与确定性报告合同，明确有限条件见证、拒签和 FINAL 内容闭包。原执行协议／旧包权限不改写，不扩大市场或统计推断范围。后续工程进入 [Sprint 7](sprint-07-status.md)，真实访谈缺口继续保留，不将整个 Sprint 6 声称为已完成。
 
 | 故事 | 当前切片与接受边界 | 状态 |
 | --- | --- | --- |
 | S06-01 / #16 | S06-01a/b 已接受；冻结共同预算、持久前后模型执行与独立审计 | Owner 已合并 #83 |
-| S06-02 / #17 | S06-02a/b/c 已接受；S06-02d 独立 finding 权限与报告通过远端验收 | In progress；[PR #87](https://github.com/Darrenus/tickwitness/pull/87) 待 owner 接受，结论仅限显式冻结的条件 profile |
+| S06-02 / #17 | S06-02a/b/c/d 已接受；独立 finding 权限与报告通过远端验收 | Owner 已合并 #87，结论仅限显式冻结的条件 profile |
 | S06-03 / #18 | 真实近期问题访谈累计 8–12 次，反馈关联工作流阻力 | 未取得新增访谈证据；不虚填次数、采用或独立领域验收 |
 
 原故事验收与容量仍见 [Sprint backlog](sprint-backlog.md#s6--l2-队列解释与证据不足判定)。实际投入工时尚未登记。S06-01 原估算不因生成代码自动视为已完成；复杂执行能力需要单独可验收切片，不通过修改旧协议或跳过预算提前打开。

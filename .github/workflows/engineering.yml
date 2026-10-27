@@ -89,11 +89,20 @@ jobs:
           python3 scripts/smoke_distribution.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_evidence.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_scenarios.py --python /tmp/tickwitness-wheel/bin/python
+          python3 scripts/smoke_search_plans.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/search-plans-core.json
           python3 scripts/smoke_queue_constraints.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_queue_execution.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_tagged_queue.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/tagged-queue-core.json
           python3 scripts/smoke_tagged_evidence.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/tagged-pair-core.json --bundles-dir /tmp/tagged-pair-core-bundles
           python3 scripts/smoke_tagged_findings.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --pairs-dir /tmp/tagged-pair-core-bundles --source-report /tmp/tagged-pair-core.json --report /tmp/tagged-findings-core.json --bundles-dir /tmp/tagged-findings-core-bundles
+      - name: Preserve installed-core deterministic candidate planning evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: search-plans-core-${{ github.sha }}
+          path: /tmp/search-plans-core.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve installed-core frozen authority and finding evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -288,6 +297,7 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_distribution.py" --python /tmp/tickwitness-preview-core/bin/python
           python3 "$TW_SOURCE/scripts/smoke_evidence.py" --python /tmp/tickwitness-preview-core/bin/python
           python3 "$TW_SOURCE/scripts/smoke_scenarios.py" --python /tmp/tickwitness-preview-core/bin/python
+          python3 "$TW_SOURCE/scripts/smoke_search_plans.py" --python /tmp/tickwitness-preview-core/bin/python --report /tmp/search-plans-source-wheel.json
           python3 "$TW_SOURCE/scripts/smoke_queue_constraints.py" --python /tmp/tickwitness-preview-core/bin/python
           python3 "$TW_SOURCE/scripts/smoke_queue_execution.py" --python /tmp/tickwitness-preview-core/bin/python
           python3 "$TW_SOURCE/scripts/smoke_tagged_queue.py" --python /tmp/tickwitness-preview-core/bin/python --report /tmp/tagged-queue-source-wheel-core.json
@@ -309,6 +319,14 @@ jobs:
           /tmp/tickwitness-preview-native/bin/python -I "$TW_SOURCE/scripts/qualify_queue_semantics.py" --output /tmp/queue-semantics-source-wheel.json
           cd dist
           sha256sum --check SHA256SUMS
+      - name: Preserve candidate planning from actual source archive and core wheel
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: search-plans-source-wheel-${{ github.sha }}
+          path: /tmp/search-plans-source-wheel.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve finding authority and reports from actual source archive and core wheel
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
