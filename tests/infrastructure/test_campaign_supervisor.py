@@ -158,16 +158,22 @@ def test_late_exit_is_not_accepted_even_when_poll_reports_exit(tmp_path, monkeyp
 
 def test_keyboard_interrupt_cleans_the_complete_worker_group(tmp_path, monkeypatch):
     marker = tmp_path / "pids.json"
+    staging = tmp_path / "pids.pending"
     executable = fake_interpreter(
         tmp_path,
         "import json,os,subprocess,sys,time\n"
         "child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(20)'])\n"
-        f"with open({str(marker)!r},'w') as stream:\n"
+        f"with open({str(staging)!r},'w') as stream:\n"
         "    json.dump({'coordinator':os.getpid(),'child':child.pid},stream)\n"
+        "    stream.flush()\n"
+        "    os.fsync(stream.fileno())\n"
+        f"os.replace({str(staging)!r},{str(marker)!r})\n"
         "time.sleep(20)\n",
     )
 
     def interrupted(*_args, **_kwargs):
+        # Existence is a complete ready handshake only after atomic publication;
+        # killing between open() and json.dump() would otherwise leave empty JSON.
         deadline = time.monotonic() + 3
         while not marker.exists() and time.monotonic() < deadline:
             time.sleep(0.01)

@@ -158,7 +158,7 @@ def test_unsafe_control_entries_are_rejected_without_blocking(tmp_path, attack):
 
 
 def test_managed_symlink_cannot_redirect_execution(tmp_path):
-    root, store, _ = prepare(tmp_path)
+    _root, store, _ = prepare(tmp_path)
     outside = tmp_path / "outside"
     outside.mkdir()
     store.managed_root(_PLAN).symlink_to(outside, target_is_directory=True)

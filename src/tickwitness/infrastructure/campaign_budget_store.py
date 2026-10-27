@@ -127,10 +127,8 @@ class LocalCampaignBudgetStore:
                     raise CampaignBudgetStoreError("Allocation directory contains too many files")
                 for name in names:
                     if _PENDING.fullmatch(name):
-                        try:
+                        with suppress(FileNotFoundError):
                             self._check_regular(allocations, name, MAX_CAMPAIGN_BUDGET_BYTES)
-                        except FileNotFoundError:
-                            pass
                         continue
                     match = _ENTRY.fullmatch(name)
                     if match is None or not 1 <= int(match.group(1)) <= 1_024:

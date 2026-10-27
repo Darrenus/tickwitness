@@ -142,15 +142,12 @@ def _snapshot(
                 raise CampaignBudgetValidationError(
                     "Evaluation limit stop lacks exhausted admission evidence"
                 )
-        elif reason == "execution_stopped":
-            if (
-                execution is None
-                or execution["status"] == "completed"
-                or execution["exit_code"] != exit_code
-            ):
-                raise CampaignBudgetValidationError(
-                    "Execution stop differs from committed inner facts"
-                )
+        elif reason == "execution_stopped" and (
+            execution is None
+            or execution["status"] == "completed"
+            or execution["exit_code"] != exit_code
+        ):
+            raise CampaignBudgetValidationError("Execution stop differs from committed inner facts")
     return {
         "kind": "bounded_search_campaign_report_v1",
         "schema_version": 1,
