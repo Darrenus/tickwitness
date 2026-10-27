@@ -43,8 +43,11 @@ class CampaignResourceGuard:
     """Sequential candidate lanes; reservations and write charges are never refunded."""
 
     def __init__(
-        self, budget: CampaignBudget, store: LocalCampaignBudgetStore,
-        clock_ns: Callable[[], int], deadline_ns: int,
+        self,
+        budget: CampaignBudget,
+        store: LocalCampaignBudgetStore,
+        clock_ns: Callable[[], int],
+        deadline_ns: int,
     ) -> None:
         if type(budget) is not CampaignBudget:
             raise CampaignResourceGuardError("Guard requires an actual frozen campaign budget")
@@ -52,8 +55,15 @@ class CampaignResourceGuard:
         if checked.budget_id != budget.budget_id:
             raise CampaignResourceGuardError("Guard budget identity differs")
         if type(deadline_ns) is not int or deadline_ns <= 0:
-            raise CampaignResourceGuardError("Deadline must be a positive absolute monotonic integer")
-        self.budget, self.store, self.clock_ns, self.deadline_ns = checked, store, clock_ns, deadline_ns
+            raise CampaignResourceGuardError(
+                "Deadline must be a positive absolute monotonic integer"
+            )
+        self.budget, self.store, self.clock_ns, self.deadline_ns = (
+            checked,
+            store,
+            clock_ns,
+            deadline_ns,
+        )
         self._plan_id = cast("str", checked.document["plan_id"])
         if store.get_budget(self._plan_id) != checked.canonical_bytes:
             raise CampaignResourceGuardError("Guard budget is not the committed outer budget")
@@ -76,10 +86,14 @@ class CampaignResourceGuard:
     def check_time(self) -> None:
         with self._mutex:
             if self._poisoned:
-                raise CampaignResourceGuardError("Admission publication is uncertain; guard cannot continue")
+                raise CampaignResourceGuardError(
+                    "Admission publication is uncertain; guard cannot continue"
+                )
             now = self.clock_ns()
             if type(now) is not int or now < 0 or now < self._last_clock:
-                raise CampaignResourceGuardError("Monotonic clock returned an invalid or regressing value")
+                raise CampaignResourceGuardError(
+                    "Monotonic clock returned an invalid or regressing value"
+                )
             self._last_clock = now
             if now >= self.deadline_ns:
                 raise CampaignLimitReached("time_limit")
@@ -88,7 +102,9 @@ class CampaignResourceGuard:
         with self._mutex:
             self.check_time()
             if type(ordinal) is not int or not 1 <= ordinal <= 1_024:
-                raise CampaignResourceGuardError("Candidate ordinal must be an integer in [1, 1024]")
+                raise CampaignResourceGuardError(
+                    "Candidate ordinal must be an integer in [1, 1024]"
+                )
             if ordinal in self._admitted:
                 raise CampaignResourceGuardError("Candidate admission cannot be reused")
             if self._index >= self._limits["max_evaluations"]:
@@ -137,14 +153,17 @@ class CampaignResourceGuard:
             return {
                 "control_charged_bytes": self._control,
                 "allocation_count": self._index,
-                "reserved_storage_bytes": CONTROL_RESERVE_BYTES + self._index * CANDIDATE_RESERVE_BYTES,
+                "reserved_storage_bytes": CONTROL_RESERVE_BYTES
+                + self._index * CANDIDATE_RESERVE_BYTES,
                 "current_ordinal": self._ordinal,
                 "current_candidate_charged_bytes": self._candidate_charged,
                 "candidate_charges": dict(self._charged_by_ordinal),
             }
 
 
-_ACTIVE_GUARD: ContextVar[CampaignResourceGuard | None] = ContextVar("campaign_resource_guard", default=None)
+_ACTIVE_GUARD: ContextVar[CampaignResourceGuard | None] = ContextVar(
+    "campaign_resource_guard", default=None
+)
 
 
 @contextmanager

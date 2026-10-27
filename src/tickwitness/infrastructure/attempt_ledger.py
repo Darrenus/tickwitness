@@ -17,8 +17,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
-from tickwitness.infrastructure.campaign_resource_guard import charge_managed_write
-
 from tickwitness.domain.evidence.queue_records import (
     MAX_QUEUE_RECORD_BYTES,
     QueueAttemptReservation,
@@ -63,6 +61,7 @@ from tickwitness.domain.research_contracts.tagged_queue_protocol import (
     TaggedQueueProtocol,
     load_tagged_queue_protocol,
 )
+from tickwitness.infrastructure.campaign_resource_guard import charge_managed_write
 
 _RECORD_LIMIT = 16 * 1024
 _ARTIFACT_LIMIT = 16 * 1024 * 1024

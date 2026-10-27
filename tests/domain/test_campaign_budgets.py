@@ -24,8 +24,10 @@ from tickwitness.domain.search.budgets import (
 
 def request(**changes):
     return {
-        "kind": "campaign_budget_request_v1", "schema_version": 1,
-        "max_evaluations": 2, "max_wall_time_ms": 1_000,
+        "kind": "campaign_budget_request_v1",
+        "schema_version": 1,
+        "max_evaluations": 2,
+        "max_wall_time_ms": 1_000,
         "max_storage_bytes": CONTROL_RESERVE_BYTES + 2 * CANDIDATE_RESERVE_BYTES,
         **changes,
     }
@@ -33,7 +35,10 @@ def request(**changes):
 
 def budget(**changes):
     return build_campaign_budget(
-        canonical(request(**changes)), plan_id="a" * 64, protocol_id="b" * 64, nonce="c" * 32,
+        canonical(request(**changes)),
+        plan_id="a" * 64,
+        protocol_id="b" * 64,
+        nonce="c" * 32,
     )
 
 
@@ -60,22 +65,36 @@ def test_budget_identity_exact_scope_and_detached_documents():
         CampaignBudget("d" * 64, frozen.canonical_bytes)
 
 
-@pytest.mark.parametrize(("field", "value"), [
-    ("kind", "frozen_research_protocol_v1"), ("schema_version", True),
-    ("max_evaluations", True), ("max_evaluations", 0), ("max_evaluations", 101),
-    ("max_wall_time_ms", 0), ("max_wall_time_ms", 3_600_001),
-    ("max_storage_bytes", CONTROL_RESERVE_BYTES - 1),
-    ("max_storage_bytes", 16 * 1024 ** 3 + 1),
-])
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("kind", "frozen_research_protocol_v1"),
+        ("schema_version", True),
+        ("max_evaluations", True),
+        ("max_evaluations", 0),
+        ("max_evaluations", 101),
+        ("max_wall_time_ms", 0),
+        ("max_wall_time_ms", 3_600_001),
+        ("max_storage_bytes", CONTROL_RESERVE_BYTES - 1),
+        ("max_storage_bytes", 16 * 1024**3 + 1),
+    ],
+)
 def test_request_boundaries_are_exact_integer_types(field, value):
     with pytest.raises(CampaignBudgetValidationError):
         budget(**{field: value})
 
 
-@pytest.mark.parametrize("raw", [
-    b"", b"{}", b'{"schema_version":1,"schema_version":1}',
-    b'{"max_wall_time_ms":NaN}', b'{"max_wall_time_ms":1.0}', b" " * 65_537,
-])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"",
+        b"{}",
+        b'{"schema_version":1,"schema_version":1}',
+        b'{"max_wall_time_ms":NaN}',
+        b'{"max_wall_time_ms":1.0}',
+        b" " * 65_537,
+    ],
+)
 def test_request_rejects_unsafe_json(raw):
     with pytest.raises(CampaignBudgetValidationError):
         build_campaign_budget(raw, plan_id="a" * 64, protocol_id="b" * 64, nonce="c" * 32)
@@ -104,19 +123,30 @@ def test_limits_and_binding_changes_create_new_identity():
     original = budget()
     assert budget(max_wall_time_ms=2_000).budget_id != original.budget_id
     changed = build_campaign_budget(
-        canonical(request()), plan_id="d" * 64, protocol_id="b" * 64, nonce="c" * 32,
+        canonical(request()),
+        plan_id="d" * 64,
+        protocol_id="b" * 64,
+        nonce="c" * 32,
     )
     assert changed.budget_id != original.budget_id
     for bad in ("A" * 64, "../a", True):
         with pytest.raises(CampaignBudgetValidationError):
-            build_campaign_budget(canonical(request()), plan_id=bad, protocol_id="b" * 64, nonce="c" * 32)
+            build_campaign_budget(
+                canonical(request()), plan_id=bad, protocol_id="b" * 64, nonce="c" * 32
+            )
 
 
 def test_allocation_charges_full_envelope_in_plan_order_not_original_attempt_slot():
     frozen = budget()
     first, second = build_allocation(frozen, 1, 1), build_allocation(frozen, 3, 2)
-    assert load_allocation(first, budget=frozen)["reserved_storage_bytes"] == CONTROL_RESERVE_BYTES + CANDIDATE_RESERVE_BYTES
-    assert load_allocation(second, budget=frozen)["reserved_storage_bytes"] == CONTROL_RESERVE_BYTES + 2 * CANDIDATE_RESERVE_BYTES
+    assert (
+        load_allocation(first, budget=frozen)["reserved_storage_bytes"]
+        == CONTROL_RESERVE_BYTES + CANDIDATE_RESERVE_BYTES
+    )
+    assert (
+        load_allocation(second, budget=frozen)["reserved_storage_bytes"]
+        == CONTROL_RESERVE_BYTES + 2 * CANDIDATE_RESERVE_BYTES
+    )
     assert load_allocation(second, budget=frozen)["ordinal"] == 3
     assert "attempt_id" not in json.loads(first)
     with pytest.raises(CampaignBudgetValidationError):
@@ -131,12 +161,22 @@ def test_allocation_charges_full_envelope_in_plan_order_not_original_attempt_slo
         load_allocation(canonical(forged), budget=frozen)
 
 
-@pytest.mark.parametrize(("reason", "code"), [
-    ("completed", 0), ("evaluation_limit", 8), ("storage_limit", 8), ("time_limit", 8),
-    ("execution_stopped", 3), ("execution_stopped", 6), ("execution_stopped", 7),
-    ("execution_stopped", 8), ("execution_unfinalized", 3), ("worker_failed", 7),
-    ("publication_unconfirmed", 3),
-])
+@pytest.mark.parametrize(
+    ("reason", "code"),
+    [
+        ("completed", 0),
+        ("evaluation_limit", 8),
+        ("storage_limit", 8),
+        ("time_limit", 8),
+        ("execution_stopped", 3),
+        ("execution_stopped", 6),
+        ("execution_stopped", 7),
+        ("execution_stopped", 8),
+        ("execution_unfinalized", 3),
+        ("worker_failed", 7),
+        ("publication_unconfirmed", 3),
+    ],
+)
 def test_budget_stop_has_fixed_reason_exit_and_content_bindings(reason, code):
     frozen = budget()
     raw = build_budget_stop(frozen, reason, exit_code=code, elapsed_ns=123)
@@ -148,10 +188,18 @@ def test_budget_stop_has_fixed_reason_exit_and_content_bindings(reason, code):
         load_budget_stop(raw, budget=budget(max_wall_time_ms=2_000))
 
 
-@pytest.mark.parametrize(("reason", "code"), [
-    ("completed", 8), ("time_limit", 7), ("storage_limit", 0), ("worker_failed", 6),
-    ("publication_unconfirmed", 7), ("execution_unfinalized", 8), ("NO_COUNTEREXAMPLE_FOUND", 0),
-])
+@pytest.mark.parametrize(
+    ("reason", "code"),
+    [
+        ("completed", 8),
+        ("time_limit", 7),
+        ("storage_limit", 0),
+        ("worker_failed", 6),
+        ("publication_unconfirmed", 7),
+        ("execution_unfinalized", 8),
+        ("NO_COUNTEREXAMPLE_FOUND", 0),
+    ],
+)
 def test_invalid_stop_never_forges_a_search_finding_or_completion(reason, code):
     with pytest.raises(CampaignBudgetValidationError):
         build_budget_stop(budget(), reason, exit_code=code, elapsed_ns=10)

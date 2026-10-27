@@ -21,7 +21,10 @@ def _alive(pid):
     # cannot run or retain campaign IO, so do not mistake it for a live worker.
     result = subprocess.run(
         ["ps", "-p", str(pid), "-o", "stat="],
-        capture_output=True, text=True, check=False, timeout=5,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=5,
     )
     state = result.stdout.strip()
     return bool(state) and not state.startswith("Z")
@@ -57,9 +60,7 @@ def test_bad_or_caller_deadline_frame_never_spawns(payload, monkeypatch):
 def test_request_contains_one_supervisor_absolute_deadline(tmp_path):
     executable = fake_interpreter(
         tmp_path,
-        "import json,sys\n"
-        "request=json.load(sys.stdin)\n"
-        "print(json.dumps(request))\n",
+        "import json,sys\nrequest=json.load(sys.stdin)\nprint(json.dumps(request))\n",
     )
     before = time.monotonic_ns()
     result = supervise_campaign(
@@ -75,7 +76,7 @@ def test_request_contains_one_supervisor_absolute_deadline(tmp_path):
 
 def test_application_budget_exit_is_a_finished_protocol_response(tmp_path):
     executable = fake_interpreter(
-        tmp_path, "import sys\nprint('{\"reason\":\"storage_limit\"}')\nsys.exit(8)\n"
+        tmp_path, 'import sys\nprint(\'{"reason":"storage_limit"}\')\nsys.exit(8)\n'
     )
     result = supervise_campaign({}, timeout_ms=1000, python_executable=executable)
     assert result.reason == "finished" and result.exit_code == 8
@@ -147,7 +148,10 @@ def test_late_exit_is_not_accepted_even_when_poll_reports_exit(tmp_path, monkeyp
 
     monkeypatch.setattr(campaign_supervisor, "_pipe_exchange", late_exchange)
     result = supervise_campaign(
-        {}, timeout_ms=1, python_executable=executable, clock_ns=lambda: clock[0],
+        {},
+        timeout_ms=1,
+        python_executable=executable,
+        clock_ns=lambda: clock[0],
     )
     assert result.reason == "time_limit" and result.exit_code == 8
 

@@ -26,11 +26,19 @@ _PLAN = "a" * 64
 
 def frozen(**changes):
     return build_campaign_budget(
-        canonical({"kind": "campaign_budget_request_v1", "schema_version": 1,
-                   "max_evaluations": 2, "max_wall_time_ms": 1000,
-                   "max_storage_bytes": CONTROL_RESERVE_BYTES + 2 * CANDIDATE_RESERVE_BYTES,
-                   **changes}),
-        plan_id=_PLAN, protocol_id="b" * 64, nonce="c" * 32,
+        canonical(
+            {
+                "kind": "campaign_budget_request_v1",
+                "schema_version": 1,
+                "max_evaluations": 2,
+                "max_wall_time_ms": 1000,
+                "max_storage_bytes": CONTROL_RESERVE_BYTES + 2 * CANDIDATE_RESERVE_BYTES,
+                **changes,
+            }
+        ),
+        plan_id=_PLAN,
+        protocol_id="b" * 64,
+        nonce="c" * 32,
     )
 
 
@@ -43,8 +51,9 @@ def prepare(tmp_path):
 
 
 def snapshot(root):
-    return {str(path.relative_to(root)): path.read_bytes()
-            for path in root.rglob("*") if path.is_file()}
+    return {
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
+    }
 
 
 def test_budget_is_idempotent_readonly_and_separate_from_original_ledger(tmp_path):
@@ -73,7 +82,12 @@ def test_missing_roots_and_plans_are_not_created_by_inspection(tmp_path):
     root, store, _ = prepare(tmp_path)
     before = snapshot(root)
     assert store.get_budget("d" * 64) is None
-    assert store.check_tree("d" * 64) == {"budget": False, "stop": False, "allocations": (), "managed": False}
+    assert store.check_tree("d" * 64) == {
+        "budget": False,
+        "stop": False,
+        "allocations": (),
+        "managed": False,
+    }
     assert snapshot(root) == before
 
 
@@ -87,7 +101,9 @@ def test_allocation_prefix_cannot_reorder_reuse_or_append_after_terminal(tmp_pat
     store.write_allocation(_PLAN, 3, second)
     assert store.get_allocations(_PLAN) == (first, second)
     assert store.check_tree(_PLAN)["allocations"] == (1, 3)
-    assert store.control_payload_bytes(_PLAN) == len(budget.canonical_bytes) + len(first) + len(second)
+    assert store.control_payload_bytes(_PLAN) == len(budget.canonical_bytes) + len(first) + len(
+        second
+    )
     stop = build_budget_stop(budget, "evaluation_limit", exit_code=8, elapsed_ns=100)
     store.write_stop(_PLAN, stop)
     assert store.get_stop(_PLAN) == stop
@@ -171,7 +187,10 @@ def test_plan_lock_is_nonblocking_and_readonly_never_constructs_it(tmp_path):
         raise AssertionError("Concurrent coordinator must not enter")
     with two.lock(_PLAN):
         pass
-    with pytest.raises(CampaignBudgetStoreError, match="read-only"), LocalCampaignBudgetStore(root).lock(_PLAN):
+    with (
+        pytest.raises(CampaignBudgetStoreError, match="read-only"),
+        LocalCampaignBudgetStore(root).lock(_PLAN),
+    ):
         raise AssertionError("Read-only opening cannot create locks")
 
 

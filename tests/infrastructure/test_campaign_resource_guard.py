@@ -24,10 +24,20 @@ _PLAN = "a" * 64
 
 def setup(tmp_path, *, evaluations=2, storage=None, now=0, deadline=1_000):
     budget = build_campaign_budget(
-        canonical({"kind": "campaign_budget_request_v1", "schema_version": 1,
-                   "max_evaluations": evaluations, "max_wall_time_ms": 1000,
-                   "max_storage_bytes": storage if storage is not None else CONTROL_RESERVE_BYTES + 2 * CANDIDATE_RESERVE_BYTES}),
-        plan_id=_PLAN, protocol_id="b" * 64, nonce="c" * 32,
+        canonical(
+            {
+                "kind": "campaign_budget_request_v1",
+                "schema_version": 1,
+                "max_evaluations": evaluations,
+                "max_wall_time_ms": 1000,
+                "max_storage_bytes": storage
+                if storage is not None
+                else CONTROL_RESERVE_BYTES + 2 * CANDIDATE_RESERVE_BYTES,
+            }
+        ),
+        plan_id=_PLAN,
+        protocol_id="b" * 64,
+        nonce="c" * 32,
     )
     store = LocalCampaignBudgetStore(tmp_path / "runs", create=True)
     store.start(_PLAN, budget.canonical_bytes)
@@ -104,7 +114,7 @@ def test_limit_baseexception_bypasses_legacy_exception_failure_coercion(tmp_path
 
 def test_context_hook_is_opt_in_nested_and_resets_after_error(tmp_path):
     _, _, _, guard = setup(tmp_path)
-    charge_managed_write(10 ** 20)
+    charge_managed_write(10**20)
     before = guard.usage["control_charged_bytes"]
     with activate_resource_guard(guard):
         charge_managed_write(7)
@@ -116,7 +126,7 @@ def test_context_hook_is_opt_in_nested_and_resets_after_error(tmp_path):
         with pytest.raises(CampaignLimitReached):
             charge_managed_write(CANDIDATE_RESERVE_BYTES)
         assert guard.usage["current_candidate_charged_bytes"] == 9
-    charge_managed_write(10 ** 20)
+    charge_managed_write(10**20)
     assert guard.usage["current_candidate_charged_bytes"] == 9
 
 

@@ -19,7 +19,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Literal, cast
+from typing import IO, Literal, cast
 
 MAX_CAMPAIGN_IPC_BYTES = 64 * 1024
 _READ_CHUNK = 64 * 1024
@@ -55,7 +55,7 @@ def _pipe_exchange(
     """
     if process.stdin is None or process.stdout is None or process.stderr is None:
         raise ValueError("Pipe supervision requires stdin, stdout and stderr pipes")
-    streams: tuple[BinaryIO, ...] = (process.stdin, process.stdout, process.stderr)
+    streams: tuple[IO[bytes], ...] = (process.stdin, process.stdout, process.stderr)
     output, errors = bytearray(), bytearray()
     offset = 0
     exit_observed = False
@@ -78,7 +78,7 @@ def _pipe_exchange(
                     on_process_exit()
             events = selector.select(timeout=min(0.05, remaining / 1_000_000_000))
             for key, _mask in events:
-                stream = cast("BinaryIO", key.fileobj)
+                stream = cast("IO[bytes]", key.fileobj)
                 if key.data == "stdin":
                     try:
                         count = os.write(stream.fileno(), payload[offset : offset + _READ_CHUNK])

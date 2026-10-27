@@ -13,7 +13,10 @@ from tickwitness.domain.evidence.run_records import canonical, identity, parse
 from tickwitness.domain.search.budgets import load_campaign_budget
 from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger
 from tickwitness.infrastructure.bounded_replay import BoundedReplayAdapter
-from tickwitness.infrastructure.campaign_budget_store import CampaignBudgetStoreError, LocalCampaignBudgetStore
+from tickwitness.infrastructure.campaign_budget_store import (
+    CampaignBudgetStoreError,
+    LocalCampaignBudgetStore,
+)
 from tickwitness.infrastructure.campaign_resource_guard import (
     CampaignLimitReached,
     CampaignResourceGuard,
@@ -29,14 +32,33 @@ def _request(raw: bytes) -> dict[str, object]:
     if not raw or len(raw) > 64 * 1024:
         raise ValueError("Campaign IPC exceeds its bounded request size")
     value: object = parse(raw, limit=64 * 1024)
-    fields = {"schema_version", "plan_id", "budget_id", "runs", "plans", "store", "registry",
-              "engine_python", "deadline_ns"}
-    if not isinstance(value, dict) or value.keys() != fields or type(value["schema_version"]) is not int or value["schema_version"] != 1:
+    fields = {
+        "schema_version",
+        "plan_id",
+        "budget_id",
+        "runs",
+        "plans",
+        "store",
+        "registry",
+        "engine_python",
+        "deadline_ns",
+    }
+    if (
+        not isinstance(value, dict)
+        or value.keys() != fields
+        or type(value["schema_version"]) is not int
+        or value["schema_version"] != 1
+    ):
         raise ValueError("Invalid trusted campaign IPC fields")
     identity(value["plan_id"])
     identity(value["budget_id"])
     for name in ("runs", "plans", "store", "registry"):
-        if not isinstance(value[name], str) or not value[name] or len(value[name]) > 4096 or "\x00" in value[name]:
+        if (
+            not isinstance(value[name], str)
+            or not value[name]
+            or len(value[name]) > 4096
+            or "\x00" in value[name]
+        ):
             raise ValueError("Invalid trusted campaign path")
     if value["engine_python"] is not None and not isinstance(value["engine_python"], str):
         raise ValueError("Invalid trusted engine interpreter")
@@ -71,17 +93,27 @@ def main() -> int:
 
         with activate_resource_guard(guard):
             report = run_search_plan(
-                plan_id, split="development",
-                plans_factory=lambda: LocalSearchPlanRegistry(Path(cast("str", request["plans"])), create=False),
-                registry_factory=lambda: LocalExecutableProtocolRegistry(Path(cast("str", request["registry"])), create=False),
-                datasets_factory=lambda: LocalDatasetStore(Path(cast("str", request["store"])), create=False),
+                plan_id,
+                split="development",
+                plans_factory=lambda: LocalSearchPlanRegistry(
+                    Path(cast("str", request["plans"])), create=False
+                ),
+                registry_factory=lambda: LocalExecutableProtocolRegistry(
+                    Path(cast("str", request["registry"])), create=False
+                ),
+                datasets_factory=lambda: LocalDatasetStore(
+                    Path(cast("str", request["store"])), create=False
+                ),
                 ledger_factory=lambda: LocalAttemptLedger(runs, create=True),
                 ledger_reader_factory=lambda: LocalAttemptLedger(runs, create=False),
                 campaigns_factory=lambda: LocalSearchCampaignStore(managed, create=True),
                 engine_factory=lambda timeout: BoundedReplayAdapter(
-                    timeout_seconds=timeout, deadline_ns=deadline, python_executable=engine_path,
+                    timeout_seconds=timeout,
+                    deadline_ns=deadline,
+                    python_executable=engine_path,
                 ),
-                nonce_factory=lambda: secrets.token_hex(16), candidate_gate=admit,
+                nonce_factory=lambda: secrets.token_hex(16),
+                candidate_gate=admit,
             )
         reason = "completed" if report["status"] == "completed" else "execution_stopped"
         code = cast("int", report["exit_code"])

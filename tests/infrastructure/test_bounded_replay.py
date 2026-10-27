@@ -114,10 +114,11 @@ def test_result_exiting_after_deadline_cannot_be_accepted(
 ):
     source = replay_input()
     result = replay_result_factory(source)
-    executable = fake_interpreter(tmp_path, "import time\ntime.sleep(10)\n")
+    executable = fake_interpreter(tmp_path, "print('{}')\n")
     clock = [100]
 
-    def late_exchange(*_args, **_kwargs):
+    def late_exchange(process, *_args, **_kwargs):
+        assert process.wait(timeout=3) == 0
         clock[0] = 201
         return result.canonical_bytes, b""
 
@@ -139,12 +140,15 @@ def test_parsing_cannot_extend_result_acceptance_past_deadline(
     executable = fake_interpreter(tmp_path, "print('{}')\n")
     clock = [100]
     actual_load = bounded_replay.load_replay_result
+    parsed = []
 
-    def exchange(*_args, **_kwargs):
+    def exchange(process, *_args, **_kwargs):
+        assert process.wait(timeout=3) == 0
         return result.canonical_bytes, b""
 
     def late_load(raw):
         loaded = actual_load(raw)
+        parsed.append(raw)
         clock[0] = 201
         return loaded
 
@@ -152,9 +156,12 @@ def test_parsing_cannot_extend_result_acceptance_past_deadline(
     monkeypatch.setattr(bounded_replay, "load_replay_result", late_load)
     with pytest.raises(ReplayProcessError) as caught:
         BoundedReplayAdapter(
-            deadline_ns=200, clock_ns=lambda: clock[0], python_executable=executable,
+            deadline_ns=200,
+            clock_ns=lambda: clock[0],
+            python_executable=executable,
         ).run(source)
     assert caught.value.code == "campaign_time_limit"
+    assert parsed == [result.canonical_bytes]
 
 
 def test_other_engine_or_input_cannot_use_the_frozen_result(tmp_path, replay_result_factory):

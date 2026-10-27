@@ -23,21 +23,55 @@ CONTROL_RESERVE_BYTES = 32 * 1024 * 1024
 CANDIDATE_RESERVE_BYTES = 64 * 1024 * 1024
 TERMINAL_RESERVE_BYTES = 64 * 1024
 MAX_CAMPAIGN_BUDGET_BYTES = 64 * 1024
-_REQUEST_FIELDS = {"kind", "schema_version", "max_evaluations", "max_wall_time_ms", "max_storage_bytes"}
+_REQUEST_FIELDS = {
+    "kind",
+    "schema_version",
+    "max_evaluations",
+    "max_wall_time_ms",
+    "max_storage_bytes",
+}
 _BUDGET_FIELDS = {
-    "kind", "schema_version", "plan_id", "protocol_id", "nonce", "profile", "limits", "accounting", "scope"
+    "kind",
+    "schema_version",
+    "plan_id",
+    "protocol_id",
+    "nonce",
+    "profile",
+    "limits",
+    "accounting",
+    "scope",
 }
 _ALLOCATION_FIELDS = {
-    "kind", "schema_version", "budget_id", "plan_id", "protocol_id", "ordinal", "index",
-    "candidate_reserve_bytes", "reserved_storage_bytes",
+    "kind",
+    "schema_version",
+    "budget_id",
+    "plan_id",
+    "protocol_id",
+    "ordinal",
+    "index",
+    "candidate_reserve_bytes",
+    "reserved_storage_bytes",
 }
 _STOP_FIELDS = {
-    "kind", "schema_version", "budget_id", "plan_id", "protocol_id", "reason", "exit_code",
-    "elapsed_ns", "message",
+    "kind",
+    "schema_version",
+    "budget_id",
+    "plan_id",
+    "protocol_id",
+    "reason",
+    "exit_code",
+    "elapsed_ns",
+    "message",
 }
 _REASONS = {
-    "completed", "evaluation_limit", "storage_limit", "time_limit", "execution_stopped",
-    "execution_unfinalized", "worker_failed", "publication_unconfirmed",
+    "completed",
+    "evaluation_limit",
+    "storage_limit",
+    "time_limit",
+    "execution_stopped",
+    "execution_unfinalized",
+    "worker_failed",
+    "publication_unconfirmed",
 }
 _ACCOUNTING: dict[str, object] = {
     "control_reserve_bytes": CONTROL_RESERVE_BYTES,
@@ -67,8 +101,10 @@ def _require(condition: bool, message: str) -> None:
 
 
 def _integer(value: object, minimum: int, maximum: int, label: str) -> int:
-    _require(type(value) is int and minimum <= value <= maximum,
-             f"{label} must be an integer in [{minimum}, {maximum}]")
+    _require(
+        type(value) is int and minimum <= value <= maximum,
+        f"{label} must be an integer in [{minimum}, {maximum}]",
+    )
     return cast("int", value)
 
 
@@ -85,8 +121,10 @@ def _id(value: object) -> str:
 
 
 def _nonce(value: object) -> str:
-    _require(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{32}", value) is not None,
-             "Budget nonce must be 32 lowercase hexadecimal characters")
+    _require(
+        isinstance(value, str) and re.fullmatch(r"[0-9a-f]{32}", value) is not None,
+        "Budget nonce must be 32 lowercase hexadecimal characters",
+    )
     return cast("str", value)
 
 
@@ -113,29 +151,46 @@ def _limits(value: dict[str, object]) -> dict[str, object]:
     return {
         "max_evaluations": _integer(value["max_evaluations"], 1, 100, "max_evaluations"),
         "max_wall_time_ms": _integer(value["max_wall_time_ms"], 1, 3_600_000, "max_wall_time_ms"),
-        "max_storage_bytes": _integer(value["max_storage_bytes"], CONTROL_RESERVE_BYTES,
-                                      16 * 1024 * 1024 * 1024, "max_storage_bytes"),
+        "max_storage_bytes": _integer(
+            value["max_storage_bytes"],
+            CONTROL_RESERVE_BYTES,
+            16 * 1024 * 1024 * 1024,
+            "max_storage_bytes",
+        ),
     }
 
 
-def _document(request: dict[str, object], *, plan_id: str, protocol_id: str, nonce: str) -> dict[str, object]:
+def _document(
+    request: dict[str, object], *, plan_id: str, protocol_id: str, nonce: str
+) -> dict[str, object]:
     _exact(request, _REQUEST_FIELDS, "Campaign budget request")
     _markers(request, "campaign_budget_request_v1")
     return {
-        "kind": "campaign_budget_v1", "schema_version": 1,
-        "plan_id": _id(plan_id), "protocol_id": _id(protocol_id), "nonce": _nonce(nonce),
-        "profile": "supervised_search_campaign_v1", "limits": _limits(request),
-        "accounting": dict(_ACCOUNTING), "scope": dict(_SCOPE),
+        "kind": "campaign_budget_v1",
+        "schema_version": 1,
+        "plan_id": _id(plan_id),
+        "protocol_id": _id(protocol_id),
+        "nonce": _nonce(nonce),
+        "profile": "supervised_search_campaign_v1",
+        "limits": _limits(request),
+        "accounting": dict(_ACCOUNTING),
+        "scope": dict(_SCOPE),
     }
 
 
 def _validated(raw: bytes) -> str:
     value = _exact(_read(raw), _BUDGET_FIELDS, "Frozen campaign budget")
     _markers(value, "campaign_budget_v1")
-    limits = _exact(value["limits"], {"max_evaluations", "max_wall_time_ms", "max_storage_bytes"}, "Limits")
+    limits = _exact(
+        value["limits"], {"max_evaluations", "max_wall_time_ms", "max_storage_bytes"}, "Limits"
+    )
     request = {"kind": "campaign_budget_request_v1", "schema_version": 1, **limits}
-    expected = _document(request, plan_id=_id(value["plan_id"]), protocol_id=_id(value["protocol_id"]),
-                         nonce=_nonce(value["nonce"]))
+    expected = _document(
+        request,
+        plan_id=_id(value["plan_id"]),
+        protocol_id=_id(value["protocol_id"]),
+        nonce=_nonce(value["nonce"]),
+    )
     _require(_encode(expected) == raw, "Campaign budget does not reproduce from its declarations")
     return digest(raw)
 
@@ -146,14 +201,18 @@ class CampaignBudget:
     canonical_bytes: bytes
 
     def __post_init__(self) -> None:
-        _require(_id(self.budget_id) == _validated(self.canonical_bytes), "Budget identity mismatch")
+        _require(
+            _id(self.budget_id) == _validated(self.canonical_bytes), "Budget identity mismatch"
+        )
 
     @property
     def document(self) -> dict[str, object]:
         return _read(self.canonical_bytes)
 
 
-def build_campaign_budget(raw: bytes, *, plan_id: str, protocol_id: str, nonce: str) -> CampaignBudget:
+def build_campaign_budget(
+    raw: bytes, *, plan_id: str, protocol_id: str, nonce: str
+) -> CampaignBudget:
     try:
         request = _parse(raw)
     except ProtocolValidationError as error:
@@ -181,27 +240,43 @@ def build_allocation(budget: CampaignBudget, ordinal: int, index: int) -> bytes:
     _integer(index, 1, limits["max_evaluations"], "allocation index")
     reserved = CONTROL_RESERVE_BYTES + index * CANDIDATE_RESERVE_BYTES
     _require(reserved <= limits["max_storage_bytes"], "Allocation exceeds frozen storage admission")
-    return _encode({
-        "kind": "campaign_allocation_v1", "schema_version": 1,
-        "budget_id": budget.budget_id, "plan_id": document["plan_id"],
-        "protocol_id": document["protocol_id"], "ordinal": ordinal, "index": index,
-        "candidate_reserve_bytes": CANDIDATE_RESERVE_BYTES, "reserved_storage_bytes": reserved,
-    })
+    return _encode(
+        {
+            "kind": "campaign_allocation_v1",
+            "schema_version": 1,
+            "budget_id": budget.budget_id,
+            "plan_id": document["plan_id"],
+            "protocol_id": document["protocol_id"],
+            "ordinal": ordinal,
+            "index": index,
+            "candidate_reserve_bytes": CANDIDATE_RESERVE_BYTES,
+            "reserved_storage_bytes": reserved,
+        }
+    )
 
 
 def load_allocation(raw: bytes, *, budget: CampaignBudget) -> dict[str, object]:
     document = _exact(_read(raw), _ALLOCATION_FIELDS, "Campaign allocation")
     _markers(document, "campaign_allocation_v1")
-    expected = build_allocation(budget, cast("int", document["ordinal"]), cast("int", document["index"]))
+    expected = build_allocation(
+        budget, cast("int", document["ordinal"]), cast("int", document["index"])
+    )
     _require(expected == raw, "Allocation differs from the frozen budget")
     return document
 
 
 def build_budget_stop(
-    budget: CampaignBudget, reason: str, *, exit_code: int, elapsed_ns: int, message: str | None = None,
+    budget: CampaignBudget,
+    reason: str,
+    *,
+    exit_code: int,
+    elapsed_ns: int,
+    message: str | None = None,
 ) -> bytes:
     budget = _checked(budget)
-    _require(isinstance(reason, str) and reason in _REASONS, "Unsupported campaign budget stop reason")
+    _require(
+        isinstance(reason, str) and reason in _REASONS, "Unsupported campaign budget stop reason"
+    )
     _integer(exit_code, 0, 255, "exit_code")
     _integer(elapsed_ns, 0, (1 << 63) - 1, "elapsed_ns")
     if reason == "completed":
@@ -215,24 +290,38 @@ def build_budget_stop(
     else:
         _require(exit_code in (3, 6, 7, 8), "Execution stop requires a supported inner exit")
     if message is not None:
-        _require(isinstance(message, str) and 0 < len(message) <= 4_096,
-                 "Stop message must be a nonempty bounded string")
-        _require(not any(ord(character) < 32 or ord(character) == 127 for character in message),
-                 "Stop message cannot contain control characters")
-    return _encode({
-        "kind": "campaign_budget_stop_v1", "schema_version": 1,
-        "budget_id": budget.budget_id, "plan_id": budget.document["plan_id"],
-        "protocol_id": budget.document["protocol_id"], "reason": reason,
-        "exit_code": exit_code, "elapsed_ns": elapsed_ns, "message": message,
-    })
+        _require(
+            isinstance(message, str) and 0 < len(message) <= 4_096,
+            "Stop message must be a nonempty bounded string",
+        )
+        _require(
+            not any(ord(character) < 32 or ord(character) == 127 for character in message),
+            "Stop message cannot contain control characters",
+        )
+    return _encode(
+        {
+            "kind": "campaign_budget_stop_v1",
+            "schema_version": 1,
+            "budget_id": budget.budget_id,
+            "plan_id": budget.document["plan_id"],
+            "protocol_id": budget.document["protocol_id"],
+            "reason": reason,
+            "exit_code": exit_code,
+            "elapsed_ns": elapsed_ns,
+            "message": message,
+        }
+    )
 
 
 def load_budget_stop(raw: bytes, *, budget: CampaignBudget) -> dict[str, object]:
     document = _exact(_read(raw), _STOP_FIELDS, "Campaign budget stop")
     _markers(document, "campaign_budget_stop_v1")
     expected = build_budget_stop(
-        budget, cast("str", document["reason"]), exit_code=cast("int", document["exit_code"]),
-        elapsed_ns=cast("int", document["elapsed_ns"]), message=cast("str | None", document["message"]),
+        budget,
+        cast("str", document["reason"]),
+        exit_code=cast("int", document["exit_code"]),
+        elapsed_ns=cast("int", document["elapsed_ns"]),
+        message=cast("str | None", document["message"]),
     )
     _require(expected == raw, "Budget stop differs from its frozen campaign")
     return document

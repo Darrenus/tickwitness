@@ -74,7 +74,9 @@ class LocalCampaignBudgetStore:
             with self._namespace(create=create):
                 pass
         except FileNotFoundError as error:
-            raise CampaignBudgetNotFoundError("Bounded campaign namespace does not exist") from error
+            raise CampaignBudgetNotFoundError(
+                "Bounded campaign namespace does not exist"
+            ) from error
         except OSError as error:
             raise CampaignBudgetStoreError(f"Cannot open campaign budget store: {error}") from error
 
@@ -91,7 +93,9 @@ class LocalCampaignBudgetStore:
                 if budget.document["plan_id"] != plan_id:
                     raise CampaignBudgetStoreError("Budget belongs to another plan")
             except CampaignBudgetValidationError as error:
-                raise CampaignBudgetStoreError(f"Invalid frozen campaign budget: {error}") from error
+                raise CampaignBudgetStoreError(
+                    f"Invalid frozen campaign budget: {error}"
+                ) from error
         return raw
 
     def start(self, plan_id: str, raw: bytes) -> None:
@@ -134,10 +138,14 @@ class LocalCampaignBudgetStore:
                     raw = self._read(allocations, name, MAX_CAMPAIGN_BUDGET_BYTES)
                     document = load_allocation(raw, budget=budget)
                     if document["ordinal"] != int(match.group(1)):
-                        raise CampaignBudgetStoreError("Allocation filename differs from its ordinal")
+                        raise CampaignBudgetStoreError(
+                            "Allocation filename differs from its ordinal"
+                        )
                     records.append((cast("int", document["index"]), raw))
         except (OSError, CampaignBudgetValidationError) as error:
-            raise CampaignBudgetStoreError(f"Cannot verify campaign allocations: {error}") from error
+            raise CampaignBudgetStoreError(
+                f"Cannot verify campaign allocations: {error}"
+            ) from error
         records.sort()
         if [index for index, _ in records] != list(range(1, len(records) + 1)):
             raise CampaignBudgetStoreError("Campaign allocation indexes are not a unique prefix")
@@ -223,15 +231,21 @@ class LocalCampaignBudgetStore:
         self._write_allowed()
         try:
             with self._campaign(plan_id, create=True) as directory:
-                descriptor = os.open(".lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
-                                     mode=0o600, dir_fd=directory)
+                descriptor = os.open(
+                    ".lock",
+                    os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
+                    mode=0o600,
+                    dir_fd=directory,
+                )
                 try:
                     if not stat.S_ISREG(os.fstat(descriptor).st_mode):
                         raise CampaignBudgetStoreError("Budget lock must be a regular file")
                     try:
                         fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     except BlockingIOError as error:
-                        raise CampaignBudgetBusyError("Bounded campaign is already running") from error
+                        raise CampaignBudgetBusyError(
+                            "Bounded campaign is already running"
+                        ) from error
                     try:
                         os.fsync(descriptor)
                         os.fsync(directory)
@@ -245,7 +259,12 @@ class LocalCampaignBudgetStore:
 
     def check_tree(self, plan_id: str) -> dict[str, object]:
         """Validate the control tree; managed/ is independently checked by its reader."""
-        inventory: dict[str, object] = {"budget": False, "stop": False, "allocations": (), "managed": False}
+        inventory: dict[str, object] = {
+            "budget": False,
+            "stop": False,
+            "allocations": (),
+            "managed": False,
+        }
         try:
             with ExitStack() as stack:
                 try:
@@ -316,7 +335,11 @@ class LocalCampaignBudgetStore:
         _identity(plan_id)
         try:
             with self._campaign(plan_id) as directory, ExitStack() as stack:
-                parent = directory if category is None else self._directory(stack, directory, category, False)
+                parent = (
+                    directory
+                    if category is None
+                    else self._directory(stack, directory, category, False)
+                )
                 return self._read(parent, name, limit)
         except FileNotFoundError:
             return None
@@ -326,11 +349,17 @@ class LocalCampaignBudgetStore:
     def _put(self, plan_id: str, category: str | None, name: str, raw: bytes, limit: int) -> None:
         _identity(plan_id)
         if not isinstance(raw, bytes) or not 0 < len(raw) <= limit:
-            raise CampaignBudgetStoreError("Budget evidence must be nonempty bounded immutable bytes")
+            raise CampaignBudgetStoreError(
+                "Budget evidence must be nonempty bounded immutable bytes"
+            )
         self._write_allowed()
         try:
             with self._campaign(plan_id, create=True) as directory, ExitStack() as stack:
-                parent = directory if category is None else self._directory(stack, directory, category, True)
+                parent = (
+                    directory
+                    if category is None
+                    else self._directory(stack, directory, category, True)
+                )
                 self._publish(parent, name, raw, limit)
         except OSError as error:
             raise CampaignBudgetStoreError(
@@ -425,18 +454,30 @@ class LocalCampaignBudgetStore:
         except FileNotFoundError:
             pass
         temporary = f".pending-{secrets.token_hex(16)}"
-        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                             mode=0o600, dir_fd=directory)
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            mode=0o600,
+            dir_fd=directory,
+        )
         try:
             with os.fdopen(descriptor, "wb") as stream:
                 stream.write(raw)
                 stream.flush()
                 os.fsync(stream.fileno())
             try:
-                os.link(temporary, name, src_dir_fd=directory, dst_dir_fd=directory, follow_symlinks=False)
+                os.link(
+                    temporary,
+                    name,
+                    src_dir_fd=directory,
+                    dst_dir_fd=directory,
+                    follow_symlinks=False,
+                )
             except FileExistsError as error:
                 if self._read(directory, name, limit, durable=True) != raw:
-                    raise CampaignBudgetStoreError("Immutable budget evidence already differs") from error
+                    raise CampaignBudgetStoreError(
+                        "Immutable budget evidence already differs"
+                    ) from error
             os.fsync(directory)
         finally:
             os.unlink(temporary, dir_fd=directory)

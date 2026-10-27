@@ -103,9 +103,12 @@ def main() -> None:
         inputs = directory / "inputs"
         inputs.mkdir()
         for name in (
-            "replay-partials.jsonl", "replay-confirmation.jsonl",
-            "stress-experiment-request.json", "stress-assumption-request.json",
-            "search-execution-grid-request.json", "campaign-budget-request.json",
+            "replay-partials.jsonl",
+            "replay-confirmation.jsonl",
+            "stress-experiment-request.json",
+            "stress-assumption-request.json",
+            "search-execution-grid-request.json",
+            "campaign-budget-request.json",
         ):
             shutil.copyfile(examples / name, inputs / name)
         data, registry, plans = (directory / name for name in ("data", "registry", "plans"))
@@ -114,8 +117,12 @@ def main() -> None:
             executable = verifier if readonly else interpreter
             entry = ["-c", _READONLY_GUARD] if readonly else ["-m", "tickwitness"]
             completed = subprocess.run(
-                [executable, "-I", *entry, *command], cwd=directory,
-                text=True, capture_output=True, check=False, timeout=180,
+                [executable, "-I", *entry, *command],
+                cwd=directory,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=180,
             )
             use_stdout = expected == 0 or report
             payload = completed.stdout if use_stdout else completed.stderr
@@ -134,28 +141,56 @@ def main() -> None:
             for name in ("replay-partials.jsonl", "replay-confirmation.jsonl")
         ]
         protocol = run(
-            "freeze-experiment", "stress-experiment-request.json", "--input-root", str(inputs),
-            "--development-dataset", ids[0], "--confirmation-dataset", ids[1],
-            "--store", str(data), "--registry", str(registry),
+            "freeze-experiment",
+            "stress-experiment-request.json",
+            "--input-root",
+            str(inputs),
+            "--development-dataset",
+            ids[0],
+            "--confirmation-dataset",
+            ids[1],
+            "--store",
+            str(data),
+            "--registry",
+            str(registry),
         )
         plan = run(
-            "freeze-search-plan", protocol["protocol_id"],
-            "stress-assumption-request.json", "search-execution-grid-request.json",
-            "--input-root", str(inputs), "--store", str(data),
-            "--registry", str(registry), "--plans", str(plans),
+            "freeze-search-plan",
+            protocol["protocol_id"],
+            "stress-assumption-request.json",
+            "search-execution-grid-request.json",
+            "--input-root",
+            str(inputs),
+            "--store",
+            str(data),
+            "--registry",
+            str(registry),
+            "--plans",
+            str(plans),
         )
         source_before = (_tree(data), _tree(registry), _tree(plans))
         plan_id = plan["plan_id"]
         case_reports = []
 
         def common(runs: Path) -> tuple[str, ...]:
-            return ("--plans", str(plans), "--store", str(data),
-                    "--registry", str(registry), "--runs", str(runs))
+            return (
+                "--plans",
+                str(plans),
+                "--store",
+                str(data),
+                "--registry",
+                str(registry),
+                "--runs",
+                str(runs),
+            )
 
         def inspect(runs: Path, identity: str = plan_id, *, expected=0) -> dict:
             return run(
-                "inspect-bounded-search-campaign", identity, *common(runs),
-                expected=expected, readonly=True,
+                "inspect-bounded-search-campaign",
+                identity,
+                *common(runs),
+                expected=expected,
+                readonly=True,
             )
 
         def check_report(receipt: dict, budget_request: dict) -> None:
@@ -167,9 +202,12 @@ def main() -> None:
                 for key in ("max_evaluations", "max_wall_time_ms", "max_storage_bytes")
             }
             assert receipt["scope"] == {
-                "phase": "development", "scenario_kind": "COUNTERFACTUAL_STRESS",
-                "calibration_status": "uncalibrated", "claim_evaluated": False,
-                "finding_issued": False, "full_trial_history_certified": False,
+                "phase": "development",
+                "scenario_kind": "COUNTERFACTUAL_STRESS",
+                "calibration_status": "uncalibrated",
+                "claim_evaluated": False,
+                "finding_issued": False,
+                "full_trial_history_certified": False,
             }
             resources = receipt["resources"]
             assert resources["admitted_evaluations"] == len(receipt["allocations"])
@@ -182,19 +220,28 @@ def main() -> None:
             assert resources["wall_time_scope"] == "coordinator_execution_phase_v1"
             verified = receipt["verification"]
             for key in (
-                "plan_recomputed", "source_revalidated", "budget_bindings_verified",
+                "plan_recomputed",
+                "source_revalidated",
+                "budget_bindings_verified",
                 "quota_reservations_verified",
             ):
                 assert verified[key] is True
             assert verified["execution_reaudited"] is (receipt["execution"] is not None)
             for key in (
-                "native_replayed", "runtime_limits_reenforced", "author_signature_verified",
+                "native_replayed",
+                "runtime_limits_reenforced",
+                "author_signature_verified",
                 "physical_storage_usage_verified",
             ):
                 assert verified[key] is False
 
         def execute_case(
-            name: str, request: dict, expected_exit: int, reason: str, *, baseline=False,
+            name: str,
+            request: dict,
+            expected_exit: int,
+            reason: str,
+            *,
+            baseline=False,
         ):
             runs = directory / f"runs-{name}"
             filename = f"budget-{name}.json"
@@ -202,13 +249,25 @@ def main() -> None:
             baseline_report = None
             if baseline:
                 baseline_report = run(
-                    "replay-protocol", protocol["protocol_id"], "--store", str(data),
-                    "--registry", str(registry), "--runs", str(runs),
+                    "replay-protocol",
+                    protocol["protocol_id"],
+                    "--store",
+                    str(data),
+                    "--registry",
+                    str(registry),
+                    "--runs",
+                    str(runs),
                 )
             before_inodes = _inodes(runs)
             executed = run(
-                "run-bounded-search-plan", plan_id, filename, "--input-root", str(inputs),
-                *common(runs), expected=expected_exit, report=True,
+                "run-bounded-search-plan",
+                plan_id,
+                filename,
+                "--input-root",
+                str(inputs),
+                *common(runs),
+                expected=expected_exit,
+                report=True,
             )
             check_report(executed, request)
             assert executed["exit_code"] == expected_exit and executed["stop_reason"] == reason
@@ -217,23 +276,36 @@ def main() -> None:
             inspected = inspect(runs)
             assert inspected == executed
             repeated = run(
-                "run-bounded-search-plan", plan_id, filename, "--input-root", str(inputs),
-                *common(runs), expected=expected_exit, readonly=True, report=True,
+                "run-bounded-search-plan",
+                plan_id,
+                filename,
+                "--input-root",
+                str(inputs),
+                *common(runs),
+                expected=expected_exit,
+                readonly=True,
+                report=True,
             )
             assert repeated == executed
             assert before_read == (_tree(data), _tree(registry), _tree(plans), _tree(runs))
             new_inodes = _inodes(runs)
-            new_committed_payload = sum(size for inode, size in new_inodes.items()
-                                        if inode not in before_inodes)
+            new_committed_payload = sum(
+                size for inode, size in new_inodes.items() if inode not in before_inodes
+            )
             assert new_committed_payload <= executed["resources"]["reserved_storage_bytes"]
-            case_reports.append({
-                "name": name, "request": request, "execution": executed,
-                "inspection": inspected, "baseline": baseline_report,
-                "new_observed_file_payload_bytes": new_committed_payload,
-                "observed_payload_is_not_peak_or_physical_block_measurement": True,
-                "same_plan_repeat_did_not_execute": True,
-                "readonly_byte_tree_preserved": True,
-            })
+            case_reports.append(
+                {
+                    "name": name,
+                    "request": request,
+                    "execution": executed,
+                    "inspection": inspected,
+                    "baseline": baseline_report,
+                    "new_observed_file_payload_bytes": new_committed_payload,
+                    "observed_payload_is_not_peak_or_physical_block_measurement": True,
+                    "same_plan_repeat_did_not_execute": True,
+                    "readonly_byte_tree_preserved": True,
+                }
+            )
             return runs, executed
 
         missing = directory / "never-created"
@@ -243,10 +315,21 @@ def main() -> None:
             )
             extra = ("--input-root", str(missing)) if command.startswith("run-") else ()
             denied = run(
-                command, *positionals, *extra, "--split", "confirmation",
-                "--plans", str(missing / "plans"), "--store", str(missing / "data"),
-                "--registry", str(missing / "registry"), "--runs", str(missing / "runs"),
-                expected=5, readonly=True,
+                command,
+                *positionals,
+                *extra,
+                "--split",
+                "confirmation",
+                "--plans",
+                str(missing / "plans"),
+                "--store",
+                str(missing / "data"),
+                "--registry",
+                str(missing / "registry"),
+                "--runs",
+                str(missing / "runs"),
+                expected=5,
+                readonly=True,
             )
             assert denied["error"]["code"] == "confirmation_access_denied"
         assert not missing.exists()
@@ -256,29 +339,43 @@ def main() -> None:
         (inputs / "bad-budget.json").write_bytes(_canonical(invalid_request))
         rejected_runs = directory / "invalid-runs"
         run(
-            "run-bounded-search-plan", plan_id, "bad-budget.json", "--input-root", str(inputs),
-            *common(rejected_runs), expected=2,
+            "run-bounded-search-plan",
+            plan_id,
+            "bad-budget.json",
+            "--input-root",
+            str(inputs),
+            *common(rejected_runs),
+            expected=2,
         )
         assert not rejected_runs.exists()
 
         normal_runs, normal = execute_case(
-            "normal", _budget(), 0 if arguments.native else 6,
-            "completed" if arguments.native else "execution_stopped", baseline=arguments.native,
+            "normal",
+            _budget(),
+            0 if arguments.native else 6,
+            "completed" if arguments.native else "execution_stopped",
+            baseline=arguments.native,
         )
         candidates = normal["execution"]["candidates"]
         if arguments.native:
             assert [row["status"] for row in candidates] == ["COMPLETED", "COMPLETED"]
             assert [row["attempt_index"] for row in candidates] == [2, 3]
             assert [row["evaluation"]["metric_observation"]["value"] for row in candidates] == [
-                "-2", "-1",
+                "-2",
+                "-1",
             ]
             assert all(row["raw_result_audited"] for row in candidates)
             _, evaluation = execute_case(
-                "evaluation", _budget(max_evaluations=1), 8, "evaluation_limit",
+                "evaluation",
+                _budget(max_evaluations=1),
+                8,
+                "evaluation_limit",
             )
             _, storage = execute_case(
-                "storage-one", _budget(max_storage_bytes=_CONTROL + _CANDIDATE),
-                8, "storage_limit",
+                "storage-one",
+                _budget(max_storage_bytes=_CONTROL + _CANDIDATE),
+                8,
+                "storage_limit",
             )
             for limited in (evaluation, storage):
                 rows = limited["execution"]["candidates"]
@@ -290,13 +387,28 @@ def main() -> None:
             other_request["search_seed"] += 1
             (inputs / "other-plan.json").write_bytes(_canonical(other_request))
             other = run(
-                "freeze-search-plan", protocol["protocol_id"], "stress-assumption-request.json",
-                "other-plan.json", "--input-root", str(inputs), "--store", str(data),
-                "--registry", str(registry), "--plans", str(plans),
+                "freeze-search-plan",
+                protocol["protocol_id"],
+                "stress-assumption-request.json",
+                "other-plan.json",
+                "--input-root",
+                str(inputs),
+                "--store",
+                str(data),
+                "--registry",
+                str(registry),
+                "--plans",
+                str(plans),
             )
             exhausted = run(
-                "run-bounded-search-plan", other["plan_id"], "budget-normal.json",
-                "--input-root", str(inputs), *common(normal_runs), expected=8, report=True,
+                "run-bounded-search-plan",
+                other["plan_id"],
+                "budget-normal.json",
+                "--input-root",
+                str(inputs),
+                *common(normal_runs),
+                expected=8,
+                report=True,
             )
             assert exhausted["stop_reason"] == "execution_stopped"
             assert exhausted["execution"]["stop_reason"] == "attempt_budget_exhausted"
@@ -309,7 +421,10 @@ def main() -> None:
             assert candidates[0]["raw_result_audited"] is False
             exhausted = None
         _, empty_storage = execute_case(
-            "storage-zero", _budget(max_storage_bytes=_CONTROL), 8, "storage_limit",
+            "storage-zero",
+            _budget(max_storage_bytes=_CONTROL),
+            8,
+            "storage_limit",
         )
         assert empty_storage["resources"]["admitted_evaluations"] == 0
         if empty_storage["execution"] is not None:
@@ -323,20 +438,31 @@ def main() -> None:
         (inputs / "changed-budget.json").write_bytes(_canonical(changed))
         before_mismatch = _tree(normal_runs)
         run(
-            "run-bounded-search-plan", plan_id, "changed-budget.json", "--input-root", str(inputs),
-            *common(normal_runs), expected=2,
+            "run-bounded-search-plan",
+            plan_id,
+            "changed-budget.json",
+            "--input-root",
+            str(inputs),
+            *common(normal_runs),
+            expected=2,
         )
         assert _tree(normal_runs) == before_mismatch
         assert source_before[:2] == (_tree(data), _tree(registry))
         assert source_before[2].items() <= _tree(plans).items()
         report = {
-            "kind": "installed_campaign_budget_acceptance_v1", "accepted": True,
-            "synthetic_data": True, "native_execution": arguments.native,
-            "cases": case_reports, "original_budget_exhaustion": exhausted,
+            "kind": "installed_campaign_budget_acceptance_v1",
+            "accepted": True,
+            "synthetic_data": True,
+            "native_execution": arguments.native,
+            "cases": case_reports,
+            "original_budget_exhaustion": exhausted,
             "source_and_original_protocol_unchanged": True,
-            "confirmation_refused_before_io": True, "missing_roots_not_created": True,
-            "invalid_budget_not_published": True, "changed_budget_not_overwritten": True,
-            "core_only_readonly_reaudit": True, "committed_results_preserved": True,
+            "confirmation_refused_before_io": True,
+            "missing_roots_not_created": True,
+            "invalid_budget_not_published": True,
+            "changed_budget_not_overwritten": True,
+            "core_only_readonly_reaudit": True,
+            "committed_results_preserved": True,
             "observed_payload_within_reserved_envelopes": True,
         }
         arguments.report.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
@@ -348,7 +474,8 @@ def main() -> None:
             str(path.relative_to(arguments.records_dir)): hashlib.sha256(
                 path.read_bytes()
             ).hexdigest()
-            for path in arguments.records_dir.rglob("*") if path.is_file()
+            for path in arguments.records_dir.rglob("*")
+            if path.is_file()
         }
         (arguments.records_dir / "artifact-files.json").write_bytes(_canonical(files))
         print(

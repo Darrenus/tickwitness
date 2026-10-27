@@ -24,9 +24,9 @@ from tickwitness.domain.replay.preflight import preflight_replay
 from tickwitness.domain.replay.specs import ReplayValidationError
 from tickwitness.infrastructure.campaign_supervisor import (
     _close_pipes,
+    _pipe_exchange,
     _PipeDeadlineExceeded,
     _PipeOutputExceeded,
-    _pipe_exchange,
 )
 from tickwitness.infrastructure.nautilus_replay import (
     CAPABILITIES,
@@ -95,7 +95,9 @@ class BoundedReplayAdapter:
                 "normalized": replay_input.normalized_bytes.decode("utf-8"),
                 "spec": replay_input.spec.canonical_bytes.decode("utf-8"),
             },
-            separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
         ).encode("utf-8")
         if len(payload) > MAX_REQUEST_BYTES:
             raise ReplayValidationError("Worker request exceeds its byte bound")
@@ -108,13 +110,19 @@ class BoundedReplayAdapter:
                 self._check(effective)
                 process = subprocess.Popen(
                     [self._python, "-I", "-m", "tickwitness.infrastructure.replay_worker"],
-                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    cwd=directory, start_new_session=False,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    cwd=directory,
+                    start_new_session=False,
                 )
                 try:
                     output, errors = _pipe_exchange(
-                        process, payload, deadline_ns=effective,
-                        stdout_limit=MAX_RESULT_BYTES, stderr_limit=MAX_STDERR_BYTES,
+                        process,
+                        payload,
+                        deadline_ns=effective,
+                        stdout_limit=MAX_RESULT_BYTES,
+                        stderr_limit=MAX_STDERR_BYTES,
                         clock_ns=self._clock,
                     )
                 except _PipeDeadlineExceeded:
@@ -149,8 +157,11 @@ class BoundedReplayAdapter:
             document["dataset_id"] != replay_input.dataset_id
             or document["spec_id"] != replay_input.spec.spec_id
             or document["data_sha256"] != hashlib.sha256(replay_input.normalized_bytes).hexdigest()
-            or document["engine"] != {
-                "id": ENGINE_ID, "version": ENGINE_VERSION, "semantic_id": SEMANTIC_ID,
+            or document["engine"]
+            != {
+                "id": ENGINE_ID,
+                "version": ENGINE_VERSION,
+                "semantic_id": SEMANTIC_ID,
             }
         ):
             raise ReplayProcessError("engine_invalid_result", "Worker result binding differs", 7)
