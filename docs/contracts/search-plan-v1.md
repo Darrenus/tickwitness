@@ -1,6 +1,6 @@
 # Search Plan v1
 
-状态：S07-01a 实现合同，[远端验收已通过](../planning/sprint-07-status.md#s07-01a-远端验收记录)，[PR #88](https://github.com/Darrenus/tickwitness/pull/88) 待 owner 接受。基线为已接受的 [S06-02d / PR #87](https://github.com/Darrenus/tickwitness/pull/87)，本轮不发行新版本。
+状态：S07-01a 实现合同，[远端验收已通过](../planning/sprint-07-status.md#s07-01a-远端验收记录)，owner 已合并 [PR #88](https://github.com/Darrenus/tickwitness/pull/88)。基线为已接受的 [S06-02d / PR #87](https://github.com/Darrenus/tickwitness/pull/87)，本轮不发行新版本。
 
 ## 用途与边界
 

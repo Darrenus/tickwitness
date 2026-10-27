@@ -1,13 +1,13 @@
 # Sprint 7 固定预算搜索状态
 
-更新：2026-10-27（Asia/Singapore）。Owner 已合并 [PR #87](https://github.com/Darrenus/tickwitness/pull/87)，S06-02 的最小 conditional tagged finding 能力已接受。Sprint 7 基线 merge 为 `2c2e0e39ccb4332afd87f4134d7fa6bf1e5801c6`；`0.2.0.dev0` 保持未发行。真实访谈、采用和独立人类领域复核没有新增证据。
+更新：2026-10-27（Asia/Singapore）。Owner 已合并 [PR #88](https://github.com/Darrenus/tickwitness/pull/88)，S07-01a 的候选规划能力已接受。当前 Sprint 7 基线 merge 为 `373d08a5c2196662c5116e02ea7b7fe3a98dc167`；`0.2.0.dev0` 保持未发行。真实访谈、采用和独立人类领域复核没有新增证据。
 
 ## 本轮切片与后续门
 
 | 故事 | 切片与实际边界 | 状态 |
 | --- | --- | --- |
-| S07-01 / #19 | S07-01a 冻结网格／随机候选、来源、种子与完整 proposal journal；重建去重／拒绝及 source 派生预检 | [PR #88](https://github.com/Darrenus/tickwitness/pull/88) 远端验收通过，待 owner 接受 |
-| S07-01 / #19 | S07-01b 自动评估、候选与真实 attempt/outcome 关联；原协议预算不重置 | 尚未实现；不以 proposal journal 代替执行账本 |
+| S07-01 / #19 | S07-01a 冻结网格／随机候选、来源、种子与完整 proposal journal；重建去重／拒绝及 source 派生预检 | Owner 已合并 #88 |
+| S07-01 / #19 | S07-01b 自动评估、候选与真实 attempt/outcome 关联；原协议预算不重置 | [PR #89](https://github.com/Darrenus/tickwitness/pull/89) 远端验收通过，待 owner 接受 |
 | S07-02 / #20 | Campaign 评估次数／时间／存储硬限额及完整停止原因 | 尚未实现 |
 | S07-03 / #21 | 有范围的反例／预算内未发现／不可评价输出 | 尚未实现；本轮 findings 关闭 |
 
@@ -51,4 +51,37 @@ S07-01a 远端结果、代码 head、实际 merge checkout 与 artifact 身份�
 
 初轮远端发现新 CLI 在 Python 3.12 运行时求值 argparse 泛型注解而阻断导入；增加延迟注解并应用远端格式补丁后重验，未修改候选或拒绝 oracle 掩盖问题。AI 并行静态复核单独计为 AI 审阅，独立人类领域接受仍未取得。
 
-S07-01a 的提议计划可供 owner 审阅；#19 保持打开，自动评估及 durable attempt／outcome 关联、campaign 硬限额、搜索 finding、确认集 lifecycle 和完整统计试验历史仍由后续切片交付。未新增实际工时、真实访谈、性能或采用数据。
+S07-01a 的提议计划已获 owner 接受；其交付时 #19 保持打开，自动评估及 durable attempt／outcome 关联、campaign 硬限额、搜索 finding、确认集 lifecycle 和完整统计试验历史仍由后续切片交付。未新增实际工时、真实访谈、性能或采用数据。
+
+## S07-01b 实现边界与验收门
+
+合同见 [Search Execution v1](../contracts/search-execution-v1.md)，决策见 [ADR 0022](../adr/0022-persistent-search-execution.md)。同一 plan／runs 根只启动一次串行 campaign；后续调用只重审已有记录，不自动恢复、重跑或退还槽位。每个 eligible 候选先持久 dispatch 与 reservation nonce，再从原 v2 协议共同 slots 占槽、保存 link 和旧 scenario intent，最后构造原生 worker。Baseline、其它 plan 和失败尝试共同消费原预算，不把 SearchPlan 当新预算 owner。
+
+每份实际 result 在独立账务审计前保存；不通过审计的原始结果保持诊断状态，不变成反例。只读 inspect 重验实际 source／plan／dispatch、原 reservation／nonce／intent／outcome 与账户；失败、未完成、预算耗尽、占槽或发布不确定均停止后缀。未知 nonce 分配不误报未消耗，槽位可见而 link 缺失时保留已占未决状态。
+
+验收包含：基线先占槽后自动0／非0场景执行、duplicate／rejected不占槽、同plan重复调用不重放、并发末槽和同nonce拒复用、reserve提交后异常按nonce恢复、success outcome提交后回执丢失不改成failure、审计拒绝raw保留、KeyboardInterrupt未决与真实native EOF incomplete停止，以及实际wheel／sdist安装和core-only只读重审。新增测试、构建、格式化和原生执行全部远端。
+
+本轮仍不签 search finding、不认证完整统计trial历史或真实市场概率；原scenario receipt的search_performed=false与tagged finding权限不改写。S07-02的campaign总时间／存储硬限额、S07-03的结论规则、S10恢复能力及真实访谈继续分别验收，工时与采用证据不补造。远端实际记录见下一节。
+
+## S07-01b 远端验收记录
+
+功能代码 head `96dff90c90593fa347773d3cb64bf3467e26945c` 的 [Engineering 40490382420](https://github.com/Darrenus/tickwitness/actions/runs/40490382420) 与 [Documentation 40490382427](https://github.com/Darrenus/tickwitness/actions/runs/40490382427) 共13 checks 全部通过；实际 merge checkout 为 `ec33e00b64d6eaa15f04116bf3eb497fa36682df`，与 PR head 分开。后续验收文档提交有独立 CI，不冒充相同代码 head。
+
+核心 Ubuntu 24.04／macOS 15 × Python 3.12／3.13／3.14 六组合各 **2395 passed / 112 optional-native skips**；原生 Ubuntu 24.04 与 macOS 26／Python 3.12 各 **2505 passed / 2 core-only skips / 313 warnings**。Lint、205 文件格式、94 source files 严格类型检查、73 文档／390 本地链接与实际 wheel／sdist 验收全部通过；warnings 保留，不当作通过断言。所有测试、构建、格式化、安装和原生执行都在远端，本机仅编辑、静态审阅、Git／gh 控制和下载报告读取。
+
+| 实际核验 | 结果 |
+| --- | --- |
+| 原预算下真实自动执行 | 先执行 baseline 占原协议 slot1，随后 ordinal1 的零延迟与 ordinal3 的2秒压力分别占 slot2／3；native 两候选均 completed，指标值为 −2／−1，原 scenario scope 与新 report 的 claim／finding 均不扩大 |
+| 去重、拒绝与耗尽 | 4 次 proposal 保持 E/D/E/R，只有两条 eligible 派发；其它 seed 的新 plan 遭原协议 budget 耗尽，退出8、无新 reservation，后缀 NOT_DISPATCHED |
+| 持久顺序与原始结果 | worker 构造前已有 dispatch nonce、原槽位、实际 link 和旧 scenario intent；原始结果在审计前保存，审计拒绝仍留 raw 诊断且 raw_result_audited=false |
+| 失败与中断 | core 缺 optional extra 先占一槽并留持久 failure，退出6并停后缀；KeyboardInterrupt 留 reserved unfinalized；同plan重调仅重审，不恢复、不重放、不退款 |
+| 不确定提交 | reserve 实际提交后抛错仍按预存 nonce 找回已消费槽；无匹配时 budget_consumed=null；success outcome 已提交后回执丢失保留真实成功结果，campaign仍按 publication_unconfirmed 停止 |
+| 真实 EOF | 新原生集成案例产生真实 pending submit／INCOMPLETE，仅占首槽，第二候选不派发，退出7；保留原始 receipt／result／时钟／来源引用，不能伪称完成或反例 |
+| 只读与完整性 | inspect 从原 source／plan／ledger 重建，不能用改写的 dispatch／link／result／stop 通过；缺 root 不创建，同plan复用不修复被删 ledger；同nonce及末槽竞争不双占；活动记录集合变化明确要求重读 |
+| 安装闭环 | 两平台实际 native wheel 执行，由独立 core-only wheel 禁 worker／native import／network／ledger写入口后重审；实际 tar.gz 内脚本与样例配合新安装 wheel 再验证 |
+
+`installed_search_execution_acceptance_v1` 报告及完整原创合成 source／registry／plans／runs 记录保留30天。Artifacts 为 `search-execution-core-ec33e00b64d6eaa15f04116bf3eb497fa36682df`、`search-execution-ubuntu-24.04-ec33e00b64d6eaa15f04116bf3eb497fa36682df`、`search-execution-macos-26-ec33e00b64d6eaa15f04116bf3eb497fa36682df` 和 `search-execution-source-wheel-ec33e00b64d6eaa15f04116bf3eb497fa36682df`。这些记录供重审，不冒充已经完成 S08 的可迁移 sealed search evidence 或认证完整试验历史。
+
+初轮远端发现格式／导入、stop ordinal 与 CLI exit_code 类型，以及循环闭包和嵌套 with 的 lint 问题；修正后完整重验，未放宽结果、预算或停止 oracle。AI 静态交叉审阅另补强了活动快照、只读复用、无头 orphan 记录和失败 intent 闭包；该审阅仍属于 AI 辅助，不替代独立人类领域接受。
+
+S07-01 的实现验收已覆盖规划、自动候选评估及原预算下的 attempt／outcome 追溯；[PR #89](https://github.com/Darrenus/tickwitness/pull/89) 待 owner 接受前 #19 保持打开。S07-02 的 campaign 总时间／存储硬限额、S07-03 搜索结论、S08 确认与封包、S10 通用恢复及真实访谈仍分别保留；不以测试通过补造工时、市场采用或研究收益证据。

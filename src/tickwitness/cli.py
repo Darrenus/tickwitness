@@ -7,6 +7,7 @@ import sys
 from dataclasses import asdict
 from importlib.metadata import version
 from pathlib import Path
+from typing import cast
 
 from tickwitness.application.datasets import import_events, inspect_dataset
 from tickwitness.application.experiments import ProtocolRunError
@@ -33,6 +34,9 @@ from tickwitness.cli_scenarios import execute as execute_scenario_command
 from tickwitness.cli_search import COMMANDS as SEARCH_COMMANDS
 from tickwitness.cli_search import add_commands as add_search_commands
 from tickwitness.cli_search import execute as execute_search_command
+from tickwitness.cli_search_execution import COMMANDS as SEARCH_EXECUTION_COMMANDS
+from tickwitness.cli_search_execution import add_commands as add_search_execution_commands
+from tickwitness.cli_search_execution import execute as execute_search_execution_command
 from tickwitness.cli_tagged_evidence import COMMANDS as TAGGED_EVIDENCE_COMMANDS
 from tickwitness.cli_tagged_evidence import add_commands as add_tagged_evidence_commands
 from tickwitness.cli_tagged_evidence import execute as execute_tagged_evidence_command
@@ -81,6 +85,10 @@ from tickwitness.infrastructure.queue_family_registry import (
     QueueFamilyRegistryError,
 )
 from tickwitness.infrastructure.safe_input import InputReadError, read_jsonl, read_regular_file
+from tickwitness.infrastructure.search_campaign_store import (
+    SearchCampaignNotFoundError,
+    SearchCampaignStoreError,
+)
 from tickwitness.infrastructure.search_plan_registry import (
     SearchPlanNotFoundError,
     SearchPlanRegistryError,
@@ -195,13 +203,17 @@ def main(argv: list[str] | None = None) -> int:
     add_tagged_evidence_commands(commands)
     add_tagged_finding_commands(commands)
     add_search_commands(commands)
+    add_search_execution_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in SEARCH_COMMANDS:
+        if arguments.command in SEARCH_EXECUTION_COMMANDS:
+            output = execute_search_execution_command(arguments)
+            identity = str(output.get("campaign_id", ""))
+        elif arguments.command in SEARCH_COMMANDS:
             output = execute_search_command(arguments)
             identity = str(output.get("plan_id", ""))
         elif arguments.command in TAGGED_FINDING_COMMANDS:
@@ -380,6 +392,7 @@ def main(argv: list[str] | None = None) -> int:
         TaggedQueueNotFoundError,
         TaggedFindingNotFoundError,
         SearchPlanNotFoundError,
+        SearchCampaignNotFoundError,
     ) as error:
         return _write_error("research_evidence_not_found", error, 4)
     except BundleDestinationExistsError as error:
@@ -394,6 +407,7 @@ def main(argv: list[str] | None = None) -> int:
         TaggedQueueRegistryError,
         TaggedFindingRegistryError,
         SearchPlanRegistryError,
+        SearchCampaignStoreError,
     ) as error:
         return _write_error("research_store_integrity_or_io_failure", error, 3)
     except DatasetNotFoundError as error:
@@ -423,4 +437,6 @@ def main(argv: list[str] | None = None) -> int:
         if isinstance(failures, list) and failures and isinstance(failures[0], dict):
             return int(failures[0].get("exit_code", 7))
         return 7
+    if arguments.command == "run-search-plan":
+        return cast("int", output["exit_code"])
     return 0
