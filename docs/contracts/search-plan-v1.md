@@ -6,13 +6,13 @@
 
 `SearchPlan` 把已支持的单一接收后缀延迟变换变成可持久冻结的候选序列。它冻结原 `ExecutableProtocol v2`、同一 `AssumptionSpec`、提议种子、生成器与原始提议预算；完整 journal 保留重复与范围拒绝。读取时重建候选顺序和决策，应用再从实际 development 数据重验来源与派生候选。
 
-本切片不会启动策略、读取研究执行结果、预留 attempt 或发出 finding；`ELIGIBLE` 只表示候选通过本合同的范围与派生预检，未表示引擎已经完成或命题成立。S07-01b 才接入自动评估与 attempt/outcome 关联，S07-02 才形成 campaign 的执行时间／存储硬预算，S07-03 才定义搜索结论。当前 proposal journal 不是完整统计 trial-family 账本。
+本切片不会启动策略、读取研究执行结果、预留 attempt 或发出 finding；领域 journal 的 `ELIGIBLE` 只表示唯一候选处于声明范围内，成功的应用回执再证明这些候选通过实际来源的派生预检，未表示引擎已经完成或命题成立。S07-01b 才接入自动评估与 attempt/outcome 关联，S07-02 才形成 campaign 的执行时间／存储硬预算，S07-03 才定义搜索结论。当前 proposal journal 不是完整统计 trial-family 账本。
 
 范围固定为 [Assumption / Scenario v1](assumption-scenario-v1.md) 的 `replay_receive_suffix_shift_v1`，anchor 固定、单位 ns、`COUNTERFACTUAL_STRESS`、研究者给定且未校准。它沿用 [耦合时钟执行](scenario-execution-v1.md) 的限制，不自动成为独立网络接收延迟模型或历史观测相容解释。S06 的 tagged finding 权限不适用于本计划。
 
 ## 请求
 
-请求须为有界 UTF-8 JSON，拒绝重复键、未知／缺失字段、浮点数、布尔冒充整数、非有限值及非规范类型。精确顶层字段为：
+请求须为最多 64 KiB 的非空 UTF-8 JSON，拒绝重复键、未知／缺失字段、浮点数、布尔冒充整数、非有限值及非规范类型。精确顶层字段为：
 
 ```json
 {

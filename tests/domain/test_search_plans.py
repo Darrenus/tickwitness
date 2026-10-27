@@ -6,6 +6,7 @@ import builtins
 import hashlib
 import json
 from dataclasses import FrozenInstanceError, replace
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -186,6 +187,23 @@ def test_random_prefix_is_stable_under_larger_proposal_budget(count: int) -> Non
     longer = plan(random_declaration(count=8))
     assert short.document["journal"] == longer.document["journal"][:count]
     assert short.plan_id != longer.plan_id
+
+
+def test_random_matches_recorded_installed_core_wheel_vectors() -> None:
+    # Recorded on the remote installed core wheel; the independent SHA-256
+    # oracle above separately checks the specified encoding and sampling rule.
+    fixture = Path(__file__).parents[1] / "fixtures" / "search-random-v1-golden.json"
+    document = json.loads(fixture.read_bytes())
+    for vector in document["vectors"]:
+        frozen = plan(
+            random_declaration(
+                seed=vector["search_seed"],
+                count=len(vector["delays_ns"]),
+                low=vector["minimum_ns"],
+                high=vector["maximum_ns"],
+            )
+        )
+        assert [row["delay_ns"] for row in frozen.document["journal"]] == vector["delays_ns"]
 
 
 def test_random_is_with_replacement_and_duplicates_count_against_raw_limit() -> None:
