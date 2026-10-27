@@ -1,0 +1,11 @@
+{
+  "kind": "search_plan_request_v1",
+  "schema_version": 1,
+  "search_seed": 17,
+  "max_proposals": 8,
+  "generator": {
+    "kind": "random_integer_with_replacement",
+    "minimum_ns": 0,
+    "maximum_ns": 3000000000
+  }
+}

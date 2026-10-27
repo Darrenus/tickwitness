@@ -30,6 +30,9 @@ from tickwitness.cli_queues import execute as execute_queue_command
 from tickwitness.cli_scenarios import COMMANDS as SCENARIO_COMMANDS
 from tickwitness.cli_scenarios import add_commands as add_scenario_commands
 from tickwitness.cli_scenarios import execute as execute_scenario_command
+from tickwitness.cli_search import COMMANDS as SEARCH_COMMANDS
+from tickwitness.cli_search import add_commands as add_search_commands
+from tickwitness.cli_search import execute as execute_search_command
 from tickwitness.cli_tagged_evidence import COMMANDS as TAGGED_EVIDENCE_COMMANDS
 from tickwitness.cli_tagged_evidence import add_commands as add_tagged_evidence_commands
 from tickwitness.cli_tagged_evidence import execute as execute_tagged_evidence_command
@@ -47,6 +50,7 @@ from tickwitness.domain.evidence.run_records import EvidenceValidationError
 from tickwitness.domain.evidence.tagged_finding_report import TaggedFindingIneligibleError
 from tickwitness.domain.replay.specs import ReplayValidationError
 from tickwitness.domain.research_contracts.protocols import ProtocolValidationError
+from tickwitness.domain.search.plans import SearchPlanValidationError
 from tickwitness.infrastructure.attempt_ledger import (
     AttemptBudgetExceededError,
     AttemptLedgerError,
@@ -77,6 +81,10 @@ from tickwitness.infrastructure.queue_family_registry import (
     QueueFamilyRegistryError,
 )
 from tickwitness.infrastructure.safe_input import InputReadError, read_jsonl, read_regular_file
+from tickwitness.infrastructure.search_plan_registry import (
+    SearchPlanNotFoundError,
+    SearchPlanRegistryError,
+)
 from tickwitness.infrastructure.subprocess_replay import ReplayProcessError, SubprocessReplayAdapter
 from tickwitness.infrastructure.tagged_finding_registry import (
     TaggedFindingNotFoundError,
@@ -186,13 +194,17 @@ def main(argv: list[str] | None = None) -> int:
     add_tagged_queue_commands(commands)
     add_tagged_evidence_commands(commands)
     add_tagged_finding_commands(commands)
+    add_search_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in TAGGED_FINDING_COMMANDS:
+        if arguments.command in SEARCH_COMMANDS:
+            output = execute_search_command(arguments)
+            identity = str(output.get("plan_id", ""))
+        elif arguments.command in TAGGED_FINDING_COMMANDS:
             output, identity = execute_tagged_finding_command(arguments), ""
         elif arguments.command in TAGGED_EVIDENCE_COMMANDS:
             output, identity = execute_tagged_evidence_command(arguments), ""
@@ -302,6 +314,8 @@ def main(argv: list[str] | None = None) -> int:
         return _write_error("invalid_scenario_contract", error, 2)
     except QueueConstraintValidationError as error:
         return _write_error("invalid_queue_constraints", error, 2)
+    except SearchPlanValidationError as error:
+        return _write_error("invalid_search_plan", error, 2)
     except ProtocolValidationError as error:
         return _write_error("invalid_protocol", error, 2)
     except ReplayValidationError as error:
@@ -365,6 +379,7 @@ def main(argv: list[str] | None = None) -> int:
         QueueFamilyNotFoundError,
         TaggedQueueNotFoundError,
         TaggedFindingNotFoundError,
+        SearchPlanNotFoundError,
     ) as error:
         return _write_error("research_evidence_not_found", error, 4)
     except BundleDestinationExistsError as error:
@@ -378,6 +393,7 @@ def main(argv: list[str] | None = None) -> int:
         QueueFamilyRegistryError,
         TaggedQueueRegistryError,
         TaggedFindingRegistryError,
+        SearchPlanRegistryError,
     ) as error:
         return _write_error("research_store_integrity_or_io_failure", error, 3)
     except DatasetNotFoundError as error:

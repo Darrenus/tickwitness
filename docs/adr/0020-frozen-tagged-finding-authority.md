@@ -1,6 +1,6 @@
 # ADR 0020：冻结独立 finding 权限并封存确定性报告
 
-- 状态：Proposed；S06-02d 实现切片，远端验收待完成，待 owner 审阅。
+- 状态：Accepted；S06-02d 通过远端验收，owner 于 2026-10-27 合并 [PR #87](https://github.com/Darrenus/tickwitness/pull/87)。独立人类领域复核仍未取得。
 - 日期：2026-10-26。
 - 基线：owner 已合并 PR #86，merge `62fc66b563528fcd03713ec8597ddb66e4d9c870`。
 - 合同：[Tagged Findings v1](../contracts/tagged-findings-v1.md)。

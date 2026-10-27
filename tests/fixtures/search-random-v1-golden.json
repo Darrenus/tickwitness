@@ -1,0 +1,57 @@
+{
+  "kind": "search_random_v1_golden_vectors",
+  "provenance": {
+    "repository": "Darrenus/tickwitness",
+    "code_head": "ac100927a9f83067fd1f45733a20a866f2caa9a9",
+    "merge_checkout": "fbba4bc7f11925c6b10b1564dbc17c46e625ce63",
+    "engineering_run": 40482932695,
+    "source": "installed core wheel; synthetic development source; no native"
+  },
+  "vectors": [
+    {
+      "search_seed": 0,
+      "minimum_ns": 0,
+      "maximum_ns": 60000000000,
+      "delays_ns": [
+        31013833291,
+        42620726945,
+        51734710976,
+        51037147105,
+        11636189775,
+        42068552447,
+        104752476,
+        20058424376
+      ]
+    },
+    {
+      "search_seed": 1,
+      "minimum_ns": 0,
+      "maximum_ns": 60000000000,
+      "delays_ns": [
+        29752393760,
+        31349829377,
+        50080970109,
+        58472277651,
+        48681968183,
+        20780608344,
+        6693236803,
+        47004078761
+      ]
+    },
+    {
+      "search_seed": 9223372036854775807,
+      "minimum_ns": 0,
+      "maximum_ns": 60000000000,
+      "delays_ns": [
+        55567580977,
+        42216701584,
+        49275789648,
+        17591355553,
+        11662440760,
+        53333312036,
+        50469489260,
+        30020724481
+      ]
+    }
+  ]
+}

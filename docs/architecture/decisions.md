@@ -124,4 +124,8 @@ raw 与显式字段业务投影分别给每通道首差异，保留原始值、�
 - [ADR 0017：先资格化观测与真假语义](../adr/0017-qualify-observation-and-predicate-semantics.md)：owner 已合并 #84；旧 ghost 投影残差与候选谓词资格边界。
 - [ADR 0018：独立冻结标记参与者的守恒重建](../adr/0018-conserved-tagged-queue-reconstruction.md)：owner 已合并 #85；独立命题、inclusive total projection 和单次 trade 分配。
 - [ADR 0019：独立的可迁移 tagged 双模型证据](../adr/0019-portable-tagged-pair-evidence.md)：owner 已合并 #86；固定十二角色、只读 core 离线重建和有界配对关系。
-- [ADR 0020：冻结独立 finding 权限并封存确定性报告](../adr/0020-frozen-tagged-finding-authority.md)：S06-02d，受限 finding 映射、独立权限、十四角色内容闭包与 FINAL 边界；本轮远端验收待完成。
+- [ADR 0020：冻结独立 finding 权限并封存确定性报告](../adr/0020-frozen-tagged-finding-authority.md)：owner 已合并 #87；受限 finding 映射、独立权限、十四角色内容闭包与 FINAL 边界。
+
+## 搜索计划决策记录
+
+- [ADR 0021：先冻结搜索候选序列与提议记录](../adr/0021-frozen-search-candidate-plans.md)：S07-01a，独立种子、固定生成算法、原始提议预算及完整 journal；自动执行与搜索判定保留后续门。
