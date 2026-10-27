@@ -1,6 +1,6 @@
 # Search Findings v1
 
-状态：S07-03 实现合同，远端验收和 owner 接受待完成。基线为 owner 已合并的 [S07-02 / PR #90](https://github.com/Darrenus/tickwitness/pull/90)，merge `935282c415d167bdcc8485569e47e5221e95b4c3`。本轮保持 `0.2.0.dev0`，不发行新版本。
+状态：S07-03 实现合同，[远端验收已通过](../planning/sprint-07-status.md#s07-03-远端验收记录)，[PR #91](https://github.com/Darrenus/tickwitness/pull/91) 待 owner 接受。基线为 owner 已合并的 [S07-02 / PR #90](https://github.com/Darrenus/tickwitness/pull/90)，merge `935282c415d167bdcc8485569e47e5221e95b4c3`。本轮保持 `0.2.0.dev0`，不发行新版本。
 
 ## 新命题与权限
 
@@ -36,6 +36,8 @@
 ## 覆盖、预算与身份
 
 报告保留完整 proposal journal、生成停止原因、eligible／audited／true／false／unknown／unevaluated ordinals、每个候选的紧凑引用、外层和内层停止状态。`coverage_complete_for_plan` 只针对这一份有限计划；`continuous_delay_space_exhausted=false` 始终不变。预算内前缀的 NO 必须明确显示未评估后缀。
+
+报告 scope 自身携带 finding protocol、plan、source protocol／claim revision、predicate、campaign budget 身份，以及 eligible／evaluated 候选的 exact ordinal 与 scenario ID 配对；单独展示 scope 时也不会丢失评价子集或混同其它命题。
 
 `conclusion_target` 进一步区分有限计划的条件稳健满足反例与“精确已审计 subset 内无 false”。`planned_predicate_truth` 在 CE 时为 false，只有完整计划全部可评价且全 true 时才为 true；预算前缀 NO 与 NOT 都保持 null，不能把已审计 subset 的 true 升格成整份未完成计划为真。
 

@@ -1,6 +1,6 @@
 # ADR 0024：为预算内搜索冻结独立条件结论权限
 
-- 状态：Proposed；S07-03 实现，远端验收和 owner 接受待完成。
+- 状态：Proposed；S07-03 [远端验收已通过](../planning/sprint-07-status.md#s07-03-远端验收记录)，[PR #91](https://github.com/Darrenus/tickwitness/pull/91) 待 owner 接受。
 - 日期：2026-10-27。
 - 基线：owner 已合并 [PR #90](https://github.com/Darrenus/tickwitness/pull/90)，merge `935282c415d167bdcc8485569e47e5221e95b4c3`。
 - 合同：[Search Findings v1](../contracts/search-findings-v1.md)。
