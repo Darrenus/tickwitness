@@ -1,6 +1,6 @@
 # Campaign Budgets v1
 
-状态：S07-02 实现合同，远端验收和 owner 接受待完成。基线为 owner 已合并的 [S07-01b / PR #89](https://github.com/Darrenus/tickwitness/pull/89)，merge `4cc6ce49d99f2f89da87a4993570e5c4a0a178fa`；本轮不发行新版本。
+状态：S07-02 实现合同，[远端验收已通过](../planning/sprint-07-status.md#s07-02-远端验收记录)，[PR #90](https://github.com/Darrenus/tickwitness/pull/90) 待 owner 接受。基线为 owner 已合并的 [S07-01b / PR #89](https://github.com/Darrenus/tickwitness/pull/89)，merge `4cc6ce49d99f2f89da87a4993570e5c4a0a178fa`；本轮不发行新版本。
 
 ## 用途与兼容边界
 
