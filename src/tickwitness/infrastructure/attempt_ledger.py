@@ -15,6 +15,7 @@ from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Lock
 from typing import cast
 
 from tickwitness.domain.evidence.queue_records import (
@@ -66,6 +67,9 @@ from tickwitness.infrastructure.campaign_resource_guard import charge_managed_wr
 _RECORD_LIMIT = 16 * 1024
 _ARTIFACT_LIMIT = 16 * 1024 * 1024
 _ARTIFACT_COUNT = 16
+# Serialize separate ledger instances in this process before acquiring flock.
+# The file lock remains necessary for independent processes sharing the root.
+_NAMED_RESERVATION_MUTEX = Lock()
 type _Owner = ExecutableProtocol | QueueFamilyProtocol | TaggedQueueProtocol
 type _Intent = ScenarioIntent | QueueRunIntent | TaggedQueueRunIntent
 
@@ -307,7 +311,7 @@ class LocalAttemptLedger:
     def _named_reservation_lock(self) -> Iterator[None]:
         import fcntl
 
-        with ExitStack() as stack:
+        with _NAMED_RESERVATION_MUTEX, ExitStack() as stack:
             root = os.open(self._root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
             stack.callback(os.close, root)
             descriptor = os.open(

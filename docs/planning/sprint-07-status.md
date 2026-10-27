@@ -51,7 +51,7 @@ S07-01a 远端结果、代码 head、实际 merge checkout 与 artifact 身份�
 
 初轮远端发现新 CLI 在 Python 3.12 运行时求值 argparse 泛型注解而阻断导入；增加延迟注解并应用远端格式补丁后重验，未修改候选或拒绝 oracle 掩盖问题。AI 并行静态复核单独计为 AI 审阅，独立人类领域接受仍未取得。
 
-S07-01a 的提议计划已获 owner 接受；其交付时 #19 保持打开，自动评估及 durable attempt／outcome 关联、campaign 硬限额、搜索 finding、确认集 lifecycle 和完整统计试验历史仍由后续切片交付。未新增实际工时、真实访谈、性能或采用数据。
+S07-01a 的提议计划已获 owner 接受；其交付时 #19 保持打开，自动评估及 durable attempt／outcome 关联随后由下节 S07-01b 交付并接受。Campaign 硬限额、搜索 finding、确认集 lifecycle 和完整统计试验历史继续作为独立后续门。未新增实际工时、真实访谈、性能或采用数据。
 
 ## S07-01b 实现边界与验收门
 
@@ -84,7 +84,7 @@ S07-01a 的提议计划已获 owner 接受；其交付时 #19 保持打开，自
 
 初轮远端发现格式／导入、stop ordinal 与 CLI exit_code 类型，以及循环闭包和嵌套 with 的 lint 问题；修正后完整重验，未放宽结果、预算或停止 oracle。AI 静态交叉审阅另补强了活动快照、只读复用、无头 orphan 记录和失败 intent 闭包；该审阅仍属于 AI 辅助，不替代独立人类领域接受。
 
-S07-01 的实现验收已覆盖规划、自动候选评估及原预算下的 attempt／outcome 追溯；[PR #89](https://github.com/Darrenus/tickwitness/pull/89) 待 owner 接受前 #19 保持打开。S07-02 的 campaign 总时间／存储硬限额、S07-03 搜索结论、S08 确认与封包、S10 通用恢复及真实访谈仍分别保留；不以测试通过补造工时、市场采用或研究收益证据。
+S07-01 的实现验收已覆盖规划、自动候选评估及原预算下的 attempt／outcome 追溯；owner 已合并 [PR #89](https://github.com/Darrenus/tickwitness/pull/89)，S07-01／[#19](https://github.com/Darrenus/tickwitness/issues/19) 已在此受限 profile 范围接受并关闭。S07-02 的 campaign 总时间／存储硬限额、S07-03 搜索结论、S08 确认与封包、S10 通用恢复及真实访谈继续独立验收；不以测试通过补造工时、市场采用或研究收益证据。
 
 ## S07-02 实现边界与验收门
 
