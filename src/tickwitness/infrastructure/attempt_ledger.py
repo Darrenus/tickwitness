@@ -17,6 +17,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
+from tickwitness.infrastructure.campaign_resource_guard import charge_managed_write
+
 from tickwitness.domain.evidence.queue_records import (
     MAX_QUEUE_RECORD_BYTES,
     QueueAttemptReservation,
@@ -715,6 +717,7 @@ class LocalAttemptLedger:
             return
         except FileNotFoundError:
             pass
+        charge_managed_write(len(raw))
         temporary = f".pending-{secrets.token_hex(16)}"
         descriptor = os.open(
             temporary,

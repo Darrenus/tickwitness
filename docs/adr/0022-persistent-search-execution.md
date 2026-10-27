@@ -1,6 +1,6 @@
 # ADR 0022：以原协议预算执行候选并持久关联尝试
 
-- 状态：Proposed；S07-01b 通过[远端验收](../planning/sprint-07-status.md#s07-01b-远端验收记录)，[PR #89](https://github.com/Darrenus/tickwitness/pull/89) 待 owner 审阅。
+- 状态：Accepted；S07-01b 通过[远端验收](../planning/sprint-07-status.md#s07-01b-远端验收记录)，owner 已合并 [PR #89](https://github.com/Darrenus/tickwitness/pull/89)。
 - 日期：2026-10-27。
 - 基线：owner 已合并 [PR #88](https://github.com/Darrenus/tickwitness/pull/88)，merge `373d08a5c2196662c5116e02ea7b7fe3a98dc167`。
 - 合同：[Search Execution v1](../contracts/search-execution-v1.md)。

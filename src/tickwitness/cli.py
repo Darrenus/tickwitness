@@ -19,6 +19,9 @@ from tickwitness.application.research import (
     read_protocol_data,
 )
 from tickwitness.application.tagged_queue_execution import TaggedQueueReservationUnconfirmed
+from tickwitness.cli_campaign_budgets import COMMANDS as CAMPAIGN_BUDGET_COMMANDS
+from tickwitness.cli_campaign_budgets import add_commands as add_campaign_budget_commands
+from tickwitness.cli_campaign_budgets import execute as execute_campaign_budget_command
 from tickwitness.cli_experiments import COMMANDS as EXPERIMENT_COMMANDS
 from tickwitness.cli_experiments import add_commands as add_experiment_commands
 from tickwitness.cli_experiments import execute as execute_experiment_command
@@ -59,6 +62,10 @@ from tickwitness.infrastructure.attempt_ledger import (
     AttemptBudgetExceededError,
     AttemptLedgerError,
     AttemptNotFoundError,
+)
+from tickwitness.infrastructure.campaign_budget_store import (
+    CampaignBudgetNotFoundError,
+    CampaignBudgetStoreError,
 )
 from tickwitness.infrastructure.evidence_bundles import (
     BundleDestinationExistsError,
@@ -204,13 +211,17 @@ def main(argv: list[str] | None = None) -> int:
     add_tagged_finding_commands(commands)
     add_search_commands(commands)
     add_search_execution_commands(commands)
+    add_campaign_budget_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in SEARCH_EXECUTION_COMMANDS:
+        if arguments.command in CAMPAIGN_BUDGET_COMMANDS:
+            output = execute_campaign_budget_command(arguments)
+            identity = str(output.get("budget_id", ""))
+        elif arguments.command in SEARCH_EXECUTION_COMMANDS:
             output = execute_search_execution_command(arguments)
             identity = str(output.get("campaign_id", ""))
         elif arguments.command in SEARCH_COMMANDS:
@@ -393,6 +404,7 @@ def main(argv: list[str] | None = None) -> int:
         TaggedFindingNotFoundError,
         SearchPlanNotFoundError,
         SearchCampaignNotFoundError,
+        CampaignBudgetNotFoundError,
     ) as error:
         return _write_error("research_evidence_not_found", error, 4)
     except BundleDestinationExistsError as error:
@@ -408,6 +420,7 @@ def main(argv: list[str] | None = None) -> int:
         TaggedFindingRegistryError,
         SearchPlanRegistryError,
         SearchCampaignStoreError,
+        CampaignBudgetStoreError,
     ) as error:
         return _write_error("research_store_integrity_or_io_failure", error, 3)
     except DatasetNotFoundError as error:
@@ -437,6 +450,6 @@ def main(argv: list[str] | None = None) -> int:
         if isinstance(failures, list) and failures and isinstance(failures[0], dict):
             return int(failures[0].get("exit_code", 7))
         return 7
-    if arguments.command == "run-search-plan":
+    if arguments.command in ("run-search-plan", "run-bounded-search-plan"):
         return cast("int", output["exit_code"])
     return 0

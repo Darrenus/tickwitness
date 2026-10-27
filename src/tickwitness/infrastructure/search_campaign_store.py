@@ -15,6 +15,8 @@ from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager, suppress
 from pathlib import Path
 
+from tickwitness.infrastructure.campaign_resource_guard import charge_managed_write
+
 _HEADER_LIMIT = 4 * 1024 * 1024
 _RECORD_LIMIT = 64 * 1024
 _RESULT_LIMIT = 16 * 1024 * 1024
@@ -320,6 +322,7 @@ class LocalSearchCampaignStore:
             return
         except FileNotFoundError:
             pass
+        charge_managed_write(len(raw))
         temporary = f".pending-{secrets.token_hex(16)}"
         descriptor = os.open(
             temporary,

@@ -1,14 +1,14 @@
 # Sprint 7 固定预算搜索状态
 
-更新：2026-10-27（Asia/Singapore）。Owner 已合并 [PR #88](https://github.com/Darrenus/tickwitness/pull/88)，S07-01a 的候选规划能力已接受。当前 Sprint 7 基线 merge 为 `373d08a5c2196662c5116e02ea7b7fe3a98dc167`；`0.2.0.dev0` 保持未发行。真实访谈、采用和独立人类领域复核没有新增证据。
+更新：2026-10-27（Asia/Singapore）。Owner 已合并 [PR #89](https://github.com/Darrenus/tickwitness/pull/89)，S07-01 的规划与持久自动评估已接受。当前 Sprint 7 基线 merge 为 `4cc6ce49d99f2f89da87a4993570e5c4a0a178fa`；`0.2.0.dev0` 保持未发行。真实访谈、采用和独立人类领域复核没有新增证据。
 
 ## 本轮切片与后续门
 
 | 故事 | 切片与实际边界 | 状态 |
 | --- | --- | --- |
 | S07-01 / #19 | S07-01a 冻结网格／随机候选、来源、种子与完整 proposal journal；重建去重／拒绝及 source 派生预检 | Owner 已合并 #88 |
-| S07-01 / #19 | S07-01b 自动评估、候选与真实 attempt/outcome 关联；原协议预算不重置 | [PR #89](https://github.com/Darrenus/tickwitness/pull/89) 远端验收通过，待 owner 接受 |
-| S07-02 / #20 | Campaign 评估次数／时间／存储硬限额及完整停止原因 | 尚未实现 |
+| S07-01 / #19 | S07-01b 自动评估、候选与真实 attempt/outcome 关联；原协议预算不重置 | Owner 已合并 #89 |
+| S07-02 / #20 | 独立受控 profile 的评估数／执行阶段总期限／managed payload 容量硬门 | 本轮实现，远端验收待完成 |
 | S07-03 / #21 | 有范围的反例／预算内未发现／不可评价输出 | 尚未实现；本轮 findings 关闭 |
 
 原故事验收、14h／12h／8h 专项估算及每 Sprint 15h 日常质量容量保持 [Sprint backlog](sprint-backlog.md#s7--固定预算反例搜索) 原意。切片不是额外工时承诺；实际工时未登记，代码或测试数量不能当作完成了全部研究或采用门。
@@ -85,3 +85,11 @@ S07-01a 的提议计划已获 owner 接受；其交付时 #19 保持打开，自
 初轮远端发现格式／导入、stop ordinal 与 CLI exit_code 类型，以及循环闭包和嵌套 with 的 lint 问题；修正后完整重验，未放宽结果、预算或停止 oracle。AI 静态交叉审阅另补强了活动快照、只读复用、无头 orphan 记录和失败 intent 闭包；该审阅仍属于 AI 辅助，不替代独立人类领域接受。
 
 S07-01 的实现验收已覆盖规划、自动候选评估及原预算下的 attempt／outcome 追溯；[PR #89](https://github.com/Darrenus/tickwitness/pull/89) 待 owner 接受前 #19 保持打开。S07-02 的 campaign 总时间／存储硬限额、S07-03 搜索结论、S08 确认与封包、S10 通用恢复及真实访谈仍分别保留；不以测试通过补造工时、市场采用或研究收益证据。
+
+## S07-02 实现边界与验收门
+
+合同见 [Campaign Budgets v1](../contracts/campaign-budgets-v1.md)，决策见 [ADR 0023](../adr/0023-supervised-campaign-resource-budgets.md)。独立预算与namespace不改写旧plan／campaign／scenario／原协议slots。新的run-bounded-search-plan受整份协调进程absolute monotonic deadline约束，native worker继承可统一终止的进程组；setup预检及终止收尾／只读重审另计，不声称硬实时CLI返回。
+
+存储按平台新管理payload计量：32MiB控制及终端预留，每candidate执行前不可退款预留64MiB，容量不足在原slot之前停止。原ledger和campaign实际新文件写入前受guard检查，含stage及复制；stdin／stdout／stderr走有界内存pipes，无磁盘spools，coordinator禁止core dump。限额不覆盖文件系统元数据／块、RAM、运行时cache、既有inputs或其它campaign，不充当恶意宿主沙箱或整机配额。
+
+新profile仍共用原协议attempt budget。评估数／容量／执行期限耗尽退出8，保留原始已提交结果、不可退款admissions和原slots；停止记录使用单独预留。重复命令只重审，不恢复或重新计时；修改冻结预算拒绝覆盖。验收包括首结果后耗尽、首slot前耗尽、<1秒期限、迟到结果拒收、洪泛／残留子进程清理、写入精确边界、提交后异常与readonly重审，以及实际wheel／sdist的core/native安装。测试／格式化／构建／安装和原生执行全部远端。远端实际证据待回填；S07-03 finding及S08/S10能力仍单独验收。

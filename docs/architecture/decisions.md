@@ -130,4 +130,6 @@ raw 与显式字段业务投影分别给每通道首差异，保留原始值、�
 
 - [ADR 0021：先冻结搜索候选序列与提议记录](../adr/0021-frozen-search-candidate-plans.md)：owner 已合并 #88；独立种子、固定生成算法、原始提议预算及完整 journal。
 
-- [ADR 0022：以原协议预算执行候选并持久关联尝试](../adr/0022-persistent-search-execution.md)：S07-01b，事前 dispatch nonce、原槽位预算、结果保留、停止与只读重审；搜索 finding 与完整作业恢复仍保留后续门。
+- [ADR 0022：以原协议预算执行候选并持久关联尝试](../adr/0022-persistent-search-execution.md)：owner 已合并 #89；事前 dispatch nonce、原槽位预算、结果保留、停止与只读重审；搜索 finding 与完整作业恢复仍保留后续门。
+
+- [ADR 0023：以独立合同监督 campaign 总资源预算](../adr/0023-supervised-campaign-resource-budgets.md)：S07-02，整份执行阶段 deadline、候选入场容量预留、原预算共用及停止证据保留；计量为受管理 payload，不冒充宿主磁盘或 RAM quota。
