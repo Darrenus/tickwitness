@@ -40,6 +40,9 @@ from tickwitness.cli_search import execute as execute_search_command
 from tickwitness.cli_search_execution import COMMANDS as SEARCH_EXECUTION_COMMANDS
 from tickwitness.cli_search_execution import add_commands as add_search_execution_commands
 from tickwitness.cli_search_execution import execute as execute_search_execution_command
+from tickwitness.cli_search_findings import COMMANDS as SEARCH_FINDING_COMMANDS
+from tickwitness.cli_search_findings import add_commands as add_search_finding_commands
+from tickwitness.cli_search_findings import execute as execute_search_finding_command
 from tickwitness.cli_tagged_evidence import COMMANDS as TAGGED_EVIDENCE_COMMANDS
 from tickwitness.cli_tagged_evidence import add_commands as add_tagged_evidence_commands
 from tickwitness.cli_tagged_evidence import execute as execute_tagged_evidence_command
@@ -99,6 +102,10 @@ from tickwitness.infrastructure.search_campaign_store import (
 from tickwitness.infrastructure.search_plan_registry import (
     SearchPlanNotFoundError,
     SearchPlanRegistryError,
+)
+from tickwitness.infrastructure.search_finding_registry import (
+    SearchFindingNotFoundError,
+    SearchFindingStoreError,
 )
 from tickwitness.infrastructure.subprocess_replay import ReplayProcessError, SubprocessReplayAdapter
 from tickwitness.infrastructure.tagged_finding_registry import (
@@ -212,13 +219,16 @@ def main(argv: list[str] | None = None) -> int:
     add_search_commands(commands)
     add_search_execution_commands(commands)
     add_campaign_budget_commands(commands)
+    add_search_finding_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in CAMPAIGN_BUDGET_COMMANDS:
+        if arguments.command in SEARCH_FINDING_COMMANDS:
+            output, identity = execute_search_finding_command(arguments), ""
+        elif arguments.command in CAMPAIGN_BUDGET_COMMANDS:
             output = execute_campaign_budget_command(arguments)
             identity = str(output.get("budget_id", ""))
         elif arguments.command in SEARCH_EXECUTION_COMMANDS:
@@ -405,6 +415,7 @@ def main(argv: list[str] | None = None) -> int:
         SearchPlanNotFoundError,
         SearchCampaignNotFoundError,
         CampaignBudgetNotFoundError,
+        SearchFindingNotFoundError,
     ) as error:
         return _write_error("research_evidence_not_found", error, 4)
     except BundleDestinationExistsError as error:
@@ -421,6 +432,7 @@ def main(argv: list[str] | None = None) -> int:
         SearchPlanRegistryError,
         SearchCampaignStoreError,
         CampaignBudgetStoreError,
+        SearchFindingStoreError,
     ) as error:
         return _write_error("research_store_integrity_or_io_failure", error, 3)
     except DatasetNotFoundError as error:

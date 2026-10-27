@@ -1,6 +1,6 @@
 # Sprint 7 固定预算搜索状态
 
-更新：2026-10-27（Asia/Singapore）。Owner 已合并 [PR #89](https://github.com/Darrenus/tickwitness/pull/89)，S07-01 的规划与持久自动评估已接受。当前 Sprint 7 基线 merge 为 `4cc6ce49d99f2f89da87a4993570e5c4a0a178fa`；`0.2.0.dev0` 保持未发行。真实访谈、采用和独立人类领域复核没有新增证据。
+更新：2026-10-27（Asia/Singapore）。Owner 已合并 [PR #90](https://github.com/Darrenus/tickwitness/pull/90)，S07-01 的规划／持久自动评估及 S07-02 的 campaign 硬预算已接受。当前 Sprint 7 基线 merge 为 `935282c415d167bdcc8485569e47e5221e95b4c3`；`0.2.0.dev0` 保持未发行。真实访谈、采用和独立人类领域复核没有新增证据。
 
 ## 本轮切片与后续门
 
@@ -8,8 +8,8 @@
 | --- | --- | --- |
 | S07-01 / #19 | S07-01a 冻结网格／随机候选、来源、种子与完整 proposal journal；重建去重／拒绝及 source 派生预检 | Owner 已合并 #88 |
 | S07-01 / #19 | S07-01b 自动评估、候选与真实 attempt/outcome 关联；原协议预算不重置 | Owner 已合并 #89 |
-| S07-02 / #20 | 独立受控 profile 的评估数／执行阶段总期限／managed payload 容量硬门 | 远端验收通过，PR #90 待 owner 接受 |
-| S07-03 / #21 | 有范围的反例／预算内未发现／不可评价输出 | 尚未实现；本轮 findings 关闭 |
+| S07-02 / #20 | 独立受控 profile 的评估数／执行阶段总期限／managed payload 容量硬门 | Owner 已合并 #90 |
+| S07-03 / #21 | 有范围的反例／预算内未发现／不可评价输出 | 本轮实现，远端验收待完成 |
 
 原故事验收、14h／12h／8h 专项估算及每 Sprint 15h 日常质量容量保持 [Sprint backlog](sprint-backlog.md#s7--固定预算反例搜索) 原意。切片不是额外工时承诺；实际工时未登记，代码或测试数量不能当作完成了全部研究或采用门。
 
@@ -121,4 +121,14 @@ S07-01 的实现验收已覆盖规划、自动候选评估及原预算下的 att
 
 远端修复保留了原预算／停止 oracle：mock worker 先确实退出再返回模拟pipe结果，PID ready文件改为完整同步后的原子发布；原同nonce并发占槽增加同进程互斥并保留跨进程文件锁及严格唯一slot断言。失败日志未打印该竞争异常的实际errno，因此不把候选平台根因写成已确认结论。AI静态交叉审阅另计为辅助审阅；独立人类领域接受未取得。
 
-[PR #90](https://github.com/Darrenus/tickwitness/pull/90) 待 owner 接受前 [S07-02 / #20](https://github.com/Darrenus/tickwitness/issues/20) 保持打开。S07-03 搜索结论、S08 确认／封包、S10 通用恢复和真实访谈继续独立验收；未新增发行版本、实际工时、性能或市场采用数据。
+Owner 已合并 [PR #90](https://github.com/Darrenus/tickwitness/pull/90)，[S07-02 / #20](https://github.com/Darrenus/tickwitness/issues/20) 已在声明的执行阶段／managed payload 范围接受并关闭。S07-03 搜索结论、S08 确认／封包、S10 通用恢复和真实访谈继续独立验收；未新增发行版本、实际工时、性能或市场采用数据。
+
+## S07-03 实现边界与验收门
+
+合同见 [Search Findings v1](../contracts/search-findings-v1.md)，决策见 [ADR 0024](../adr/0024-scoped-search-findings.md)。独立 SearchFindingProtocol 绑定完整冻结 SearchPlan，把原数字 criterion 复制为新的条件压力谓词；不修改旧 plan、scenario receipt、baseline claim 或 tagged finding 权限，不允许新请求改选有利阈值。不认证规则曾在观察结果前预注册。
+
+结论命令只从实际 bounded inspector 重新核对 source、候选派发、原 reservation／intent／result／outcome、admission 和停止证据；不接受外部自报 JSON report，不构造 worker、不占新 attempt、不写 runs。已审计 completed false 见证可给出有范围反例；非空 true 子集只有在正常完成或干净预算终止且所有入场候选可明确交代时，才可输出预算内未发现。集合、未评估后缀、生成停止、执行停止与两份预算分别列出；部分覆盖不判全计划谓词为 true。
+
+合法的零覆盖、未知估值、失败、未完成、在途时间截断或无终态输出 NOT_EVALUABLE；错误来源、坏 hash 或篡改闭包仍是校验失败，不能洗成不可评价或未发现。先前有效 false 见证不会被后来执行故障抹掉，但故障仍在停止与覆盖中保留。报告为 LOCAL_REAUDITED，不冒充 S08 的 portable sealed FINAL。
+
+验收包括 gt／ge／lt／le 的精确 Decimal 边界、false／true／unknown 全表、零候选、预算前缀、执行中与候选间时间耗尽、失败后不能 NO、有效反例后故障、完整重算 hash 的伪造输出、不同 plan／owner 拒绝、只读和原槽位不增、confirmation先拒，以及实际 core／native wheel 与 actual source archive 的安装闭环。所有测试／格式化／构建／安装和原生执行仍在远端；实际证据待回填。原8h估算及持续质量预算保持，未新增实际工时、访谈、独立人类复核或市场采用证据。

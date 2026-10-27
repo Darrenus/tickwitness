@@ -1,6 +1,6 @@
 # ADR 0023：以独立合同监督 campaign 总资源预算
 
-- 状态：Proposed；S07-02 [远端验收已通过](../planning/sprint-07-status.md#s07-02-远端验收记录)，[PR #90](https://github.com/Darrenus/tickwitness/pull/90) 待 owner 接受。
+- 状态：Accepted；S07-02 [远端验收已通过](../planning/sprint-07-status.md#s07-02-远端验收记录)，owner 已合并 [PR #90](https://github.com/Darrenus/tickwitness/pull/90)。
 - 日期：2026-10-27。
 - 基线：owner 已合并 [PR #89](https://github.com/Darrenus/tickwitness/pull/89)，merge `4cc6ce49d99f2f89da87a4993570e5c4a0a178fa`。
 - 合同：[Campaign Budgets v1](../contracts/campaign-budgets-v1.md)。
