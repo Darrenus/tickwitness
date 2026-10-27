@@ -1,6 +1,6 @@
 # Search Execution v1
 
-状态：S07-01b 实现合同，远端验收及 owner 接受待完成。基线为 owner 已合并的 [S07-01a / PR #88](https://github.com/Darrenus/tickwitness/pull/88)，merge `373d08a5c2196662c5116e02ea7b7fe3a98dc167`；本轮不发行新版本。
+状态：S07-01b 实现合同，[远端验收已通过](../planning/sprint-07-status.md#s07-01b-远端验收记录)，[PR #89](https://github.com/Darrenus/tickwitness/pull/89) 待 owner 接受。基线为 owner 已合并的 [S07-01a / PR #88](https://github.com/Darrenus/tickwitness/pull/88)，merge `373d08a5c2196662c5116e02ea7b7fe3a98dc167`；本轮不发行新版本。
 
 ## 用途与边界
 
@@ -16,7 +16,7 @@
 
 每次实际候选执行都在原 protocol 的 `LocalAttemptLedger` 占用一个不可退款槽。此前的 baseline、手动 scenario、其它 plan 或失败／未决尝试占用的槽继续计入同一预算；不得克隆协议、按 plan 重置预算或将重复执行伪装成免费缓存命中。不同 plan 可以竞争余下槽，槽位占用以原 ledger 的原子提交为准，不能根据较早的预算快照假定仍有容量。
 
-同一 plan 在同一 runs 根下只建立一次 campaign。POSIX 非阻塞排他锁阻止同 plan 的两个协调器同时执行；已有 campaign 再次收到运行命令时只读复核其已记录状态，不自动重放、补跑后缀或恢复未决尝试。检查无需引擎或 GPU。更广的作业恢复机制仍属 S10；重新运行命令不会退还槽位或消除已发生的结果。
+同一 plan 在同一 runs 根下只建立一次 campaign。POSIX 非阻塞排他锁阻止同 plan 的两个协调器同时执行；已有 campaign 再次收到运行命令时取得协调锁后，以只读 ledger 复核其已记录状态，不自动重放、补跑后缀或恢复未决尝试。检查无需引擎或 GPU。更广的作业恢复机制仍属 S10；重新运行命令不会退还槽位或消除已发生的结果。
 
 ## 执行前的持久关联
 
@@ -70,4 +70,4 @@ tickwitness inspect-search-campaign PLAN_ID \
 
 两条命令均先拒绝 `--split confirmation`，再处理 ID、输入和任何 repository factory。坏 plan／source／绑定在建立新 campaign 或 runs 之前拒绝。缺失 runs 的 inspect 不创建目录。`--engine-python` 只在执行命令上选择可信的已安装引擎环境，不改变冻结预算或回放语义。
 
-运行命令即使停止也保留机器可读 campaign report，并通过非零退出码区分预算、引擎或存储失败；inspect 对可验证的已停止／未决状态返回报告，不重试执行。请依据报告状态和具体错误处理，不能把 JSON 能解析或 inspect 成功当作搜索或研究结论成功。
+对于可重审的已记录停止状态，运行命令也保留机器可读 campaign report，并通过非零退出码区分预算、引擎或存储失败；inspect 对可验证的已停止／未决状态返回报告，不重试执行。请依据报告状态和具体错误处理，不能把 JSON 能解析或 inspect 成功当作搜索或研究结论成功。
