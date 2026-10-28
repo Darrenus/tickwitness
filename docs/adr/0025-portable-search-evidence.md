@@ -1,6 +1,6 @@
 # ADR 0025：以独立内容闭包封存搜索证据并离线重审
 
-- 状态：Proposed；S08-01 实现，远端验收和 owner 接受待完成。
+- 状态：Proposed；S08-01 已远端验收，[PR #92](https://github.com/Darrenus/tickwitness/pull/92) 待 owner 接受。
 - 日期：2026-10-28。
 - 基线：owner 已合并 [PR #91](https://github.com/Darrenus/tickwitness/pull/91)，merge `2a83d39022ce5d53edbb42dafef897c6b5d1bd0c`。
 - 合同：[Search Evidence v1](../contracts/search-evidence-v1.md)。
@@ -25,6 +25,6 @@ Export pin 当前 report ID，重审实际来源后收集真实 bytes，再以�
 
 完整发布并读回或独立验证后返回 FINAL，含义是 sealed内容及审计闭包成立。内容身份不认证作者、原发布、原资源历史、全局试验账本或 confirmation 引用；纯 finding report 自身仍不承担这些权限。导出与验证不执行策略、不 reserve、不退款、不修改原 runs 或 budget。
 
-core3／native10既有真实合成案例可直接承担安装验收，无需再花研究槽位。新 smoke 删除复制的发行者所有目录并移动包后，以独立 core-only guard验证同一语义报告与诊断，并覆盖精确缺件与全量重算hash攻击。实际测试、格式化、构建、安装和原生前序执行全部远端；证据待回填。
+core3／native10既有真实合成案例承担安装验收，无需再花研究槽位。新 smoke 删除复制的发行者所有目录并移动包后，以独立 core-only guard验证同一语义报告与诊断，并覆盖精确缺件与全量重算hash攻击。实际测试、格式化、构建、安装和原生前序执行全部远端；实际功能 head、merge checkout、运行与产物见 [Sprint 8 验收记录](../planning/sprint-08-status.md#s08-01-远端验收记录)。AI 静态交叉审阅单独计为 AI 辅助审阅，不替代独立人类领域接受。
 
 S08-02 确认协议、S08-03 alpha与外部复验、S10恢复继续单独交付，不据此提前发行或声称真实采用。原12h专项估算与持续质量预算不重记，独立人类领域接受、工时及用户证据不补造。
