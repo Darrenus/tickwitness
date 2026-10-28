@@ -54,48 +54,70 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
         )
 
 
+def _inspect_execution(
+    plan_id: str, *, plans: Path, registry: Path, store: Path, runs: Path
+) -> dict[str, object] | None:
+    budgets = LocalCampaignBudgetStore(runs, create=False)
+    try:
+        campaigns = LocalSearchCampaignStore(budgets.managed_root(plan_id), create=False)
+    except SearchCampaignNotFoundError:
+        return None
+    if campaigns.get_campaign(plan_id) is None:
+        if any(campaigns.check_tree(plan_id).values()):
+            raise CampaignBudgetValidationError(
+                "Bounded execution has orphaned records without a header"
+            )
+        return None
+    return inspect_search_campaign(
+        plan_id,
+        split="development",
+        plans_factory=lambda: LocalSearchPlanRegistry(plans, create=False),
+        registry_factory=lambda: LocalExecutableProtocolRegistry(registry, create=False),
+        datasets_factory=lambda: LocalDatasetStore(store, create=False),
+        ledger_factory=lambda: LocalAttemptLedger(runs, create=False),
+        campaigns_factory=lambda: campaigns,
+    )
+
+
+def inspect_bounded_campaign_paths(
+    plan_id: str, *, split: str, plans: Path, registry: Path, store: Path, runs: Path
+) -> dict[str, object]:
+    """One read-only composition shared by campaign inspection and finding output."""
+    return inspect_bounded_search_campaign(
+        plan_id,
+        split=split,
+        plans_factory=lambda: LocalSearchPlanRegistry(plans, create=False),
+        registry_factory=lambda: LocalExecutableProtocolRegistry(registry, create=False),
+        datasets_factory=lambda: LocalDatasetStore(store, create=False),
+        budgets_factory=lambda: LocalCampaignBudgetStore(runs, create=False),
+        execution_inspector=lambda: _inspect_execution(
+            plan_id, plans=plans, registry=registry, store=store, runs=runs
+        ),
+    )
+
+
 def execute(arguments: argparse.Namespace) -> dict[str, object]:
     if arguments.split != "development":
         raise ConfirmationAccessDenied("Bounded campaigns permit development evidence only")
     identity(arguments.plan_id)
 
     def inner() -> dict[str, object] | None:
-        budgets = LocalCampaignBudgetStore(arguments.runs, create=False)
-        try:
-            campaigns = LocalSearchCampaignStore(
-                budgets.managed_root(arguments.plan_id), create=False
-            )
-        except SearchCampaignNotFoundError:
-            return None
-        if campaigns.get_campaign(arguments.plan_id) is None:
-            if any(campaigns.check_tree(arguments.plan_id).values()):
-                raise CampaignBudgetValidationError(
-                    "Bounded execution has orphaned records without a header"
-                )
-            return None
-        return inspect_search_campaign(
+        return _inspect_execution(
             arguments.plan_id,
-            split="development",
-            plans_factory=lambda: LocalSearchPlanRegistry(arguments.plans, create=False),
-            registry_factory=lambda: LocalExecutableProtocolRegistry(
-                arguments.registry, create=False
-            ),
-            datasets_factory=lambda: LocalDatasetStore(arguments.store, create=False),
-            ledger_factory=lambda: LocalAttemptLedger(arguments.runs, create=False),
-            campaigns_factory=lambda: campaigns,
+            plans=arguments.plans,
+            registry=arguments.registry,
+            store=arguments.store,
+            runs=arguments.runs,
         )
 
     if arguments.command == "inspect-bounded-search-campaign":
-        return inspect_bounded_search_campaign(
+        return inspect_bounded_campaign_paths(
             arguments.plan_id,
             split=arguments.split,
-            plans_factory=lambda: LocalSearchPlanRegistry(arguments.plans, create=False),
-            registry_factory=lambda: LocalExecutableProtocolRegistry(
-                arguments.registry, create=False
-            ),
-            datasets_factory=lambda: LocalDatasetStore(arguments.store, create=False),
-            budgets_factory=lambda: LocalCampaignBudgetStore(arguments.runs, create=False),
-            execution_inspector=inner,
+            plans=arguments.plans,
+            registry=arguments.registry,
+            store=arguments.store,
+            runs=arguments.runs,
         )
     request = read_regular_file(
         arguments.input_root,

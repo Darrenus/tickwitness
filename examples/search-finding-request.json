@@ -1,0 +1,6 @@
+{
+  "kind": "search_finding_request_v1",
+  "schema_version": 1,
+  "title": "Conditional receive-delay stress criterion over the frozen candidate plan",
+  "authority": "conditional_stress_search_findings_v1"
+}
