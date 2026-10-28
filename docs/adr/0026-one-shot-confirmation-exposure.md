@@ -1,6 +1,6 @@
 # ADR 0026：在整窗确认观测交付前不可逆登记来源暴露
 
-- 状态：Proposed；S08-02 已[远端验收](../planning/sprint-08-status.md#s08-02-远端验收记录)，[PR #93](https://github.com/Darrenus/tickwitness/pull/93) 待 owner 接受。
+- 状态：Accepted；owner 已合并 [PR #93](https://github.com/Darrenus/tickwitness/pull/93)，merge `97822d7a74931a829bd3355fb40d85d4504de59d`；[远端验收](../planning/sprint-08-status.md#s08-02-远端验收记录) 保持原范围。
 - 日期：2026-10-28。
 - 基线：owner 已合并 [PR #92](https://github.com/Darrenus/tickwitness/pull/92)，merge `275b5e1a8c8f706f5636773061b11da53231194a`。
 - 合同：[Confirmation Access v1](../contracts/confirmation-access-v1.md)。

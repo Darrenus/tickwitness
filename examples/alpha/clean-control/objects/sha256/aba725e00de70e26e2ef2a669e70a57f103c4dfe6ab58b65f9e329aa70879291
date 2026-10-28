@@ -1,0 +1,1 @@
+{"additional_delay":{"unit":"ns","value":2000000000},"assumption_id":"2113c488c10096445ffca2775cd09cd2c51cc060727a5c664f87c19884156e1c","kind":"scenario_spec_v1","scenario_kind":"COUNTERFACTUAL_STRESS","schema_version":1}
