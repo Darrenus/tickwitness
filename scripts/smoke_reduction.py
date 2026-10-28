@@ -235,7 +235,10 @@ def _candidate_bytes(original: bytes, delay: int) -> bytes:
 
 def _check_package(path: Path, receipt: dict, request: dict, original: bytes) -> dict:
     assert sorted(item.name for item in path.iterdir()) == [
-        "manifest.json", "materialization.json", "normalized.jsonl", "recipe.json"
+        "manifest.json",
+        "materialization.json",
+        "normalized.jsonl",
+        "recipe.json",
     ]
     manifest_raw = (path / "manifest.json").read_bytes()
     manifest = json.loads(manifest_raw)
@@ -252,7 +255,9 @@ def _check_package(path: Path, receipt: dict, request: dict, original: bytes) ->
     ):
         raw = (path / filename).read_bytes()
         assert manifest["roles"][role] == {
-            "ref": filename, "sha256": _sha(raw), "size_bytes": len(raw)
+            "ref": filename,
+            "sha256": _sha(raw),
+            "size_bytes": len(raw),
         }
     recipe_raw = (path / "recipe.json").read_bytes()
     material_raw = (path / "materialization.json").read_bytes()
@@ -273,17 +278,23 @@ def _check_package(path: Path, receipt: dict, request: dict, original: bytes) ->
         "checkpoint_used": False,
         "prefix_reuse_allowed": False,
     }
-    assert recipe["scope"] == material["scope"] == {
-        "phase": "development",
-        "authority": "input_preparation_only_v1",
-        "source_claim_authority_extended": False,
-        "budget_owner_changed": False,
-    }
+    assert (
+        recipe["scope"]
+        == material["scope"]
+        == {
+            "phase": "development",
+            "authority": "input_preparation_only_v1",
+            "source_claim_authority_extended": False,
+            "budget_owner_changed": False,
+        }
+    )
     assert material["kind"] == "materialized_reduction_input_v1"
     assert material["schema_version"] == 1
     assert material["recipe_id"] == receipt["recipe_id"] == _sha(recipe_raw)
     context, retained, candidate = (
-        material["prefix_context"], material["retained"], material["candidate"]
+        material["prefix_context"],
+        material["retained"],
+        material["candidate"],
     )
     assert _identity(context) == material["prefix_context_id"] == receipt["prefix_context_id"]
     assert context["recipe_id"] == material["recipe_id"]
@@ -296,12 +307,13 @@ def _check_package(path: Path, receipt: dict, request: dict, original: bytes) ->
     assert candidate["scenario_id"] == receipt["candidate_scenario_id"]
     assert candidate["additional_delay_ns"] == request["additional_delay_ns"]
     assert candidate["scenario"]["additional_delay"] == {
-        "value": request["additional_delay_ns"], "unit": "ns"
+        "value": request["additional_delay_ns"],
+        "unit": "ns",
     }
     full = _candidate_bytes(original, request["additional_delay_ns"])
     lines = full.splitlines(keepends=True)
-    expected = b"".join(lines[:request["through_capture_seq"]])
-    warmup = b"".join(lines[:request["focus_from_capture_seq"] - 1])
+    expected = b"".join(lines[: request["through_capture_seq"]])
+    warmup = b"".join(lines[: request["focus_from_capture_seq"] - 1])
     assert candidate["full_event_count"] == 7
     assert candidate["full_normalized_sha256"] == _sha(full)
     assert (path / "normalized.jsonl").read_bytes() == expected
@@ -322,8 +334,11 @@ def _check_package(path: Path, receipt: dict, request: dict, original: bytes) ->
         ("focus_ref", request["focus_from_capture_seq"]),
         ("through_ref", request["through_capture_seq"]),
     ):
-        reference = {"line": capture, "capture_seq": capture,
-                     "event_type": events[capture - 1]["type"]}
+        reference = {
+            "line": capture,
+            "capture_seq": capture,
+            "event_type": events[capture - 1]["type"],
+        }
         assert retained[name] == context[name] == reference
     changes = {
         "strictly_shorter_input": request["through_capture_seq"] < 7,
@@ -344,7 +359,8 @@ def _check_package(path: Path, receipt: dict, request: dict, original: bytes) ->
     for name, value in {**_FLAGS, **changes}.items():
         assert receipt[name] is value
     assert material["prefix_context_id"] not in {
-        recipe["source"]["source_dataset_id"], candidate["full_view_id"]
+        recipe["source"]["source_dataset_id"],
+        candidate["full_view_id"],
     }
     return material
 
@@ -378,8 +394,12 @@ def main() -> None:
             "'prefix':sys.prefix,'base_prefix':sys.base_prefix},sort_keys=True))"
         )
         runtime_process = subprocess.run(
-            [interpreter, "-I", "-c", query], cwd=cwd, capture_output=True,
-            text=True, check=True, timeout=30
+            [interpreter, "-I", "-c", query],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
         )
         runtime = json.loads(runtime_process.stdout)
         expected_prefix = str(arguments.python.absolute().parent.parent.resolve())
@@ -400,9 +420,16 @@ def main() -> None:
             shutil.copytree(corpus / name, issuer / name)
         original = _source_role(issuer / "counterexample", "normalized")
         assert len(original.splitlines()) == 7
-        sources_before = {name: _tree(issuer / name) for name in ("counterexample", "clean-control")}
+        sources_before = {
+            name: _tree(issuer / name) for name in ("counterexample", "clean-control")
+        }
         denied = (str(corpus.resolve()),)
-        guard = _GUARD + "\n_denied_roots = " + repr(denied) + "\n" + """
+        guard = (
+            _GUARD
+            + "\n_denied_roots = "
+            + repr(denied)
+            + "\n"
+            + """
 def deny_original_paths(event, arguments):
     if event == 'open' and arguments and isinstance(arguments[0], (str, bytes)):
         filename = arguments[0].decode() if isinstance(arguments[0], bytes) else arguments[0]
@@ -411,16 +438,23 @@ def deny_original_paths(event, arguments):
             raise AssertionError('Reduction acceptance read original corpus: ' + filename)
 sys.addaudithook(deny_original_paths)
 """
+        )
         invocations = []
 
         def execute(code: str, *command: str, expected: int = 0) -> dict:
             process = subprocess.run(
-                [interpreter, "-I", "-c", guard + code, *command], cwd=cwd,
-                capture_output=True, text=True, check=False, timeout=180
+                [interpreter, "-I", "-c", guard + code, *command],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=180,
             )
             record = {
-                "command": list(command), "expected_exit_code": expected,
-                "exit_code": process.returncode, "stdout": process.stdout,
+                "command": list(command),
+                "expected_exit_code": expected,
+                "exit_code": process.returncode,
+                "stdout": process.stdout,
                 "stderr": process.stderr,
             }
             invocations.append(record)
@@ -443,15 +477,29 @@ sys.addaudithook(deny_original_paths)
             "confirmation_operations_rejected_before_package_access": 2,
         }
 
-        def prepare(name: str, request: dict, *, source: str = "counterexample",
-                    pins: dict | None = None, expected: int = 0) -> dict:
+        def prepare(
+            name: str,
+            request: dict,
+            *,
+            source: str = "counterexample",
+            pins: dict | None = None,
+            expected: int = 0,
+        ) -> dict:
             (issuer / (name + ".json")).write_bytes(_canonical(request))
             selected = _SOURCE if pins is None else pins
             return run(
-                "prepare-reduction-input", source, name + ".json", "--input-root", str(issuer),
-                "--expected-bundle-id", selected["bundle_id"],
-                "--expected-report-id", selected["report_id"],
-                "--output", str(outputs / name), expected=expected
+                "prepare-reduction-input",
+                source,
+                name + ".json",
+                "--input-root",
+                str(issuer),
+                "--expected-bundle-id",
+                selected["bundle_id"],
+                "--expected-report-id",
+                selected["report_id"],
+                "--output",
+                str(outputs / name),
+                expected=expected,
             )
 
         requests = {
@@ -468,16 +516,22 @@ sys.addaudithook(deny_original_paths)
             assert receipt["status"] == "PREPARED_INPUT_ONLY"
             materials[name] = _check_package(outputs / name, receipt, request, original)
             cases.append({"name": name, "request": request, "prepared": receipt})
-        assert materials["no-op"]["candidate"]["scenario_id"] == (
-            json.loads((outputs / "no-op" / "recipe.json").read_bytes())
-            ["source"]["source_scenario_id"]
+        assert (
+            materials["no-op"]["candidate"]["scenario_id"]
+            == (
+                json.loads((outputs / "no-op" / "recipe.json").read_bytes())["source"][
+                    "source_scenario_id"
+                ]
+            )
         )
         for field in ("scenario_id", "full_view_id", "full_normalized_sha256"):
-            assert materials["focused-prefix"]["candidate"][field] != (
-                materials["contracted-prefix"]["candidate"][field]
+            assert (
+                materials["focused-prefix"]["candidate"][field]
+                != (materials["contracted-prefix"]["candidate"][field])
             )
-        assert materials["focused-prefix"]["prefix_context_id"] != (
-            materials["contracted-prefix"]["prefix_context_id"]
+        assert (
+            materials["focused-prefix"]["prefix_context_id"]
+            != (materials["contracted-prefix"]["prefix_context_id"])
         )
         assert materials["affected-warmup"]["retained"]["warmup_normalized_sha256"] != (
             _sha(b"".join(_candidate_bytes(original, 2_000_000_000).splitlines(keepends=True)[:4]))
@@ -497,8 +551,9 @@ sys.addaudithook(deny_original_paths)
             assert error["error"]["code"] == "invalid_research_evidence"
             assert not (outputs / name).exists()
             rejected.append({"name": name, "error": error})
-        clean_error = prepare("true-control", _request(), source="clean-control",
-                              pins=_CLEAN, expected=2)
+        clean_error = prepare(
+            "true-control", _request(), source="clean-control", pins=_CLEAN, expected=2
+        )
         assert clean_error["error"]["code"] == "invalid_research_evidence"
         assert not (outputs / "true-control").exists()
         rejected.append({"name": "true-control", "error": clean_error})
@@ -519,13 +574,20 @@ sys.addaudithook(deny_original_paths)
         shutil.move(str(outputs), relocated / "preparations")
         shutil.rmtree(issuer)
         assert not issuer.exists() and not outputs.exists()
-        guard += "\n_denied_roots += " + repr((str(issuer.resolve()), str(outputs.resolve()))) + "\n"
+        guard += (
+            "\n_denied_roots += " + repr((str(issuer.resolve()), str(outputs.resolve()))) + "\n"
+        )
         outputs = relocated / "preparations"
         for case in cases:
             verified = run(
-                "verify-reduction-input", str(outputs / case["name"]),
-                "--input-root", str(relocated_source), "--source-evidence", "counterexample",
-                "--expected-preparation-id", case["prepared"]["preparation_id"]
+                "verify-reduction-input",
+                str(outputs / case["name"]),
+                "--input-root",
+                str(relocated_source),
+                "--source-evidence",
+                "counterexample",
+                "--expected-preparation-id",
+                case["prepared"]["preparation_id"],
             )
             assert verified == {**case["prepared"], "status": "RECOMPUTED_PREPARATION_ONLY"}
             _check_package(outputs / case["name"], verified, case["request"], original)
@@ -538,9 +600,15 @@ sys.addaudithook(deny_original_paths)
             shutil.copytree(outputs / "focused-prefix", target)
             preparation_id = mutate(target)
             error = run(
-                "verify-reduction-input", str(target), "--input-root", str(relocated_source),
-                "--source-evidence", "counterexample", "--expected-preparation-id",
-                preparation_id, expected=expected
+                "verify-reduction-input",
+                str(target),
+                "--input-root",
+                str(relocated_source),
+                "--source-evidence",
+                "counterexample",
+                "--expected-preparation-id",
+                preparation_id,
+                expected=expected,
             )
             assert error["error"]["code"] == code
             rejected.append({"name": name, "error": error, "preparation_id": preparation_id})
@@ -578,11 +646,13 @@ sys.addaudithook(deny_original_paths)
             path.write_bytes(_canonical(document))
             return _rehash(target)
 
-        reject_saved("rehashed-middle-delta-deletion", 2, "invalid_research_evidence",
-                     remove_middle_delta)
+        reject_saved(
+            "rehashed-middle-delta-deletion", 2, "invalid_research_evidence", remove_middle_delta
+        )
         reject_saved("rehashed-checkpoint-claim", 2, "invalid_research_evidence", claim_checkpoint)
-        reject_saved("rehashed-scenario-prefix-binding", 2, "invalid_research_evidence",
-                     change_context)
+        reject_saved(
+            "rehashed-scenario-prefix-binding", 2, "invalid_research_evidence", change_context
+        )
 
         def missing_materialization(target: Path) -> str:
             preparation_id = _sha((target / "manifest.json").read_bytes())
@@ -595,20 +665,44 @@ sys.addaudithook(deny_original_paths)
             path.write_bytes(path.read_bytes() + b" ")
             return preparation_id
 
-        reject_saved("missing-materialization", 3, "research_store_integrity_or_io_failure",
-                     missing_materialization)
-        reject_saved("unrehashed-normalized-bytes", 3, "research_store_integrity_or_io_failure",
-                     tamper_bytes)
+        reject_saved(
+            "missing-materialization",
+            3,
+            "research_store_integrity_or_io_failure",
+            missing_materialization,
+        )
+        reject_saved(
+            "unrehashed-normalized-bytes", 3, "research_store_integrity_or_io_failure", tamper_bytes
+        )
         for command in ("prepare-reduction-input", "verify-reduction-input"):
             if command == "prepare-reduction-input":
-                positional = ("missing-source", "missing-request.json", "--expected-bundle-id",
-                              "invalid", "--expected-report-id", "invalid", "--output",
-                              str(root / "must-not-publish"))
+                positional = (
+                    "missing-source",
+                    "missing-request.json",
+                    "--expected-bundle-id",
+                    "invalid",
+                    "--expected-report-id",
+                    "invalid",
+                    "--output",
+                    str(root / "must-not-publish"),
+                )
             else:
-                positional = (str(root / "missing-preparation"), "--source-evidence",
-                              "missing-source", "--expected-preparation-id", "invalid")
-            error = run(command, *positional, "--input-root", str(root / "missing-input-root"),
-                        "--split", "confirmation", expected=5)
+                positional = (
+                    str(root / "missing-preparation"),
+                    "--source-evidence",
+                    "missing-source",
+                    "--expected-preparation-id",
+                    "invalid",
+                )
+            error = run(
+                command,
+                *positional,
+                "--input-root",
+                str(root / "missing-input-root"),
+                "--split",
+                "confirmation",
+                expected=5,
+            )
             assert error["error"]["code"] == "confirmation_access_denied"
             rejected.append({"name": command + "-confirmation-pre-io", "error": error})
         assert not (root / "must-not-publish").exists()

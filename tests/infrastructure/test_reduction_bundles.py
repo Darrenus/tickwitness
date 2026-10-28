@@ -58,9 +58,7 @@ def _prepared(artifacts):
 
 
 def _tree(root: Path) -> dict[str, bytes]:
-    return {
-        path.name: path.read_bytes() for path in root.iterdir() if path.is_file()
-    }
+    return {path.name: path.read_bytes() for path in root.iterdir() if path.is_file()}
 
 
 def _json_bytes(size: int) -> bytes:
@@ -77,7 +75,10 @@ def test_exact_four_files_roundtrip_and_detached_content(tmp_path: Path, prepare
     assert saved.preparation_id == prepared.preparation_id == digest(saved.manifest_bytes)
     assert saved.artifacts == prepared.artifacts
     assert set(_tree(output)) == {
-        "manifest.json", "recipe.json", "materialization.json", "normalized.jsonl"
+        "manifest.json",
+        "recipe.json",
+        "materialization.json",
+        "normalized.jsonl",
     }
     assert _tree(output) == {
         "manifest.json": saved.manifest_bytes,
@@ -192,7 +193,10 @@ def test_postcommit_sync_uncertainty_preserves_complete_target_without_success(
     assert readback.preparation_id == prepared.preparation_id
     assert readback.artifacts == prepared.artifacts
     assert set(_tree(output)) == {
-        "manifest.json", "recipe.json", "materialization.json", "normalized.jsonl"
+        "manifest.json",
+        "recipe.json",
+        "materialization.json",
+        "normalized.jsonl",
     }
     with pytest.raises(BundleDestinationExistsError):
         publisher.publish(prepared, output)

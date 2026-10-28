@@ -27,11 +27,17 @@ def _request():
 
 def _args(tmp_path):
     return [
-        "prepare-reduction-input", "source", "request.json",
-        "--input-root", str(tmp_path / "inputs"),
-        "--expected-bundle-id", BUNDLE_ID,
-        "--expected-report-id", REPORT_ID,
-        "--output", str(tmp_path / "prepared"),
+        "prepare-reduction-input",
+        "source",
+        "request.json",
+        "--input-root",
+        str(tmp_path / "inputs"),
+        "--expected-bundle-id",
+        BUNDLE_ID,
+        "--expected-report-id",
+        REPORT_ID,
+        "--output",
+        str(tmp_path / "prepared"),
     ]
 
 
@@ -40,8 +46,16 @@ def test_confirmation_denied_before_invalid_identity_or_missing_files(tmp_path, 
     if command == "prepare-reduction-input":
         args = _args(tmp_path)
     else:
-        args = [command, "missing", "--source-evidence", "missing",
-                "--expected-preparation-id", "invalid", "--input-root", str(tmp_path)]
+        args = [
+            command,
+            "missing",
+            "--source-evidence",
+            "missing",
+            "--expected-preparation-id",
+            "invalid",
+            "--input-root",
+            str(tmp_path),
+        ]
     assert main([*args, "--split", "confirmation"]) == 5
     captured = capsys.readouterr()
     assert not captured.out
@@ -67,11 +81,21 @@ def test_real_prefix_publish_relocation_verify_and_no_overwrite(tmp_path, capsys
     assert receipt["witness_preservation_verified"] is False
     assert len((tmp_path / "prepared" / "normalized.jsonl").read_bytes().splitlines()) == 6
     shutil.move(tmp_path / "prepared", tmp_path / "relocated")
-    assert main([
-        "verify-reduction-input", str(tmp_path / "relocated"),
-        "--source-evidence", "source", "--input-root", str(inputs),
-        "--expected-preparation-id", receipt["preparation_id"],
-    ]) == 0
+    assert (
+        main(
+            [
+                "verify-reduction-input",
+                str(tmp_path / "relocated"),
+                "--source-evidence",
+                "source",
+                "--input-root",
+                str(inputs),
+                "--expected-preparation-id",
+                receipt["preparation_id"],
+            ]
+        )
+        == 0
+    )
     checked = capsys.readouterr()
     assert not checked.err
     assert json.loads(checked.out) == {**receipt, "status": "RECOMPUTED_PREPARATION_ONLY"}

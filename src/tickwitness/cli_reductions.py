@@ -26,7 +26,8 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
     prepare.add_argument("--expected-report-id", required=True)
     prepare.add_argument("--output", required=True, type=Path)
     verify = commands.add_parser(
-        "verify-reduction-input", help="Recompute a prepared input from the complete source evidence"
+        "verify-reduction-input",
+        help="Recompute a prepared input from the complete source evidence",
     )
     verify.add_argument("preparation", type=Path)
     verify.add_argument("--source-evidence", required=True)
@@ -88,10 +89,7 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
     )
     published = bundles.publish(prepared, arguments.output)
     reread = bundles.read(arguments.output)
-    if (
-        reread.manifest_bytes != published.manifest_bytes
-        or reread.artifacts != published.artifacts
-    ):
+    if reread.manifest_bytes != published.manifest_bytes or reread.artifacts != published.artifacts:
         raise EvidenceValidationError("Published reduction input changed before readback")
     receipt = verify_reduction_input(
         reread,
