@@ -7,7 +7,7 @@
 | 故事 | 实际范围 | 状态 |
 | --- | --- | --- |
 | S08-01 / #22 | 搜索数据／约束／候选／原预算槽位／结果／停止／版本完整闭包，离线重建 finding 和候选 trace diagnostics | Owner 已合并 [PR #92](https://github.com/Darrenus/tickwitness/pull/92)，#22 在受限profile范围接受并关闭 |
-| S08-02 / #23 | 确认协议与一次性开启／暴露记账 | 本轮实现，远端验收待完成；旧探索接口继续拒绝 confirmation |
+| S08-02 / #23 | 确认协议与一次性开启／暴露记账 | 远端验收通过，[PR #93](https://github.com/Darrenus/tickwitness/pull/93) 待 owner 接受；#23 保持打开 |
 | S08-03 / #24 | Alpha scorecard 与真实外部复验记录 | 后续验收，未新增外部尝试或采用证据 |
 
 原 [Sprint backlog](sprint-backlog.md#s8--独立复现与-alpha-门槛) 的12h／12h／8h专项估算与每Sprint持续质量容量保持；实际工时未登记，测试数量不替代外部验收。
@@ -65,4 +65,34 @@ Verify仅需包和core安装，不需要原SQLite／registry／ledger／workspac
 
 确认读取最多1000个事件，且不超过源协议和本次冻结上限；origin2MiB、协议／单exposure各3MiB，整个账本最多256记录／32MiB，超限整体拒绝。无匹配记录仅表示本managed ledger未登记交叠，不能认证真实历史未见、预注册、外部来源或宿主owner保密。Owner改source/session、删除全部可信状态或另起store根仍属于配置／信任边界。平台底层数据工具不因此变成对owner的沙箱。
 
-远端验收需覆盖：实际v1／v2冻结和整窗首次开启、重复／新名称／跨协议与registry拒绝、book重分段及trade来源交叠、独立窗口可开启、超限前拒、提交前后失败、同源并发唯一赢家、坏账本／缺件／符号链接与初始化不确定、旧探索confirmation在I/O前拒绝，以及实际wheel与tar.gz内脚本安装链路。全部执行仍在远端，报告和合成状态保留30天；实际head、运行、数量和artifact待回填。该切片不创建native执行、研究attempt／统计trial或确认finding，S08-03与独立人类复验门保持。
+远端验收覆盖实际v1／v2冻结和整窗首次开启、重复／新名称／跨协议与registry拒绝、book重分段及trade来源交叠、独立窗口可开启、超限前拒、提交前后失败、同源并发唯一赢家、坏账本／缺件／符号链接与初始化不确定、旧探索confirmation在I/O前拒绝，以及实际wheel与tar.gz内脚本安装链路。全部执行仍在远端，报告和合成状态保留30天；实际head、运行、数量和artifact见下节。该切片不创建native执行、研究attempt／统计trial或确认finding，S08-03与独立人类复验门保持。
+
+## S08-02 远端验收记录
+
+功能代码 head `f1e0d8ae3783fe1999e71362b7a475b77a0d7adf` 的 [Engineering 40669710235](https://github.com/Darrenus/tickwitness/actions/runs/40669710235) 与 [Documentation 40669710220](https://github.com/Darrenus/tickwitness/actions/runs/40669710220) 共13 checks 全部通过，包含实际源码包／wheel安装链路。实际 merge checkout 为 `57efdadbaef012d5e4bd74299f8f3d1626d6d6a4`，不与 PR head 混同。
+
+核心 Ubuntu 24.04／macOS 15 × Python 3.12／3.13／3.14 六组合各 **2870 passed / 112 optional-native skips**；原生 Ubuntu 24.04 与 macOS 26／Python 3.12 各 **2979 passed / 3 core-only skips / 313 warnings**。Lint、253 文件格式、116 source files 严格类型检查、82 文档／428 本地链接通过；这些数字属于上述功能 run，warnings 保留。全部项目测试、格式化、构建、安装与原生回放在远端，本机仅文本编辑、静态审阅、Git／gh控制与下载JSON读取。
+
+安装报告为 `installed_confirmation_exposure_acceptance_v1`，实际报告与合成状态树保留30天。
+
+| 实际 artifact（共同后缀 `57efdadbaef012d5e4bd74299f8f3d1626d6d6a4`） | ID 与内容 |
+| --- | --- |
+| `confirmation-core-…` | [12807482818](https://github.com/Darrenus/tickwitness/actions/runs/40669710235/artifacts/12807482818)：实际 core wheel |
+| `confirmation-ubuntu-24.04-…` | [12807992994](https://github.com/Darrenus/tickwitness/actions/runs/40669710235/artifacts/12807992994)：Ubuntu 作业内独立 core-only wheel |
+| `confirmation-macos-26-…` | [12807129401](https://github.com/Darrenus/tickwitness/actions/runs/40669710235/artifacts/12807129401)：macOS 作业内独立 core-only wheel |
+| `confirmation-source-wheel-…` | [12808202589](https://github.com/Darrenus/tickwitness/actions/runs/40669710235/artifacts/12808202589)：实际tar.gz内脚本／样例配合新安装core wheel |
+
+| 实际核验 | 结果与权限 |
+| --- | --- |
+| 完整首次开启 | 18个正常流程案例中有4次release，分别返回3／2／1000／1条完整观测，total_records与真实数组一致、truncated=false；包含实际v1和v2源声明，无策略或引擎执行 |
+| 拒绝与继承 | 11个重复／交叠开启均exit5、`confirmation_already_exposed`并关联真实exposure IDs，stdout无观测；涵盖改名、跨source protocol／registry、首开前已冻结子集、raw重封、capture/time/payload、部分超集及book重分段；独立窗口正常开启 |
+| 整窗上限 | 3个request cap／source cap／1001事件案例在暴露提交前exit2、`invalid_confirmation_protocol`，不通过截断或多次开启释放后缀 |
+| 探索与重复早拒 | read-protocol-data、replay-protocol、run-scenario、freeze-search-plan 的confirmation路由均在I/O前exit5；重复open在构造实际source/data reader之前拒绝，inspect仅返回声明和关联 |
+| 持久真实性 | 四类产物均accepted=true，合成records中的实际exposures.json与报告内完整4条记录逐对象相等；core／Ubuntu／macOS／source-wheel的protocol与exposure身份相同，除临时I/O路径外完整报告一致；独立SHA重算与文件名／回执匹配。同声明重复freeze为created=false，首开后变为ALREADY_EXPOSED_IN_LEDGER |
+| 损坏与不确定 | 2个损坏／缺log安装案例均exit3、`confirmation_store_integrity_or_io_failure`，不伪称未见；远端回归另覆盖thread／subprocess原子竞争、提交前后replace／fsync失败、初始化失败、缺sentinel／整个state、符号链接／FIFO／超限、锁inode替换及256／257与精确字节边界 |
+| 预算与来源 | 安装guard禁止native、worker、network、旧attempt／budget写入口；new_native_calls、new_attempts_reserved、old_budget_mutations均false，原immutable source证据／catalog保持不变；新增状态仅为明确的confirmation namespace及anchor |
+| 认证范围 | historical_unseen_certified、host_owner_confidentiality_claimed及确认finding等认证旗标为false；owner仍可直接读取其文件。origin覆盖只约束同一可信managed root和声明来源，不冒充全局试验历史或预注册 |
+
+初轮远端发现新增持久层测试fixture使用了旧v1协议不支持的clock policy，47个用例在进入目标逻辑前被拒绝；改为既有合法 `capture_order_unbound_v1` 后重验，不放宽领域规则或断言。同时应用远端格式补丁，修正异常链、循环闭包和一处冗余cast。AI交叉审阅补强了并发AlreadyExposed异常保留、全账本origin互斥与线性区间扫描；该审阅仍为AI辅助，不替代独立人类领域接受。
+
+[S08-02 / #23](https://github.com/Darrenus/tickwitness/issues/23) 的实现与远端验收在上述受限profile范围交付，仍待owner接受 [PR #93](https://github.com/Darrenus/tickwitness/pull/93)，保持打开。后续文档提交有独立最新head检查，不冒充同一功能run；S08-03外部复验／alpha scorecard、S10恢复和真实访谈继续分别验收，不发行新版本，也不新增实际工时、市场采用或研究收益记录。

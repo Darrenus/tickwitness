@@ -1,6 +1,6 @@
 # Confirmation Access v1
 
-状态：S08-02 实现中，远端验收尚未完成。基线为 owner 已合并 [PR #92](https://github.com/Darrenus/tickwitness/pull/92)，merge `275b5e1a8c8f706f5636773061b11da53231194a`；决策见 [ADR 0026](../adr/0026-one-shot-confirmation-exposure.md)。
+状态：S08-02 已完成[远端验收](../planning/sprint-08-status.md#s08-02-远端验收记录)，[PR #93](https://github.com/Darrenus/tickwitness/pull/93) 待 owner 接受。基线为 owner 已合并 [PR #92](https://github.com/Darrenus/tickwitness/pull/92)，merge `275b5e1a8c8f706f5636773061b11da53231194a`；决策见 [ADR 0026](../adr/0026-one-shot-confirmation-exposure.md)。
 
 本合同新增独立冻结与一次整窗确认**观测交付**。它不执行策略、不调用 native、不评价源 claim、不签发 confirmation finding，也不消耗旧执行 attempt 或 campaign 预算。既有 [Frozen Protocol v1](frozen-protocol-v1.md) 与 executable v2 的探索 `split=confirmation` 拒绝保持生效。
 
