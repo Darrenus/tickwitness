@@ -8,7 +8,15 @@
 
 请从联系人取得完整 kit 目录，以及通过可信单独渠道提供的 **64位 kit ID**。目录内应有 `manifest.json`、本手册 `README.md`、`reproduce.py`、`distribution` 下唯一的 `tickwitness-…-py3-none-any.whl`，以及 `cases/counterexample`、`cases/clean-control` 两个完整证据包。
 
-如果收到的是 `alpha-reproduction-kit.tar.gz`，请同时保留包外的 `handoff.json`／`HANDOFF.txt`。它们列出实际 kit ID、archive／wheel SHA-256、组装 revision 和可直接替换路径的三步命令。先在新目录解压，得到唯一顶层 `tickwitness-alpha-kit`；不要把包外 sidecar 塞回 kit，或修改 README。Archive 只携带 kit，不混入作者的 probe／自动化提交；sidecar 中的外部计数仍是0/PENDING。
+如果收到的是 `alpha-reproduction-kit.tar.gz`，请同时保留包外的 `handoff.json`／`HANDOFF.txt`。它们列出实际 kit ID、archive／wheel SHA-256、组装 revision 和三步命令。**先通过 owner 的单独可信渠道确认 archive SHA-256，再用系统命令校验，随后才解压或安装 wheel。不要只信任与压缩包同送的 sidecar。**
+
+把下面 `OWNER_CONFIRMED_ARCHIVE_SHA256` 换成通过单独渠道确认的64位值，在压缩包所在目录执行；只有显示 `OK` 且期望值与 owner 确认值一致才继续：
+
+```sh
+printf '%s  %s\n' 'OWNER_CONFIRMED_ARCHIVE_SHA256' 'alpha-reproduction-kit.tar.gz' | shasum -a 256 -c -
+```
+
+校验失败或暂时无法向 owner 确认时，不安装或执行包内内容，保留实际输出并联系 owner。校验后在新目录解压，得到唯一顶层 `tickwitness-alpha-kit`；不要把包外 sidecar 塞回 kit，或修改 README。Archive 只携带 kit，不混入作者的 probe／自动化提交；sidecar 中的外部计数仍是0/PENDING。若最初只收到解压目录，请先向 owner 索取归档与单独确认的 checksum，完成这个安装前步骤。
 
 不要自行修改文件、补缺件、重新计算一个 ID 当成原 pin，或把只有报告 JSON 的目录当成完整 kit。Hash pin 检查内容身份，不等于作者签名。原始合成见证来自早先受验收的 S08-01，当前组装 revision 另记在 manifest；不是新跑出来的盈利记录。
 

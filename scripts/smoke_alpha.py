@@ -8,7 +8,10 @@ import io
 import json
 import shutil
 import subprocess
+import sys
 import tarfile
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -125,6 +128,44 @@ def _tree(root: Path) -> dict[str, str]:
         for path in root.rglob("*")
         if path.is_file()
     }
+
+
+@contextmanager
+def _preserved_workspace(records: Path, report: Path) -> Iterator[Path]:
+    with TemporaryDirectory(prefix="tickwitness-alpha-wheel-") as temporary:
+        root = Path(temporary)
+        failure = None
+        try:
+            yield root
+        except BaseException as error:
+            failure = error
+            with suppress(OSError):
+                report.unlink(missing_ok=True)
+            raise
+        finally:
+            if not records.exists():
+                try:
+                    shutil.copytree(root, records)
+                    (records / "diagnostic-capture.json").write_bytes(
+                        _canonical(
+                            {
+                                "kind": "alpha_smoke_workspace_diagnostics_v1",
+                                "accepted": False,
+                                "exception_type": (
+                                    type(failure).__name__ if failure is not None else None
+                                ),
+                                "message": str(failure) if failure is not None else None,
+                            }
+                        )
+                    )
+                    (records / "artifact-files.json").write_bytes(_canonical(_tree(records)))
+                except Exception as diagnostic_error:
+                    if failure is None:
+                        raise
+                    print(
+                        "Failed to preserve alpha smoke diagnostics: " + str(diagnostic_error),
+                        file=sys.stderr,
+                    )
 
 
 def _check_scorecard(receipt: dict, kit_id: str, suite: dict) -> None:
@@ -251,6 +292,12 @@ def _package_handoff(root: Path, kit: Path, manifest: dict, kit_id: str) -> dict
         archive.extractall(extracted, filter="data")
     assert _tree(extracted / prefix) == _tree(kit)
     wheel_path = manifest["wheel_path"]
+    archive_sha256 = _sha(archive_path.read_bytes())
+    checksum_command = (
+        "printf '%s  %s\\n' '"
+        + archive_sha256
+        + "' 'alpha-reproduction-kit.tar.gz' | shasum -a 256 -c -"
+    )
     commands = [
         "python3.12 -m venv ./tickwitness-alpha-env",
         "./tickwitness-alpha-env/bin/python -m pip install --no-index --no-deps ./"
@@ -272,7 +319,7 @@ def _package_handoff(root: Path, kit: Path, manifest: dict, kit_id: str) -> dict
         "expected_kit_id": kit_id,
         "archive": {
             "path": archive_path.name,
-            "sha256": _sha(archive_path.read_bytes()),
+            "sha256": archive_sha256,
             "size_bytes": archive_path.stat().st_size,
             "root": prefix,
         },
@@ -282,6 +329,8 @@ def _package_handoff(root: Path, kit: Path, manifest: dict, kit_id: str) -> dict
         "external_successes": 0,
         "external_attempt_gate": "PENDING",
         "participant_role_is_self_reported": True,
+        "archive_digest_requires_separate_owner_confirmation": True,
+        "pre_install_checksum_command": checksum_command,
         "commands_after_extraction": commands,
     }
     (root / "handoff.json").write_bytes(_canonical(handoff))
@@ -303,7 +352,12 @@ def _package_handoff(root: Path, kit: Path, manifest: dict, kit_id: str) -> dict
         + manifest["producer"]["source_revision"]
         + "\n"
         + "External attempts/successes: 0/0; gate PENDING. No release authorized.\n\n"
-        + "Extract alpha-reproduction-kit.tar.gz in a new directory first.\n"
+        + "Before extracting or installing, confirm the archive SHA-256 with the owner "
+        + "through a separate trusted channel; do not trust this sidecar alone.\n"
+        + "After confirming the digest, run this system checksum command and continue "
+        + "only if it reports OK:\n\n"
+        + checksum_command
+        + "\n\nExtract alpha-reproduction-kit.tar.gz in a new directory.\n"
         + "Use Linux/macOS and Python 3.12-3.14. Then run these three steps:\n\n"
         + "\n\n".join(commands)
         + "\n\n"
@@ -330,14 +384,43 @@ def main() -> None:
         "guide": (arguments.guide, _sha(arguments.guide.read_bytes())),
         "runner": (arguments.runner, _sha(arguments.runner.read_bytes())),
     }
-    with TemporaryDirectory(prefix="tickwitness-alpha-wheel-") as temporary:
-        root = Path(temporary)
+    with _preserved_workspace(arguments.records_dir, arguments.report) as root:
         assembly, publication, cwd, results, probes = (
             root / name
             for name in ("assembly-inputs", "assembled", "unrelated-cwd", "results", "probes")
         )
         for directory in (assembly, publication, cwd, results, probes):
             directory.mkdir()
+        runtime_query = """
+import json
+import sys
+print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
+                  'base_prefix': sys.base_prefix}, sort_keys=True))
+"""
+        runtime_process = subprocess.run(
+            [interpreter, "-I", "-c", runtime_query],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
+        )
+        runtime = json.loads(runtime_process.stdout)
+        expected_prefix = str(arguments.python.absolute().parent.parent.resolve())
+        interpreter_identity = {
+            "requested_executable": interpreter,
+            "requested_venv_prefix_resolved": expected_prefix,
+            "runtime": runtime,
+        }
+        (root / "interpreter-identity.json").write_bytes(_canonical(interpreter_identity))
+        assert str(Path(runtime["prefix"]).resolve()) == expected_prefix, (
+            f"Requested interpreter {interpreter!r} uses prefix {runtime['prefix']!r}; "
+            f"expected virtual environment {expected_prefix!r}"
+        )
+        assert Path(runtime["prefix"]).resolve() != Path(runtime["base_prefix"]).resolve(), (
+            f"Requested interpreter {interpreter!r} did not select a virtual environment: "
+            f"prefix={runtime['prefix']!r}, base_prefix={runtime['base_prefix']!r}"
+        )
         for expected in _CASES.values():
             shutil.copytree(corpus / expected["path"], assembly / expected["path"])
         wheel = assembly / arguments.wheel.name
@@ -568,7 +651,10 @@ def main() -> None:
             assert actual["participant_identity_authenticated"] is False
             assert actual["external_gate_updated"] is written["external_gate_updated"] is False
             assert actual["environment"]["tickwitness"] == manifest["producer"]["version"]
-            assert actual["command"][0] == interpreter
+            assert actual["command"][0] == runtime["executable"], (
+                f"Runner executable mismatch: requested={interpreter!r}, "
+                f"runtime={runtime['executable']!r}, actual={actual['command'][0]!r}"
+            )
             if outcome == "VERIFIED":
                 saved = json.loads((output / "scorecard.json").read_bytes())
                 assert saved == receipt and actual["scorecard_id"] == receipt["scorecard_id"]
@@ -603,6 +689,7 @@ def main() -> None:
             "accepted": True,
             "synthetic_data": True,
             "source_revision": arguments.source_revision,
+            "interpreter_identity": interpreter_identity,
             "export": exported,
             "receipt": receipt,
             "case_reaudits": case_receipts,
