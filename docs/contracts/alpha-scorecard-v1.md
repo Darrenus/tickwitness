@@ -1,6 +1,6 @@
 # Alpha Scorecard v1
 
-状态：S08-03a 实现中，远端验收尚未完成。基线为 owner 已合并 [PR #93](https://github.com/Darrenus/tickwitness/pull/93)，merge `97822d7a74931a829bd3355fb40d85d4504de59d`；决策见 [ADR 0027](../adr/0027-reproducible-alpha-scorecard.md)，外部操作见[复验手册](../alpha-reproduction.md)。
+状态：S08-03a 软件已完成[远端技术验收](../planning/sprint-08-status.md#s08-03a-远端验收记录)，[PR #94](https://github.com/Darrenus/tickwitness/pull/94) 待owner接受；真实外部门仍PENDING。基线为 owner 已合并 [PR #93](https://github.com/Darrenus/tickwitness/pull/93)，merge `97822d7a74931a829bd3355fb40d85d4504de59d`；决策见 [ADR 0027](../adr/0027-reproducible-alpha-scorecard.md)，外部操作见[复验手册](../alpha-reproduction.md)。
 
 本切片提供可转交的 core-only 复验 kit、实际技术 scorecard 和保留成功／失败的提交 runner。用户负责联系外部参与者；当前没有真实外部尝试，`external_attempts=0`、`external_successes=0`、门槛 `PENDING`。[S08-03 / #24](https://github.com/Darrenus/tickwitness/issues/24) 保持打开，不把软件交付、CI、AI、owner 自测或独立 cwd 自动解释为外部复验完成，不发行新版本。
 
