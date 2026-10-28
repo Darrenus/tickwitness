@@ -37,6 +37,9 @@ from tickwitness.cli_queue_execution import execute as execute_queue_execution_c
 from tickwitness.cli_queues import COMMAND as QUEUE_COMMAND
 from tickwitness.cli_queues import add_commands as add_queue_commands
 from tickwitness.cli_queues import execute as execute_queue_command
+from tickwitness.cli_reductions import COMMANDS as REDUCTION_COMMANDS
+from tickwitness.cli_reductions import add_commands as add_reduction_commands
+from tickwitness.cli_reductions import execute as execute_reduction_command
 from tickwitness.cli_scenarios import COMMANDS as SCENARIO_COMMANDS
 from tickwitness.cli_scenarios import add_commands as add_scenario_commands
 from tickwitness.cli_scenarios import execute as execute_scenario_command
@@ -248,13 +251,16 @@ def main(argv: list[str] | None = None) -> int:
     add_search_evidence_commands(commands)
     add_confirmation_commands(commands)
     add_alpha_commands(commands)
+    add_reduction_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in ALPHA_COMMANDS:
+        if arguments.command in REDUCTION_COMMANDS:
+            output, identity = execute_reduction_command(arguments), ""
+        elif arguments.command in ALPHA_COMMANDS:
             output, identity = execute_alpha_command(arguments), ""
         elif arguments.command in CONFIRMATION_COMMANDS:
             output, identity = execute_confirmation_command(arguments)

@@ -1,6 +1,6 @@
 # Sprint 8 独立复核与确认窗口状态
 
-更新：2026-10-28（Asia/Singapore）。Owner 已合并 [PR #93](https://github.com/Darrenus/tickwitness/pull/93)，基线 merge 为 `97822d7a74931a829bd3355fb40d85d4504de59d`；Sprint 7 与 S08-01／02 在各自声明范围接受。`0.2.0.dev0` 仍未发行。Owner 已表示会联系一位外部用户；外部复验实际记录尚未收到，不能把联系计划记成尝试、采用或人类领域接受。
+更新：2026-10-28（Asia/Singapore）。Owner 已合并 [PR #94](https://github.com/Darrenus/tickwitness/pull/94)，接受 merge 为 `3ab62bf97dd21609638e9f887f68f450bc345aaf`；S08-03a 软件在下述受限技术范围接受。`0.2.0.dev0` 仍未发行。Owner 将联系外部用户，并明确要求先保持 PENDING；实际记录尚未收到，不能把联系计划或软件合并记成外部尝试、采用或人类领域接受。#24 已重新打开，独立工程进入 [S09-01a](sprint-09-status.md)。
 
 ## 切片与验收门
 
@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | S08-01 / #22 | 搜索数据／约束／候选／原预算槽位／结果／停止／版本完整闭包，离线重建 finding 和候选 trace diagnostics | Owner 已合并 [PR #92](https://github.com/Darrenus/tickwitness/pull/92)，#22 在受限profile范围接受并关闭 |
 | S08-02 / #23 | 确认协议与一次性开启／暴露记账 | Owner 已合并 [PR #93](https://github.com/Darrenus/tickwitness/pull/93)，#23 在受限profile范围接受并关闭 |
-| S08-03 / #24 | Alpha scorecard 与真实外部复验记录 | S08-03a已远端技术验收，[PR #94](https://github.com/Darrenus/tickwitness/pull/94) 待owner接受；外部0／PENDING，#24整体保持打开 |
+| S08-03 / #24 | Alpha scorecard 与真实外部复验记录 | Owner 已合并 [PR #94](https://github.com/Darrenus/tickwitness/pull/94) 接受S08-03a软件；S08-03b外部0／PENDING，#24整体保持打开 |
 
 原 [Sprint backlog](sprint-backlog.md#s8--独立复现与-alpha-门槛) 的12h／12h／8h专项估算与每Sprint持续质量容量保持；实际工时未登记，测试数量不替代外部验收。
 
@@ -140,4 +140,4 @@ Kit为独立32MiB／512files／256KiB manifest profile，wheel≤4MiB、guide与
 
 初轮远端同时捕获了verify命令positional注册顺序与冻结CLI合同相反的问题；按KIT再SAVED修正，没有改手册命令或弱化断言。macOS实测请求为 `/tmp/tickwitness-tagged-verifier/bin/python`，runtime为 `/private/tmp/tickwitness-tagged-verifier/bin/python`；其prefix与resolved requested venv均为 `/private/tmp/tickwitness-tagged-verifier`，且不同于base framework。现以同一解释器实际sys.executable／prefix／base_prefix精确比较runner命令，确认别名属于同一venv；失败先保留诊断树而不产accepted报告。归档按各平台实际SHA校验，实测Mac归档SHA不同于Linux，kit内容身份与技术语义仍一致。格式问题使用远端生成的补丁处理。最终交叉静态审阅未发现P1／P2阻塞，但仍属于AI辅助，不替代独立人类领域接受。
 
-[PR #94](https://github.com/Darrenus/tickwitness/pull/94) 的S08-03a软件与可转交包已在上述profile内通过远端验收，仍待owner接受；[#24](https://github.com/Darrenus/tickwitness/issues/24) 整体保持打开。Owner将联系外部参与者，实际回执／失败原文收到并核对前不填外部尝试、不发alpha、不宣称采用。后续文档提交有独立最新head检查，交付给外部用户的归档以该最新source-wheel产物中的实际kit ID与SHA为准；S10恢复、真实访谈及研究收益记录没有新增。
+[PR #94](https://github.com/Darrenus/tickwitness/pull/94) 的S08-03a软件与可转交包已在上述profile内通过远端验收，并由owner合并接受；[#24](https://github.com/Darrenus/tickwitness/issues/24) 因S08-03b真实外部复验未完成而保持打开。Owner将联系外部参与者，实际回执／失败原文收到并核对前不填外部尝试、不发alpha、不宣称采用。交付给外部用户的现有PR94归档与pin保持原样，不因S09工程变化而替换；S10恢复、真实访谈及研究收益记录没有新增。

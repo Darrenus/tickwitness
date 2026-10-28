@@ -1,6 +1,6 @@
 # ADR 0027：以可转交 kit 和真实边界 probe 区分技术 alpha 与外部复验
 
-- 状态：Proposed；S08-03a 已[远端技术验收](../planning/sprint-08-status.md#s08-03a-远端验收记录)，[PR #94](https://github.com/Darrenus/tickwitness/pull/94) 待owner接受，真实外部门PENDING。
+- 状态：Accepted；S08-03a 已[远端技术验收](../planning/sprint-08-status.md#s08-03a-远端验收记录)，owner 已合并 [PR #94](https://github.com/Darrenus/tickwitness/pull/94) 接受软件，merge `3ab62bf97dd21609638e9f887f68f450bc345aaf`；S08-03b真实外部门仍0／PENDING，#24保持打开。
 - 日期：2026-10-28。
 - 基线：owner 已合并 [PR #93](https://github.com/Darrenus/tickwitness/pull/93)，merge `97822d7a74931a829bd3355fb40d85d4504de59d`。
 - 合同：[Alpha Scorecard v1](../contracts/alpha-scorecard-v1.md)；[外部复验手册](../alpha-reproduction.md)。
