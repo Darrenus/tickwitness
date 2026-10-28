@@ -60,7 +60,10 @@ def kit(tmp_path):
         wheel_name="tickwitness-0.2.0.dev0-py3-none-any.whl",
         wheel_bytes=b"opaque wheel is not executed by inspection",
         guide_bytes=b"Synthetic technical reproduction instructions\n",
-        runner_bytes=b"raise AssertionError('included code must never execute during qualification')\n",
+        runner_bytes=(
+            b"raise AssertionError("
+            b"'included code must never execute during qualification')\n"
+        ),
         counterexample=ce,
         clean_control=clean,
         producer_version="test-assembler",
