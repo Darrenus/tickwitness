@@ -153,9 +153,9 @@ def _check(receipt: dict, case: dict) -> None:
     assert snapshot["finding_protocol_id"] == report["finding_protocol_id"]
     assert snapshot["plan_id"] == report["plan_id"]
     assert snapshot["budget_id"] == report["budget"]["campaign_budget_id"]
-    assert snapshot["dataset_id"] == report["finding_protocol"]["bindings"][
-        "development_dataset_id"
-    ]
+    assert (
+        snapshot["dataset_id"] == report["finding_protocol"]["bindings"]["development_dataset_id"]
+    )
     assert isinstance(snapshot["producer_version"], str) and snapshot["producer_version"]
     if case["bounded"]["execution"] is None:
         assert snapshot["ledger_prefix_observed"] is False
@@ -165,17 +165,27 @@ def _check(receipt: dict, case: dict) -> None:
         assert snapshot["ledger_prefix_observed"] is True
     verified = receipt["verification"]
     for name in (
-        "integrity_verified", "bindings_verified", "source_revalidated", "plan_recomputed",
-        "ledger_content_reconstructed", "findings_recomputed", "diagnostics_recomputed",
+        "integrity_verified",
+        "bindings_verified",
+        "source_revalidated",
+        "plan_recomputed",
+        "findings_recomputed",
+        "diagnostics_recomputed",
         "portable_evidence_verified",
     ):
         assert verified[name] is True
+    assert verified["ledger_content_reconstructed"] is snapshot["ledger_prefix_observed"]
     assert verified["reservation_prefix_reconstructed"] is snapshot["ledger_prefix_observed"]
     for name in (
-        "native_replayed", "attempt_reserved", "author_signature_verified",
-        "human_domain_approval_verified", "original_publication_verified",
-        "producer_version_authenticated", "full_attempt_history_verified",
-        "confirmation_reference_checked", "runtime_limits_reenforced",
+        "native_replayed",
+        "attempt_reserved",
+        "author_signature_verified",
+        "human_domain_approval_verified",
+        "original_publication_verified",
+        "producer_version_authenticated",
+        "full_attempt_history_verified",
+        "confirmation_reference_checked",
+        "runtime_limits_reenforced",
         "physical_storage_usage_verified",
     ):
         assert verified[name] is False
@@ -219,7 +229,8 @@ def _rehash_attack(source: Path, destination: Path, *, diagnostics: bool) -> str
     for name, raw in payload.items():
         content_hash = _digest(raw)
         manifest["roles"][name] = {
-            "sha256": content_hash, "size_bytes": len(raw),
+            "sha256": content_hash,
+            "size_bytes": len(raw),
             "ref": "objects/sha256/" + content_hash,
         }
         (objects / content_hash).write_bytes(raw)
@@ -267,7 +278,11 @@ def main() -> None:
         original_bundle = staged / first["name"]
         first_tree = _tree(original_bundle)
         assert _run(
-            issuer, root, *_export_arguments(first, workspace), "--output", str(original_bundle),
+            issuer,
+            root,
+            *_export_arguments(first, workspace),
+            "--output",
+            str(original_bundle),
             expected=3,
         )["error"]
         assert _tree(original_bundle) == first_tree
@@ -284,10 +299,27 @@ def main() -> None:
         assert refused["error"] and not wrong_output.exists()
         absent = root / "never-created"
         denied = _run(
-            issuer, root, "export-search-evidence", "invalid", "--expected-report-id", "invalid",
-            "--plans", str(absent), "--store", str(absent), "--registry", str(absent),
-            "--runs", str(absent), "--finding-registry", str(absent),
-            "--output", str(absent / "output"), "--split", "confirmation", expected=5,
+            issuer,
+            root,
+            "export-search-evidence",
+            "invalid",
+            "--expected-report-id",
+            "invalid",
+            "--plans",
+            str(absent),
+            "--store",
+            str(absent),
+            "--registry",
+            str(absent),
+            "--runs",
+            str(absent),
+            "--finding-registry",
+            str(absent),
+            "--output",
+            str(absent / "output"),
+            "--split",
+            "confirmation",
+            expected=5,
         )
         assert denied["error"]["code"] == "confirmation_access_denied" and not absent.exists()
         assert _tree(workspace) == before_workspace
@@ -304,7 +336,9 @@ def main() -> None:
             before = _tree(bundle)
             exported = issued[case["name"]]
             command = (
-                "verify-search-evidence", str(bundle), "--expected-bundle-id",
+                "verify-search-evidence",
+                str(bundle),
+                "--expected-bundle-id",
                 exported["bundle_id"],
             )
             verified = _run(verifier, cwd, *command)
@@ -314,31 +348,49 @@ def main() -> None:
             assert verified["snapshot"] == exported["snapshot"]
             assert _run(verifier, cwd, *command) == verified
             assert _tree(bundle) == before
-            cases.append({
-                "name": case["name"], "export": exported, "verification": verified,
-                "issuer_workspace_deleted": True, "bundle_relocated": True,
-                "same_semantic_report": True, "diagnostics_recomputed": True,
-                "core_only_offline_guard": True, "readonly_byte_tree_preserved": True,
-                "same_receipt_on_repeat": True,
-            })
+            cases.append(
+                {
+                    "name": case["name"],
+                    "export": exported,
+                    "verification": verified,
+                    "issuer_workspace_deleted": True,
+                    "bundle_relocated": True,
+                    "same_semantic_report": True,
+                    "diagnostics_recomputed": True,
+                    "core_only_offline_guard": True,
+                    "readonly_byte_tree_preserved": True,
+                    "same_receipt_on_repeat": True,
+                }
+            )
         first_bundle = relocated / first["name"]
         assert _run(
-            verifier, cwd, "verify-search-evidence", str(first_bundle),
-            "--expected-bundle-id", "0" * 64, expected=2,
+            verifier,
+            cwd,
+            "verify-search-evidence",
+            str(first_bundle),
+            "--expected-bundle-id",
+            "0" * 64,
+            expected=2,
         )["error"]
-        assert _run(
-            verifier, cwd, "verify-search-evidence", str(absent),
-            "--split", "confirmation", expected=5,
-        )["error"]["code"] == "confirmation_access_denied"
+        assert (
+            _run(
+                verifier,
+                cwd,
+                "verify-search-evidence",
+                str(absent),
+                "--split",
+                "confirmation",
+                expected=5,
+            )["error"]["code"]
+            == "confirmation_access_denied"
+        )
         assert not absent.exists()
         missing = root / "missing-object"
         shutil.copytree(first_bundle, missing)
         manifest = json.loads((missing / "manifest.json").read_bytes())
         raw = manifest["roles"]["raw"]
         (missing / raw["ref"]).unlink()
-        error = _run(
-            verifier, cwd, "verify-search-evidence", str(missing), expected=3
-        )["error"]
+        error = _run(verifier, cwd, "verify-search-evidence", str(missing), expected=3)["error"]
         assert error["code"] == "search_evidence_object_missing"
         assert error["sha256"] == raw["sha256"]
         assert "raw" in error["roles"]
@@ -347,8 +399,13 @@ def main() -> None:
             attack = root / ("rehash-" + name)
             attack_id = _rehash_attack(first_bundle, attack, diagnostics=diagnostic)
             refused = _run(
-                verifier, cwd, "verify-search-evidence", str(attack),
-                "--expected-bundle-id", attack_id, expected=2,
+                verifier,
+                cwd,
+                "verify-search-evidence",
+                str(attack),
+                "--expected-bundle-id",
+                attack_id,
+                expected=2,
             )
             assert refused["error"] and "report" not in refused
             attacks.append(name)
@@ -357,14 +414,22 @@ def main() -> None:
         for case in source["cases"]:
             shutil.copytree(relocated / case["name"], arguments.bundles_dir / case["name"])
         acceptance = {
-            "kind": "installed_search_evidence_acceptance_v1", "accepted": True,
-            "synthetic_data": True, "source_native_execution": source["native_execution"],
-            "new_native_calls": False, "new_attempts_reserved": False,
-            "source_records_unchanged": True, "issuer_workspace_deleted": True,
-            "wrong_report_pin_rejected": True, "wrong_bundle_pin_rejected": True,
-            "no_overwrite_verified": True, "same_evidence_same_bundle_identity": True,
-            "confirmation_refused_before_io": True, "missing_object_error": error,
-            "fully_rehashed_attacks_rejected": attacks, "cases": cases,
+            "kind": "installed_search_evidence_acceptance_v1",
+            "accepted": True,
+            "synthetic_data": True,
+            "source_native_execution": source["native_execution"],
+            "new_native_calls": False,
+            "new_attempts_reserved": False,
+            "source_records_unchanged": True,
+            "issuer_workspace_deleted": True,
+            "wrong_report_pin_rejected": True,
+            "wrong_bundle_pin_rejected": True,
+            "no_overwrite_verified": True,
+            "same_evidence_same_bundle_identity": True,
+            "confirmation_refused_before_io": True,
+            "missing_object_error": error,
+            "fully_rehashed_attacks_rejected": attacks,
+            "cases": cases,
         }
         arguments.report.write_text(json.dumps(acceptance, sort_keys=True, indent=2) + "\n")
         print(

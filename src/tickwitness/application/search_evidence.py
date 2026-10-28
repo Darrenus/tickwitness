@@ -23,7 +23,9 @@ from tickwitness.domain.evidence.run_records import (
 from tickwitness.domain.evidence.scenario_records import load_scenario_intent
 from tickwitness.domain.evidence.search_evidence import MAX_FILES, MAX_TOTAL_BYTES, role_limit
 from tickwitness.domain.research_contracts.executable import load_executable_protocol
-from tickwitness.domain.research_contracts.search_finding_protocol import load_search_finding_protocol
+from tickwitness.domain.research_contracts.search_finding_protocol import (
+    load_search_finding_protocol,
+)
 from tickwitness.domain.search.budgets import load_allocation, load_campaign_budget
 
 type Row = dict[str, object]
@@ -42,7 +44,9 @@ class _CollectedArtifacts(dict[str, bytes]):
             raise EvidenceValidationError("Search evidence role exceeds its byte limit: " + role)
         if role in self:
             if self[role] != raw:
-                raise EvidenceValidationError("Search evidence role changed during collection: " + role)
+                raise EvidenceValidationError(
+                    "Search evidence role changed during collection: " + role
+                )
             return
         sha = digest(raw)
         if sha not in self._sizes:
@@ -79,17 +83,26 @@ def verify_search_package(
     if expected_bundle_id is not None and identity(expected_bundle_id) != bundle_id:
         raise EvidenceValidationError("Search bundle differs from the expected pinned identity")
     artifacts = package.artifacts
-    expected = canonical({
-        "kind": "search_evidence_bundle_v1",
-        "schema_version": 1,
-        "scope": "development_scoped_search_evidence_v1",
-        "roles": {
-            role: {"sha256": digest(raw), "size_bytes": len(raw),
-                   "ref": "objects/sha256/" + digest(raw)}
-            for role, raw in artifacts.items()
-        },
-    })
-    if type(package.manifest_bytes) is not bytes or package.manifest_bytes != expected or digest(expected) != bundle_id:
+    expected = canonical(
+        {
+            "kind": "search_evidence_bundle_v1",
+            "schema_version": 1,
+            "scope": "development_scoped_search_evidence_v1",
+            "roles": {
+                role: {
+                    "sha256": digest(raw),
+                    "size_bytes": len(raw),
+                    "ref": "objects/sha256/" + digest(raw),
+                }
+                for role, raw in artifacts.items()
+            },
+        }
+    )
+    if (
+        type(package.manifest_bytes) is not bytes
+        or package.manifest_bytes != expected
+        or digest(expected) != bundle_id
+    ):
         raise EvidenceValidationError("Search manifest differs from its exact content closure")
     return {**verify_search_artifacts(artifacts), "bundle_id": bundle_id}
 
@@ -122,7 +135,9 @@ def collect_search_artifacts(
 
     def current() -> Row:
         return evaluate_search_findings(
-            finding_protocol_id, split=split, findings_factory=findings_factory,
+            finding_protocol_id,
+            split=split,
+            findings_factory=findings_factory,
             campaign_inspector=campaign_inspector,
         )
 
@@ -173,20 +188,22 @@ def collect_search_artifacts(
         ordinal = cast("int", proposal["ordinal"])
         row: Row = {"ordinal": ordinal}
         for field in ("dispatch", "link", "result"):
-            raw = None
+            candidate_raw: bytes | None = None
             if campaign is not None:
                 assert store is not None
                 if field == "dispatch":
-                    raw = store.get_dispatch(plan.plan_id, ordinal)
+                    candidate_raw = store.get_dispatch(plan.plan_id, ordinal)
                 elif field == "link":
-                    raw = store.get_link(plan.plan_id, ordinal)
+                    candidate_raw = store.get_link(plan.plan_id, ordinal)
                 else:
-                    raw = store.get_result(plan.plan_id, ordinal)
-            row[field] = raw is not None
-            if raw is not None:
-                payload[f"candidate/{ordinal:04}/{field}"] = raw
+                    candidate_raw = store.get_result(plan.plan_id, ordinal)
+            row[field] = candidate_raw is not None
+            if candidate_raw is not None:
+                payload[f"candidate/{ordinal:04}/{field}"] = candidate_raw
                 if field == "dispatch":
-                    nonces.add(cast("str", parse(raw, limit=64 * 1024)["reservation_nonce"]))
+                    nonces.add(
+                        cast("str", parse(candidate_raw, limit=64 * 1024)["reservation_nonce"])
+                    )
         candidates.append(row)
     reservations: list[Row] = []
     attempts: list[Row] = []
@@ -219,36 +236,71 @@ def collect_search_artifacts(
                 continue
             intent = ledger.get_intent(attempt_id)
             outcome = ledger.get_outcome(attempt_id)
-            attempts.append({"attempt_id": attempt_id, "intent": intent is not None,
-                             "outcome": outcome is not None})
-            for field, raw in (("intent", intent), ("outcome", outcome)):
-                if raw is not None:
+            attempts.append(
+                {
+                    "attempt_id": attempt_id,
+                    "intent": intent is not None,
+                    "outcome": outcome is not None,
+                }
+            )
+            for field, attempt_raw in (("intent", intent), ("outcome", outcome)):
+                if attempt_raw is not None:
                     role = f"attempt/{attempt_id}/{field}"
-                    payload[role] = raw
-                    add_cas(digest(raw), 16 * 1024, role)
+                    payload[role] = attempt_raw
+                    add_cas(digest(attempt_raw), 16 * 1024, role)
             if intent is not None:
                 bindings = cast("dict[str, str]", load_scenario_intent(intent).document["bindings"])
-                for field in ("assumption_id", "scenario_id", "derived_view_id", "derived_normalized_sha256"):
-                    add_cas(bindings[field], 8 * 1024 * 1024 if field == "derived_normalized_sha256" else 64 * 1024, "attempt/" + attempt_id + "/intent")
+                for field in (
+                    "assumption_id",
+                    "scenario_id",
+                    "derived_view_id",
+                    "derived_normalized_sha256",
+                ):
+                    add_cas(
+                        bindings[field],
+                        8 * 1024 * 1024 if field == "derived_normalized_sha256" else 64 * 1024,
+                        "attempt/" + attempt_id + "/intent",
+                    )
             if outcome is not None:
                 document = parse(outcome)
                 if document["kind"] == "scenario_run_receipt_v1":
                     refs = cast("dict[str, str]", document["bindings"])
-                    add_cas(refs["replay_result_sha256"], 16 * 1024 * 1024, "attempt/" + attempt_id + "/outcome")
-                    add_cas(refs["evaluation_sha256"], 4 * 1024 * 1024, "attempt/" + attempt_id + "/outcome")
-    payload["snapshot"] = canonical({
-        "kind": "search_evidence_snapshot_v1", "schema_version": 1,
-        "finding_protocol_id": finding_protocol_id, "plan_id": plan.plan_id,
-        "protocol_id": protocol.protocol_id, "dataset_id": dataset_id,
-        "budget_id": budget.budget_id, "producer_version": producer_version,
-        "allocations": allocation_ordinals, "outer_stop": outer_stop is not None,
-        "inner_campaign": campaign is not None, "inner_stop": inner_stop is not None,
-        "ledger_prefix_observed": campaign is not None,
-        "reservations": reservations, "candidates": candidates,
-        "attempts": attempts, "cas": sorted(cas),
-    })
+                    add_cas(
+                        refs["replay_result_sha256"],
+                        16 * 1024 * 1024,
+                        "attempt/" + attempt_id + "/outcome",
+                    )
+                    add_cas(
+                        refs["evaluation_sha256"],
+                        4 * 1024 * 1024,
+                        "attempt/" + attempt_id + "/outcome",
+                    )
+    payload["snapshot"] = canonical(
+        {
+            "kind": "search_evidence_snapshot_v1",
+            "schema_version": 1,
+            "finding_protocol_id": finding_protocol_id,
+            "plan_id": plan.plan_id,
+            "protocol_id": protocol.protocol_id,
+            "dataset_id": dataset_id,
+            "budget_id": budget.budget_id,
+            "producer_version": producer_version,
+            "allocations": allocation_ordinals,
+            "outer_stop": outer_stop is not None,
+            "inner_campaign": campaign is not None,
+            "inner_stop": inner_stop is not None,
+            "ledger_prefix_observed": campaign is not None,
+            "reservations": reservations,
+            "candidates": candidates,
+            "attempts": attempts,
+            "cas": sorted(cas),
+        }
+    )
     _bounded, rebuilt, diagnostics = inspect_search_artifacts(payload)
-    if rebuilt["report_id"] != expected_report_id or canonical(cast("Row", rebuilt["report"])) != payload["finding_report"]:
+    if (
+        rebuilt["report_id"] != expected_report_id
+        or canonical(cast("Row", rebuilt["report"])) != payload["finding_report"]
+    ):
         raise EvidenceValidationError("Collected evidence differs from the pinned search report")
     payload["diagnostics"] = canonical(diagnostics)
     verified = verify_search_artifacts(payload)
@@ -272,10 +324,15 @@ def export_search_evidence(
     publisher: Callable[[Mapping[str, bytes]], SearchEvidencePackage],
 ) -> Row:
     payload = collect_search_artifacts(
-        finding_protocol_id, expected_report_id=expected_report_id, split=split,
-        findings_factory=findings_factory, datasets_factory=datasets_factory,
-        budgets_factory=budgets_factory, campaigns_factory=campaigns_factory,
-        ledger_factory=ledger_factory, campaign_inspector=campaign_inspector,
+        finding_protocol_id,
+        expected_report_id=expected_report_id,
+        split=split,
+        findings_factory=findings_factory,
+        datasets_factory=datasets_factory,
+        budgets_factory=budgets_factory,
+        campaigns_factory=campaigns_factory,
+        ledger_factory=ledger_factory,
+        campaign_inspector=campaign_inspector,
         producer_version=producer_version,
     )
     published = publisher(MappingProxyType(dict(payload)))

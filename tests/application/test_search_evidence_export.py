@@ -50,12 +50,14 @@ def inputs(case, authority_id):
             return None
 
     receipt = evaluate_search_findings(
-        authority_id, split="development",
+        authority_id,
+        split="development",
         findings_factory=lambda: LocalSearchFindingRegistry(case.root / "findings"),
         campaign_inspector=lambda plan_id: inspect(case, plan_id),
     )
     return receipt, {
-        "expected_report_id": receipt["report_id"], "split": "development",
+        "expected_report_id": receipt["report_id"],
+        "split": "development",
         "findings_factory": lambda: LocalSearchFindingRegistry(case.root / "findings"),
         "datasets_factory": lambda: LocalDatasetStore(case.root / "data", create=False),
         "budgets_factory": lambda: LocalCampaignBudgetStore(case.root / "runs"),
@@ -88,14 +90,22 @@ def test_export_delete_originals_and_core_only_reaudit(experiment_case, monkeypa
     destination.rename(moved)
     for path in source_dirs:
         shutil.rmtree(path)
-    for store in (LocalDatasetStore, LocalAttemptLedger, LocalCampaignBudgetStore,
-                  LocalSearchCampaignStore, LocalSearchFindingRegistry, LocalSearchPlanRegistry):
+    for store in (
+        LocalDatasetStore,
+        LocalAttemptLedger,
+        LocalCampaignBudgetStore,
+        LocalSearchCampaignStore,
+        LocalSearchFindingRegistry,
+        LocalSearchPlanRegistry,
+    ):
         monkeypatch.setattr(store, "__init__", forbidden)
     monkeypatch.setattr(sqlite3, "connect", forbidden)
     monkeypatch.setattr(subprocess, "Popen", forbidden)
     monkeypatch.setattr(socket, "socket", forbidden)
     monkeypatch.setattr(socket, "create_connection", forbidden)
-    verified = verify_search_package(read_search_evidence_bundle(moved), expected_bundle_id=exported["bundle_id"])
+    verified = verify_search_package(
+        read_search_evidence_bundle(moved), expected_bundle_id=exported["bundle_id"]
+    )
     assert verified == exported
     assert all(not path.exists() for path in source_dirs)
 
@@ -118,10 +128,14 @@ def test_publisher_cannot_substitute_a_different_payload(experiment_case):
     execute(case, plan_id)
     _original, options = inputs(case, authority_id)
     with pytest.raises(EvidenceValidationError, match="publisher returned different"):
-        export_search_evidence(authority_id, **options, publisher=lambda _: SimpleNamespace(artifacts={}))
+        export_search_evidence(
+            authority_id, **options, publisher=lambda _: SimpleNamespace(artifacts={})
+        )
 
 
-def test_collection_limit_stops_before_publication_and_preserves_originals(experiment_case, monkeypatch):
+def test_collection_limit_stops_before_publication_and_preserves_originals(
+    experiment_case, monkeypatch
+):
     case = experiment_case
     plan_id, authority_id = prepare(case)
     execute(case, plan_id)
@@ -138,16 +152,24 @@ def test_no_inner_campaign_does_not_open_a_ledger(experiment_case):
     plan_id, authority_id = prepare(case)
     run_bounded_search_campaign(
         plan_id,
-        canonical({"kind": "campaign_budget_request_v1", "schema_version": 1,
-                   "max_evaluations": 1, "max_wall_time_ms": 1,
-                   "max_storage_bytes": 32 * 1024 * 1024}),
+        canonical(
+            {
+                "kind": "campaign_budget_request_v1",
+                "schema_version": 1,
+                "max_evaluations": 1,
+                "max_wall_time_ms": 1,
+                "max_storage_bytes": 32 * 1024 * 1024,
+            }
+        ),
         split="development",
         plans_factory=lambda: LocalSearchPlanRegistry(case.root / "plans"),
-        registry_factory=lambda: case.registry, datasets_factory=lambda: case.data,
+        registry_factory=lambda: case.registry,
+        datasets_factory=lambda: case.data,
         budgets_factory=lambda: LocalCampaignBudgetStore(case.root / "runs", create=True),
         execution_inspector=lambda: None,
-        supervise=lambda _: SimpleNamespace(reason="time_limit", exit_code=8, elapsed_ns=1_000_000,
-                                           stdout=b"", stderr=b""),
+        supervise=lambda _: SimpleNamespace(
+            reason="time_limit", exit_code=8, elapsed_ns=1_000_000, stdout=b"", stderr=b""
+        ),
         nonce_factory=lambda: "a" * 32,
     )
     original, options = inputs(case, authority_id)
@@ -161,10 +183,16 @@ def test_no_inner_campaign_does_not_open_a_ledger(experiment_case):
 def test_confirmation_rejected_before_factories_or_identity():
     with pytest.raises(ConfirmationAccessDenied):
         collect_search_artifacts(
-            "invalid", expected_report_id="invalid", split="confirmation",
-            findings_factory=forbidden, datasets_factory=forbidden,
-            budgets_factory=forbidden, campaigns_factory=forbidden,
-            ledger_factory=forbidden, campaign_inspector=forbidden, producer_version="fixture",
+            "invalid",
+            expected_report_id="invalid",
+            split="confirmation",
+            findings_factory=forbidden,
+            datasets_factory=forbidden,
+            budgets_factory=forbidden,
+            campaigns_factory=forbidden,
+            ledger_factory=forbidden,
+            campaign_inspector=forbidden,
+            producer_version="fixture",
         )
     with pytest.raises(ConfirmationAccessDenied):
         verify_search_package(SimpleNamespace(), expected_bundle_id="invalid", split="confirmation")

@@ -14,21 +14,27 @@ from pathlib import Path
 import pytest
 from test_search_findings import ambiguous_engine, evaluate, execute, prepare
 
+from tickwitness.application.experiments import run_experiment
 from tickwitness.application.search_evidence_verification import (
     _diagnostics,
     inspect_search_artifacts,
     verify_search_artifacts,
 )
-from tickwitness.application.experiments import run_experiment
 from tickwitness.domain.evidence.run_records import canonical, digest, parse
-from tickwitness.domain.evidence.search_evidence import SearchEvidenceValidationError, validate_snapshot
+from tickwitness.domain.evidence.search_evidence import (
+    SearchEvidenceValidationError,
+    validate_snapshot,
+)
+from tickwitness.domain.research_contracts.executable import load_executable_protocol
 from tickwitness.domain.search.budgets import build_budget_stop, build_campaign_budget
 from tickwitness.domain.search.execution import load_campaign, load_dispatch
-from tickwitness.domain.research_contracts.executable import load_executable_protocol
 from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger
 from tickwitness.infrastructure.campaign_budget_store import LocalCampaignBudgetStore
 from tickwitness.infrastructure.local_dataset_store import LocalDatasetStore
-from tickwitness.infrastructure.search_campaign_store import LocalSearchCampaignStore, SearchCampaignNotFoundError
+from tickwitness.infrastructure.search_campaign_store import (
+    LocalSearchCampaignStore,
+    SearchCampaignNotFoundError,
+)
 from tickwitness.infrastructure.search_finding_registry import LocalSearchFindingRegistry
 
 
@@ -88,39 +94,63 @@ def proof(case, plan_id, authority_id):
                 if raw is not None:
                     artifacts[f"candidate/{ordinal:04}/{field}"] = raw
             if row["dispatch"]:
-                dispatch = load_dispatch(artifacts[f"candidate/{ordinal:04}/dispatch"], campaign=campaign)
+                dispatch = load_dispatch(
+                    artifacts[f"candidate/{ordinal:04}/dispatch"], campaign=campaign
+                )
                 for reservation in original:
                     if reservation.document["nonce"] == dispatch.document["reservation_nonce"]:
                         selected.add(reservation.attempt_id)
         candidates.append(row)
-    for reservation in (() if ledger is None else original):
+    for reservation in () if ledger is None else original:
         attempt_id = reservation.attempt_id
         if attempt_id not in selected:
             continue
         intent, outcome = ledger.get_intent(attempt_id), ledger.get_outcome(attempt_id)
-        attempts.append({"attempt_id": attempt_id, "intent": intent is not None, "outcome": outcome is not None})
+        attempts.append(
+            {"attempt_id": attempt_id, "intent": intent is not None, "outcome": outcome is not None}
+        )
         if intent is not None:
             artifacts[f"attempt/{attempt_id}/intent"] = intent
             cas.add(digest(intent))
             bindings = parse(intent)["bindings"]
-            cas.update(bindings[name] for name in ("assumption_id", "scenario_id", "derived_view_id", "derived_normalized_sha256"))
+            cas.update(
+                bindings[name]
+                for name in (
+                    "assumption_id",
+                    "scenario_id",
+                    "derived_view_id",
+                    "derived_normalized_sha256",
+                )
+            )
         if outcome is not None:
             artifacts[f"attempt/{attempt_id}/outcome"] = outcome
             cas.add(digest(outcome))
             document = parse(outcome)
             if document["kind"] == "scenario_run_receipt_v1":
-                cas.update(document["bindings"][name] for name in ("replay_result_sha256", "evaluation_sha256"))
+                cas.update(
+                    document["bindings"][name]
+                    for name in ("replay_result_sha256", "evaluation_sha256")
+                )
     for sha in cas:
         artifacts["cas/" + sha] = ledger.read_artifact(sha)
     snapshot = {
-        "kind": "search_evidence_snapshot_v1", "schema_version": 1,
-        "finding_protocol_id": authority_id, "plan_id": plan_id, "protocol_id": pdoc["protocol_id"],
+        "kind": "search_evidence_snapshot_v1",
+        "schema_version": 1,
+        "finding_protocol_id": authority_id,
+        "plan_id": plan_id,
+        "protocol_id": pdoc["protocol_id"],
         "dataset_id": pdoc["protocol"]["datasets"]["development"],
-        "budget_id": digest(artifacts["budget"]), "producer_version": "saved-fixture-proof-v1",
-        "allocations": allocations, "outer_stop": outer is not None,
-        "inner_campaign": header is not None, "inner_stop": "inner_stop" in artifacts,
-        "ledger_prefix_observed": header is not None, "reservations": reservations,
-        "candidates": candidates, "attempts": attempts, "cas": sorted(cas),
+        "budget_id": digest(artifacts["budget"]),
+        "producer_version": "saved-fixture-proof-v1",
+        "allocations": allocations,
+        "outer_stop": outer is not None,
+        "inner_campaign": header is not None,
+        "inner_stop": "inner_stop" in artifacts,
+        "ledger_prefix_observed": header is not None,
+        "reservations": reservations,
+        "candidates": candidates,
+        "attempts": attempts,
+        "cas": sorted(cas),
     }
     artifacts["snapshot"] = canonical(snapshot)
     finding = evaluate(case, authority_id)
@@ -132,15 +162,22 @@ def proof(case, plan_id, authority_id):
     return artifacts, bounded
 
 
-@pytest.mark.parametrize("threshold,outcome", [("-3", "NO_COUNTEREXAMPLE_FOUND"), ("0", "COUNTEREXAMPLE_FOUND")])
+@pytest.mark.parametrize(
+    "threshold,outcome", [("-3", "NO_COUNTEREXAMPLE_FOUND"), ("0", "COUNTEREXAMPLE_FOUND")]
+)
 def test_actual_closed_proof_survives_original_workspace_deletion_and_forbids_io(
     experiment_case, monkeypatch, threshold, outcome
 ):
     case = experiment_case
     plan_id, authority_id = prepare(case, threshold=threshold)
-    run_experiment(case.frozen.protocol_id, split="development",
-        registry_factory=lambda: case.registry, datasets_factory=lambda: case.data,
-        ledger_factory=case.ledger_factory, engine_factory=case.engine_factory)
+    run_experiment(
+        case.frozen.protocol_id,
+        split="development",
+        registry_factory=lambda: case.registry,
+        datasets_factory=lambda: case.data,
+        ledger_factory=case.ledger_factory,
+        engine_factory=case.engine_factory,
+    )
     execute(case, plan_id)
     artifacts, _bounded = proof(case, plan_id, authority_id)
     expected = evaluate(case, authority_id)
@@ -166,12 +203,27 @@ def test_actual_closed_proof_survives_original_workspace_deletion_and_forbids_io
     assert result["verification"]["ledger_content_reconstructed"] is True
     assert [row["index"] for row in result["snapshot"]["reservations"]] == [1, 2]
     assert len(result["snapshot"]["attempts"]) == 1
-    for key in ("native_replayed", "attempt_reserved", "original_publication_verified", "full_attempt_history_verified", "producer_version_authenticated"):
+    for key in (
+        "native_replayed",
+        "attempt_reserved",
+        "original_publication_verified",
+        "full_attempt_history_verified",
+        "producer_version_authenticated",
+    ):
         assert result["verification"][key] is False
 
 
-@pytest.mark.parametrize("mode,outcome", [("clean-time", "NO_COUNTEREXAMPLE_FOUND"), ("active-time", "NOT_EVALUABLE"), ("second-failure", "NOT_EVALUABLE")])
-def test_budget_prefix_inflight_and_multiline_failure_keep_their_original_semantics(experiment_case, mode, outcome):
+@pytest.mark.parametrize(
+    "mode,outcome",
+    [
+        ("clean-time", "NO_COUNTEREXAMPLE_FOUND"),
+        ("active-time", "NOT_EVALUABLE"),
+        ("second-failure", "NOT_EVALUABLE"),
+    ],
+)
+def test_budget_prefix_inflight_and_multiline_failure_keep_their_original_semantics(
+    experiment_case, mode, outcome
+):
     case = experiment_case
     plan_id, authority_id = prepare(case, values=[0, 1])
     execute(case, plan_id, mode=mode)
@@ -181,7 +233,10 @@ def test_budget_prefix_inflight_and_multiline_failure_keep_their_original_semant
     assert result["report"]["planned_predicate_truth"] is None
     assert result["report"]["coverage"]["unevaluated_ordinals"] == [2]
     if mode == "second-failure":
-        assert "\nwith detail\tretained" in result["report"]["candidate_assessments"][1]["error"]["message"]
+        assert (
+            "\nwith detail\tretained"
+            in result["report"]["candidate_assessments"][1]["error"]["message"]
+        )
 
 
 def test_false_witness_remains_counterexample_when_later_failure_is_sealed(experiment_case):
@@ -197,12 +252,25 @@ def test_false_witness_remains_counterexample_when_later_failure_is_sealed(exper
 def test_outer_only_deadline_never_invents_an_observed_empty_ledger(experiment_case):
     case = experiment_case
     plan_id, authority_id = prepare(case)
-    budget = build_campaign_budget(canonical({"kind": "campaign_budget_request_v1", "schema_version": 1,
-        "max_evaluations": 2, "max_wall_time_ms": 1, "max_storage_bytes": 512 * 1024 * 1024}),
-        plan_id=plan_id, protocol_id=case.frozen.protocol_id, nonce="e" * 32)
+    budget = build_campaign_budget(
+        canonical(
+            {
+                "kind": "campaign_budget_request_v1",
+                "schema_version": 1,
+                "max_evaluations": 2,
+                "max_wall_time_ms": 1,
+                "max_storage_bytes": 512 * 1024 * 1024,
+            }
+        ),
+        plan_id=plan_id,
+        protocol_id=case.frozen.protocol_id,
+        nonce="e" * 32,
+    )
     budgets = LocalCampaignBudgetStore(case.root / "runs", create=True)
     budgets.start(plan_id, budget.canonical_bytes)
-    budgets.write_stop(plan_id, build_budget_stop(budget, "time_limit", exit_code=8, elapsed_ns=1_000_000))
+    budgets.write_stop(
+        plan_id, build_budget_stop(budget, "time_limit", exit_code=8, elapsed_ns=1_000_000)
+    )
     artifacts, _bounded = proof(case, plan_id, authority_id)
     result = verify_search_artifacts(artifacts)
     assert result["report"]["outcome"] == "NOT_EVALUABLE"
@@ -213,8 +281,21 @@ def test_outer_only_deadline_never_invents_an_observed_empty_ledger(experiment_c
     assert not (case.root / "runs" / "slots").exists()
 
 
-@pytest.mark.parametrize("attack", ["snapshot_bool", "missing_intent_cas", "omitted_reservation", "extra_role", "rehashed_finding", "rehashed_diagnostics", "raw_source"])
-def test_role_presence_and_rehashed_outputs_cannot_replace_independent_reaudit(experiment_case, attack):
+@pytest.mark.parametrize(
+    "attack",
+    [
+        "snapshot_bool",
+        "missing_intent_cas",
+        "omitted_reservation",
+        "extra_role",
+        "rehashed_finding",
+        "rehashed_diagnostics",
+        "raw_source",
+    ],
+)
+def test_role_presence_and_rehashed_outputs_cannot_replace_independent_reaudit(
+    experiment_case, attack
+):
     case = experiment_case
     plan_id, authority_id = prepare(case)
     execute(case, plan_id)
@@ -248,14 +329,32 @@ def test_role_presence_and_rehashed_outputs_cannot_replace_independent_reaudit(e
 def test_diagnostics_select_adjacent_completed_candidates_without_baseline_or_causal_claims():
     # Declaration-level channel selection; full native paired proofs are covered
     # by the installed acceptance workflow, not this helper's synthetic mapping.
-    result = json.loads((Path(__file__).parents[1] / "fixtures" / "evidence-result.json").read_bytes())
+    result = json.loads(
+        (Path(__file__).parents[1] / "fixtures" / "evidence-result.json").read_bytes()
+    )
     raw = canonical(result)
-    bounded = {"execution": {"candidates": [
-        {"ordinal": 1, "status": "COMPLETED", "raw_result_audited": True, "run_id": "a" * 64},
-        {"ordinal": 3, "status": "COMPLETED", "raw_result_audited": True, "run_id": "b" * 64},
-        {"ordinal": 4, "status": "FAILED", "raw_result_audited": False, "run_id": None},
-    ]}}
-    diagnostics = _diagnostics(bounded, {"candidate/0001/result": raw, "candidate/0003/result": raw})
+    bounded = {
+        "execution": {
+            "candidates": [
+                {
+                    "ordinal": 1,
+                    "status": "COMPLETED",
+                    "raw_result_audited": True,
+                    "run_id": "a" * 64,
+                },
+                {
+                    "ordinal": 3,
+                    "status": "COMPLETED",
+                    "raw_result_audited": True,
+                    "run_id": "b" * 64,
+                },
+                {"ordinal": 4, "status": "FAILED", "raw_result_audited": False, "run_id": None},
+            ]
+        }
+    }
+    diagnostics = _diagnostics(
+        bounded, {"candidate/0001/result": raw, "candidate/0003/result": raw}
+    )
     assert diagnostics["baseline_comparison_performed"] is False
     assert diagnostics["causal_attribution_issued"] is False
     assert len(diagnostics["pairs"]) == 1

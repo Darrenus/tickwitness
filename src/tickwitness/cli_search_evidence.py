@@ -30,16 +30,22 @@ COMMANDS = frozenset({"export-search-evidence", "verify-search-evidence"})
 
 
 def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    export = commands.add_parser("export-search-evidence", help="Seal a pinned reaudited search report")
+    export = commands.add_parser(
+        "export-search-evidence", help="Seal a pinned reaudited search report"
+    )
     export.add_argument("protocol_id")
     export.add_argument("--expected-report-id", required=True)
     for name in ("plans", "store", "registry", "runs", "finding-registry", "output"):
         export.add_argument(f"--{name}", required=True, type=Path)
-    verify = commands.add_parser("verify-search-evidence", help="Rebuild search findings from a portable package")
+    verify = commands.add_parser(
+        "verify-search-evidence", help="Rebuild search findings from a portable package"
+    )
     verify.add_argument("bundle", type=Path)
     verify.add_argument("--expected-bundle-id")
     for command in (export, verify):
-        command.add_argument("--split", choices=("development", "confirmation"), default="development")
+        command.add_argument(
+            "--split", choices=("development", "confirmation"), default="development"
+        )
 
 
 def execute(arguments: argparse.Namespace) -> dict[str, object]:
@@ -56,10 +62,17 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
     identity(arguments.protocol_id)
     identity(arguments.expected_report_id)
     destination = arguments.output.resolve()
-    for source in (arguments.plans, arguments.store, arguments.registry,
-                   arguments.runs, arguments.finding_registry):
+    for source in (
+        arguments.plans,
+        arguments.store,
+        arguments.registry,
+        arguments.runs,
+        arguments.finding_registry,
+    ):
         if destination.is_relative_to(source.resolve()):
-            raise EvidenceValidationError("Evidence output must be outside all original source roots")
+            raise EvidenceValidationError(
+                "Evidence output must be outside all original source roots"
+            )
 
     def campaigns(plan_id: str) -> CampaignReader | None:
         budgets = LocalCampaignBudgetStore(arguments.runs, create=False)
@@ -79,14 +92,20 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
         arguments.protocol_id,
         expected_report_id=arguments.expected_report_id,
         split=arguments.split,
-        findings_factory=lambda: LocalSearchFindingRegistry(arguments.finding_registry, create=False),
+        findings_factory=lambda: LocalSearchFindingRegistry(
+            arguments.finding_registry, create=False
+        ),
         datasets_factory=lambda: LocalDatasetStore(arguments.store, create=False),
         budgets_factory=lambda: LocalCampaignBudgetStore(arguments.runs, create=False),
         campaigns_factory=campaigns,
         ledger_factory=lambda: LocalAttemptLedger(arguments.runs, create=False),
         campaign_inspector=lambda plan_id: inspect_bounded_campaign_paths(
-            plan_id, split=arguments.split, plans=arguments.plans,
-            registry=arguments.registry, store=arguments.store, runs=arguments.runs,
+            plan_id,
+            split=arguments.split,
+            plans=arguments.plans,
+            registry=arguments.registry,
+            store=arguments.store,
+            runs=arguments.runs,
         ),
         producer_version=version("tickwitness"),
         publisher=publish,

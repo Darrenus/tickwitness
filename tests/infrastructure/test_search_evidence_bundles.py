@@ -5,7 +5,6 @@ import os
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import FrozenInstanceError
-from pathlib import Path
 from threading import Barrier
 
 import pytest
@@ -17,7 +16,6 @@ from tickwitness.domain.evidence.search_evidence import (
     REQUIRED_ROLES,
 )
 from tickwitness.infrastructure import evidence_bundles as legacy
-from tickwitness.infrastructure import search_evidence_bundles as bundles
 from tickwitness.infrastructure.evidence_bundles import (
     BundleDestinationExistsError,
     BundleDurabilityError,
@@ -37,16 +35,18 @@ def artifacts():
     # Deliberately opaque: this layer must never pretend these bytes are a
     # semantically valid source/ledger proof. The app tests that separately.
     result = {role: ("opaque-" + role).encode() for role in REQUIRED_ROLES}
-    result.update({
-        "allocation/0001": b"allocation",
-        "candidate/0001/dispatch": b"dispatch",
-        "candidate/0001/link": b"link",
-        "candidate/0001/result": b"captured-result",
-        "reservation/0001": b"reservation",
-        "attempt/" + "a" * 64 + "/intent": b"intent",
-        "attempt/" + "a" * 64 + "/outcome": b"outcome",
-        "cas/" + "b" * 64: b"cas-body",
-    })
+    result.update(
+        {
+            "allocation/0001": b"allocation",
+            "candidate/0001/dispatch": b"dispatch",
+            "candidate/0001/link": b"link",
+            "candidate/0001/result": b"captured-result",
+            "reservation/0001": b"reservation",
+            "attempt/" + "a" * 64 + "/intent": b"intent",
+            "attempt/" + "a" * 64 + "/outcome": b"outcome",
+            "cas/" + "b" * 64: b"cas-body",
+        }
+    )
     return result
 
 
@@ -126,11 +126,14 @@ def test_tightening_boundaries_count_unique_objects_and_manifest(tmp_path):
             read_search_evidence_bundle(root, limits=limits)
 
 
-@pytest.mark.parametrize("field,maximum", [
-    ("max_total_bytes", MAX_TOTAL_BYTES),
-    ("max_files", MAX_FILES),
-    ("max_manifest_bytes", MAX_MANIFEST_BYTES),
-])
+@pytest.mark.parametrize(
+    "field,maximum",
+    [
+        ("max_total_bytes", MAX_TOTAL_BYTES),
+        ("max_files", MAX_FILES),
+        ("max_manifest_bytes", MAX_MANIFEST_BYTES),
+    ],
+)
 @pytest.mark.parametrize("kind", ["zero", "negative", "bool", "float", "broaden"])
 def test_limits_only_allow_positive_integers_tightening_profile(field, maximum, kind):
     value = {"zero": 0, "negative": -1, "bool": True, "float": 1.0, "broaden": maximum + 1}[kind]
@@ -147,10 +150,19 @@ def test_reader_rechecks_forged_or_foreign_limit_object(tmp_path):
             read_search_evidence_bundle(root, limits=limits)
 
 
-@pytest.mark.parametrize("role", [
-    "../raw", "cas/not-a-hash", "candidate/0000/result", "candidate/1025/result",
-    "candidate/0001/unknown", "allocation/1", "reservation/0000", "unknown",
-])
+@pytest.mark.parametrize(
+    "role",
+    [
+        "../raw",
+        "cas/not-a-hash",
+        "candidate/0000/result",
+        "candidate/1025/result",
+        "candidate/0001/unknown",
+        "allocation/1",
+        "reservation/0000",
+        "unknown",
+    ],
+)
 def test_invalid_role_rejected_before_filesystem_changes(tmp_path, role):
     payload = artifacts()
     payload[role] = b"invalid"
@@ -175,9 +187,20 @@ def test_invalid_payload_rejected_before_publication(tmp_path, attack):
     assert tuple(tmp_path.iterdir()) == ()
 
 
-@pytest.mark.parametrize("attack", [
-    "kind", "scope", "bool_version", "unknown", "role", "hash", "size_bool", "ref", "alias_size",
-])
+@pytest.mark.parametrize(
+    "attack",
+    [
+        "kind",
+        "scope",
+        "bool_version",
+        "unknown",
+        "role",
+        "hash",
+        "size_bool",
+        "ref",
+        "alias_size",
+    ],
+)
 def test_manifest_declarations_are_strict_even_when_reencoded(tmp_path, attack):
     root, _ = exported(tmp_path)
 
@@ -362,7 +385,7 @@ def test_postcommit_sync_failure_retains_complete_published_bundle(tmp_path, mon
 def test_immutable_bundle_rejects_duplicate_and_incomplete_payload(tmp_path):
     _root, package = exported(tmp_path)
     contents = package._contents
-    for malformed in (contents + (contents[0],), contents[1:], list(contents)):
+    for malformed in ((*contents, contents[0]), contents[1:], list(contents)):
         with pytest.raises(BundleError):
             SearchEvidenceBundle(package.manifest_bytes, malformed)
 

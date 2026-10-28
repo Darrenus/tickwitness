@@ -75,9 +75,7 @@ _DEFAULT_LIMITS = SearchEvidenceLimits()
 def _checked_limits(limits: SearchEvidenceLimits) -> SearchEvidenceLimits:
     if type(limits) is not SearchEvidenceLimits:
         raise BundleError("limits must be SearchEvidenceLimits")
-    return SearchEvidenceLimits(
-        limits.max_total_bytes, limits.max_files, limits.max_manifest_bytes
-    )
+    return SearchEvidenceLimits(limits.max_total_bytes, limits.max_files, limits.max_manifest_bytes)
 
 
 def _role_limit(role: object) -> int:
@@ -98,7 +96,10 @@ def _manifest(raw: bytes, limits: SearchEvidenceLimits) -> dict[str, object]:
             parse_constant=_io._reject_number,
         )
         if not isinstance(value, dict) or value.keys() != {
-            "kind", "schema_version", "scope", "roles"
+            "kind",
+            "schema_version",
+            "scope",
+            "roles",
         }:
             raise BundleError("Search evidence manifest has missing or unknown fields")
         if (
@@ -109,13 +110,15 @@ def _manifest(raw: bytes, limits: SearchEvidenceLimits) -> dict[str, object]:
         ):
             raise BundleError("Unsupported search evidence bundle markers")
         roles = value["roles"]
-        if not isinstance(roles, dict) or not REQUIRED_ROLES <= roles.keys():
+        if not isinstance(roles, dict) or not roles.keys() >= REQUIRED_ROLES:
             raise BundleError("Search evidence manifest lacks mandatory roles")
         object_sizes: dict[str, int] = {}
         for role, reference in roles.items():
             maximum = _role_limit(role)
             if not isinstance(reference, dict) or reference.keys() != {
-                "sha256", "size_bytes", "ref"
+                "sha256",
+                "size_bytes",
+                "ref",
             }:
                 raise BundleError("Search artifact reference has missing or unknown fields")
             sha, size = reference["sha256"], reference["size_bytes"]
@@ -142,7 +145,7 @@ def _manifest(raw: bytes, limits: SearchEvidenceLimits) -> dict[str, object]:
 
 
 def _artifacts(artifacts: Mapping[str, bytes]) -> dict[str, bytes]:
-    if not isinstance(artifacts, Mapping) or not REQUIRED_ROLES <= artifacts.keys():
+    if not isinstance(artifacts, Mapping) or not artifacts.keys() >= REQUIRED_ROLES:
         raise BundleError("Search evidence requires every mandatory artifact role")
     result: dict[str, bytes] = {}
     for role, raw in artifacts.items():
@@ -202,10 +205,14 @@ def _prepare(artifacts: Mapping[str, bytes]) -> SearchEvidenceBundle:
         }
         for role, raw in payload.items()
     }
-    manifest = _io._canonical({
-        "kind": "search_evidence_bundle_v1", "schema_version": 1,
-        "scope": "development_scoped_search_evidence_v1", "roles": roles,
-    })
+    manifest = _io._canonical(
+        {
+            "kind": "search_evidence_bundle_v1",
+            "schema_version": 1,
+            "scope": "development_scoped_search_evidence_v1",
+            "roles": roles,
+        }
+    )
     return SearchEvidenceBundle(manifest, tuple(sorted(payload.items())))
 
 
@@ -313,8 +320,7 @@ def read_search_evidence_bundle(
             manifest = _manifest(raw, limits)
             roles = cast("dict[str, dict[str, object]]", manifest["roles"])
             sizes = {
-                cast("str", ref["sha256"]): cast("int", ref["size_bytes"])
-                for ref in roles.values()
+                cast("str", ref["sha256"]): cast("int", ref["size_bytes"]) for ref in roles.values()
             }
             try:
                 objects = _io._directory(directory, "objects")
