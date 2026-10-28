@@ -9,7 +9,7 @@ import pytest
 from tickwitness.cli import main
 from tickwitness.domain.evidence.run_records import canonical
 
-BUNDLE_ID = "2261f5c82bf19d3f088ecd64fed131ae71635d686a4a4b1a8e9e6c43c78369"
+BUNDLE_ID = "2261f5c82bf19d3f088ecd64fed131ae71635d686a4a4a4b1a8e9e6c43c78369"
 REPORT_ID = "398ead2cd2ed7db4f4ba69a1cd3e4dd4acc6ae9d80abd7897307ca94d4af75bb"
 CORPUS = Path(__file__).resolve().parents[1] / "examples" / "alpha" / "counterexample"
 
