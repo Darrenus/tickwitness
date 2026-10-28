@@ -1,6 +1,6 @@
 # Reduction Input v1
 
-状态：S09-01a 合同冻结，远端实现验收待完成。决策见 [ADR 0028](../adr/0028-valid-prefix-reduction-inputs.md)。本切片只准备 development 回放输入；[S09-01 / #25](https://github.com/Darrenus/tickwitness/issues/25) 的真实前缀回放与有效状态验收仍留给 S09-01b，不能据此关闭整个 story。[#24](https://github.com/Darrenus/tickwitness/issues/24) 的外部尝试继续为 `0 / PENDING`，本轮不采集或补造外部记录。
+状态：S09-01a 已完成[远端实现验收](../planning/sprint-09-status.md#s09-01a-远端验收记录)，[PR #95](https://github.com/Darrenus/tickwitness/pull/95) 待owner接受。决策见 [ADR 0028](../adr/0028-valid-prefix-reduction-inputs.md)。本切片只准备 development 回放输入；[S09-01 / #25](https://github.com/Darrenus/tickwitness/issues/25) 的真实前缀回放与有效状态验收仍留给 S09-01b，不能据此关闭整个 story。[#24](https://github.com/Darrenus/tickwitness/issues/24) 的外部尝试继续为 `0 / PENDING`，本轮不采集或补造外部记录。
 
 ## 1. 已认证源与合法算子
 
@@ -86,4 +86,4 @@ Descriptor 与回执明确固定：
 
 Installed core smoke 验收 no-op、focus4/through6/warmup1..3、delay1e9 重绑定、非法端点／锚点／checkpoint、原始 hash 篡改与重哈希后的语义篡改拒绝，以及移动源和 preparation 后的相同复算结果。Guard 禁 native、网络、SQLite、原 stores、attempt reservation 与研究 worker；准备和重验保持源字节树不变。确认 split 和不安全 request 另以 pre-IO tripwire 检查，不把输出声明当权限防护。
 
-Smoke 保存实际 runtime interpreter identity、请求、包、回执与失败诊断，成功报告唯一为 `reduction-input-smoke/report.json`。异常保留诊断并继续失败，不写 accepted 报告。全部 runtime、安装、测试、构建和格式化在远端执行；本合同不预记验收通过。后续 S09-01b 需要真实完整前缀重放和有效状态证明，S09-02 另验预算与结论保持。
+Smoke 保存实际 runtime interpreter identity、请求、包、回执与失败诊断，目录内成功报告唯一为 `reduction-input-smoke/report.json`，并向显式 `--report` 路径写出相同字节。异常保留诊断并继续失败，不写 accepted 报告。全部 runtime、安装、测试、构建和格式化在远端执行；实际head／artifact见上述验收记录。后续 S09-01b 需要真实完整前缀重放和有效状态证明，S09-02 另验预算与结论保持。

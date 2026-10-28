@@ -2,6 +2,8 @@
 
 适用版本：已发行的`0.1.0a1`技术预览，固定源提交、CI与原制品见[发布记录](releases/0.1.0a1.md)。没有PyPI发布。`0.2.0.dev0`是后续开发分支，其新增场景校验及耦合回放时钟压力执行不属于0.1发行物；开发检查以对应PR实际结果为准。场景回执仅支持ledger持久化及独立复核；旧八角色bundle导出只支持baseline。
 
+未发行开发分支的[完整搜索证据](contracts/search-evidence-v1.md)、[一次确认窗口](contracts/confirmation-access-v1.md)、[技术alpha复验包](contracts/alpha-scorecard-v1.md)与[合法缩减输入准备](contracts/reduction-input-v1.md)分别遵循各自版本合同及实际PR验收，不追记到0.1发行认证。缩减准备只生成完整必要前缀输入；不执行引擎、不生成运行态、不验证反例保持，当前没有checkpoint恢复能力。[Sprint 9状态](planning/sprint-09-status.md)区分输入准备与后续实际执行；真实外部复验仍为0／PENDING。
+
 ## 按任务划分的环境矩阵
 
 以下是现有 [Engineering CI](../.github/workflows/engineering.yml) 配置对应的验收组合。只有候选 commit 的实际 job 成功后，才能在发布记录中记为该组合通过；历史 PR 成功或配置存在不能替代本候选的结果。
