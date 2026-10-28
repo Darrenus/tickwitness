@@ -1,13 +1,13 @@
 # Sprint 8 独立复核与确认窗口状态
 
-更新：2026-10-28（Asia/Singapore）。Owner 已合并 [PR #91](https://github.com/Darrenus/tickwitness/pull/91)，基线 merge 为 `2a83d39022ce5d53edbb42dafef897c6b5d1bd0c`；Sprint 7 在其声明范围接受。`0.2.0.dev0` 仍未发行，真实用户采用与独立人类领域复验没有新增证据。
+更新：2026-10-28（Asia/Singapore）。Owner 已合并 [PR #92](https://github.com/Darrenus/tickwitness/pull/92)，基线 merge 为 `275b5e1a8c8f706f5636773061b11da53231194a`；Sprint 7 与 S08-01 在各自声明范围接受。`0.2.0.dev0` 仍未发行，真实用户采用与独立人类领域复验没有新增证据。
 
 ## 切片与验收门
 
 | 故事 | 实际范围 | 状态 |
 | --- | --- | --- |
-| S08-01 / #22 | 搜索数据／约束／候选／原预算槽位／结果／停止／版本完整闭包，离线重建 finding 和候选 trace diagnostics | 远端验收通过，[PR #92](https://github.com/Darrenus/tickwitness/pull/92) 待 owner 审阅；#22 保持打开 |
-| S08-02 / #23 | 确认协议与一次性开启／暴露记账 | 后续实现，本轮拒绝 confirmation |
+| S08-01 / #22 | 搜索数据／约束／候选／原预算槽位／结果／停止／版本完整闭包，离线重建 finding 和候选 trace diagnostics | Owner 已合并 [PR #92](https://github.com/Darrenus/tickwitness/pull/92)，#22 在受限profile范围接受并关闭 |
+| S08-02 / #23 | 确认协议与一次性开启／暴露记账 | 本轮实现，远端验收待完成；旧探索接口继续拒绝 confirmation |
 | S08-03 / #24 | Alpha scorecard 与真实外部复验记录 | 后续验收，未新增外部尝试或采用证据 |
 
 原 [Sprint backlog](sprint-backlog.md#s8--独立复现与-alpha-门槛) 的12h／12h／8h专项估算与每Sprint持续质量容量保持；实际工时未登记，测试数量不替代外部验收。
@@ -55,4 +55,14 @@ Verify仅需包和core安装，不需要原SQLite／registry／ledger／workspac
 
 初轮远端发现格式／导入、nullable bytes循环变量与snapshot类型问题，应用远端格式补丁及类型修正后完整重验。安装smoke最初把无inner案例的ledger重建旗标写死为true，已改为精确匹配 `ledger_prefix_observed`，保持未观察语义，而非放宽报告oracle。AI 并行静态审阅另补强了输出必须位于原source roots之外；该审阅属于AI辅助，不宣称独立人类领域接受。
 
-[S08-01 / #22](https://github.com/Darrenus/tickwitness/issues/22) 的实现与远端验收在上述受限profile范围交付，仍待owner合并#92后接受；不自动关闭故事、不发行新版本。S08-02确认窗口、S08-03真实外部复验与alpha scorecard、S10恢复和真实访谈继续独立验收，未新增实际工时、市场采用、研究收益或独立人类复验记录。
+[S08-01 / #22](https://github.com/Darrenus/tickwitness/issues/22) 的实现与远端验收已由owner合并#92在上述受限profile范围接受并关闭；不发行新版本。S08-02确认窗口、S08-03真实外部复验与alpha scorecard、S10恢复和真实访谈继续独立验收，未新增实际工时、市场采用、研究收益或独立人类复验记录。
+
+## S08-02 实现边界与验收门
+
+合同见 [Confirmation Access v1](../contracts/confirmation-access-v1.md)，决策见 [ADR 0026](../adr/0026-one-shot-confirmation-exposure.md)。以独立ConfirmationProtocol冻结实际v1／v2源声明、确认窗口身份、完整来源footprint、最大事件数及整窗一次开启政策。旧source的development_only读取政策不改变。冻结允许内部结构／质量／forward-disjoint预检，但不向caller返回确认观测；只有显式open在持久提交后返回整个已绑定窗口，不截断、不分页、不评估原claim。
+
+共享暴露账本固定在dataset root的confirmation-state，不接受按实验切换账本参数。同source／instrument／session的trade ID交集或book闭区间交叠继承已暴露状态，换名称、协议、registry、raw封装或支持的子集不恢复“未见”。内部预检失败不消费；一旦exposure提交，即使返回或stdout失败也不退款。并发重查与提交在同一全账本锁内；丢失、损坏或未确认持久化明确failclosed。固定初始化sentinel用于发现整个state误删；不自动修补已初始化状态。
+
+确认读取最多1000个事件，且不超过源协议和本次冻结上限；origin2MiB、协议／单exposure各3MiB，整个账本最多256记录／32MiB，超限整体拒绝。无匹配记录仅表示本managed ledger未登记交叠，不能认证真实历史未见、预注册、外部来源或宿主owner保密。Owner改source/session、删除全部可信状态或另起store根仍属于配置／信任边界。平台底层数据工具不因此变成对owner的沙箱。
+
+远端验收需覆盖：实际v1／v2冻结和整窗首次开启、重复／新名称／跨协议与registry拒绝、book重分段及trade来源交叠、独立窗口可开启、超限前拒、提交前后失败、同源并发唯一赢家、坏账本／缺件／符号链接与初始化不确定、旧探索confirmation在I/O前拒绝，以及实际wheel与tar.gz内脚本安装链路。全部执行仍在远端，报告和合成状态保留30天；实际head、运行、数量和artifact待回填。该切片不创建native执行、研究attempt／统计trial或确认finding，S08-03与独立人类复验门保持。

@@ -1,6 +1,6 @@
 # ADR 0025：以独立内容闭包封存搜索证据并离线重审
 
-- 状态：Proposed；S08-01 已远端验收，[PR #92](https://github.com/Darrenus/tickwitness/pull/92) 待 owner 接受。
+- 状态：Accepted；owner 已合并 [PR #92](https://github.com/Darrenus/tickwitness/pull/92)，merge `275b5e1a8c8f706f5636773061b11da53231194a`。
 - 日期：2026-10-28。
 - 基线：owner 已合并 [PR #91](https://github.com/Darrenus/tickwitness/pull/91)，merge `2a83d39022ce5d53edbb42dafef897c6b5d1bd0c`。
 - 合同：[Search Evidence v1](../contracts/search-evidence-v1.md)。

@@ -39,7 +39,7 @@ registry 使用独立可信 owner 根目录、内容寻址源码与协议文件�
 uv run --locked tickwitness read-protocol-data "$TW_PROTOCOL" --split confirmation --store .local/data --registry .local/protocols
 ```
 
-此命令以退出码 **5** 拒绝，stderr 为 `confirmation_access_denied`，stdout 无 observation。拒绝发生在构造或读取 repository **之前**；即使传入不存在的路径也不创建目录。当前没有解封 flag、override 或 confirmation evaluator。inspect 只返回声明与引用，不返回行情值。
+此命令以退出码 **5** 拒绝，stderr 为 `confirmation_access_denied`，stdout 无 observation。拒绝发生在构造或读取 repository **之前**；即使传入不存在的路径也不创建目录。该探索接口不提供解封 flag 或 override；独立的一次性确认读取见 [Confirmation Access v1](contracts/confirmation-access-v1.md)，不授权 confirmation evaluator。inspect 只返回声明与引用，不返回行情值。
 
 这是 CLI/application 的路由约束，适用于调用这些接口的受约束客户端。拥有宿主文件访问权限的用户仍可直接读取或另行导入原始数据；它不是多租户授权、保密 vault 或防止恶意研究员旁路的安全证明。确认集的单次使用、跨协议尝试计数、泄漏审计及完整 trial attempt ledger 仍需后续实现，不能将本功能宣传为“绝不会作弊的 Agent”。
 

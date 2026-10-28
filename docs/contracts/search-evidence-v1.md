@@ -1,6 +1,6 @@
 # Search Evidence v1
 
-状态：S08-01 实现合同，[远端验收记录](../planning/sprint-08-status.md#s08-01-远端验收记录) 已回填，[PR #92](https://github.com/Darrenus/tickwitness/pull/92) 待 owner 接受。基线为 owner 已合并 [PR #91](https://github.com/Darrenus/tickwitness/pull/91)，merge `2a83d39022ce5d53edbb42dafef897c6b5d1bd0c`。本轮保持 `0.2.0.dev0`，不发行新版本；S08-02 的确认协议与一次性解封另行验收。
+状态：S08-01 合同已由 owner 合并 [PR #92](https://github.com/Darrenus/tickwitness/pull/92) 接受，merge `275b5e1a8c8f706f5636773061b11da53231194a`；[远端验收记录](../planning/sprint-08-status.md#s08-01-远端验收记录) 已回填。本轮保持 `0.2.0.dev0`，不发行新版本；S08-02 的[确认协议与一次性开启](confirmation-access-v1.md)另行验收。
 
 ## 内容闭包与权限
 
