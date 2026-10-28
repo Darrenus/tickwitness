@@ -134,4 +134,6 @@ raw 与显式字段业务投影分别给每通道首差异，保留原始值、�
 
 - [ADR 0023：以独立合同监督 campaign 总资源预算](../adr/0023-supervised-campaign-resource-budgets.md)：owner 已合并 #90；整份执行阶段 deadline、候选入场容量预留、原预算共用及停止证据保留；计量为受管理 payload，不冒充宿主磁盘或 RAM quota。
 
-- [ADR 0024：独立的有范围搜索结论](../adr/0024-scoped-search-findings.md)：S07-03；复制数字 criterion 为新条件命题，从真实来源与原 ledger 只读重审后输出见证、覆盖、预算和不可评价原因，不扩大旧 baseline 权限。
+- [ADR 0024：独立的有范围搜索结论](../adr/0024-scoped-search-findings.md)：owner 已合并 #91；复制数字 criterion 为新条件命题，从真实来源与原 ledger 只读重审后输出见证、覆盖、预算和不可评价原因，不扩大旧 baseline 权限。
+
+- [ADR 0025：可迁移搜索证据闭包](../adr/0025-portable-search-evidence.md)：S08-01；封存明确缺省、原协议槽位前缀和完整候选CAS，移除原workspace后core-only重建同一报告与trace诊断，FINAL仅为内容闭包。

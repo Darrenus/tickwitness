@@ -1,6 +1,6 @@
 # Search Findings v1
 
-状态：S07-03 实现合同，[远端验收已通过](../planning/sprint-07-status.md#s07-03-远端验收记录)，[PR #91](https://github.com/Darrenus/tickwitness/pull/91) 待 owner 接受。基线为 owner 已合并的 [S07-02 / PR #90](https://github.com/Darrenus/tickwitness/pull/90)，merge `935282c415d167bdcc8485569e47e5221e95b4c3`。本轮保持 `0.2.0.dev0`，不发行新版本。
+状态：Accepted；S07-03 [远端验收已通过](../planning/sprint-07-status.md#s07-03-远端验收记录)，owner 已合并 [PR #91](https://github.com/Darrenus/tickwitness/pull/91)。基线为 owner 已合并的 [S07-02 / PR #90](https://github.com/Darrenus/tickwitness/pull/90)，merge `935282c415d167bdcc8485569e47e5221e95b4c3`。本轮保持 `0.2.0.dev0`，不发行新版本。
 
 ## 新命题与权限
 
