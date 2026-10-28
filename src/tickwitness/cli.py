@@ -22,6 +22,9 @@ from tickwitness.application.tagged_queue_execution import TaggedQueueReservatio
 from tickwitness.cli_campaign_budgets import COMMANDS as CAMPAIGN_BUDGET_COMMANDS
 from tickwitness.cli_campaign_budgets import add_commands as add_campaign_budget_commands
 from tickwitness.cli_campaign_budgets import execute as execute_campaign_budget_command
+from tickwitness.cli_confirmation import COMMANDS as CONFIRMATION_COMMANDS
+from tickwitness.cli_confirmation import add_commands as add_confirmation_commands
+from tickwitness.cli_confirmation import execute as execute_confirmation_command
 from tickwitness.cli_experiments import COMMANDS as EXPERIMENT_COMMANDS
 from tickwitness.cli_experiments import add_commands as add_experiment_commands
 from tickwitness.cli_experiments import execute as execute_experiment_command
@@ -62,6 +65,10 @@ from tickwitness.domain.evidence.evaluation import EvaluationValidationError
 from tickwitness.domain.evidence.run_records import EvidenceValidationError
 from tickwitness.domain.evidence.tagged_finding_report import TaggedFindingIneligibleError
 from tickwitness.domain.replay.specs import ReplayValidationError
+from tickwitness.domain.research_contracts.confirmation import (
+    ConfirmationAlreadyExposed,
+    ConfirmationValidationError,
+)
 from tickwitness.domain.research_contracts.protocols import ProtocolValidationError
 from tickwitness.domain.search.plans import SearchPlanValidationError
 from tickwitness.infrastructure.attempt_ledger import (
@@ -82,6 +89,10 @@ from tickwitness.infrastructure.evidence_bundles import (
 from tickwitness.infrastructure.executable_registry import (
     ExecutableProtocolNotFoundError,
     ExecutableRegistryError,
+)
+from tickwitness.infrastructure.local_confirmation import (
+    ConfirmationNotFoundError,
+    ConfirmationStoreError,
 )
 from tickwitness.infrastructure.local_dataset_store import (
     DatasetNotFoundError,
@@ -225,13 +236,16 @@ def main(argv: list[str] | None = None) -> int:
     add_campaign_budget_commands(commands)
     add_search_finding_commands(commands)
     add_search_evidence_commands(commands)
+    add_confirmation_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in SEARCH_EVIDENCE_COMMANDS:
+        if arguments.command in CONFIRMATION_COMMANDS:
+            output, identity = execute_confirmation_command(arguments)
+        elif arguments.command in SEARCH_EVIDENCE_COMMANDS:
             output, identity = execute_search_evidence_command(arguments), ""
         elif arguments.command in SEARCH_FINDING_COMMANDS:
             output, identity = execute_search_finding_command(arguments), ""
@@ -344,6 +358,29 @@ def main(argv: list[str] | None = None) -> int:
             ]
             output = compare_replays(*result_files).document
             identity = ""
+    except ConfirmationAlreadyExposed as error:
+        print(
+            json.dumps(
+                {
+                    "error": {
+                        "code": "confirmation_already_exposed",
+                        "message": str(error),
+                        "related_exposure_ids": sorted(
+                            item.exposure_id for item in error.exposures
+                        ),
+                    }
+                },
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+        return 5
+    except ConfirmationValidationError as error:
+        return _write_error("invalid_confirmation_protocol", error, 2)
+    except ConfirmationNotFoundError as error:
+        return _write_error("confirmation_protocol_not_found", error, 4)
+    except ConfirmationStoreError as error:
+        return _write_error("confirmation_store_integrity_or_io_failure", error, 3)
     except ConfirmationAccessDenied as error:
         return _write_error("confirmation_access_denied", error, 5)
     except InputReadError as error:

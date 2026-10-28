@@ -137,3 +137,5 @@ raw 与显式字段业务投影分别给每通道首差异，保留原始值、�
 - [ADR 0024：独立的有范围搜索结论](../adr/0024-scoped-search-findings.md)：owner 已合并 #91；复制数字 criterion 为新条件命题，从真实来源与原 ledger 只读重审后输出见证、覆盖、预算和不可评价原因，不扩大旧 baseline 权限。
 
 - [ADR 0025：可迁移搜索证据闭包](../adr/0025-portable-search-evidence.md)：S08-01；封存明确缺省、原协议槽位前缀和完整候选CAS，移除原workspace后core-only重建同一报告与trace诊断，FINAL仅为内容闭包。
+
+- [ADR 0026：一次性确认窗口与不可逆暴露记账](../adr/0026-one-shot-confirmation-exposure.md)：S08-02；独立冻结整窗读取政策，按同一数据根的稳定来源交叠持久消费，改名称或协议不恢复未接触状态；不认证宿主保密或全局历史。
