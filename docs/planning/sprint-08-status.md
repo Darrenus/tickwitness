@@ -1,14 +1,14 @@
 # Sprint 8 独立复核与确认窗口状态
 
-更新：2026-10-28（Asia/Singapore）。Owner 已合并 [PR #92](https://github.com/Darrenus/tickwitness/pull/92)，基线 merge 为 `275b5e1a8c8f706f5636773061b11da53231194a`；Sprint 7 与 S08-01 在各自声明范围接受。`0.2.0.dev0` 仍未发行，真实用户采用与独立人类领域复验没有新增证据。
+更新：2026-10-28（Asia/Singapore）。Owner 已合并 [PR #93](https://github.com/Darrenus/tickwitness/pull/93)，基线 merge 为 `97822d7a74931a829bd3355fb40d85d4504de59d`；Sprint 7 与 S08-01／02 在各自声明范围接受。`0.2.0.dev0` 仍未发行。Owner 已表示会联系一位外部用户；外部复验实际记录尚未收到，不能把联系计划记成尝试、采用或人类领域接受。
 
 ## 切片与验收门
 
 | 故事 | 实际范围 | 状态 |
 | --- | --- | --- |
 | S08-01 / #22 | 搜索数据／约束／候选／原预算槽位／结果／停止／版本完整闭包，离线重建 finding 和候选 trace diagnostics | Owner 已合并 [PR #92](https://github.com/Darrenus/tickwitness/pull/92)，#22 在受限profile范围接受并关闭 |
-| S08-02 / #23 | 确认协议与一次性开启／暴露记账 | 远端验收通过，[PR #93](https://github.com/Darrenus/tickwitness/pull/93) 待 owner 接受；#23 保持打开 |
-| S08-03 / #24 | Alpha scorecard 与真实外部复验记录 | 后续验收，未新增外部尝试或采用证据 |
+| S08-02 / #23 | 确认协议与一次性开启／暴露记账 | Owner 已合并 [PR #93](https://github.com/Darrenus/tickwitness/pull/93)，#23 在受限profile范围接受并关闭 |
+| S08-03 / #24 | Alpha scorecard 与真实外部复验记录 | S08-03a已远端技术验收，[PR #94](https://github.com/Darrenus/tickwitness/pull/94) 待owner接受；外部0／PENDING，#24整体保持打开 |
 
 原 [Sprint backlog](sprint-backlog.md#s8--独立复现与-alpha-门槛) 的12h／12h／8h专项估算与每Sprint持续质量容量保持；实际工时未登记，测试数量不替代外部验收。
 
@@ -95,4 +95,49 @@ Verify仅需包和core安装，不需要原SQLite／registry／ledger／workspac
 
 初轮远端发现新增持久层测试fixture使用了旧v1协议不支持的clock policy，47个用例在进入目标逻辑前被拒绝；改为既有合法 `capture_order_unbound_v1` 后重验，不放宽领域规则或断言。同时应用远端格式补丁，修正异常链、循环闭包和一处冗余cast。AI交叉审阅补强了并发AlreadyExposed异常保留、全账本origin互斥与线性区间扫描；该审阅仍为AI辅助，不替代独立人类领域接受。
 
-[S08-02 / #23](https://github.com/Darrenus/tickwitness/issues/23) 的实现与远端验收在上述受限profile范围交付，仍待owner接受 [PR #93](https://github.com/Darrenus/tickwitness/pull/93)，保持打开。后续文档提交有独立最新head检查，不冒充同一功能run；S08-03外部复验／alpha scorecard、S10恢复和真实访谈继续分别验收，不发行新版本，也不新增实际工时、市场采用或研究收益记录。
+[S08-02 / #23](https://github.com/Darrenus/tickwitness/issues/23) 的实现与远端验收已由owner合并 [PR #93](https://github.com/Darrenus/tickwitness/pull/93) 在上述受限profile范围接受并关闭。后续文档提交有独立最新head检查，不冒充同一功能run；S08-03外部复验／alpha scorecard、S10恢复和真实访谈继续分别验收，不发行新版本，也不新增实际工时、市场采用或研究收益记录。
+
+## S08-03a 实现边界与外部门
+
+合同见 [Alpha Scorecard v1](../contracts/alpha-scorecard-v1.md)，决策见 [ADR 0027](../adr/0027-reproducible-alpha-scorecard.md)，转交步骤见 [外部复验手册](../alpha-reproduction.md)。本轮是原8h故事的软件切片：把实际历史native产生的两份合成证据、真实core wheel、手册与stdlib回执脚本封为严格kit，独立重建技术scorecard，外部真实尝试待对方执行后再记入原故事；不补记实际工时或扩充Sprint容量。
+
+语料见 [examples/alpha](../../examples/alpha/README.md)，原字节来自owner接受的S08-01实际Ubuntu artifact12804098468；原生成head／merge与当前组装代码分开追踪。反例使用gt0 USD，完整all-true参考使用gt−3 USD，二者是不同冻结问题，不提供控制变量因果或真实市场收益证明。Kit不执行随包wheel或脚本；接收者在新core环境按独立渠道pin安装并运行。
+
+每次qualify均重新审计两份search evidence；完整clean要求全eligible已审计且全true，预算内未发现不顶替clean。无效扰动从实际冻结assumption上界+1ns构造，并调用真实validator取得指定范围拒绝。Publication probe在新目录实际执行正常／重复拒绝／提交前同步失败／提交后父目录同步失败；后者保留完整目录、返回不确定错误而不产生成功发布回执，保留内容仍需重新语义核验。不据此认证真实断电、历史磁盘状态或S10恢复。
+
+Kit为独立32MiB／512files／256KiB manifest profile，wheel≤4MiB、guide与runner各≤64KiB；超限整体拒绝。所有路径、hash、完整文件集、有界普通文件与原子no-replace受检查。保存的scorecard必须当场重算并逐字节相同，不能只信已存PASS。原研究attempt预算、native执行、确认访问和claim权限不变。
+
+外部runner使用真实安装CLI，保留成功、失败或超时及环境／退出码／诊断，自报participant role只标 `SELF_REPORTED_UNREVIEWED`，不会自动把gate改成已完成。Owner会联系真实外部用户，实际记录收到并核实前external_attempts=0／external_successes=0／PENDING；CI、AI审阅、维护者复跑和合并均不计外部尝试。#24整体保持打开，不发行alpha、不新增采用或独立人类领域接受记录。
+
+远端验收覆盖实际wheel与tar.gz内脚本／guide／原始语料、独立cwd与迁移后kit、无native／network／原stores／SQLite／budget写入口、真实fault probe、新saved receipt重算、重hash伪造拒绝、限额与安全IO、runner automation真实成功和真实错误留痕。报告、kit、probe与未审阅submission保留30天；实际运行、head与artifact见下节，所有项目运行仍在远端。
+
+## S08-03a 远端验收记录
+
+功能代码 head `1de34c661b34e23fcc0826d294ce16c43bd5d3bf` 的 [Engineering 40680161528](https://github.com/Darrenus/tickwitness/actions/runs/40680161528) 与 [Documentation 40680161350](https://github.com/Darrenus/tickwitness/actions/runs/40680161350) 共13 checks全部通过，包含实际源码归档／wheel组合安装验收。实际 merge checkout 为 `b89bc2ac27bb4e8811b84138f32dce85afb8fd31`，与 PR head、原始语料生成revision分别记录。
+
+核心 Ubuntu 24.04／macOS 15 × Python 3.12／3.13／3.14 六组合各 **3005 passed / 112 optional-native skips**；原生 Ubuntu 24.04 与 macOS 26 各 **3114 passed / 3 core-only skips / 313 warnings**。Lint、265 文件格式、121 source files严格类型检查、86 文档／442 本地链接通过；这些数字属于上述功能 run，warnings保留。所有项目运行、测试、格式化、构建、安装与原生回放均在远端，本机仅文本编辑、静态审阅、Git／gh控制、下载与JSON／SHA读取。
+
+安装报告为 `installed_alpha_scorecard_acceptance_v1`。报告、完整kit、真实probe目录、未审阅automation提交、可转交归档与handoff保留30天。
+
+| 实际 artifact（共同后缀 `b89bc2ac27bb4e8811b84138f32dce85afb8fd31`） | ID 与内容 |
+| --- | --- |
+| `alpha-core-…` | [12811533995](https://github.com/Darrenus/tickwitness/actions/runs/40680161528/artifacts/12811533995)：实际core wheel、scorecard与转交包 |
+| `alpha-ubuntu-24.04-…` | [12813090562](https://github.com/Darrenus/tickwitness/actions/runs/40680161528/artifacts/12813090562)：Ubuntu作业内独立core-only wheel |
+| `alpha-macos-26-…` | [12811704525](https://github.com/Darrenus/tickwitness/actions/runs/40680161528/artifacts/12811704525)：macOS作业内独立core-only wheel |
+| `alpha-source-wheel-…` | [12812314605](https://github.com/Darrenus/tickwitness/actions/runs/40680161528/artifacts/12812314605)：实际tar.gz内脚本／guide／语料与新安装core wheel |
+
+| 实际核验 | 结果与权限 |
+| --- | --- |
+| 真正固定输入 | 两个原native合成包的bundle／report pins保持 [语料来源](../../examples/alpha/README.md) 原值；反例为完整已审计false见证，clean为非空全部eligible已审计且全true；两谓词分别gt0和gt−3 USD，不作同命题配对因果解释 |
+| 独立环境重建 | 实际wheel在无源码依赖的core环境、独立cwd中组装kit；移动kit并删除复制的assembly输入后qualify／repeat／verify saved／postcommit retained／归档解压复验得到同一完整技术回执；kit与原source字节树不变 |
+| 真实invalid校验 | 从实际assumption最大值2,000,000,000ns推导2,000,000,001ns，先通过可执行ScenarioSpec结构，再由真实validator精确拒绝冻结范围；不跑native、不占原研究槽位、不输出该无效情形的finding |
+| 实际发布边界 | 新目录正常发布读回、重复目标拒绝且原字节不变；提交前同步故障无最终目标且stage清除；提交后父目录同步故障无成功回执并保留完整目标，其两份actual case再独立重审。技术PASS仅表示观察到这些受控失败，不认证历史durability或断电恢复 |
+| 重hash仍拒绝 | 改invalid上界／挑战值／ScenarioSpec ID再重算scorecard ID，使伪造文档仍满足严格shape；验证实际重跑新probe后拒绝exact receipt不一致。缺README、额外隐藏文件、错误pin均精确拒绝，不能降成技术通过 |
+| 实际转交闭包 | 每个平台独立核kit manifest／全部payload SHA、wheel SHA、archive SHA与handoff；tar仅含唯一顶层kit，不夹带probe或automation记录；解压后再用guarded installed core复验。安装前校验命令在pip之前，要求owner独立渠道确认归档digest |
+| 真实自动化提交 | 原样stdlib runner使用同一core解释器，成功VERIFIED时runner／CLI均exit0；错误pin的真实FAILED记录为runner10／CLI3并保留原stderr，无scorecard成功文件。两条实际submission及saved receipt与报告逐对象一致，身份均automation／SELF_REPORTED_UNREVIEWED |
+| 严格guard与资源边界 | 主qualify／saved重验禁native import、原stores、SQLite、network、研究worker及旧预算写入口；独立runner子CLI原样执行，报告如实标runner_subprocess_guarded=false而非伪称全程instrumented。边界回归覆盖32MiB／512files及单件tighten、unsafe／missing／alias／额外目录、并发nooverwrite、提交前后write／sync故障和输出／启动失败留痕 |
+| 外部与权威 | gates保持technical PASS、external_attempts=0／external_successes=0／PENDING，scope八项均false。CI／AI／owner不计外部用户；participant role自报不能改gate，保存PASS不能替代当场重验。无新release、native研究attempt、confirmation访问、claim扩权或S10资格 |
+
+初轮远端同时捕获了verify命令positional注册顺序与冻结CLI合同相反的问题；按KIT再SAVED修正，没有改手册命令或弱化断言。macOS实测请求为 `/tmp/tickwitness-tagged-verifier/bin/python`，runtime为 `/private/tmp/tickwitness-tagged-verifier/bin/python`；其prefix与resolved requested venv均为 `/private/tmp/tickwitness-tagged-verifier`，且不同于base framework。现以同一解释器实际sys.executable／prefix／base_prefix精确比较runner命令，确认别名属于同一venv；失败先保留诊断树而不产accepted报告。归档按各平台实际SHA校验，实测Mac归档SHA不同于Linux，kit内容身份与技术语义仍一致。格式问题使用远端生成的补丁处理。最终交叉静态审阅未发现P1／P2阻塞，但仍属于AI辅助，不替代独立人类领域接受。
+
+[PR #94](https://github.com/Darrenus/tickwitness/pull/94) 的S08-03a软件与可转交包已在上述profile内通过远端验收，仍待owner接受；[#24](https://github.com/Darrenus/tickwitness/issues/24) 整体保持打开。Owner将联系外部参与者，实际回执／失败原文收到并核对前不填外部尝试、不发alpha、不宣称采用。后续文档提交有独立最新head检查，交付给外部用户的归档以该最新source-wheel产物中的实际kit ID与SHA为准；S10恢复、真实访谈及研究收益记录没有新增。

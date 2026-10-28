@@ -19,6 +19,9 @@ from tickwitness.application.research import (
     read_protocol_data,
 )
 from tickwitness.application.tagged_queue_execution import TaggedQueueReservationUnconfirmed
+from tickwitness.cli_alpha import COMMANDS as ALPHA_COMMANDS
+from tickwitness.cli_alpha import add_commands as add_alpha_commands
+from tickwitness.cli_alpha import execute as execute_alpha_command
 from tickwitness.cli_campaign_budgets import COMMANDS as CAMPAIGN_BUDGET_COMMANDS
 from tickwitness.cli_campaign_budgets import add_commands as add_campaign_budget_commands
 from tickwitness.cli_campaign_budgets import execute as execute_campaign_budget_command
@@ -61,6 +64,7 @@ from tickwitness.cli_tagged_queue import execute as execute_tagged_queue_command
 from tickwitness.domain.assumptions.queue_constraints import QueueConstraintValidationError
 from tickwitness.domain.assumptions.specs import AssumptionValidationError
 from tickwitness.domain.data_evidence.events import DataValidationError, ValidationLimits
+from tickwitness.domain.evidence.alpha_scorecard import AlphaValidationError
 from tickwitness.domain.evidence.evaluation import EvaluationValidationError
 from tickwitness.domain.evidence.run_records import EvidenceValidationError
 from tickwitness.domain.evidence.tagged_finding_report import TaggedFindingIneligibleError
@@ -71,6 +75,12 @@ from tickwitness.domain.research_contracts.confirmation import (
 )
 from tickwitness.domain.research_contracts.protocols import ProtocolValidationError
 from tickwitness.domain.search.plans import SearchPlanValidationError
+from tickwitness.infrastructure.alpha_reproduction_kits import (
+    AlphaKitDestinationExistsError,
+    AlphaKitDurabilityError,
+    AlphaKitError,
+    AlphaKitNotFoundError,
+)
 from tickwitness.infrastructure.attempt_ledger import (
     AttemptBudgetExceededError,
     AttemptLedgerError,
@@ -237,13 +247,16 @@ def main(argv: list[str] | None = None) -> int:
     add_search_finding_commands(commands)
     add_search_evidence_commands(commands)
     add_confirmation_commands(commands)
+    add_alpha_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in CONFIRMATION_COMMANDS:
+        if arguments.command in ALPHA_COMMANDS:
+            output, identity = execute_alpha_command(arguments), ""
+        elif arguments.command in CONFIRMATION_COMMANDS:
             output, identity = execute_confirmation_command(arguments)
         elif arguments.command in SEARCH_EVIDENCE_COMMANDS:
             output, identity = execute_search_evidence_command(arguments), ""
@@ -358,6 +371,16 @@ def main(argv: list[str] | None = None) -> int:
             ]
             output = compare_replays(*result_files).document
             identity = ""
+    except AlphaValidationError as error:
+        return _write_error("invalid_alpha_evidence", error, 2)
+    except AlphaKitNotFoundError as error:
+        return _write_error("alpha_kit_not_found", error, 4)
+    except AlphaKitDestinationExistsError as error:
+        return _write_error("alpha_kit_destination_exists", error, 3)
+    except AlphaKitDurabilityError as error:
+        return _write_error("alpha_kit_durability_unconfirmed", error, 3)
+    except AlphaKitError as error:
+        return _write_error("alpha_kit_integrity_or_io_failure", error, 3)
     except ConfirmationAlreadyExposed as error:
         print(
             json.dumps(
