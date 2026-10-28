@@ -1,6 +1,6 @@
 # Sprint 7 固定预算搜索状态
 
-更新：2026-10-27（Asia/Singapore）。Owner 已合并 [PR #90](https://github.com/Darrenus/tickwitness/pull/90)，S07-01 的规划／持久自动评估及 S07-02 的 campaign 硬预算已接受。当前 Sprint 7 基线 merge 为 `935282c415d167bdcc8485569e47e5221e95b4c3`；`0.2.0.dev0` 保持未发行。真实访谈、采用和独立人类领域复核没有新增证据。
+更新：2026-10-28（Asia/Singapore）。Owner 已合并 [PR #91](https://github.com/Darrenus/tickwitness/pull/91)，Sprint 7 的规划、持久候选执行、硬预算和有范围结论已在各自声明范围接受。当前接受基线 merge 为 `2a83d39022ce5d53edbb42dafef897c6b5d1bd0c`；`0.2.0.dev0` 保持未发行。真实访谈、采用和独立人类领域复核没有新增证据。
 
 ## 本轮切片与后续门
 
@@ -9,7 +9,7 @@
 | S07-01 / #19 | S07-01a 冻结网格／随机候选、来源、种子与完整 proposal journal；重建去重／拒绝及 source 派生预检 | Owner 已合并 #88 |
 | S07-01 / #19 | S07-01b 自动评估、候选与真实 attempt/outcome 关联；原协议预算不重置 | Owner 已合并 #89 |
 | S07-02 / #20 | 独立受控 profile 的评估数／执行阶段总期限／managed payload 容量硬门 | Owner 已合并 #90 |
-| S07-03 / #21 | 有范围的反例／预算内未发现／不可评价输出 | 远端验收通过，PR #91 待 owner 接受 |
+| S07-03 / #21 | 有范围的反例／预算内未发现／不可评价输出 | Owner 已合并 #91 |
 
 原故事验收、14h／12h／8h 专项估算及每 Sprint 15h 日常质量容量保持 [Sprint backlog](sprint-backlog.md#s7--固定预算反例搜索) 原意。切片不是额外工时承诺；实际工时未登记，代码或测试数量不能当作完成了全部研究或采用门。
 
@@ -160,4 +160,4 @@ Owner 已合并 [PR #90](https://github.com/Darrenus/tickwitness/pull/90)，[S07
 
 远端修复包括由远端formatter生成并应用的补丁、测试协调器写库的显式create=True，以及合法多行failure诊断的兼容；旧停止、覆盖、false见证与共同预算oracle未放宽。AI交叉审阅发现的诊断兼容问题已进入first true／false后故障回归。此审阅仍是AI辅助，不替代独立人类领域接受。
 
-[PR #91](https://github.com/Darrenus/tickwitness/pull/91) 待 owner 接受前 [S07-03 / #21](https://github.com/Darrenus/tickwitness/issues/21) 保持打开。Sprint 7 的这些实现不替代 S08 sealed search evidence／confirmation、S10恢复、全局统计trial账本或真实用户验证；未新增发行、实际工时、性能、采用或真实市场推断证据。
+Owner 已合并 [PR #91](https://github.com/Darrenus/tickwitness/pull/91)，[S07-03 / #21](https://github.com/Darrenus/tickwitness/issues/21) 已在限定的条件压力范围接受并关闭。Sprint 7 的这些实现不替代 S08 sealed search evidence／confirmation、S10恢复、全局统计trial账本或真实用户验证；未新增发行、实际工时、性能、采用或真实市场推断证据。

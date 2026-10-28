@@ -40,6 +40,9 @@ from tickwitness.cli_search import execute as execute_search_command
 from tickwitness.cli_search_execution import COMMANDS as SEARCH_EXECUTION_COMMANDS
 from tickwitness.cli_search_execution import add_commands as add_search_execution_commands
 from tickwitness.cli_search_execution import execute as execute_search_execution_command
+from tickwitness.cli_search_evidence import COMMANDS as SEARCH_EVIDENCE_COMMANDS
+from tickwitness.cli_search_evidence import add_commands as add_search_evidence_commands
+from tickwitness.cli_search_evidence import execute as execute_search_evidence_command
 from tickwitness.cli_search_findings import COMMANDS as SEARCH_FINDING_COMMANDS
 from tickwitness.cli_search_findings import add_commands as add_search_finding_commands
 from tickwitness.cli_search_findings import execute as execute_search_finding_command
@@ -103,6 +106,7 @@ from tickwitness.infrastructure.search_finding_registry import (
     SearchFindingNotFoundError,
     SearchFindingStoreError,
 )
+from tickwitness.infrastructure.search_evidence_bundles import SearchEvidenceMissingObjectError
 from tickwitness.infrastructure.search_plan_registry import (
     SearchPlanNotFoundError,
     SearchPlanRegistryError,
@@ -220,13 +224,16 @@ def main(argv: list[str] | None = None) -> int:
     add_search_execution_commands(commands)
     add_campaign_budget_commands(commands)
     add_search_finding_commands(commands)
+    add_search_evidence_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in SEARCH_FINDING_COMMANDS:
+        if arguments.command in SEARCH_EVIDENCE_COMMANDS:
+            output, identity = execute_search_evidence_command(arguments), ""
+        elif arguments.command in SEARCH_FINDING_COMMANDS:
             output, identity = execute_search_finding_command(arguments), ""
         elif arguments.command in CAMPAIGN_BUDGET_COMMANDS:
             output = execute_campaign_budget_command(arguments)
@@ -418,6 +425,12 @@ def main(argv: list[str] | None = None) -> int:
         SearchFindingNotFoundError,
     ) as error:
         return _write_error("research_evidence_not_found", error, 4)
+    except SearchEvidenceMissingObjectError as error:
+        print(json.dumps({"error": {
+            "code": "search_evidence_object_missing", "message": str(error),
+            "role": error.role, "roles": list(error.roles), "sha256": error.sha256,
+        }}), file=sys.stderr)
+        return 3
     except BundleDestinationExistsError as error:
         return _write_error("bundle_destination_exists", error, 3)
     except BundleDurabilityError as error:
