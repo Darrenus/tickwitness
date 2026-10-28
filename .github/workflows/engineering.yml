@@ -96,11 +96,23 @@ jobs:
           python3 scripts/smoke_search_evidence.py --python /tmp/tickwitness-wheel/bin/python --finding-report /tmp/search-findings-core.json --finding-records /tmp/search-findings-core-records --report /tmp/search-evidence-core.json --bundles-dir /tmp/search-evidence-core-bundles
           python3 scripts/smoke_confirmation.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/confirmation-core.json --records-dir /tmp/confirmation-core-records
           python3 scripts/smoke_alpha.py --python /tmp/tickwitness-wheel/bin/python --wheel dist/*.whl --corpus-root examples/alpha --guide docs/alpha-reproduction.md --runner scripts/reproduce_alpha.py --source-revision "${{ github.sha }}" --report /tmp/alpha-core.json --records-dir /tmp/alpha-core-records
+          python3 scripts/smoke_reduction.py --python /tmp/tickwitness-wheel/bin/python --corpus-root examples/alpha --report /tmp/reduction-input-core.json --records-dir /tmp/reduction-input-core-records
           python3 scripts/smoke_queue_constraints.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_queue_execution.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_tagged_queue.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/tagged-queue-core.json
           python3 scripts/smoke_tagged_evidence.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/tagged-pair-core.json --bundles-dir /tmp/tagged-pair-core-bundles
           python3 scripts/smoke_tagged_findings.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --pairs-dir /tmp/tagged-pair-core-bundles --source-report /tmp/tagged-pair-core.json --report /tmp/tagged-findings-core.json --bundles-dir /tmp/tagged-findings-core-bundles
+      - name: Preserve installed-core legal reduction input preparation
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reduction-input-core-${{ github.sha }}
+          path: |
+            /tmp/reduction-input-core.json
+            /tmp/reduction-input-core-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve core alpha scorecard and transferable external reproduction kit
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -298,6 +310,20 @@ jobs:
       - name: Recompute the alpha scorecard in the installed core-only environment
         run: |
           python3 scripts/smoke_alpha.py --python /tmp/tickwitness-tagged-verifier/bin/python --wheel dist/*.whl --corpus-root examples/alpha --guide docs/alpha-reproduction.md --runner scripts/reproduce_alpha.py --source-revision "${{ github.sha }}" --report /tmp/alpha.json --records-dir /tmp/alpha-records
+      - name: Recompute legal reduction inputs in the installed core-only environment
+        run: |
+          python3 scripts/smoke_reduction.py --python /tmp/tickwitness-tagged-verifier/bin/python --corpus-root examples/alpha --report /tmp/reduction-input.json --records-dir /tmp/reduction-input-records
+      - name: Preserve legal reduction input preparation
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reduction-input-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            /tmp/reduction-input.json
+            /tmp/reduction-input-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve alpha scorecard and transferable external reproduction kit
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -460,6 +486,7 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_search_evidence.py" --python /tmp/tickwitness-preview-core/bin/python --finding-report /tmp/search-findings-source-wheel-core.json --finding-records /tmp/search-findings-source-wheel-core-records --report /tmp/search-evidence-source-wheel-core.json --bundles-dir /tmp/search-evidence-source-wheel-core-bundles
           python3 "$TW_SOURCE/scripts/smoke_confirmation.py" --python /tmp/tickwitness-preview-core/bin/python --report /tmp/confirmation-source-wheel.json --records-dir /tmp/confirmation-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_alpha.py" --python /tmp/tickwitness-preview-core/bin/python --wheel dist/*.whl --corpus-root "$TW_SOURCE/examples/alpha" --guide "$TW_SOURCE/docs/alpha-reproduction.md" --runner "$TW_SOURCE/scripts/reproduce_alpha.py" --source-revision "${{ github.sha }}" --report /tmp/alpha-source-wheel.json --records-dir /tmp/alpha-source-wheel-records
+          python3 "$TW_SOURCE/scripts/smoke_reduction.py" --python /tmp/tickwitness-preview-core/bin/python --corpus-root "$TW_SOURCE/examples/alpha" --report /tmp/reduction-input-source-wheel.json --records-dir /tmp/reduction-input-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_queue_constraints.py" --python /tmp/tickwitness-preview-core/bin/python
           python3 "$TW_SOURCE/scripts/smoke_queue_execution.py" --python /tmp/tickwitness-preview-core/bin/python
           python3 "$TW_SOURCE/scripts/smoke_tagged_queue.py" --python /tmp/tickwitness-preview-core/bin/python --report /tmp/tagged-queue-source-wheel-core.json
@@ -495,6 +522,17 @@ jobs:
             /tmp/search-evidence-source-wheel-core-bundles
             /tmp/search-evidence-source-wheel.json
             /tmp/search-evidence-source-wheel-bundles
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve legal reduction preparation from actual source archive and core wheel
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reduction-input-source-wheel-${{ github.sha }}
+          path: |
+            /tmp/reduction-input-source-wheel.json
+            /tmp/reduction-input-source-wheel-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30
