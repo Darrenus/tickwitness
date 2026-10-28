@@ -100,10 +100,15 @@ def _source(protocol_id: str, reader: SourceReader) -> SourceRecord:
             actual_id = value.protocol_id
         else:
             actual_id = load_executable_protocol(record.canonical_bytes).protocol_id
-        _require(record.protocol_id == protocol_id == actual_id, "Actual source protocol identity differs")
+        _require(
+            record.protocol_id == protocol_id == actual_id,
+            "Actual source protocol identity differs",
+        )
         return record
     except (ValueError, KeyError, TypeError, AttributeError) as error:
-        raise ConfirmationValidationError("Invalid actual source protocol: " + str(error)) from error
+        raise ConfirmationValidationError(
+            "Invalid actual source protocol: " + str(error)
+        ) from error
 
 
 def _records(data: bytes) -> tuple[Row, ...]:
@@ -117,13 +122,17 @@ def _partitions(source: bytes, datasets: DatasetReader) -> tuple[bytes, tuple[Ro
         development = read_accepted_events(refs["development"], datasets)
         confirmation = read_accepted_events(refs["confirmation"], datasets)
     except DataAccessError as error:
-        raise ConfirmationValidationError("Invalid actual confirmation partitions: " + str(error)) from error
+        raise ConfirmationValidationError(
+            "Invalid actual confirmation partitions: " + str(error)
+        ) from error
     try:
         records = _records(confirmation)
         assert_forward_disjoint(_records(development), records)
         return confirmation, records
     except (ProtocolValidationError, json.JSONDecodeError, KeyError, TypeError) as error:
-        raise ConfirmationValidationError("Invalid actual confirmation partitions: " + str(error)) from error
+        raise ConfirmationValidationError(
+            "Invalid actual confirmation partitions: " + str(error)
+        ) from error
 
 
 def _load(protocol_id: str, registry: ConfirmationRepository) -> ConfirmationProtocol:
@@ -131,51 +140,93 @@ def _load(protocol_id: str, registry: ConfirmationRepository) -> ConfirmationPro
         identity(protocol_id)
         record = registry.get(protocol_id)
         protocol = load_confirmation_protocol(record.canonical_bytes)
-        _require(record.protocol_id == protocol_id == protocol.protocol_id, "Registered confirmation identity differs")
+        _require(
+            record.protocol_id == protocol_id == protocol.protocol_id,
+            "Registered confirmation identity differs",
+        )
         return protocol
     except ConfirmationValidationError:
         raise
     except (KeyError, TypeError, AttributeError) as error:
-        raise ConfirmationValidationError("Invalid confirmation registry record: " + str(error)) from error
+        raise ConfirmationValidationError(
+            "Invalid confirmation registry record: " + str(error)
+        ) from error
 
 
 def _footprint(protocol: ConfirmationProtocol) -> OriginFootprint:
     return load_origin_footprint(canonical(cast("Row", protocol.document["origin_footprint"])))
 
 
-def _conflicts(protocol: ConfirmationProtocol, reader: ExposureReader) -> tuple[ConfirmationExposure, ...]:
+def _conflicts(
+    protocol: ConfirmationProtocol, reader: ExposureReader
+) -> tuple[ConfirmationExposure, ...]:
     footprint = _footprint(protocol)
     conflicts = reader.find_conflicts(footprint)
-    _require(type(conflicts) is tuple and len(conflicts) <= 256, "Invalid managed exposure conflict inventory")
+    _require(
+        type(conflicts) is tuple and len(conflicts) <= 256,
+        "Invalid managed exposure conflict inventory",
+    )
     result: list[ConfirmationExposure] = []
     for record in conflicts:
         checked = load_confirmation_exposure(record.canonical_bytes)
         _require(checked.exposure_id == record.exposure_id, "Managed exposure identity differs")
         other = load_origin_footprint(canonical(cast("Row", checked.document["origin_footprint"])))
-        _require(footprints_overlap(footprint, other), "Managed exposure does not overlap this window")
+        _require(
+            footprints_overlap(footprint, other), "Managed exposure does not overlap this window"
+        )
         result.append(checked)
-    _require(len({record.exposure_id for record in result}) == len(result), "Duplicate managed exposure conflict")
+    _require(
+        len({record.exposure_id for record in result}) == len(result),
+        "Duplicate managed exposure conflict",
+    )
     return tuple(sorted(result, key=lambda record: record.exposure_id))
 
 
-def _receipt(protocol: ConfirmationProtocol, created: bool, conflicts: tuple[ConfirmationExposure, ...]) -> Row:
+def _receipt(
+    protocol: ConfirmationProtocol, created: bool, conflicts: tuple[ConfirmationExposure, ...]
+) -> Row:
     return {
-        "kind": "confirmation_protocol_receipt_v1", "schema_version": 1,
-        "protocol_id": protocol.protocol_id, "created": created, "document": protocol.document,
-        "exposure_status": "ALREADY_EXPOSED_IN_LEDGER" if conflicts else "NO_MATCHING_EXPOSURE_IN_LEDGER",
-        "related_exposure_ids": [record.exposure_id for record in conflicts], "scope": dict(SCOPE),
+        "kind": "confirmation_protocol_receipt_v1",
+        "schema_version": 1,
+        "protocol_id": protocol.protocol_id,
+        "created": created,
+        "document": protocol.document,
+        "exposure_status": "ALREADY_EXPOSED_IN_LEDGER"
+        if conflicts
+        else "NO_MATCHING_EXPOSURE_IN_LEDGER",
+        "related_exposure_ids": [record.exposure_id for record in conflicts],
+        "scope": dict(SCOPE),
     }
 
 
-def _revalidate(protocol: ConfirmationProtocol, source_factory: Callable[[], SourceReader], datasets_factory: Callable[[], DatasetReader]) -> tuple[Row, ...]:
+def _revalidate(
+    protocol: ConfirmationProtocol,
+    source_factory: Callable[[], SourceReader],
+    datasets_factory: Callable[[], DatasetReader],
+) -> tuple[Row, ...]:
     document = protocol.document
     source_id = cast("str", cast("Row", document["bindings"])["source_protocol_id"])
     source = _source(source_id, source_factory())
-    _require(source.canonical_bytes == canonical(cast("Row", document["source_protocol"])), "Actual source differs from the frozen confirmation declaration")
+    _require(
+        source.canonical_bytes == canonical(cast("Row", document["source_protocol"])),
+        "Actual source differs from the frozen confirmation declaration",
+    )
     normalized, records = _partitions(source.canonical_bytes, datasets_factory())
-    request = canonical({"kind": "confirmation_request_v1", "schema_version": 1, "title": document["title"], "max_events": cast("Row", document["read_policy"])["max_events"]})
-    rebuilt = build_confirmation_protocol(request, source_protocol=source.canonical_bytes, confirmation_normalized=normalized)
-    _require(rebuilt.canonical_bytes == protocol.canonical_bytes, "Actual confirmation source, data or origin footprint differs")
+    request = canonical(
+        {
+            "kind": "confirmation_request_v1",
+            "schema_version": 1,
+            "title": document["title"],
+            "max_events": cast("Row", document["read_policy"])["max_events"],
+        }
+    )
+    rebuilt = build_confirmation_protocol(
+        request, source_protocol=source.canonical_bytes, confirmation_normalized=normalized
+    )
+    _require(
+        rebuilt.canonical_bytes == protocol.canonical_bytes,
+        "Actual confirmation source, data or origin footprint differs",
+    )
     return records
 
 
@@ -192,10 +243,17 @@ def freeze_confirmation_protocol(
     _identity(source_protocol_id)
     source = _source(source_protocol_id, source_factory())
     normalized, _records_value = _partitions(source.canonical_bytes, datasets_factory())
-    protocol = build_confirmation_protocol(request, source_protocol=source.canonical_bytes, confirmation_normalized=normalized)
+    protocol = build_confirmation_protocol(
+        request, source_protocol=source.canonical_bytes, confirmation_normalized=normalized
+    )
     conflicts = _conflicts(protocol, exposures_factory())
     stored = confirmations_factory().seal(protocol.canonical_bytes)
-    _require(stored.protocol_id == protocol.protocol_id and stored.canonical_bytes == protocol.canonical_bytes and type(stored.created) is bool, "Confirmation registry returned conflicting declaration evidence")
+    _require(
+        stored.protocol_id == protocol.protocol_id
+        and stored.canonical_bytes == protocol.canonical_bytes
+        and type(stored.created) is bool,
+        "Confirmation registry returned conflicting declaration evidence",
+    )
     return _receipt(protocol, stored.created, conflicts)
 
 
@@ -233,11 +291,20 @@ def open_confirmation_protocol(
     expected = build_confirmation_exposure(protocol)
     exposed = ledger.expose(protocol)
     checked = load_confirmation_exposure(exposed.canonical_bytes)
-    _require(checked.exposure_id == exposed.exposure_id == expected.exposure_id and checked.canonical_bytes == expected.canonical_bytes, "Exposure port returned conflicting committed evidence; exposure is not refunded")
+    _require(
+        checked.exposure_id == exposed.exposure_id == expected.exposure_id
+        and checked.canonical_bytes == expected.canonical_bytes,
+        "Exposure port returned conflicting committed evidence; exposure is not refunded",
+    )
     return {
-        "kind": "confirmation_observation_release_v1", "schema_version": 1,
-        "protocol_id": protocol.protocol_id, "dataset_id": checked.document["confirmation_dataset_id"],
-        "exposure_id": checked.exposure_id, "exposure": checked.document,
-        "observations": list(records), "total_records": len(records), "truncated": False,
+        "kind": "confirmation_observation_release_v1",
+        "schema_version": 1,
+        "protocol_id": protocol.protocol_id,
+        "dataset_id": checked.document["confirmation_dataset_id"],
+        "exposure_id": checked.exposure_id,
+        "exposure": checked.document,
+        "observations": list(records),
+        "total_records": len(records),
+        "truncated": False,
         "scope": dict(SCOPE),
     }

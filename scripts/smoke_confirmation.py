@@ -316,7 +316,9 @@ def main() -> None:
         oversized_source = source("too-many", ingest("too-many", too_many), cap=2000)
         low_budget_source = source("source-cap-two", primary_dataset, cap=2)
         for filename in (
-            "replay-partials.jsonl", "replay-confirmation.jsonl", "experiment-request.json"
+            "replay-partials.jsonl",
+            "replay-confirmation.jsonl",
+            "experiment-request.json",
         ):
             shutil.copyfile(examples / filename, inputs / filename)
         replay_ids = [
@@ -348,42 +350,74 @@ def main() -> None:
         )
 
         def freeze(
-            name: str, source_id: str, *, target: Path = registry, cap: int = 1000,
+            name: str,
+            source_id: str,
+            *,
+            target: Path = registry,
+            cap: int = 1000,
             expected: int = 0,
         ) -> dict:
             return run(
                 "freeze-confirmation-protocol",
                 source_id,
-                write(name, {
-                    "kind": "confirmation_request_v1", "schema_version": 1,
-                    "title": name, "max_events": cap,
-                }),
-                "--input-root", str(inputs), "--store", str(data), "--registry", str(target),
+                write(
+                    name,
+                    {
+                        "kind": "confirmation_request_v1",
+                        "schema_version": 1,
+                        "title": name,
+                        "max_events": cap,
+                    },
+                ),
+                "--input-root",
+                str(inputs),
+                "--store",
+                str(data),
+                "--registry",
+                str(target),
                 expected=expected,
             )
 
         def opening(
-            protocol: dict, *, target: Path = registry, store: Path = data,
-            expected: int = 0, mode: str = "normal",
+            protocol: dict,
+            *,
+            target: Path = registry,
+            store: Path = data,
+            expected: int = 0,
+            mode: str = "normal",
         ) -> dict:
             return run(
-                "open-confirmation-protocol", protocol["protocol_id"],
-                "--store", str(store), "--registry", str(target), expected=expected, mode=mode,
+                "open-confirmation-protocol",
+                protocol["protocol_id"],
+                "--store",
+                str(store),
+                "--registry",
+                str(target),
+                expected=expected,
+                mode=mode,
             )
 
         def inspect(protocol: dict, *, target: Path = registry) -> dict:
             return run(
-                "inspect-confirmation-protocol", protocol["protocol_id"],
-                "--store", str(data), "--registry", str(target),
+                "inspect-confirmation-protocol",
+                protocol["protocol_id"],
+                "--store",
+                str(data),
+                "--registry",
+                str(target),
             )
 
         primary = freeze("first-full-window", subject)
         _check_protocol(primary, exposed=False, related=[])
-        assert primary["document"]["origin_footprint"]["streams"] == [{
-            "source": "synthetic", "instrument": "TEST-USD",
-            "session": "confirmation-installed-v1", "trade_ids": ["confirmation-trade"],
-            "book_intervals": [[20, 24]],
-        }]
+        assert primary["document"]["origin_footprint"]["streams"] == [
+            {
+                "source": "synthetic",
+                "instrument": "TEST-USD",
+                "session": "confirmation-installed-v1",
+                "trade_ids": ["confirmation-trade"],
+                "book_intervals": [[20, 24]],
+            }
+        ]
         assert primary["created"] is True
         repeated = freeze("first-full-window", subject)
         _check_protocol(repeated, exposed=False, related=[])
@@ -407,8 +441,15 @@ def main() -> None:
         related = [released["exposure_id"]]
         inspected = inspect(primary)
         _check_protocol(inspected, exposed=True, related=related)
-        cases.append({"name": "first-full-window", "protocol": primary, "release": released,
-                      "after": inspected, "full_window_returned": True})
+        cases.append(
+            {
+                "name": "first-full-window",
+                "protocol": primary,
+                "release": released,
+                "after": inspected,
+                "full_window_returned": True,
+            }
+        )
 
         def denied(name: str, protocol: dict, *, target: Path = registry) -> None:
             before = _tree(data / "confirmation-state")
@@ -418,8 +459,16 @@ def main() -> None:
             assert before == _tree(data / "confirmation-state")
             after = inspect(protocol, target=target)
             _check_protocol(after, exposed=True, related=related)
-            cases.append({"name": name, "protocol": protocol, "error": refusal, "after": after,
-                          "denied_before_data_read": True, "state_unchanged": True})
+            cases.append(
+                {
+                    "name": name,
+                    "protocol": protocol,
+                    "error": refusal,
+                    "after": after,
+                    "denied_before_data_read": True,
+                    "state_unchanged": True,
+                }
+            )
 
         denied("repeat-open", primary)
         denied("subset-frozen-before-open", stale_subset)
@@ -445,24 +494,33 @@ def main() -> None:
         for name, identity, records, target in (
             ("independent-window", independent_source, independent_records, registry),
             ("whole-window-1000", boundary_source, boundary_records, registry),
-            ("executable-v2-window", executable["protocol_id"], executable_records,
-             executable_registry),
+            (
+                "executable-v2-window",
+                executable["protocol_id"],
+                executable_records,
+                executable_registry,
+            ),
         ):
             protocol = freeze(name, identity, target=target)
             _check_protocol(protocol, exposed=False, related=[])
             receipt = opening(protocol, target=target)
             _check_release(receipt, protocol, records)
-            _check_protocol(inspect(protocol, target=target), exposed=True,
-                            related=[receipt["exposure_id"]])
+            _check_protocol(
+                inspect(protocol, target=target), exposed=True, related=[receipt["exposure_id"]]
+            )
             successful.append((protocol, receipt))
-            cases.append({"name": name, "protocol": protocol, "release": receipt,
-                          "full_window_returned": True})
+            cases.append(
+                {
+                    "name": name,
+                    "protocol": protocol,
+                    "release": receipt,
+                    "full_window_returned": True,
+                }
+            )
 
         before_audit = _tree(data / "confirmation-state")
         audit = run(str(data), mode="audit-ledger")
-        assert audit["exposure_ids"] == sorted(
-            receipt["exposure_id"] for _, receipt in successful
-        )
+        assert audit["exposure_ids"] == sorted(receipt["exposure_id"] for _, receipt in successful)
         assert sorted(_digest(exposure) for exposure in audit["exposures"]) == audit["exposure_ids"]
         assert before_audit == _tree(data / "confirmation-state")
 
@@ -479,8 +537,9 @@ def main() -> None:
             failure = opening(primary, store=broken, expected=3, mode="no-data")
             assert failure["error"]["code"] == "confirmation_store_integrity_or_io_failure"
             assert before == _tree(broken)
-            corrupt_cases.append({"name": name, "error": failure, "fail_closed": True,
-                                  "state_unchanged": True})
+            corrupt_cases.append(
+                {"name": name, "error": failure, "fail_closed": True, "state_unchanged": True}
+            )
 
         missing = directory / "must-remain-absent"
         pre_io = []
@@ -488,10 +547,28 @@ def main() -> None:
         for command in (
             ("read-protocol-data", subject, *common),
             ("replay-protocol", subject, *common, "--runs", str(missing / "runs")),
-            ("run-scenario", subject, "absent-assumption.json", "absent-scenario.json",
-             "--input-root", str(missing / "inputs"), *common, "--runs", str(missing / "runs")),
-            ("freeze-search-plan", subject, "absent-assumption.json", "absent-search.json",
-             "--input-root", str(missing / "inputs"), *common, "--plans", str(missing / "plans")),
+            (
+                "run-scenario",
+                subject,
+                "absent-assumption.json",
+                "absent-scenario.json",
+                "--input-root",
+                str(missing / "inputs"),
+                *common,
+                "--runs",
+                str(missing / "runs"),
+            ),
+            (
+                "freeze-search-plan",
+                subject,
+                "absent-assumption.json",
+                "absent-search.json",
+                "--input-root",
+                str(missing / "inputs"),
+                *common,
+                "--plans",
+                str(missing / "plans"),
+            ),
         ):
             failure = run(*command, "--split", "confirmation", expected=5, mode="pre-io")
             assert failure["error"]["code"] == "confirmation_access_denied"
@@ -499,8 +576,10 @@ def main() -> None:
             pre_io.append({"command": command[0], "error": failure})
 
         assert readonly_before == (
-            _tree(data, exclude_state=True), _tree(registry),
-            _tree(alternate_registry), _tree(executable_registry),
+            _tree(data, exclude_state=True),
+            _tree(registry),
+            _tree(alternate_registry),
+            _tree(executable_registry),
         )
         owner_observations = [
             json.loads(line) for line in (inputs / "confirmation.jsonl").read_bytes().splitlines()

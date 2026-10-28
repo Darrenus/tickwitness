@@ -84,9 +84,7 @@ def test_real_v2_confirmation_open_repeat_and_new_name(experiment_case, capsys):
 
 
 @pytest.mark.parametrize("failure", ["bad_json", "symlink", "bool_budget", "over_limit"])
-def test_invalid_confirmation_request_does_not_initialize_state(
-    experiment_case, capsys, failure
-):
+def test_invalid_confirmation_request_does_not_initialize_state(experiment_case, capsys, failure):
     case = experiment_case
     name = _request(case.root)
     path = case.root / name
@@ -107,9 +105,19 @@ def test_invalid_confirmation_request_does_not_initialize_state(
 
 @pytest.mark.parametrize("command", ["inspect-confirmation-protocol", "open-confirmation-protocol"])
 def test_missing_confirmation_does_not_create_storage(tmp_path, capsys, command):
-    assert main(
-        [command, "a" * 64, "--store", str(tmp_path / "data"), "--registry", str(tmp_path / "registry")]
-    ) == 4
+    assert (
+        main(
+            [
+                command,
+                "a" * 64,
+                "--store",
+                str(tmp_path / "data"),
+                "--registry",
+                str(tmp_path / "registry"),
+            ]
+        )
+        == 4
+    )
     failure = capsys.readouterr()
     assert failure.out == ""
     assert json.loads(failure.err)["error"]["code"] == "confirmation_protocol_not_found"

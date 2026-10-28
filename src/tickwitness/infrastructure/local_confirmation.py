@@ -240,7 +240,9 @@ class _ManagedConfirmationState:
                     )
                 except FileNotFoundError as error:
                     if create:
-                        raise ConfirmationStoreError("Managed dataset root must already exist")
+                        raise ConfirmationStoreError(
+                            "Managed dataset root must already exist"
+                        ) from error
                     raise ConfirmationNotFoundError(
                         "Managed dataset root does not exist"
                     ) from error
@@ -268,9 +270,7 @@ class _ManagedConfirmationState:
     def _locked(self) -> Iterator[tuple[int, int, tuple[ConfirmationExposure, ...]]]:
         try:
             with _MUTEX, ExitStack() as stack:
-                dataset = os.open(
-                    self._dataset_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-                )
+                dataset = os.open(self._dataset_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
                 stack.callback(os.close, dataset)
                 if _read_file(dataset, _ANCHOR_NAME, len(_ANCHOR)) != _ANCHOR:
                     raise ConfirmationStoreError("Invalid managed confirmation anchor")
@@ -372,7 +372,9 @@ class LocalConfirmationRegistry(_ManagedConfirmationState):
                 created = True
             except FileExistsError:
                 if self._read_protocol(directory, value.protocol_id) != value.canonical_bytes:
-                    raise ConfirmationStoreError("Concurrent confirmation declaration differs")
+                    raise ConfirmationStoreError(
+                        "Concurrent confirmation declaration differs"
+                    ) from None
                 created = False
             os.fsync(directory)
             return created

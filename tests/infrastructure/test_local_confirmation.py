@@ -91,7 +91,7 @@ def _protocol(
                 "configuration": {
                     "fee_model_id": "fee_v1",
                     "execution_model_id": "execution_v1",
-                    "clock_policy_id": "capture_order_v1",
+                    "clock_policy_id": "capture_order_unbound_v1",
                 },
                 "budget": {"max_scenarios": 3, "max_wall_seconds": 30, "max_events": 1000},
                 "seed": 1,

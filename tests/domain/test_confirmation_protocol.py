@@ -26,8 +26,14 @@ from tickwitness.domain.research_contracts.confirmation import (
 
 def event(*, kind="snapshot", capture=2, sequence=20, trade_id="trade-1", **changes):
     row = {
-        "schema_version": 1, "type": kind, "source": "synthetic", "instrument": "TEST-USD", "session": "confirmation-test",
-        "capture_seq": capture, "event_time_ns": capture * 100, "receive_time_ns": None,
+        "schema_version": 1,
+        "type": kind,
+        "source": "synthetic",
+        "instrument": "TEST-USD",
+        "session": "confirmation-test",
+        "capture_seq": capture,
+        "event_time_ns": capture * 100,
+        "receive_time_ns": None,
     }
     if kind == "trade":
         row.update(trade_id=trade_id, price_ticks=101, quantity_lots=2, aggressor_side="sell")
@@ -44,11 +50,23 @@ def tape(*records):
 
 
 def request(**changes):
-    return canonical({"kind": "confirmation_request_v1", "schema_version": 1, "title": "One frozen window", "max_events": 1000, **changes})
+    return canonical(
+        {
+            "kind": "confirmation_request_v1",
+            "schema_version": 1,
+            "title": "One frozen window",
+            "max_events": 1000,
+            **changes,
+        }
+    )
 
 
 def build(*, source=None, data=None, **changes):
-    return build_confirmation_protocol(request(**changes), source_protocol=(source or frozen_source()).canonical_bytes, confirmation_normalized=data or tape(event()))
+    return build_confirmation_protocol(
+        request(**changes),
+        source_protocol=(source or frozen_source()).canonical_bytes,
+        confirmation_normalized=data or tape(event()),
+    )
 
 
 @pytest.mark.parametrize("source_factory", [frozen_source, executable_source])
@@ -61,9 +79,12 @@ def test_independent_exact_authority_preserves_source_and_has_no_execution_grant
     assert document["source_protocol"] == source.document
     assert document["source_protocol"]["read_policy"] == "development_only_v1"
     assert document["bindings"] == {
-        "source_protocol_id": source.protocol_id, "source_claim_revision_id": source.claim_revision_id,
-        "development_dataset_id": "a" * 64, "confirmation_dataset_id": "b" * 64,
-        "confirmation_normalized_sha256": digest(tape(event())), "confirmation_event_count": 1,
+        "source_protocol_id": source.protocol_id,
+        "source_claim_revision_id": source.claim_revision_id,
+        "development_dataset_id": "a" * 64,
+        "confirmation_dataset_id": "b" * 64,
+        "confirmation_normalized_sha256": digest(tape(event())),
+        "confirmation_event_count": 1,
         "origin_footprint_id": origin_footprint((event(),)).footprint_id,
     }
     assert document["scope"] == SCOPE
@@ -75,34 +96,65 @@ def test_independent_exact_authority_preserves_source_and_has_no_execution_grant
 
 def test_origin_identity_ignores_capture_clocks_and_market_payload():
     initial = event(kind="trade")
-    revised = event(kind="trade", capture=50, event_time_ns=9999, receive_time_ns=9998, price_ticks=203, quantity_lots=7)
+    revised = event(
+        kind="trade",
+        capture=50,
+        event_time_ns=9999,
+        receive_time_ns=9998,
+        price_ticks=203,
+        quantity_lots=7,
+    )
     first, second = origin_footprint((initial,)), origin_footprint((revised,))
     assert first == second
     assert footprints_overlap(first, second)
     left, right = build(data=tape(initial)), build(data=tape(revised))
     assert left.protocol_id != right.protocol_id
-    assert left.document["bindings"]["origin_footprint_id"] == right.document["bindings"]["origin_footprint_id"]
+    assert (
+        left.document["bindings"]["origin_footprint_id"]
+        == right.document["bindings"]["origin_footprint_id"]
+    )
 
 
 def test_closed_book_intervals_intersect_despite_slicing_and_resegmentation():
-    full = origin_footprint((event(), event(kind="delta", capture=3, sequence=23, first_sequence=21), event(kind="delta", capture=4, sequence=25, first_sequence=24)))
-    resegmented = origin_footprint((event(), event(kind="delta", capture=3, sequence=25, first_sequence=21)))
+    full = origin_footprint(
+        (
+            event(),
+            event(kind="delta", capture=3, sequence=23, first_sequence=21),
+            event(kind="delta", capture=4, sequence=25, first_sequence=24),
+        )
+    )
+    resegmented = origin_footprint(
+        (event(), event(kind="delta", capture=3, sequence=25, first_sequence=21))
+    )
     assert full == resegmented
     assert full.document["streams"][0]["book_intervals"] == [[20, 25]]
     assert footprints_overlap(full, origin_footprint((event(sequence=22),)))
     assert not footprints_overlap(full, origin_footprint((event(sequence=26),)))
-    assert not footprints_overlap(full, origin_footprint((event(sequence=22, session="another-trusted-session"),)))
+    assert not footprints_overlap(
+        full, origin_footprint((event(sequence=22, session="another-trusted-session"),))
+    )
 
 
 def test_trade_overlap_requires_stable_identity_and_stream():
     first = origin_footprint((event(kind="trade"),))
-    assert not footprints_overlap(first, origin_footprint((event(kind="trade", trade_id="trade-2"),)))
-    assert not footprints_overlap(first, origin_footprint((event(kind="trade", instrument="OTHER-USD"),)))
-    assert footprints_overlap(first, origin_footprint((event(kind="trade", capture=99, quantity_lots=999),)))
+    assert not footprints_overlap(
+        first, origin_footprint((event(kind="trade", trade_id="trade-2"),))
+    )
+    assert not footprints_overlap(
+        first, origin_footprint((event(kind="trade", instrument="OTHER-USD"),))
+    )
+    assert footprints_overlap(
+        first, origin_footprint((event(kind="trade", capture=99, quantity_lots=999),))
+    )
 
 
-@pytest.mark.parametrize("right_intervals,expected", [([[2, 4]], True), ([[3, 5], [9, 11], [15, 17]], False), ([[3, 5], [9, 12]], True)])
-def test_book_interval_scan_preserves_closed_endpoints_and_disjoint_interleaving(right_intervals, expected):
+@pytest.mark.parametrize(
+    "right_intervals,expected",
+    [([[2, 4]], True), ([[3, 5], [9, 11], [15, 17]], False), ([[3, 5], [9, 12]], True)],
+)
+def test_book_interval_scan_preserves_closed_endpoints_and_disjoint_interleaving(
+    right_intervals, expected
+):
     left_document = origin_footprint((event(),)).document
     left_document["streams"][0]["book_intervals"] = [[0, 2], [6, 8], [12, 14]]
     right_document = deepcopy(left_document)
@@ -113,7 +165,9 @@ def test_book_interval_scan_preserves_closed_endpoints_and_disjoint_interleaving
     assert footprints_overlap(right, left) is expected
 
 
-@pytest.mark.parametrize("change", ["unknown", "boolean", "uncoalesced", "unsorted", "empty", "float", "duplicate"])
+@pytest.mark.parametrize(
+    "change", ["unknown", "boolean", "uncoalesced", "unsorted", "empty", "float", "duplicate"]
+)
 def test_footprint_loader_rejects_rehashed_noncanonical_coverage(change):
     document = origin_footprint((event(),)).document
     stream = document["streams"][0]
@@ -135,7 +189,17 @@ def test_footprint_loader_rejects_rehashed_noncanonical_coverage(change):
         load_origin_footprint(canonical(document))
 
 
-@pytest.mark.parametrize("changes", [{"max_events": True}, {"max_events": 0}, {"max_events": 1001}, {"title": "bad\nname"}, {"kind": "other"}, {"override": True}])
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"max_events": True},
+        {"max_events": 0},
+        {"max_events": 1001},
+        {"title": "bad\nname"},
+        {"kind": "other"},
+        {"override": True},
+    ],
+)
 def test_invalid_request_never_creates_confirmation_authority(changes):
     with pytest.raises(ConfirmationValidationError):
         build(**changes)
@@ -148,14 +212,20 @@ def test_confirmation_requires_whole_accepted_canonical_window_within_frozen_lim
     with pytest.raises(ConfirmationValidationError):
         build(data=json.dumps(event()).encode() + b"\n")
     with pytest.raises(ConfirmationValidationError):
-        build_confirmation_protocol(request(), source_protocol=frozen_source().canonical_bytes, confirmation_normalized=b"")
+        build_confirmation_protocol(
+            request(), source_protocol=frozen_source().canonical_bytes, confirmation_normalized=b""
+        )
     source = frozen_source().document
     source["budget"]["max_events"] = 1
     with pytest.raises(ConfirmationValidationError):
-        build_confirmation_protocol(request(), source_protocol=canonical(source), confirmation_normalized=data)
+        build_confirmation_protocol(
+            request(), source_protocol=canonical(source), confirmation_normalized=data
+        )
 
 
-@pytest.mark.parametrize("change", ["scope", "binding", "hash", "policy", "source", "schema", "whitespace"])
+@pytest.mark.parametrize(
+    "change", ["scope", "binding", "hash", "policy", "source", "schema", "whitespace"]
+)
 def test_rehashed_protocol_cannot_expand_permission_or_rewrite_source_binding(change):
     document = build().document
     if change == "scope":
@@ -197,8 +267,15 @@ def test_exposure_is_immutable_consumption_with_actual_conflict_records():
 
 def test_profile_bounds_and_duplicate_json_are_rejected(monkeypatch):
     valid = build()
-    monkeypatch.setattr("tickwitness.domain.research_contracts.confirmation.MAX_CONFIRMATION_PROTOCOL_BYTES", len(valid.canonical_bytes) - 1)
+    monkeypatch.setattr(
+        "tickwitness.domain.research_contracts.confirmation.MAX_CONFIRMATION_PROTOCOL_BYTES",
+        len(valid.canonical_bytes) - 1,
+    )
     with pytest.raises(ConfirmationValidationError):
         load_confirmation_protocol(valid.canonical_bytes)
     with pytest.raises(ConfirmationValidationError):
-        build_confirmation_protocol(b'{"kind":"confirmation_request_v1","kind":"confirmation_request_v1"}', source_protocol=frozen_source().canonical_bytes, confirmation_normalized=tape(event()))
+        build_confirmation_protocol(
+            b'{"kind":"confirmation_request_v1","kind":"confirmation_request_v1"}',
+            source_protocol=frozen_source().canonical_bytes,
+            confirmation_normalized=tape(event()),
+        )

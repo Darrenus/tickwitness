@@ -58,7 +58,13 @@ class Ledger:
         self.calls = 0
 
     def find_conflicts(self, footprint):
-        return tuple(record for record in self.records if footprints_overlap(footprint, load_origin_footprint(canonical(record.document["origin_footprint"]))))
+        return tuple(
+            record
+            for record in self.records
+            if footprints_overlap(
+                footprint, load_origin_footprint(canonical(record.document["origin_footprint"]))
+            )
+        )
 
     def expose(self, protocol):
         self.calls += 1
@@ -76,7 +82,15 @@ class Ledger:
 
 
 def confirmation_request(**changes):
-    return canonical({"kind": "confirmation_request_v1", "schema_version": 1, "title": "Confirmation release", "max_events": 10, **changes})
+    return canonical(
+        {
+            "kind": "confirmation_request_v1",
+            "schema_version": 1,
+            "title": "Confirmation release",
+            "max_events": 10,
+            **changes,
+        }
+    )
 
 
 def setup(tmp_path, *, confirmation_raw=None):
@@ -93,11 +107,21 @@ def setup(tmp_path, *, confirmation_raw=None):
         "confirmations_factory": lambda: registry,
         "exposures_factory": lambda: ledger,
     }
-    return SimpleNamespace(data=data, source=source, development=development, confirmation=confirmation, registry=registry, ledger=ledger, options=options)
+    return SimpleNamespace(
+        data=data,
+        source=source,
+        development=development,
+        confirmation=confirmation,
+        registry=registry,
+        ledger=ledger,
+        options=options,
+    )
 
 
 def frozen(case, **changes):
-    return freeze_confirmation_protocol(confirmation_request(**changes), source_protocol_id=case.source.protocol_id, **case.options)
+    return freeze_confirmation_protocol(
+        confirmation_request(**changes), source_protocol_id=case.source.protocol_id, **case.options
+    )
 
 
 def test_freeze_is_idempotent_and_first_release_commits_entire_window(tmp_path):
@@ -138,10 +162,14 @@ def test_executable_source_needs_no_v1_strategy_property(experiment_case):
     case = experiment_case
     registry, ledger = Registry(), Ledger()
     options = {
-        "source_factory": lambda: case.registry, "datasets_factory": lambda: case.data,
-        "confirmations_factory": lambda: registry, "exposures_factory": lambda: ledger,
+        "source_factory": lambda: case.registry,
+        "datasets_factory": lambda: case.data,
+        "confirmations_factory": lambda: registry,
+        "exposures_factory": lambda: ledger,
     }
-    receipt = freeze_confirmation_protocol(confirmation_request(), source_protocol_id=case.frozen.protocol_id, **options)
+    receipt = freeze_confirmation_protocol(
+        confirmation_request(), source_protocol_id=case.frozen.protocol_id, **options
+    )
     assert receipt["document"]["source_protocol"]["kind"] == "executable_research_protocol_v2"
     opened = open_confirmation_protocol(receipt["protocol_id"], **options)
     assert opened["total_records"] == 1
@@ -165,14 +193,19 @@ def test_committed_but_undelivered_window_is_never_refunded(tmp_path, after_comm
         open_confirmation_protocol(receipt["protocol_id"], **case.options)
     assert len(case.ledger.records) == 1
     with pytest.raises(ConfirmationAlreadyExposed):
-        open_confirmation_protocol(receipt["protocol_id"], **{**case.options, "source_factory": forbidden, "datasets_factory": forbidden})
+        open_confirmation_protocol(
+            receipt["protocol_id"],
+            **{**case.options, "source_factory": forbidden, "datasets_factory": forbidden},
+        )
     assert case.ledger.calls == 1
 
 
 def test_atomic_exposure_rechecks_a_race_after_initial_fresh_read(tmp_path):
     case = setup(tmp_path)
     first, other = frozen(case), frozen(case, title="Competing authority")
-    competing = build_confirmation_exposure(load_confirmation_protocol(case.registry.get(other["protocol_id"]).canonical_bytes))
+    competing = build_confirmation_exposure(
+        load_confirmation_protocol(case.registry.get(other["protocol_id"]).canonical_bytes)
+    )
     case.ledger.race = competing
     with pytest.raises(ConfirmationAlreadyExposed) as caught:
         open_confirmation_protocol(first["protocol_id"], **case.options)
@@ -185,19 +218,27 @@ def test_invalid_preflight_does_not_create_writable_confirmation_state(tmp_path,
     case = setup(tmp_path, confirmation_raw=snapshot(3) + trade(4, event_time=400))
     options = {**case.options, "confirmations_factory": forbidden, "exposures_factory": forbidden}
     source_id = case.source.protocol_id
-    declaration = confirmation_request(max_events=1) if change == "request_budget" else confirmation_request()
+    declaration = (
+        confirmation_request(max_events=1) if change == "request_budget" else confirmation_request()
+    )
     if change == "source_budget":
         draft = request()
         import json
 
         document = json.loads(draft)
         document["budget"]["max_events"] = 1
-        source = freeze(tmp_path, case.data, case.development, case.confirmation, canonical(document))
+        source = freeze(
+            tmp_path, case.data, case.development, case.confirmation, canonical(document)
+        )
         source_id = source.protocol_id
     elif change == "bad_source":
-        options["source_factory"] = lambda: SimpleNamespace(get=lambda _: SimpleNamespace(protocol_id=source_id, canonical_bytes=b"{}"))
+        options["source_factory"] = lambda: SimpleNamespace(
+            get=lambda _: SimpleNamespace(protocol_id=source_id, canonical_bytes=b"{}")
+        )
     elif change == "bad_data":
-        options["datasets_factory"] = lambda: SimpleNamespace(get=lambda _: SimpleNamespace(dataset_id="0" * 64, manifest={}, report={}))
+        options["datasets_factory"] = lambda: SimpleNamespace(
+            get=lambda _: SimpleNamespace(dataset_id="0" * 64, manifest={}, report={})
+        )
     with pytest.raises(ConfirmationValidationError):
         freeze_confirmation_protocol(declaration, source_protocol_id=source_id, **options)
     assert not case.ledger.records
@@ -206,7 +247,14 @@ def test_invalid_preflight_does_not_create_writable_confirmation_state(tmp_path,
 def test_open_revalidates_actual_bindings_before_consumption(tmp_path):
     case = setup(tmp_path)
     receipt = frozen(case)
-    options = {**case.options, "source_factory": lambda: SimpleNamespace(get=lambda _: SimpleNamespace(protocol_id=case.source.protocol_id, canonical_bytes=b"{}"))}
+    options = {
+        **case.options,
+        "source_factory": lambda: SimpleNamespace(
+            get=lambda _: SimpleNamespace(
+                protocol_id=case.source.protocol_id, canonical_bytes=b"{}"
+            )
+        ),
+    }
     with pytest.raises(ConfirmationValidationError):
         open_confirmation_protocol(receipt["protocol_id"], **options)
     assert not case.ledger.records
@@ -218,8 +266,13 @@ def test_exposure_metadata_cannot_report_unrelated_conflicts(tmp_path):
     receipt = frozen(case)
     other = setup(tmp_path / "other", confirmation_raw=snapshot(7))
     other_receipt = frozen(other)
-    exposure = build_confirmation_exposure(load_confirmation_protocol(other.registry.get(other_receipt["protocol_id"]).canonical_bytes))
-    options = {**case.options, "exposures_factory": lambda: SimpleNamespace(find_conflicts=lambda _: (exposure,))}
+    exposure = build_confirmation_exposure(
+        load_confirmation_protocol(other.registry.get(other_receipt["protocol_id"]).canonical_bytes)
+    )
+    options = {
+        **case.options,
+        "exposures_factory": lambda: SimpleNamespace(find_conflicts=lambda _: (exposure,)),
+    }
     with pytest.raises(ConfirmationValidationError, match="does not overlap"):
         inspect_confirmation_protocol(receipt["protocol_id"], **options)
 
@@ -229,7 +282,12 @@ def test_old_exploration_interface_keeps_confirmation_denial_before_io(tmp_path)
     receipt = frozen(case)
     open_confirmation_protocol(receipt["protocol_id"], **case.options)
     with pytest.raises(ConfirmationAccessDenied):
-        read_protocol_data(case.source.protocol_id, split="confirmation", registry_factory=forbidden, datasets_factory=forbidden)
+        read_protocol_data(
+            case.source.protocol_id,
+            split="confirmation",
+            registry_factory=forbidden,
+            datasets_factory=forbidden,
+        )
 
 
 def test_source_repository_failures_keep_their_integrity_or_not_found_type(tmp_path):
@@ -241,28 +299,53 @@ def test_source_repository_failures_keep_their_integrity_or_not_found_type(tmp_p
     def fail(_):
         raise SourceIntegrityError("actual strategy CAS is absent")
 
-    options = {**case.options, "source_factory": lambda: SimpleNamespace(get=fail), "confirmations_factory": forbidden, "exposures_factory": forbidden}
+    options = {
+        **case.options,
+        "source_factory": lambda: SimpleNamespace(get=fail),
+        "confirmations_factory": forbidden,
+        "exposures_factory": forbidden,
+    }
     with pytest.raises(SourceIntegrityError):
-        freeze_confirmation_protocol(confirmation_request(), source_protocol_id=case.source.protocol_id, **options)
+        freeze_confirmation_protocol(
+            confirmation_request(), source_protocol_id=case.source.protocol_id, **options
+        )
 
 
-def test_changed_source_and_registry_inherit_repacked_origins_but_disjoint_trade_is_allowed(tmp_path):
+def test_changed_source_and_registry_inherit_repacked_origins_but_disjoint_trade_is_allowed(
+    tmp_path,
+):
     case = setup(tmp_path, confirmation_raw=trade(3, event_time=300))
     first = frozen(case)
     released = open_confirmation_protocol(first["protocol_id"], **case.options)
     from tickwitness.infrastructure.local_protocol_registry import LocalProtocolRegistry
 
-    for trade_id, expected in (("trade-1", "ALREADY_EXPOSED_IN_LEDGER"), ("trade-2", "NO_MATCHING_EXPOSURE_IN_LEDGER")):
+    for trade_id, expected in (
+        ("trade-1", "ALREADY_EXPOSED_IN_LEDGER"),
+        ("trade-2", "NO_MATCHING_EXPOSURE_IN_LEDGER"),
+    ):
         raw = trade(30, event_time=9999, quantity=7, trade_id=trade_id)
         changed_data = import_events(raw.replace(b'"source":', b'"source" :'), lambda: case.data)
         source_root = tmp_path / trade_id
-        source = freeze(source_root, case.data, case.development, changed_data.dataset_id, request(hypothesis="A new claim and source registry"))
+        source = freeze(
+            source_root,
+            case.data,
+            case.development,
+            changed_data.dataset_id,
+            request(hypothesis="A new claim and source registry"),
+        )
         registry = Registry()
         options = {
-            **case.options, "source_factory": lambda root=source_root: LocalProtocolRegistry(root / "registry", create=False),
-            "confirmations_factory": lambda: registry,
+            **case.options,
+            "source_factory": lambda root=source_root: LocalProtocolRegistry(
+                root / "registry", create=False
+            ),
+            "confirmations_factory": lambda current=registry: current,
         }
-        declaration = freeze_confirmation_protocol(confirmation_request(title="Changed declaration"), source_protocol_id=source.protocol_id, **options)
+        declaration = freeze_confirmation_protocol(
+            confirmation_request(title="Changed declaration"),
+            source_protocol_id=source.protocol_id,
+            **options,
+        )
         assert declaration["exposure_status"] == expected
         if trade_id == "trade-1":
             assert declaration["related_exposure_ids"] == [released["exposure_id"]]
@@ -276,7 +359,12 @@ def test_changed_source_and_registry_inherit_repacked_origins_but_disjoint_trade
 
 @pytest.mark.parametrize("invalid", ["invalid", "A" * 64, "../protocol", "", True])
 def test_invalid_identity_precedes_every_application_factory(invalid):
-    options = {"source_factory": forbidden, "datasets_factory": forbidden, "confirmations_factory": forbidden, "exposures_factory": forbidden}
+    options = {
+        "source_factory": forbidden,
+        "datasets_factory": forbidden,
+        "confirmations_factory": forbidden,
+        "exposures_factory": forbidden,
+    }
     with pytest.raises(ConfirmationValidationError):
         freeze_confirmation_protocol(confirmation_request(), source_protocol_id=invalid, **options)
     for service in (inspect_confirmation_protocol, open_confirmation_protocol):
