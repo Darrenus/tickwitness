@@ -24,10 +24,21 @@ def export_arguments(tmp_path):
     runner.write_bytes(b"raise AssertionError('qualification must not execute included code')\n")
     output = tmp_path / "kit"
     return output, [
-        "export-alpha-kit", "--counterexample", str(inputs / "cases" / "counterexample"),
-        "--clean-control", str(inputs / "cases" / "clean-control"),
-        "--wheel", str(wheel), "--guide", str(guide), "--runner", str(runner),
-        "--source-revision", "1" * 40, "--output", str(output),
+        "export-alpha-kit",
+        "--counterexample",
+        str(inputs / "cases" / "counterexample"),
+        "--clean-control",
+        str(inputs / "cases" / "clean-control"),
+        "--wheel",
+        str(wheel),
+        "--guide",
+        str(guide),
+        "--runner",
+        str(runner),
+        "--source-revision",
+        "1" * 40,
+        "--output",
+        str(output),
     ]
 
 
@@ -49,7 +60,9 @@ def qualify_arguments(kit, kit_id, probe):
 
 
 def tree(root):
-    return {str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+    return {
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
+    }
 
 
 def test_export_qualify_and_redirected_single_lf_receipt_reproduce(tmp_path, capsys):
@@ -63,7 +76,22 @@ def test_export_qualify_and_redirected_single_lf_receipt_reproduce(tmp_path, cap
     assert receipt["kind"] == "alpha_scorecard_receipt_v1"
     assert receipt["scorecard"]["gates"]["external_attempt_gate"] == "PENDING"
     (tmp_path / "receipt.json").write_bytes(emitted.out.encode())
-    assert main(["verify-alpha-scorecard", str(kit), "receipt.json", "--input-root", str(tmp_path), "--expected-kit-id", kit_id, "--probe-root", str(tmp_path / "probe-second")]) == 0
+    assert (
+        main(
+            [
+                "verify-alpha-scorecard",
+                str(kit),
+                "receipt.json",
+                "--input-root",
+                str(tmp_path),
+                "--expected-kit-id",
+                kit_id,
+                "--probe-root",
+                str(tmp_path / "probe-second"),
+            ]
+        )
+        == 0
+    )
     verified = capsys.readouterr()
     assert verified.err == "" and json.loads(verified.out) == receipt
     assert tree(kit) == before
@@ -101,7 +129,22 @@ def test_saved_forgery_or_extra_framing_is_rejected_before_probe(tmp_path, capsy
         saved = emitted.encode() + b"\n"
     (tmp_path / "saved.json").write_bytes(saved)
     probe = tmp_path / "must-not-run"
-    assert main(["verify-alpha-scorecard", str(kit), "saved.json", "--input-root", str(tmp_path), "--expected-kit-id", kit_id, "--probe-root", str(probe)]) == 2
+    assert (
+        main(
+            [
+                "verify-alpha-scorecard",
+                str(kit),
+                "saved.json",
+                "--input-root",
+                str(tmp_path),
+                "--expected-kit-id",
+                kit_id,
+                "--probe-root",
+                str(probe),
+            ]
+        )
+        == 2
+    )
     result = capsys.readouterr()
     assert result.out == ""
     assert json.loads(result.err)["error"]["code"] == "invalid_alpha_evidence"

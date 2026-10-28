@@ -169,29 +169,42 @@ def _check_scorecard(receipt: dict, kit_id: str, suite: dict) -> None:
     assert invalid["challenge_delay_ns"] == 2_000_000_001
     assert invalid["outcome"] == "REJECTED"
     assert invalid["reason_code"] == "scenario_delay_outside_frozen_assumption_range"
-    assert invalid["scenario_id"] == _identity({
-        "kind": "scenario_spec_v1", "schema_version": 1,
-        "scenario_kind": "COUNTERFACTUAL_STRESS", "assumption_id": invalid["assumption_id"],
-        "additional_delay": {"value": invalid["challenge_delay_ns"], "unit": "ns"},
-    })
+    assert invalid["scenario_id"] == _identity(
+        {
+            "kind": "scenario_spec_v1",
+            "schema_version": 1,
+            "scenario_kind": "COUNTERFACTUAL_STRESS",
+            "assumption_id": invalid["assumption_id"],
+            "additional_delay": {"value": invalid["challenge_delay_ns"], "unit": "ns"},
+        }
+    )
     probe = scorecard["publication_probe"]
     assert probe["kind"] == "alpha_kit_publication_probe_v1"
     assert probe["profile"] == "alpha_kit_precommit_sync_postcommit_parent_sync_v1"
     assert probe["kit_id"] == kit_id
     assert probe["normal_publication"] == {
-        "published_kit_id": kit_id, "readback_kit_id": kit_id, "success_returned": True,
+        "published_kit_id": kit_id,
+        "readback_kit_id": kit_id,
+        "success_returned": True,
     }
     assert probe["existing_destination"] == {
         "exception_type": "AlphaKitDestinationExistsError",
-        "success_returned": False, "original_tree_unchanged": True,
+        "success_returned": False,
+        "original_tree_unchanged": True,
     }
     assert probe["precommit_sync_failure"] == {
-        "fault_injected": True, "exception_type": "AlphaKitError", "success_returned": False,
-        "target_exists": False, "staging_entries_remaining": 0,
+        "fault_injected": True,
+        "exception_type": "AlphaKitError",
+        "success_returned": False,
+        "target_exists": False,
+        "staging_entries_remaining": 0,
     }
     assert probe["postcommit_parent_sync_failure"] == {
-        "fault_injected": True, "exception_type": "AlphaKitDurabilityError",
-        "success_returned": False, "target_exists": True, "retained_kit_id": kit_id,
+        "fault_injected": True,
+        "exception_type": "AlphaKitDurabilityError",
+        "success_returned": False,
+        "target_exists": True,
+        "retained_kit_id": kit_id,
     }
 
 
@@ -205,24 +218,25 @@ def _check_probe(root: Path, kit: Path) -> None:
 def _package_handoff(root: Path, kit: Path, manifest: dict, kit_id: str) -> dict:
     archive_path = root / "alpha-reproduction-kit.tar.gz"
     prefix = "tickwitness-alpha-kit"
-    contents = {
-        relative: (kit / relative).read_bytes() for relative in sorted(_tree(kit))
-    }
+    contents = {relative: (kit / relative).read_bytes() for relative in sorted(_tree(kit))}
     directories = {prefix}
     for relative in contents:
-        directories.update(prefix + "/" + str(parent) for parent in Path(relative).parents
-                           if str(parent) != ".")
-    with archive_path.open("wb") as output:
-        with gzip.GzipFile(filename="", mode="wb", fileobj=output, mtime=0) as compressed:
-            with tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as archive:
-                for name in sorted(directories):
-                    entry = tarfile.TarInfo(name)
-                    entry.type, entry.mode = tarfile.DIRTYPE, 0o755
-                    archive.addfile(entry)
-                for relative, raw in contents.items():
-                    entry = tarfile.TarInfo(prefix + "/" + relative)
-                    entry.size, entry.mode = len(raw), 0o644
-                    archive.addfile(entry, io.BytesIO(raw))
+        directories.update(
+            prefix + "/" + str(parent) for parent in Path(relative).parents if str(parent) != "."
+        )
+    with (
+        archive_path.open("wb") as output,
+        gzip.GzipFile(filename="", mode="wb", fileobj=output, mtime=0) as compressed,
+        tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as archive,
+    ):
+        for name in sorted(directories):
+            entry = tarfile.TarInfo(name)
+            entry.type, entry.mode = tarfile.DIRTYPE, 0o755
+            archive.addfile(entry)
+        for relative, raw in contents.items():
+            entry = tarfile.TarInfo(prefix + "/" + relative)
+            entry.size, entry.mode = len(raw), 0o644
+            archive.addfile(entry, io.BytesIO(raw))
     with tarfile.open(archive_path, mode="r:gz") as archive:
         members = archive.getmembers()
         files = {member.name: member for member in members if member.isfile()}
@@ -240,34 +254,59 @@ def _package_handoff(root: Path, kit: Path, manifest: dict, kit_id: str) -> dict
     commands = [
         "python3.12 -m venv ./tickwitness-alpha-env",
         "./tickwitness-alpha-env/bin/python -m pip install --no-index --no-deps ./"
-        + prefix + "/" + wheel_path,
-        "./tickwitness-alpha-env/bin/python -I ./" + prefix + "/reproduce.py --kit ./"
-        + prefix + " --expected-kit-id " + kit_id
+        + prefix
+        + "/"
+        + wheel_path,
+        "./tickwitness-alpha-env/bin/python -I ./"
+        + prefix
+        + "/reproduce.py --kit ./"
+        + prefix
+        + " --expected-kit-id "
+        + kit_id
         + " --participant-id external-reviewer-01 --participant-role external_user"
         + " --output ./tickwitness-alpha-submission-01",
     ]
     handoff = {
-        "kind": "alpha_reproduction_handoff_v1", "schema_version": 1,
+        "kind": "alpha_reproduction_handoff_v1",
+        "schema_version": 1,
         "expected_kit_id": kit_id,
-        "archive": {"path": archive_path.name, "sha256": _sha(archive_path.read_bytes()),
-                    "size_bytes": archive_path.stat().st_size, "root": prefix},
+        "archive": {
+            "path": archive_path.name,
+            "sha256": _sha(archive_path.read_bytes()),
+            "size_bytes": archive_path.stat().st_size,
+            "root": prefix,
+        },
         "wheel": {"path": wheel_path, **manifest["files"][wheel_path]},
-        "producer": manifest["producer"], "external_attempts": 0, "external_successes": 0,
-        "external_attempt_gate": "PENDING", "participant_role_is_self_reported": True,
+        "producer": manifest["producer"],
+        "external_attempts": 0,
+        "external_successes": 0,
+        "external_attempt_gate": "PENDING",
+        "participant_role_is_self_reported": True,
         "commands_after_extraction": commands,
     }
     (root / "handoff.json").write_bytes(_canonical(handoff))
     (root / "HANDOFF.txt").write_text(
         "TickWitness technical alpha reproduction handoff\n\n"
-        + "Expected kit ID: " + kit_id + "\n"
-        + "Archive SHA-256: " + handoff["archive"]["sha256"] + "\n"
-        + "Wheel path: " + wheel_path + "\n"
-        + "Wheel SHA-256: " + handoff["wheel"]["sha256"] + "\n"
-        + "Assembler revision: " + manifest["producer"]["source_revision"] + "\n"
+        + "Expected kit ID: "
+        + kit_id
+        + "\n"
+        + "Archive SHA-256: "
+        + handoff["archive"]["sha256"]
+        + "\n"
+        + "Wheel path: "
+        + wheel_path
+        + "\n"
+        + "Wheel SHA-256: "
+        + handoff["wheel"]["sha256"]
+        + "\n"
+        + "Assembler revision: "
+        + manifest["producer"]["source_revision"]
+        + "\n"
         + "External attempts/successes: 0/0; gate PENDING. No release authorized.\n\n"
         + "Extract alpha-reproduction-kit.tar.gz in a new directory first.\n"
         + "Use Linux/macOS and Python 3.12-3.14. Then run these three steps:\n\n"
-        + "\n\n".join(commands) + "\n\n"
+        + "\n\n".join(commands)
+        + "\n\n"
         + "The external_user role is an example for the actual external participant; "
         + "maintainers use maintainer and CI uses automation.\n"
         + "Return the complete new submission directory, including failed attempts. "
@@ -309,8 +348,12 @@ def main() -> None:
 
         def run(*command: str, expected: int = 0) -> dict:
             completed = subprocess.run(
-                [interpreter, "-I", "-c", _GUARD, *command], cwd=cwd,
-                capture_output=True, text=True, check=False, timeout=180,
+                [interpreter, "-I", "-c", _GUARD, *command],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=180,
             )
             if completed.returncode != expected or (
                 completed.stderr if expected == 0 else completed.stdout
@@ -322,10 +365,19 @@ def main() -> None:
             return json.loads(completed.stdout if expected == 0 else completed.stderr)
 
         export_command = (
-            "export-alpha-kit", "--counterexample", str(assembly / "counterexample"),
-            "--clean-control", str(assembly / "clean-control"), "--wheel", str(wheel),
-            "--guide", str(assembly / "guide.md"), "--runner", str(assembly / "runner.py"),
-            "--source-revision", arguments.source_revision,
+            "export-alpha-kit",
+            "--counterexample",
+            str(assembly / "counterexample"),
+            "--clean-control",
+            str(assembly / "clean-control"),
+            "--wheel",
+            str(wheel),
+            "--guide",
+            str(assembly / "guide.md"),
+            "--runner",
+            str(assembly / "runner.py"),
+            "--source-revision",
+            arguments.source_revision,
         )
         published = publication / "kit"
         exported = run(*export_command, "--output", str(published))
@@ -341,7 +393,8 @@ def main() -> None:
         assert _identity(suite) == exported["suite_id"]
         for name, expected in _CASES.items():
             assert suite["cases"][name] == {
-                "bundle_id": expected["bundle_id"], "report_id": expected["report_id"],
+                "bundle_id": expected["bundle_id"],
+                "report_id": expected["report_id"],
             }
         original = _tree(published)
         conflict = run(*export_command, "--output", str(published), expected=3)
@@ -355,8 +408,13 @@ def main() -> None:
 
         def qualify(target: Path, probe: Path, *, pin: str = kit_id, expected: int = 0) -> dict:
             return run(
-                "qualify-alpha-kit", str(target), "--expected-kit-id", pin,
-                "--probe-root", str(probe), expected=expected,
+                "qualify-alpha-kit",
+                str(target),
+                "--expected-kit-id",
+                pin,
+                "--probe-root",
+                str(probe),
+                expected=expected,
             )
 
         receipt = qualify(kit, probes / "initial")
@@ -367,8 +425,15 @@ def main() -> None:
         assert repeated == receipt
         _check_probe(probes / "repeat", kit)
         verified = run(
-            "verify-alpha-scorecard", str(kit), "scorecard.json", "--input-root", str(results),
-            "--expected-kit-id", kit_id, "--probe-root", str(probes / "saved-verification"),
+            "verify-alpha-scorecard",
+            str(kit),
+            "scorecard.json",
+            "--input-root",
+            str(results),
+            "--expected-kit-id",
+            kit_id,
+            "--probe-root",
+            str(probes / "saved-verification"),
         )
         assert verified == receipt
         _check_probe(probes / "saved-verification", kit)
@@ -387,15 +452,15 @@ def main() -> None:
         case_receipts = {}
         for name, expected in _CASES.items():
             evidence = run(
-                "verify-search-evidence", str(kit / "cases" / expected["path"]),
-                "--expected-bundle-id", expected["bundle_id"],
+                "verify-search-evidence",
+                str(kit / "cases" / expected["path"]),
+                "--expected-bundle-id",
+                expected["bundle_id"],
             )
             assert evidence["report_id"] == expected["report_id"]
             assert evidence["report"]["outcome"] == expected["outcome"]
             assert evidence["report"]["planned_predicate_truth"] is expected["truth"]
-            indices = [
-                row["attempt_index"] for row in evidence["report"]["candidate_assessments"]
-            ]
+            indices = [row["attempt_index"] for row in evidence["report"]["candidate_assessments"]]
             assert indices == expected["attempt_indices"]
             assert evidence["verification"]["native_replayed"] is False
             assert evidence["verification"]["attempt_reserved"] is False
@@ -406,18 +471,29 @@ def main() -> None:
         invalid = forged["scorecard"]["invalid_perturbation"]
         invalid["frozen_maximum_ns"] += 1
         invalid["challenge_delay_ns"] += 1
-        invalid["scenario_id"] = _identity({
-            "kind": "scenario_spec_v1", "schema_version": 1,
-            "scenario_kind": "COUNTERFACTUAL_STRESS", "assumption_id": invalid["assumption_id"],
-            "additional_delay": {"value": invalid["challenge_delay_ns"], "unit": "ns"},
-        })
+        invalid["scenario_id"] = _identity(
+            {
+                "kind": "scenario_spec_v1",
+                "schema_version": 1,
+                "scenario_kind": "COUNTERFACTUAL_STRESS",
+                "assumption_id": invalid["assumption_id"],
+                "additional_delay": {"value": invalid["challenge_delay_ns"], "unit": "ns"},
+            }
+        )
         forged["scorecard_id"] = _identity(forged["scorecard"])
         (results / "rehashed-invalid-oracle.json").write_bytes(_canonical(forged))
         forged_probe = probes / "rehashed-invalid-oracle"
         rejected = run(
-            "verify-alpha-scorecard", str(kit), "rehashed-invalid-oracle.json",
-            "--input-root", str(results), "--expected-kit-id", kit_id,
-            "--probe-root", str(forged_probe), expected=2,
+            "verify-alpha-scorecard",
+            str(kit),
+            "rehashed-invalid-oracle.json",
+            "--input-root",
+            str(results),
+            "--expected-kit-id",
+            kit_id,
+            "--probe-root",
+            str(forged_probe),
+            expected=2,
         )
         assert rejected["error"]["code"] == "invalid_alpha_evidence"
         _check_probe(forged_probe, kit)  # The canonical forgery reached fresh full execution.
@@ -435,8 +511,14 @@ def main() -> None:
             error = qualify(corrupt, probe, expected=3)
             assert error["error"]["code"] == "alpha_kit_integrity_or_io_failure"
             assert not probe.exists() and _tree(corrupt) == before
-            corruptions.append({"name": name, "error": error, "probe_not_created": True,
-                                "corrupt_tree_unchanged": True})
+            corruptions.append(
+                {
+                    "name": name,
+                    "error": error,
+                    "probe_not_created": True,
+                    "corrupt_tree_unchanged": True,
+                }
+            )
 
         submissions = root / "submissions"
         submissions.mkdir()
@@ -447,10 +529,26 @@ def main() -> None:
         ):
             output = submissions / name
             completed = subprocess.run(
-                [interpreter, "-I", str(kit / "reproduce.py"), "--kit", str(kit),
-                 "--expected-kit-id", pin, "--participant-id", "installed-smoke",
-                 "--participant-role", "automation", "--output", str(output)],
-                cwd=cwd, capture_output=True, text=True, check=False, timeout=240,
+                [
+                    interpreter,
+                    "-I",
+                    str(kit / "reproduce.py"),
+                    "--kit",
+                    str(kit),
+                    "--expected-kit-id",
+                    pin,
+                    "--participant-id",
+                    "installed-smoke",
+                    "--participant-role",
+                    "automation",
+                    "--output",
+                    str(output),
+                ],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=240,
             )
             if completed.returncode != runner_exit or completed.stderr:
                 raise RuntimeError(
@@ -481,8 +579,14 @@ def main() -> None:
                 observed = json.loads(actual["stderr"]["text"])
                 assert observed["error"]["code"] == "alpha_kit_integrity_or_io_failure"
                 assert not (output / "publication-probe").exists()
-            runner_reports.append({"name": name, "runner_exit_code": runner_exit,
-                                   "written": written, "submission_record": submission})
+            runner_reports.append(
+                {
+                    "name": name,
+                    "runner_exit_code": runner_exit,
+                    "written": written,
+                    "submission_record": submission,
+                }
+            )
 
         assert _tree(kit) == original and _tree(corpus) == source_before
         for path, before in source_files.values():
@@ -495,26 +599,41 @@ def main() -> None:
         _check_probe(probes / "archive-reaudit", kit)
         assert _tree(kit) == original
         report = {
-            "kind": "installed_alpha_scorecard_acceptance_v1", "accepted": True,
-            "synthetic_data": True, "source_revision": arguments.source_revision,
-            "export": exported, "receipt": receipt, "case_reaudits": case_receipts,
-            "corruptions": corruptions, "runner_attempts": runner_reports,
-            "wrong_kit_pin_error": wrong_pin, "occupied_probe_error": occupied,
-            "existing_kit_error": conflict, "rehashed_invalid_oracle_error": rejected,
+            "kind": "installed_alpha_scorecard_acceptance_v1",
+            "accepted": True,
+            "synthetic_data": True,
+            "source_revision": arguments.source_revision,
+            "export": exported,
+            "receipt": receipt,
+            "case_reaudits": case_receipts,
+            "corruptions": corruptions,
+            "runner_attempts": runner_reports,
+            "wrong_kit_pin_error": wrong_pin,
+            "occupied_probe_error": occupied,
+            "existing_kit_error": conflict,
+            "rehashed_invalid_oracle_error": rejected,
             "guarded_qualification_and_verification": True,
-            "standalone_runner_unmodified": True, "runner_subprocess_guarded": False,
+            "standalone_runner_unmodified": True,
+            "runner_subprocess_guarded": False,
             "runner_uses_same_core_only_interpreter": True,
-            "assembly_inputs_deleted": True, "kit_relocated": True,
-            "source_byte_trees_unchanged": True, "immutable_kit_tree_unchanged": True,
-            "same_receipt_on_repeat": True, "saved_receipt_freshly_recomputed": True,
+            "assembly_inputs_deleted": True,
+            "kit_relocated": True,
+            "source_byte_trees_unchanged": True,
+            "immutable_kit_tree_unchanged": True,
+            "same_receipt_on_repeat": True,
+            "saved_receipt_freshly_recomputed": True,
             "postcommit_content_independently_reaudited": True,
             "controlled_faults_actually_executed": True,
             "rehashed_invalid_oracle_freshly_rejected": True,
             "failed_submission_retained": True,
-            "handoff": handoff, "archive_exact_kit_only": True,
+            "handoff": handoff,
+            "archive_exact_kit_only": True,
             "archive_extracted_kit_freshly_reaudited": True,
-            "external_attempts": 0, "external_successes": 0, "external_attempt_gate": "PENDING",
-            "new_native_calls": False, "new_research_attempts": False,
+            "external_attempts": 0,
+            "external_successes": 0,
+            "external_attempt_gate": "PENDING",
+            "new_native_calls": False,
+            "new_research_attempts": False,
             "old_budget_mutations": False,
         }
         shutil.copytree(root, arguments.records_dir)

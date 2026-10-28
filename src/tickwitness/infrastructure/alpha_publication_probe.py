@@ -38,9 +38,7 @@ class LocalAlphaPublicationProbe:
             raise AlphaKitError("Publication probe must name a new scratch directory")
         try:
             with ExitStack() as stack:
-                parent = os.open(
-                    self._root.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-                )
+                parent = os.open(self._root.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
                 stack.callback(os.close, parent)
                 try:
                     os.mkdir(self._root.name, 0o700, dir_fd=parent)

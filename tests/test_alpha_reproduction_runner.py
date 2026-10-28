@@ -19,7 +19,18 @@ def load_runner():
 
 
 def arguments(kit, kit_id, output, role="automation"):
-    return ["--kit", str(kit), "--expected-kit-id", kit_id, "--participant-id", "remote-reproduction", "--participant-role", role, "--output", str(output)]
+    return [
+        "--kit",
+        str(kit),
+        "--expected-kit-id",
+        kit_id,
+        "--participant-id",
+        "remote-reproduction",
+        "--participant-role",
+        role,
+        "--output",
+        str(output),
+    ]
 
 
 def submission(output):
@@ -28,7 +39,9 @@ def submission(output):
     return document["submission"]
 
 
-def test_success_preserves_actual_technical_receipt_and_unreviewed_automation_identity(tmp_path, capsys, monkeypatch):
+def test_success_preserves_actual_technical_receipt_and_unreviewed_automation_identity(
+    tmp_path, capsys, monkeypatch
+):
     kit, kit_id = export_kit(tmp_path, capsys)
     assert main(qualify_arguments(kit, kit_id, tmp_path / "actual-probe")) == 0
     actual = capsys.readouterr()
@@ -41,7 +54,13 @@ def test_success_preserves_actual_technical_receipt_and_unreviewed_automation_id
     def completed(command):
         calls.append(command)
         assert command[1:3] == ["-I", "-c"]
-        return capture_result(stdout=actual.out.encode(), exit_code=0, stdout_complete=True, stderr_complete=True, stdout_observed_bytes=len(actual.out.encode()))
+        return capture_result(
+            stdout=actual.out.encode(),
+            exit_code=0,
+            stdout_complete=True,
+            stderr_complete=True,
+            stdout_observed_bytes=len(actual.out.encode()),
+        )
 
     monkeypatch.setitem(run.__globals__, "_capture", completed)
     output = tmp_path / "submission-success"
@@ -61,7 +80,9 @@ def test_success_preserves_actual_technical_receipt_and_unreviewed_automation_id
     assert receipt["scorecard"]["gates"]["external_attempts"] == 0
 
 
-def test_actual_cli_failure_is_preserved_with_exit_three_and_no_scorecard(tmp_path, capsys, monkeypatch):
+def test_actual_cli_failure_is_preserved_with_exit_three_and_no_scorecard(
+    tmp_path, capsys, monkeypatch
+):
     kit, kit_id = export_kit(tmp_path, capsys)
     assert main(qualify_arguments(kit, "0" * 64, tmp_path / "unused-probe")) == 3
     failed = capsys.readouterr()
@@ -70,7 +91,13 @@ def test_actual_cli_failure_is_preserved_with_exit_three_and_no_scorecard(tmp_pa
     capture_result = run.__globals__["CaptureResult"]
 
     def completed(_command):
-        return capture_result(stderr=failed.err.encode(), exit_code=3, stdout_complete=True, stderr_complete=True, stderr_observed_bytes=len(failed.err.encode()))
+        return capture_result(
+            stderr=failed.err.encode(),
+            exit_code=3,
+            stdout_complete=True,
+            stderr_complete=True,
+            stderr_observed_bytes=len(failed.err.encode()),
+        )
 
     monkeypatch.setitem(run.__globals__, "_capture", completed)
     output = tmp_path / "failed-submission"
@@ -95,7 +122,14 @@ def test_timeout_is_retained_and_existing_submission_is_never_reused(tmp_path, c
     capture_result = run.__globals__["CaptureResult"]
 
     def timeout(_command):
-        return capture_result(stdout=b"partial output", stderr=b"timeout diagnostic", timed_out=True, stdout_observed_bytes=len(b"partial output"), stderr_observed_bytes=len(b"timeout diagnostic"), stage="process_timeout")
+        return capture_result(
+            stdout=b"partial output",
+            stderr=b"timeout diagnostic",
+            timed_out=True,
+            stdout_observed_bytes=len(b"partial output"),
+            stderr_observed_bytes=len(b"timeout diagnostic"),
+            stage="process_timeout",
+        )
 
     monkeypatch.setitem(run.__globals__, "_capture", timeout)
     assert run(arguments(kit, "a" * 64, output)) == 11
@@ -135,7 +169,9 @@ def test_output_inside_the_kit_is_rejected_before_process_or_files(tmp_path, mon
 
 
 @pytest.mark.parametrize("stream", ["stdout", "stderr"])
-def test_actual_child_output_overflow_is_bounded_and_preserved_as_failed_submission(tmp_path, capsys, monkeypatch, stream):
+def test_actual_child_output_overflow_is_bounded_and_preserved_as_failed_submission(
+    tmp_path, capsys, monkeypatch, stream
+):
     kit = tmp_path / "kit"
     kit.mkdir()
     run = load_runner()

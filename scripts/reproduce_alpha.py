@@ -214,7 +214,8 @@ def _receipt(raw: bytes, expected: str) -> dict[str, object]:
     gates = scorecard.get("gates")
     if (
         not isinstance(gates, dict)
-        or gates != {
+        or gates
+        != {
             "technical_checks": "PASS",
             "external_attempts": 0,
             "external_successes": 0,
@@ -230,9 +231,7 @@ def _receipt(raw: bytes, expected: str) -> dict[str, object]:
 
 def _publish(directory: Path, name: str, payload: bytes) -> None:
     temporary = directory / (".pending-" + secrets.token_hex(16))
-    descriptor = os.open(
-        temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
-    )
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, "wb") as stream:
         stream.write(payload)
         stream.flush()
@@ -265,9 +264,16 @@ def main(argv: list[str] | None = None) -> int:
         # Reserve a new directory; never overwrite a prior submission or run.
         output.mkdir(mode=0o700)
         command = [
-            sys.executable, "-I", "-c", _ENTRYPOINT, "qualify-alpha-kit",
-            str(arguments.kit.absolute()), "--expected-kit-id", arguments.expected_kit_id,
-            "--probe-root", str(output / "publication-probe"),
+            sys.executable,
+            "-I",
+            "-c",
+            _ENTRYPOINT,
+            "qualify-alpha-kit",
+            str(arguments.kit.absolute()),
+            "--expected-kit-id",
+            arguments.expected_kit_id,
+            "--probe-root",
+            str(output / "publication-probe"),
         ]
         started = datetime.now(UTC).isoformat()
         began = time.monotonic_ns()
@@ -317,8 +323,10 @@ def main(argv: list[str] | None = None) -> int:
             "finished_at_utc_declared": finished,
             "elapsed_ns_observed": elapsed_ns,
             "environment": {
-                "os": platform.system(), "machine": platform.machine(),
-                "python": platform.python_version(), "tickwitness": installed,
+                "os": platform.system(),
+                "machine": platform.machine(),
+                "python": platform.python_version(),
+                "tickwitness": installed,
             },
             "command": command,
             "process_exit_code": exit_code,
@@ -342,7 +350,8 @@ def main(argv: list[str] | None = None) -> int:
                     complete=captured.stdout_complete,
                     overflow=captured.stdout_overflow,
                 )
-                if checked is None else None
+                if checked is None
+                else None
             ),
             "stderr": _diagnostic(
                 stderr,
@@ -361,11 +370,18 @@ def main(argv: list[str] | None = None) -> int:
             "submission.json",
             _canonical({"submission_id": submission_id, "submission": submission}),
         )
-        print(json.dumps({
-            "kind": "alpha_submission_written_v1", "submission_id": submission_id,
-            "outcome": outcome, "review_status": "SELF_REPORTED_UNREVIEWED",
-            "external_gate_updated": False,
-        }, sort_keys=True))
+        print(
+            json.dumps(
+                {
+                    "kind": "alpha_submission_written_v1",
+                    "submission_id": submission_id,
+                    "outcome": outcome,
+                    "review_status": "SELF_REPORTED_UNREVIEWED",
+                    "external_gate_updated": False,
+                },
+                sort_keys=True,
+            )
+        )
         return 0 if checked is not None else 11 if timed_out else 10
     except OSError as error:
         print(

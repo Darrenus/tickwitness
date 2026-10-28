@@ -54,17 +54,18 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
         export.add_argument("--" + option, type=Path, required=True)
     export.add_argument("--source-revision", type=_revision, required=True)
     qualify = commands.add_parser(
-        "qualify-alpha-kit", help="Re-audit both cases and execute fresh publication boundary checks"
+        "qualify-alpha-kit",
+        help="Re-audit both cases and execute fresh publication boundary checks",
     )
     verify = commands.add_parser(
         "verify-alpha-scorecard", help="Recompute a saved technical scorecard using a fresh probe"
     )
-    verify.add_argument("saved", help="Relative saved receipt .json under --input-root")
-    verify.add_argument("--input-root", type=Path, required=True)
     for command in (qualify, verify):
         command.add_argument("kit", type=Path)
         command.add_argument("--expected-kit-id", type=_identity, required=True)
         command.add_argument("--probe-root", type=Path, required=True)
+    verify.add_argument("saved", help="Relative saved receipt .json under --input-root")
+    verify.add_argument("--input-root", type=Path, required=True)
 
 
 def execute(arguments: argparse.Namespace) -> dict[str, object]:

@@ -143,13 +143,17 @@ def _manifest(raw: bytes, limits: AlphaKitLimits) -> dict[str, object]:
         ):
             raise AlphaKitError("Alpha kit requires one TickWitness universal wheel basename")
         files = value["files"]
-        if not isinstance(files, dict) or not {
-            "README.md",
-            "reproduce.py",
-            wheel,
-            "cases/counterexample/manifest.json",
-            "cases/clean-control/manifest.json",
-        } <= files.keys():
+        if (
+            not isinstance(files, dict)
+            or not {
+                "README.md",
+                "reproduce.py",
+                wheel,
+                "cases/counterexample/manifest.json",
+                "cases/clean-control/manifest.json",
+            }
+            <= files.keys()
+        ):
             raise AlphaKitError("Alpha kit is missing a fixed required file")
         if len(files) + 1 > limits.max_files:
             raise AlphaKitError("Alpha kit exceeds max_files")
