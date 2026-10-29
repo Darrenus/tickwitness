@@ -7,23 +7,33 @@ This script never uploads a result or certifies the participant's identity.
 
 from __future__ import annotations
 
-import argparse
-import hashlib
-import json
-import os
-import platform
-import re
-import secrets
-import selectors
-import signal
-import subprocess
 import sys
-import time
-from contextlib import suppress
-from dataclasses import dataclass
-from datetime import UTC, datetime
-from importlib import metadata
-from pathlib import Path
+
+# Bootstrap before version-dependent imports or declarations. Unsupported
+# interpreters must not inspect a kit, launch qualification, or reserve output.
+if (3, 12) <= sys.version_info[:2] < (3, 15):
+    import argparse
+    import hashlib
+    import json
+    import os
+    import platform
+    import re
+    import secrets
+    import selectors
+    import signal
+    import subprocess
+    import time
+    from contextlib import suppress
+    from dataclasses import dataclass
+    from datetime import UTC, datetime
+    from importlib import metadata
+    from pathlib import Path
+else:
+    sys.stderr.write(
+        '{"error":{"code":"unsupported_python_version",'
+        '"message":"TickWitness alpha reproduction requires Python 3.12\\u20133.14."}}\n'
+    )
+    raise SystemExit(2)
 
 _MAX_RECEIPT = 1024 * 1024 + 4096
 _MAX_DIAGNOSTIC = 32 * 1024

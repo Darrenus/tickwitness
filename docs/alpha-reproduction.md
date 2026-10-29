@@ -10,17 +10,27 @@
 
 如果收到的是 `alpha-reproduction-kit.tar.gz`，请同时保留包外的 `handoff.json`／`HANDOFF.txt`。它们列出实际 kit ID、archive／wheel SHA-256、组装 revision 和三步命令。**先通过 owner 的单独可信渠道确认 archive SHA-256，再用系统命令校验，随后才解压或安装 wheel。不要只信任与压缩包同送的 sidecar。**
 
-把下面 `OWNER_CONFIRMED_ARCHIVE_SHA256` 换成通过单独渠道确认的64位值，在压缩包所在目录执行；只有显示 `OK` 且期望值与 owner 确认值一致才继续：
+把下面 `OWNER_CONFIRMED_ARCHIVE_SHA256` 换成通过单独渠道确认的64位值，在压缩包所在目录执行适合系统的一条命令；只有显示 `OK` 且期望值与 owner 确认值一致才继续。macOS：
 
 ```sh
 printf '%s  %s\n' 'OWNER_CONFIRMED_ARCHIVE_SHA256' 'alpha-reproduction-kit.tar.gz' | shasum -a 256 -c -
 ```
+
+Linux：
+
+```sh
+printf '%s  %s\n' 'OWNER_CONFIRMED_ARCHIVE_SHA256' 'alpha-reproduction-kit.tar.gz' | sha256sum -c -
+```
+
+Linux精简环境可能没有`shasum`；使用上面的`sha256sum`形式。所需系统校验工具不可用、命令失败或digest不符时保留原始输出，先解决校验步骤，再解压、安装或执行包内文件。校验不依赖运行随包Python代码。
 
 校验失败或暂时无法向 owner 确认时，不安装或执行包内内容，保留实际输出并联系 owner。校验后在新目录解压，得到唯一顶层 `tickwitness-alpha-kit`；不要把包外 sidecar 塞回 kit，或修改 README。Archive 只携带 kit，不混入作者的 probe／自动化提交；sidecar 中的外部计数仍是0/PENDING。若最初只收到解压目录，请先向 owner 索取归档与单独确认的 checksum，完成这个安装前步骤。
 
 不要自行修改文件、补缺件、重新计算一个 ID 当成原 pin，或把只有报告 JSON 的目录当成完整 kit。Hash pin 检查内容身份，不等于作者签名。原始合成见证来自早先受验收的 S08-01，当前组装 revision 另记在 manifest；不是新跑出来的盈利记录。
 
 所需环境：独立的 **Linux 或 macOS**、Python **3.12／3.13／3.14**、可创建新目录且支持 atomic no-replace 和目录 fsync 的本地文件系统。不承诺 Windows、特殊网络盘或真实断电恢复资格。包下载完成、Python 已可用后，安装与复验可以离线进行。无需额外 Python 依赖、数据库、API key 或 GPU。
+
+原子发布还要求实际运行时提供受支持的入口：Linux的进程libc必须导出`renameat2`，macOS必须提供`renameatx_np`，内核与目标文件系统也必须支持所需的无覆盖操作和目录同步。当前实现直接检测这些能力；缺少入口时明确失败，不改用可能覆盖目标的rename。收到的一份Alpine配置因缺少libc入口失败；不能把“Linux”理解为所有libc／容器／挂载方式均受支持，也不承诺未经验证的统一glibc版本下限。请保留实际失败记录，不将其改写成技术通过。
 
 ## 2. 在新的虚拟环境安装
 
@@ -52,6 +62,8 @@ python3.12 -m venv /absolute/path/tickwitness-alpha-env
 `--output` 必须是尚不存在的新目录。Runner 用同一已安装 Python 启动实际 CLI，保存 `submission.json` 和实际产生的 scorecard／错误输出；它不联网、不自动上传或替你联系任何人。请保留整个输出目录。非零退出、超时、错误 pin 或 IO 问题也要保留，不用删掉失败后只交成功截图。
 
 Runner 成功退出0；已经保存实际失败时退出10，已保存超时则退出11。实际 CLI 原退出码另存在 submission 内；例如错 pin 的 CLI 退出3，不应手工改成10。提交文件本身 IO 失败退出3，此时可能没有完整 submission，请保留终端原始错误并说明发生在哪一步。
+
+独立runner检测到不支持的解释器版本时，在版本相关导入、包加载、worker或输出目录创建之前，以`unsupported_python_version`错误和退出2停止；此时没有submission，已有输出目录不改动。Python3.9的这一启动路径会单独远端验收，不因此获得项目安装支持。pip的`>=3.12,<3.15`限制保持不变；不要在安装失败后把后续启动错误当成有效复验结果。
 
 重试请换一个新输出目录，保留上次失败目录。Kit 和原证据保持原样，不要重用旧 probe 目录、不覆盖已有制品、不删除同步不确定目录以伪装成首次成功。提交前可检查记录是否含你不愿分享的环境信息；如需脱敏，应另提供说明并保留原件，不能静默改写 hash 绑定的证据。
 

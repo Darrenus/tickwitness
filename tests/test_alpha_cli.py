@@ -8,6 +8,7 @@ import pytest
 
 from tickwitness.cli import main
 from tickwitness.domain.evidence.run_records import canonical
+from tickwitness.infrastructure import evidence_bundles as safe_io
 
 CORPUS = Path(__file__).resolve().parents[1] / "examples" / "alpha"
 
@@ -175,3 +176,31 @@ def test_missing_kit_does_not_create_kit_or_probe_root(tmp_path, capsys, command
     assert result.out == ""
     assert json.loads(result.err)["error"]["code"] == "alpha_kit_not_found"
     assert not missing.exists() and not probe.exists()
+
+
+def test_missing_libc_publication_api_reports_failure_without_a_scorecard_or_partial_kit(
+    tmp_path, capsys, monkeypatch
+):
+    kit, kit_id = export_kit(tmp_path, capsys)
+    before = tree(kit)
+    probe = tmp_path / "unsupported-publication-probe"
+
+    class MissingLibcAPI:
+        def __getattr__(self, symbol):
+            raise AttributeError("Controlled missing libc symbol: " + symbol)
+
+    monkeypatch.setattr(safe_io.ctypes, "CDLL", lambda *args, **kwargs: MissingLibcAPI())
+    assert main(qualify_arguments(kit, kit_id, probe)) == 3
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err) == {
+        "error": {
+            "code": "alpha_kit_integrity_or_io_failure",
+            "message": (
+                "Alpha kit publication failed: "
+                "Atomic no-replace bundle publication is unavailable in libc"
+            ),
+        }
+    }
+    assert probe.is_dir() and list(probe.iterdir()) == []
+    assert tree(kit) == before

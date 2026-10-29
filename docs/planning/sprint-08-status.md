@@ -1,6 +1,6 @@
 # Sprint 8 独立复核与确认窗口状态
 
-更新：2026-10-28（Asia/Singapore）。Owner 已合并 [PR #94](https://github.com/Darrenus/tickwitness/pull/94)，接受 merge 为 `3ab62bf97dd21609638e9f887f68f450bc345aaf`；S08-03a 软件在下述受限技术范围接受。`0.2.0.dev0` 仍未发行。Owner 将联系外部用户，并明确要求先保持 PENDING；实际记录尚未收到，不能把联系计划或软件合并记成外部尝试、采用或人类领域接受。#24 已重新打开，独立工程进入 [S09-01a](sprint-09-status.md)。
+更新：2026-10-29（Asia/Singapore）。Owner 已合并 [PR #94](https://github.com/Darrenus/tickwitness/pull/94)，接受 merge 为 `3ab62bf97dd21609638e9f887f68f450bc345aaf`；S08-03a 软件在下述受限技术范围接受，后续[S09-01a](sprint-09-status.md)也已通过owner合并#95接受。`0.2.0.dev0` 仍未发行。已收到的补充回传由owner明确确认为Claude自动化，不计真实外部用户；真人门仍为0／PENDING，#24保持打开。兼容性问题先归入[#96](https://github.com/Darrenus/tickwitness/issues/96)处理，不把AI执行、联系计划或软件合并记成外部采用与人类领域接受。
 
 ## 切片与验收门
 
@@ -141,3 +141,13 @@ Kit为独立32MiB／512files／256KiB manifest profile，wheel≤4MiB、guide与
 初轮远端同时捕获了verify命令positional注册顺序与冻结CLI合同相反的问题；按KIT再SAVED修正，没有改手册命令或弱化断言。macOS实测请求为 `/tmp/tickwitness-tagged-verifier/bin/python`，runtime为 `/private/tmp/tickwitness-tagged-verifier/bin/python`；其prefix与resolved requested venv均为 `/private/tmp/tickwitness-tagged-verifier`，且不同于base framework。现以同一解释器实际sys.executable／prefix／base_prefix精确比较runner命令，确认别名属于同一venv；失败先保留诊断树而不产accepted报告。归档按各平台实际SHA校验，实测Mac归档SHA不同于Linux，kit内容身份与技术语义仍一致。格式问题使用远端生成的补丁处理。最终交叉静态审阅未发现P1／P2阻塞，但仍属于AI辅助，不替代独立人类领域接受。
 
 [PR #94](https://github.com/Darrenus/tickwitness/pull/94) 的S08-03a软件与可转交包已在上述profile内通过远端验收，并由owner合并接受；[#24](https://github.com/Darrenus/tickwitness/issues/24) 因S08-03b真实外部复验未完成而保持打开。Owner将联系外部参与者，实际回执／失败原文收到并核对前不填外部尝试、不发alpha、不宣称采用。交付给外部用户的现有PR94归档与pin保持原样，不因S09工程变化而替换；S10恢复、真实访谈及研究收益记录没有新增。
+
+## 自动化补充回传与 #96 兼容性修复
+
+Owner已明确确认本批记录全部来自其请求的Claude自动化。指定目录有5个唯一submission：01／02／03／05为VERIFIED、06为FAILED；另有Python3.9.6的前置安装／启动失败日志而无submission。四份成功scorecard逐字节相同，5个canonical submission IDs与原PR94的kit／归档／wheel pins静态核验吻合，8份normal／postcommit probe树与原kit一致。此审计未执行回传harness；环境与执行过程仍属供方报告，不认证真实OS、容器隔离或独立人类参与。回传矩阵的external-user标题与实际automation角色冲突，以原始角色记录和owner确认为准，原件不改。
+
+Alpine回执保留runner10／CLI3和缺失libc原子发布入口的错误，无scorecard、probe为空；不把这一失败改成通过。两份Linux日志显示shasum不可用、sha256sum替代成功。Python3.9被pip正确拒绝，继续启动旧runner得到UTC导入traceback。具体musl版本、raw syscall探针或统一glibc版本下限未独立确认，不能据此扩大支持矩阵。
+
+[#96](https://github.com/Darrenus/tickwitness/issues/96) 本轮实现范围：手册与新sidecar提供macOS／Linux系统checksum命令，实际运行正确与错误digest校验；精确说明发布能力并补missing API安全失败回归；独立runner在版本相关导入／包加载／worker／输出前拒绝不支持Python，exit2且无submission。真实Python3.9拒绝路径在远端core wheel与实际sdist安装链路验证，不扩展项目Python支持、不加入syscall回退。S09-01b真实执行在后续独立切片实现。
+
+当前修复实现中、远端验收待完成，不能把测试配置记成通过。所有测试／格式／构建／安装仍在远端；不新增Sprint容量、实际工时、外部尝试、release或研究权限。旧PR94归档和返回材料保持原样，新guide／runner／wheel产生的新kit与sidecar单独记录身份，未经owner接受不替换原转交包。

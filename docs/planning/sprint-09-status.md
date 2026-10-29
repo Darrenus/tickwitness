@@ -1,12 +1,12 @@
 # Sprint 9 合法反例缩减状态
 
-更新：2026-10-28（Asia/Singapore）。Owner 已合并 [PR #94](https://github.com/Darrenus/tickwitness/pull/94)，本轮基线为 `3ab62bf97dd21609638e9f887f68f450bc345aaf`。软件工程继续推进；[S08-03 / #24](https://github.com/Darrenus/tickwitness/issues/24) 的真实外部复验由owner联系，仍为0／PENDING、整体保持打开。现有PR94转交归档与pin不变，没有新增外部记录或release。
+更新：2026-10-29（Asia/Singapore）。Owner 已合并 [PR #95](https://github.com/Darrenus/tickwitness/pull/95)，接受merge为 `a2c711861d1d776c78b4b5f5471f8afa388d390f`。下述01a功能基线仍为PR94 merge `3ab62bf97dd21609638e9f887f68f450bc345aaf`，不改写历史run。[S08-03 / #24](https://github.com/Darrenus/tickwitness/issues/24) 的真实外部复验仍为0／PENDING；已返回的owner请求AI自动化记录另行登记，不计外部真人。[#96](https://github.com/Darrenus/tickwitness/issues/96) 先处理这些记录发现的兼容性问题，再接续01b。原PR94转交归档与pin不变，无新release。
 
 ## 切片与验收门
 
 | 故事／切片 | 范围 | 状态 |
 | --- | --- | --- |
-| S09-01a / #25 | 合法缩减recipe、完整必要前缀输入准备与独立重建 | [PR #95](https://github.com/Darrenus/tickwitness/pull/95) 已远端验收，软件待owner接受 |
+| S09-01a / #25 | 合法缩减recipe、完整必要前缀输入准备与独立重建 | Owner已合并 [PR #95](https://github.com/Darrenus/tickwitness/pull/95) 接受软件 |
 | S09-01b / #25 | 在原协议共同预算下真实从头执行前缀，持久关联intent／attempt／outcome，审计真实账户／订单／在途状态 | 尚未实现，#25整体保持打开 |
 | S09-02 / #26 | 预算内自动局部缩减、取消、反例保持判定 | Planned，不能以准备好输入代替实际反例保持 |
 | S09-03 / #27 | 原／缩减证据对比、实际首次分歧定位 | Planned，不能将输入字节差异提升为业务因果 |
@@ -55,4 +55,4 @@ Ubuntu 24.04／macOS 15 × Python 3.12／3.13／3.14 六组合各 **3092 passed 
 
 初轮远端发现格式／导入排序问题，应用远端生成补丁；CLI测试夹具抄写bundle pin漏了两位，按实际manifest SHA修正后原严格断言通过，没有放宽身份校验。并行交叉审阅与下载产物审计均为AI辅助，不冒充外部用户、人类领域接受或完整历史认证。
 
-[PR #95](https://github.com/Darrenus/tickwitness/pull/95) 仅交付S09-01a软件，尚待owner接受。#25因01b实际执行与状态验收未实现而继续打开；S09-02／03独立推进。#24继续打开，真实外部复验0／PENDING，现有PR94转交归档和pin不变；无新release、采用、访谈、实际工时或研究收益记录。
+[PR #95](https://github.com/Darrenus/tickwitness/pull/95) 仅交付S09-01a软件，现已由owner合并接受。#25因01b实际执行与状态验收未实现而继续打开；S09-02／03独立推进。#24继续打开，真实外部复验0／PENDING，现有PR94转交归档和pin不变；无新release、采用、访谈、实际工时或研究收益记录。

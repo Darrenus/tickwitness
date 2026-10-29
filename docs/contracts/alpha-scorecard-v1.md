@@ -133,9 +133,13 @@ Export 独立核两份原包并 pin 实际报告，发布／读回新 kit；正�
 
 提交目录保留 `submission.json={submission_id,submission}` 和实际存在的完整 receipt `scorecard.json`；submission outcome 为 `VERIFIED`、`FAILED` 或 `TIMED_OUT`，review_status 为 `SELF_REPORTED_UNREVIEWED`。保留实际命令、kit pin、OS／Python／project version、子进程退出码与有界 stdout/stderr、receipt error；其真实时间／随机 attempt ID 与语义 scorecard 分开。Runner 自身成功退出0，实际失败记录完成后退出10，超时记录完成后退出11，提交 IO 失败退出3；子进程的原退出码另记，不能用 runner 的10替代。例如错误 kit pin 的 CLI 实际退出3，runner 保留该错误后退出10，不产生 scorecard.json。
 
+独立runner在受支持区间`>=3.12,<3.15`之外以单行`unsupported_python_version`错误和退出2拒绝启动，先于版本相关导入、TickWitness包加载、子进程及任何输出目录操作；没有submission，已有输出不改动。Python3.9实际启动拒绝另由远端安装smoke验证，不扩大项目安装支持。
+
 Role 自报不认证身份，`external_gate_updated=false`，任何 role 都不能改 scorecard 的 external gate；模板、CI／AI／owner 和尚未执行的邀请不计真实外部尝试。后续收到原始记录再单独核验并由 owner 接受，不能在本切片补造。
 
 远端 smoke 另生成只含已移位验证后 kit 的 `alpha-reproduction-kit.tar.gz`，唯一顶层为 `tickwitness-alpha-kit`。Kit 外的 `handoff.json`／`HANDOFF.txt` 绑定实际 expected kit ID、archive SHA-256、wheel 相对路径／SHA、当前组装 revision、外部0/PENDING及三步离线操作；不把自身 kit ID 写回 README 形成循环。Archive 不含 probe／自动化 submission，解压内容再由 guard 内实际 qualify 重验；sidecar 不认证作者或外部身份。
+
+新生成sidecar保留原`pre_install_checksum_command`作为macOS兼容字段，增加`pre_install_checksum_commands={macos,linux}`明确两个平台的系统命令；HANDOFF.txt及随包README列出`shasum -a 256 -c -`与`sha256sum -c -`。先由owner单独确认期望digest，再校验归档，成功后才解压／安装／执行。实际available工具针对生成的完整命令执行正确digest通过与错误digest拒绝，缺少的非本平台工具明确记录未执行；不把Python自行计算hash当成系统命令已通过。旧PR94归档及既有sidecar原样保留，新guide／runner／wheel产生新的kit和archive身份，不覆盖旧pin。
 
 ## 5. 远端验收
 

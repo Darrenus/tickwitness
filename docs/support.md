@@ -18,6 +18,8 @@ runner 标签不是所有 CPU 架构、发行版或文件系统的认证。实�
 
 文件存储依赖 POSIX directory fd、no-follow、regular-file 检查、hard link 与 fsync。原子目录发布只实现 Linux/macOS 的 no-replace 接口，缺少能力就明确失败。Windows、其他 OS、网络文件系统、云盘挂载、不同原生 Python 组合及上游源码编译不在本预览认证范围。macOS 原生 wheel 还须满足上游平台标签，不能把 macOS 15 的核心回归当作原生支持。细节见[开发入口](development.md)。
 
+当前原子发布实现还依赖进程libc／运行时导出对应入口：Linux使用`renameat2`，macOS使用`renameatx_np`；内核与目标文件系统也须支持无覆盖发布及目录同步。缺少入口会明确失败，不采用覆盖式fallback。自动化补充复验中的一份Alpine配置在这一能力检查处失败；该记录不代表全部musl配置均已验证，也不为所有Linux发行版或某个glibc版本下限提供保证。[复验手册](alpha-reproduction.md)分别提供Linux与macOS的系统checksum命令，支持矩阵以实际CI记录为准。
+
 建议在符合矩阵的远端 CPU 主机或 GitHub Actions 上验收；当前受限工作流不要求 GPU，也没有 GPU 加速承诺。Colab 可作为临时手动验收环境，其运行时与本地磁盘可能回收；它不是 24×7 托管、数据持久性或本项目额外支持矩阵的保证。需要保留的原始数据、CAS、attempt ledger 和导出包应按 owner 的备份流程保存。
 
 ## 功能与模型边界

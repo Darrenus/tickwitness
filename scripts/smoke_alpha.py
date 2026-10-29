@@ -6,6 +6,7 @@ import gzip
 import hashlib
 import io
 import json
+import platform
 import shutil
 import subprocess
 import sys
@@ -256,7 +257,65 @@ def _check_probe(root: Path, kit: Path) -> None:
     assert not (root / "precommit").exists()
 
 
-def _package_handoff(root: Path, kit: Path, manifest: dict, kit_id: str) -> dict:
+def _checksum_commands(digest: str) -> dict[str, str]:
+    prefix = "printf '%s  %s\\n' '" + digest + "' 'alpha-reproduction-kit.tar.gz' | "
+    return {"macos": prefix + "shasum -a 256 -c -", "linux": prefix + "sha256sum -c -"}
+
+
+def _check_checksum_commands(root: Path, commands: dict[str, str], digest: str) -> dict:
+    system = platform.system()
+    assert system in {"Darwin", "Linux"}, "Alpha checksum acceptance requires macOS or Linux"
+    required = "macos" if system == "Darwin" else "linux"
+    observations = []
+    for profile, tool in (("macos", "shasum"), ("linux", "sha256sum")):
+        executable = shutil.which(tool)
+        if executable is None:
+            assert profile != required, f"Required system checksum tool is unavailable: {tool}"
+            observations.append({"profile": profile, "tool": tool, "status": "UNAVAILABLE"})
+            continue
+        process = subprocess.run(
+            ["/bin/sh", "-c", commands[profile]],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+        wrong_command = commands[profile].replace(digest, "0" * 64, 1)
+        rejected = subprocess.run(
+            ["/bin/sh", "-c", wrong_command],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+        observation = {
+            "profile": profile,
+            "tool": tool,
+            "executable": executable,
+            "status": "EXECUTED",
+            "command": commands[profile],
+            "exit_code": process.returncode,
+            "stdout": process.stdout,
+            "stderr": process.stderr,
+            "wrong_digest_command": wrong_command,
+            "wrong_digest_exit_code": rejected.returncode,
+            "wrong_digest_stdout": rejected.stdout,
+            "wrong_digest_stderr": rejected.stderr,
+        }
+        observations.append(observation)
+        (root / "checksum-command-observations.json").write_bytes(_canonical(observations))
+        assert process.returncode == 0 and process.stderr == "", observation
+        assert process.stdout == "alpha-reproduction-kit.tar.gz: OK\n", observation
+        assert rejected.returncode == 1, observation
+        assert "alpha-reproduction-kit.tar.gz: FAILED" in rejected.stdout, observation
+    result = {"platform": system, "required_profile": required, "observations": observations}
+    (root / "checksum-command-checks.json").write_bytes(_canonical(result))
+    return result
+
+
+def _package_handoff(root: Path, kit: Path, manifest: dict, kit_id: str) -> tuple[dict, dict]:
     archive_path = root / "alpha-reproduction-kit.tar.gz"
     prefix = "tickwitness-alpha-kit"
     contents = {relative: (kit / relative).read_bytes() for relative in sorted(_tree(kit))}
@@ -293,11 +352,11 @@ def _package_handoff(root: Path, kit: Path, manifest: dict, kit_id: str) -> dict
     assert _tree(extracted / prefix) == _tree(kit)
     wheel_path = manifest["wheel_path"]
     archive_sha256 = _sha(archive_path.read_bytes())
-    checksum_command = (
-        "printf '%s  %s\\n' '"
-        + archive_sha256
-        + "' 'alpha-reproduction-kit.tar.gz' | shasum -a 256 -c -"
-    )
+    checksum_commands = _checksum_commands(archive_sha256)
+    guide = (kit / "README.md").read_text(encoding="utf-8")
+    for command in _checksum_commands("OWNER_CONFIRMED_ARCHIVE_SHA256").values():
+        assert command in guide, "Bundled guide and generated checksum handoff differ: " + command
+    checksum_checks = _check_checksum_commands(root, checksum_commands, archive_sha256)
     commands = [
         "python3.12 -m venv ./tickwitness-alpha-env",
         "./tickwitness-alpha-env/bin/python -m pip install --no-index --no-deps ./"
@@ -330,7 +389,8 @@ def _package_handoff(root: Path, kit: Path, manifest: dict, kit_id: str) -> dict
         "external_attempt_gate": "PENDING",
         "participant_role_is_self_reported": True,
         "archive_digest_requires_separate_owner_confirmation": True,
-        "pre_install_checksum_command": checksum_command,
+        "pre_install_checksum_command": checksum_commands["macos"],
+        "pre_install_checksum_commands": checksum_commands,
         "commands_after_extraction": commands,
     }
     (root / "handoff.json").write_bytes(_canonical(handoff))
@@ -354,9 +414,11 @@ def _package_handoff(root: Path, kit: Path, manifest: dict, kit_id: str) -> dict
         + "External attempts/successes: 0/0; gate PENDING. No release authorized.\n\n"
         + "Before extracting or installing, confirm the archive SHA-256 with the owner "
         + "through a separate trusted channel; do not trust this sidecar alone.\n"
-        + "After confirming the digest, run this system checksum command and continue "
-        + "only if it reports OK:\n\n"
-        + checksum_command
+        + "After confirming the digest, run the command for your operating system and "
+        + "continue only if it reports OK:\n\nmacOS (shasum):\n\n"
+        + checksum_commands["macos"]
+        + "\n\nLinux (sha256sum):\n\n"
+        + checksum_commands["linux"]
         + "\n\nExtract alpha-reproduction-kit.tar.gz in a new directory.\n"
         + "Use Linux/macOS and Python 3.12-3.14. Then run these three steps:\n\n"
         + "\n\n".join(commands)
@@ -367,7 +429,7 @@ def _package_handoff(root: Path, kit: Path, manifest: dict, kit_id: str) -> dict
         + "The runner never uploads files or authenticates identity.\n",
         encoding="utf-8",
     )
-    return handoff
+    return handoff, checksum_checks
 
 
 def main() -> None:
@@ -677,7 +739,7 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
         assert _tree(kit) == original and _tree(corpus) == source_before
         for path, before in source_files.values():
             assert _sha(path.read_bytes()) == before
-        handoff = _package_handoff(root, kit, manifest, kit_id)
+        handoff, checksum_checks = _package_handoff(root, kit, manifest, kit_id)
         archived_receipt = qualify(
             root / "archive-extraction" / "tickwitness-alpha-kit", probes / "archive-reaudit"
         )
@@ -714,6 +776,8 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
             "rehashed_invalid_oracle_freshly_rejected": True,
             "failed_submission_retained": True,
             "handoff": handoff,
+            "checksum_command_checks": checksum_checks,
+            "bundled_guide_and_handoff_checksum_commands_match": True,
             "archive_exact_kit_only": True,
             "archive_extracted_kit_freshly_reaudited": True,
             "external_attempts": 0,
