@@ -398,8 +398,7 @@ def test_missing_libc_api_refuses_before_staging_without_replacing_or_mutating_c
     with pytest.raises(AlphaKitError) as caught:
         _publish_alpha_kit(target, kit, writer=forbidden, sync=forbidden)
     assert str(caught.value) == (
-        "Alpha kit publication failed: "
-        "Atomic no-replace bundle publication is unavailable in libc"
+        "Alpha kit publication failed: Atomic no-replace bundle publication is unavailable in libc"
     )
     assert isinstance(caught.value.__cause__, io.BundleError)
     assert isinstance(caught.value.__cause__.__cause__, AttributeError)

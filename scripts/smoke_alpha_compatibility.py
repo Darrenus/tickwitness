@@ -15,7 +15,7 @@ from tempfile import TemporaryDirectory
 _ERROR = {
     "error": {
         "code": "unsupported_python_version",
-        "message": "TickWitness alpha reproduction requires Python 3.12–3.14.",
+        "message": "TickWitness alpha reproduction requires Python 3.12\u20133.14.",
     }
 }
 _RUNTIME_QUERY = """
@@ -34,6 +34,7 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
                   'distributions': versions}, sort_keys=True))
 """
 _BOOTSTRAP_GUARD = """
+import __future__
 import builtins
 import io
 import json
@@ -78,6 +79,7 @@ finally:
     guard_report.write_text(json.dumps({'observed_imports': observed_imports,
                                        'exit_code': exit_code,
                                        'actual_version_info': list(sys.version_info[:3]),
+                                       'harness_preloaded_stdlib_future': True,
                                        'file_io_worker_and_network_tripwires': True},
                                       sort_keys=True), encoding='utf-8')
 if exit_code is None:
@@ -236,19 +238,33 @@ def main() -> None:
                 )
                 output = occupied if existing else cwd / (name + "-submission")
                 runner_arguments = [
-                    "--kit", str(kit), "--expected-kit-id", "0" * 64,
-                    "--participant-id", "automation-compatibility",
-                    "--participant-role", "automation", "--output", str(output),
+                    "--kit",
+                    str(kit),
+                    "--expected-kit-id",
+                    "0" * 64,
+                    "--participant-id",
+                    "automation-compatibility",
+                    "--participant-role",
+                    "automation",
+                    "--output",
+                    str(output),
                 ]
                 guard_path = root / (name + "-guard.json")
                 if guarded:
                     command = [
-                        str(arguments.unsupported_python.absolute()), "-I", "-c",
-                        _BOOTSTRAP_GUARD, str(runner), str(guard_path), *runner_arguments,
+                        str(arguments.unsupported_python.absolute()),
+                        "-I",
+                        "-c",
+                        _BOOTSTRAP_GUARD,
+                        str(runner),
+                        str(guard_path),
+                        *runner_arguments,
                     ]
                 else:
                     command = [
-                        str(arguments.unsupported_python.absolute()), "-I", str(runner),
+                        str(arguments.unsupported_python.absolute()),
+                        "-I",
+                        str(runner),
                         *runner_arguments,
                     ]
                 process = invoke(command, expected=2)
@@ -265,6 +281,7 @@ def main() -> None:
                     assert guard["actual_version_info"][:2] == [3, 9]
                     assert "sys" in guard["observed_imports"]
                     assert set(guard["observed_imports"]) <= {"__future__", "sys"}
+                    assert guard["harness_preloaded_stdlib_future"] is True
                     assert guard["file_io_worker_and_network_tripwires"] is True
                 cases.append(
                     {

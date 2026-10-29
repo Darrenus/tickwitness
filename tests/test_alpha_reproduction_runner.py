@@ -260,7 +260,7 @@ def test_unsupported_python_refuses_before_imports_worker_and_output(
     assert json.loads(captured.err) == {
         "error": {
             "code": "unsupported_python_version",
-            "message": "TickWitness alpha reproduction requires Python 3.12–3.14.",
+            "message": "TickWitness alpha reproduction requires Python 3.12\u20133.14.",
         }
     }
     assert "Traceback" not in captured.err
