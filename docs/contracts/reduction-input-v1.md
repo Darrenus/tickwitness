@@ -1,6 +1,6 @@
 # Reduction Input v1
 
-状态：S09-01a 已完成[远端实现验收](../planning/sprint-09-status.md#s09-01a-远端验收记录)，[PR #95](https://github.com/Darrenus/tickwitness/pull/95) 待owner接受。决策见 [ADR 0028](../adr/0028-valid-prefix-reduction-inputs.md)。本切片只准备 development 回放输入；[S09-01 / #25](https://github.com/Darrenus/tickwitness/issues/25) 的真实前缀回放与有效状态验收仍留给 S09-01b，不能据此关闭整个 story。[#24](https://github.com/Darrenus/tickwitness/issues/24) 的外部尝试继续为 `0 / PENDING`，本轮不采集或补造外部记录。
+状态：S09-01a 已完成[远端实现验收](../planning/sprint-09-status.md#s09-01a-远端验收记录)，owner 已合并 [PR #95](https://github.com/Darrenus/tickwitness/pull/95) 接受，merge `a2c711861d1d776c78b4b5f5471f8afa388d390f`。决策见 [ADR 0028](../adr/0028-valid-prefix-reduction-inputs.md)。本切片只准备 development 回放输入；[S09-01 / #25](https://github.com/Darrenus/tickwitness/issues/25) 的真实前缀回放与有效状态验收仍留给 S09-01b，不能据此关闭整个 story。[#24](https://github.com/Darrenus/tickwitness/issues/24) 的外部尝试继续为 `0 / PENDING`，本轮不采集或补造外部记录。
 
 ## 1. 已认证源与合法算子
 

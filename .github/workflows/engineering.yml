@@ -102,6 +102,21 @@ jobs:
           python3 scripts/smoke_tagged_queue.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/tagged-queue-core.json
           python3 scripts/smoke_tagged_evidence.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/tagged-pair-core.json --bundles-dir /tmp/tagged-pair-core-bundles
           python3 scripts/smoke_tagged_findings.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --pairs-dir /tmp/tagged-pair-core-bundles --source-report /tmp/tagged-pair-core.json --report /tmp/tagged-findings-core.json --bundles-dir /tmp/tagged-findings-core-bundles
+      - name: Verify standalone reproduction rejection on an actual unsupported interpreter
+        run: |
+          uv venv /tmp/tickwitness-unsupported --python 3.9
+          python3 scripts/smoke_alpha_compatibility.py --python /tmp/tickwitness-wheel/bin/python --unsupported-python /tmp/tickwitness-unsupported/bin/python --runner scripts/reproduce_alpha.py --guide docs/alpha-reproduction.md --report /tmp/alpha-compatibility-core.json --records-dir /tmp/alpha-compatibility-core-records
+      - name: Preserve standalone reproduction compatibility acceptance
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: alpha-compatibility-core-${{ github.sha }}
+          path: |
+            /tmp/alpha-compatibility-core.json
+            /tmp/alpha-compatibility-core-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve installed-core legal reduction input preparation
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -486,6 +501,8 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_search_evidence.py" --python /tmp/tickwitness-preview-core/bin/python --finding-report /tmp/search-findings-source-wheel-core.json --finding-records /tmp/search-findings-source-wheel-core-records --report /tmp/search-evidence-source-wheel-core.json --bundles-dir /tmp/search-evidence-source-wheel-core-bundles
           python3 "$TW_SOURCE/scripts/smoke_confirmation.py" --python /tmp/tickwitness-preview-core/bin/python --report /tmp/confirmation-source-wheel.json --records-dir /tmp/confirmation-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_alpha.py" --python /tmp/tickwitness-preview-core/bin/python --wheel dist/*.whl --corpus-root "$TW_SOURCE/examples/alpha" --guide "$TW_SOURCE/docs/alpha-reproduction.md" --runner "$TW_SOURCE/scripts/reproduce_alpha.py" --source-revision "${{ github.sha }}" --report /tmp/alpha-source-wheel.json --records-dir /tmp/alpha-source-wheel-records
+          uv venv /tmp/tickwitness-preview-unsupported --python 3.9
+          python3 "$TW_SOURCE/scripts/smoke_alpha_compatibility.py" --python /tmp/tickwitness-preview-core/bin/python --unsupported-python /tmp/tickwitness-preview-unsupported/bin/python --runner "$TW_SOURCE/scripts/reproduce_alpha.py" --guide "$TW_SOURCE/docs/alpha-reproduction.md" --report /tmp/alpha-compatibility-source-wheel.json --records-dir /tmp/alpha-compatibility-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_reduction.py" --python /tmp/tickwitness-preview-core/bin/python --corpus-root "$TW_SOURCE/examples/alpha" --report /tmp/reduction-input-source-wheel.json --records-dir /tmp/reduction-input-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_queue_constraints.py" --python /tmp/tickwitness-preview-core/bin/python
           python3 "$TW_SOURCE/scripts/smoke_queue_execution.py" --python /tmp/tickwitness-preview-core/bin/python
@@ -522,6 +539,17 @@ jobs:
             /tmp/search-evidence-source-wheel-core-bundles
             /tmp/search-evidence-source-wheel.json
             /tmp/search-evidence-source-wheel-bundles
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve standalone reproduction compatibility from the actual source archive
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: alpha-compatibility-source-wheel-${{ github.sha }}
+          path: |
+            /tmp/alpha-compatibility-source-wheel.json
+            /tmp/alpha-compatibility-source-wheel-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30

@@ -1,5 +1,6 @@
 """The stdlib participant runner records real CLI-shaped outcomes without certification."""
 
+import builtins
 import json
 import runpy
 import sys
@@ -217,3 +218,56 @@ def test_actual_process_start_error_still_writes_a_failed_submission(tmp_path, c
     assert record["external_gate_updated"] is False
     assert record["scorecard_id"] is None
     assert not (output / "scorecard.json").exists()
+
+
+@pytest.mark.parametrize("unsupported", [(3, 9, 99), (3, 10, 99), (3, 11, 99), (3, 15, 0)])
+@pytest.mark.parametrize("existing", [False, True])
+def test_unsupported_python_refuses_before_imports_worker_and_output(
+    tmp_path, capsys, monkeypatch, unsupported, existing
+):
+    kit = tmp_path / "unread-kit"
+    output = tmp_path / "submission"
+    if existing:
+        output.mkdir()
+        (output / "submission.json").write_bytes(b"preserve an existing submission exactly\n")
+    before = {
+        str(path.relative_to(tmp_path)): path.read_bytes()
+        for path in tmp_path.rglob("*")
+        if path.is_file()
+    }
+    actual_import = builtins.__import__
+
+    def guarded_import(name, *args, **kwargs):
+        if name in {"argparse", "dataclasses", "datetime", "subprocess"} or name.startswith(
+            ("tickwitness", "importlib.metadata")
+        ):
+            raise AssertionError("Unsupported Python must stop during bootstrap")
+        return actual_import(name, *args, **kwargs)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("Unsupported Python cannot create or overwrite submission output")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(sys, "version_info", unsupported)
+        patch.setattr(sys, "argv", [str(RUNNER), *arguments(kit, "a" * 64, output)])
+        patch.setattr(builtins, "__import__", guarded_import)
+        patch.setattr(Path, "mkdir", forbidden)
+        with pytest.raises(SystemExit) as caught:
+            runpy.run_path(str(RUNNER), run_name="__main__")
+    assert caught.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err) == {
+        "error": {
+            "code": "unsupported_python_version",
+            "message": "TickWitness alpha reproduction requires Python 3.12\u20133.14.",
+        }
+    }
+    assert "Traceback" not in captured.err
+    assert not kit.exists()
+    assert output.exists() is existing
+    assert {
+        str(path.relative_to(tmp_path)): path.read_bytes()
+        for path in tmp_path.rglob("*")
+        if path.is_file()
+    } == before

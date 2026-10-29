@@ -1,6 +1,6 @@
 # ADR 0028 — Bind reduction inputs to a complete source prefix
 
-Status: Proposed; S09-01a [remote implementation acceptance](../planning/sprint-09-status.md#s09-01a-远端验收记录) passed, awaiting owner acceptance of [PR #95](https://github.com/Darrenus/tickwitness/pull/95).
+Status: Accepted; owner merged [PR #95](https://github.com/Darrenus/tickwitness/pull/95) at `a2c711861d1d776c78b4b5f5471f8afa388d390f` after S09-01a [remote implementation acceptance](../planning/sprint-09-status.md#s09-01a-远端验收记录). S09-01b actual prefix execution remains separately pending.
 
 ## Context
 

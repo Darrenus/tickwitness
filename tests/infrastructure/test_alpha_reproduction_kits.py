@@ -363,6 +363,55 @@ def test_creation_race_never_replaces_the_winners_directory(
     assert {path.name for path in tmp_path.iterdir()} == {"kit", "raced"}
 
 
+@pytest.mark.parametrize("existing", [False, True])
+def test_missing_libc_api_refuses_before_staging_without_replacing_or_mutating_content(
+    tmp_path: Path,
+    kit: AlphaReproductionKit,
+    monkeypatch: pytest.MonkeyPatch,
+    existing: bool,
+) -> None:
+    target = tmp_path / "unavailable"
+    if existing:
+        target.mkdir()
+        (target / "owner-file").write_bytes(b"preserve this existing destination")
+    before_target = _paths(target) if existing else None
+    before_kit = _paths(tmp_path / "kit")
+    before_entries = {path.name for path in tmp_path.iterdir()}
+    requested: list[str] = []
+    expected_symbol = "renameatx_np" if io.sys.platform == "darwin" else "renameat2"
+
+    class MissingLibcAPI:
+        def __getattr__(self, symbol: str) -> object:
+            requested.append(symbol)
+            raise AttributeError("Controlled missing libc symbol: " + symbol)
+
+    def missing_library(name: object, *, use_errno: bool) -> MissingLibcAPI:
+        assert name is None and use_errno is True
+        return MissingLibcAPI()
+
+    def forbidden(*_args: object) -> None:
+        raise AssertionError("Missing libc API must be detected before stage writes or sync")
+
+    # Exercise the real helper's dynamic symbol lookup. The missing-entry
+    # condition is independent of a particular libc family or version.
+    monkeypatch.setattr(io.ctypes, "CDLL", missing_library)
+    with pytest.raises(AlphaKitError) as caught:
+        _publish_alpha_kit(target, kit, writer=forbidden, sync=forbidden)
+    assert str(caught.value) == (
+        "Alpha kit publication failed: Atomic no-replace bundle publication is unavailable in libc"
+    )
+    assert isinstance(caught.value.__cause__, io.BundleError)
+    assert isinstance(caught.value.__cause__.__cause__, AttributeError)
+    assert requested == [expected_symbol]
+    assert {path.name for path in tmp_path.iterdir()} == before_entries
+    assert _paths(tmp_path / "kit") == before_kit
+    assert read_alpha_kit(tmp_path / "kit", expected_kit_id=kit.kit_id) == kit
+    if existing:
+        assert _paths(target) == before_target
+    else:
+        assert not target.exists()
+
+
 def test_fresh_probe_uses_real_publisher_faults_and_retains_actual_artifact(
     tmp_path: Path, kit: AlphaReproductionKit
 ) -> None:
