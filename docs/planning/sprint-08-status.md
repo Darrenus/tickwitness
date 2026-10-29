@@ -150,4 +150,34 @@ Alpine回执保留runner10／CLI3和缺失libc原子发布入口的错误，无s
 
 [#96](https://github.com/Darrenus/tickwitness/issues/96) 本轮实现范围：手册与新sidecar提供macOS／Linux系统checksum命令，实际运行正确与错误digest校验；精确说明发布能力并补missing API安全失败回归；独立runner在版本相关导入／包加载／worker／输出前拒绝不支持Python，exit2且无submission。真实Python3.9拒绝路径在远端core wheel与实际sdist安装链路验证，不扩展项目Python支持、不加入syscall回退。S09-01b真实执行在后续独立切片实现。
 
-当前修复实现中、远端验收待完成，不能把测试配置记成通过。所有测试／格式／构建／安装仍在远端；不新增Sprint容量、实际工时、外部尝试、release或研究权限。旧PR94归档和返回材料保持原样，新guide／runner／wheel产生的新kit与sidecar单独记录身份，未经owner接受不替换原转交包。
+[#96](https://github.com/Darrenus/tickwitness/issues/96)修复已在[PR #97](https://github.com/Darrenus/tickwitness/pull/97)完成下述远端验收，尚待owner接受。所有测试／格式／构建／安装仍在远端；不新增Sprint容量、实际工时、外部尝试、release或研究权限。旧PR94归档和返回材料保持原样，新guide／runner／wheel产生的新kit与sidecar单独记录身份，未经owner接受不替换原转交包。
+
+## #96 远端兼容性验收记录
+
+修复功能head为 `f6872189772ce7c93dec382a1a3fb2889662f356`，[Engineering 40860037902](https://github.com/Darrenus/tickwitness/actions/runs/40860037902) 与 [Documentation 40860037822](https://github.com/Darrenus/tickwitness/actions/runs/40860037822) 共13 checks全部通过。actual merge checkout为 `4f8780d6cc9ecdf573835d1dfeb40768e7634375`，与PR head分开。后续验收文档提交另有独立最新head检查，不冒充同一功能head。
+
+六组Ubuntu 24.04／macOS 15 × Python3.12／3.13／3.14核心回归各 **3103 passed／112 optional-native skips**；Ubuntu 24.04及macOS 26／Python3.12原生回归各 **3212 passed／3 core-only skips／313 warnings**。Lint、276文件格式、126 source files严格类型检查与89文档／464本地链接通过；这些数字仅属于上述功能run，warnings原样保留。实际wheel／sdist安装闭环也通过，构建日志明确为先source distribution、再wheel from source distribution；源码包内脚本／guide／runner及实际新装wheel分别核验。所有项目runtime、格式、测试、构建与安装在远端，本机只做文本编辑、静态审阅、Git／gh控制与产物下载核查。
+
+| 实际artifact（共同后缀 `4f8780d6cc9ecdf573835d1dfeb40768e7634375`） | 内容与状态 |
+| --- | --- |
+| `alpha-compatibility-core-…` | [12891665752](https://github.com/Darrenus/tickwitness/actions/runs/40860037902/artifacts/12891665752)：实际Python3.9.25启动拒绝与已安装core环境 |
+| `alpha-core-…` | [12891860238](https://github.com/Darrenus/tickwitness/actions/runs/40860037902/artifacts/12891860238)：新手册、runner、archive、双系统命令及既有完整技术复验 |
+| `alpha-ubuntu-24.04-…` | [12891217630](https://github.com/Darrenus/tickwitness/actions/runs/40860037902/artifacts/12891217630)：Linux原生作业内独立core verifier及实际checksum命令 |
+| `alpha-macos-26-…` | [12891387227](https://github.com/Darrenus/tickwitness/actions/runs/40860037902/artifacts/12891387227)：Mac host实际checksum命令及独立core verifier |
+| `alpha-compatibility-source-wheel-…` | [12892515095](https://github.com/Darrenus/tickwitness/actions/runs/40860037902/artifacts/12892515095)：实际sdist内runner／guide与真实3.9.25启动拒绝 |
+| `alpha-source-wheel-…` | [12892370736](https://github.com/Darrenus/tickwitness/actions/runs/40860037902/artifacts/12892370736)：实际sdist内脚本／语料／guide／runner、wheel、可转交新归档与handoff |
+
+六份实际报告均accepted=true；两个兼容报告的外部report与目录内report字节相同，四个alpha报告中的handoff及checksum对象与保存JSON内容一致。每个兼容产物14个、每个alpha产物1381个声明文件SHA均已逐项核验，保留30天。兼容报告中的实际Python为3.9.25，无TickWitness或native安装；core支持端为独立的Python3.12.3环境，有TickWitness、无native。每条兼容链路7份真实命令transcripts为3次成功的runtime／help探测，以及4次预期退出2；没有把模拟version_info的单元测试当成真实3.9。
+
+| 实际核验 | 结果及范围 |
+| --- | --- |
+| 3.9直接启动 | 原样runner在新输出／已有输出两例均stderr单行`unsupported_python_version`、stdout空、exit2且无traceback；不存在kit和新submission，已有marker不变 |
+| 3.9带监控启动 | 两例保持同一真实解释器与未改runner字节；harness先预载标准库`__future__`并明确记录，随后观察runner只导入`__future__`与`sys`，IO／worker／network tripwire保持启用；不声称Python冷启动加载自身标准库也完全无IO |
+| 新handoff与手册 | 旧singular checksum字段等于新map.macos，map只有macos／linux；HANDOFF、guide与实际归档pin一致。四条安装链路分别在各自Linux或Mac host实际执行available的`shasum`与`sha256sum`，均正确digest为0／OK／空stderr，错误digest为1／FAILED；报告区分host与命令profile，不能单凭profile名宣称平台执行 |
+| 信任与顺序 | 手册及handoff要求接收者先由owner独立渠道确认digest，再系统checksum，成功后解压／安装。CI内部处理自建可信归档，验证闭包与系统命令可用性，不认证独立渠道或模拟真实外部用户完整安装顺序 |
+| 缺少发布API | 远端回归通过真实lookup路径注入缺少libc符号，验证新／已有目标与CLI均明确失败、无stage残留、无成功scorecard且原kit／目标字节不变；这是能力缺失回归，不是Alpine环境认证，没有新增raw syscall或覆盖式fallback |
+| 既有语义及外部门 | 正常技术复验、重复核验、真实automation成功与失败留痕仍按旧受限合同；外部0／0／PENDING，八项scope仍false。没有原预算新slot、native研究、确认访问、发行或人类接受 |
+
+首轮远端发现格式问题及两个期望字符串的ENdash lint，应用远端格式补丁并以相同Unicode转义保留实际消息。真实3.9直接运行已正常拒绝，但监控harness首次加载`__future__`时触发内部`_io`导入而被拦截；已通过harness预载标准库修正，并保留导入白名单、全部IO限制和明确的preloaded标记，没有放宽runner oracle。并行静态审阅及产物审计属于AI辅助，不替代外部真人复验。
+
+新候选kit ID为 `dd6750d9b6eb27d10ba15ab10af098d2301f162b2a06a640fcd97c67a974af33`，wheel SHA为 `d5c3f69f6129f18d158b43215791a076dc82081f7bdfd9b00b9a5adcef390b4d`。本次Linux归档SHA为 `db233fc9b952aec04e57200cec0e80233ebe9a955bab34ccf1d0e7ffbb0e823c`，Mac归档为 `64f989e86e4910c8fb4aebeac2bc7e0bd3df2786f0d3507dd4146aefdac8abf3`；各自按实际sidecar核验，不把压缩归档SHA与kit内容身份混同。原PR94归档仍为 `0d70d81486c4286c0dbe60d2858ee6afcdd8a05d9f54c9c511b9101d7ef80f8f`，本轮未修改或替换；后续文档head的新归档也必须使用自己的实际pin。
