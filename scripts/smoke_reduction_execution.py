@@ -276,6 +276,12 @@ def _check_inspection(
     assert [row["source_ref"]["capture_seq"] for row in result["input_trace"]] == list(
         range(1, through + 1)
     )
+    expected_times = [
+        1_700_000_000_000_000_000 + offset
+        for offset in (0, 500_000_000, 1_000_000_000, 2_000_000_001, 3_000_000_000, 3_000_000_001)
+    ][:through]
+    assert [row["native_time_ns"] for row in result["input_trace"]] == expected_times
+    assert [row["fields"]["receive_time_ns"] for row in result["input_trace"]] == expected_times
     assert result["dataset_id"] == prepared["prefix_context_id"]
     assert result["data_sha256"] == audit["bindings"]["normalized_sha256"]
     initial, terminal = audit["initial_account"], audit["terminal_state"]
@@ -288,15 +294,21 @@ def _check_inspection(
     assert terminal["open_orders"] == result["completeness"]["open_orders"]
     assert terminal["pending_commands"] == result["completeness"]["pending_commands"]
     assert terminal["stop_reason"] == result["completeness"]["stop_reason"]
-    assert terminal["account"]["fields"]["net_position_lots"] == 1
-    assert terminal["account"]["fields"]["observed_commission"] == "1"
-    assert terminal["account"]["fields"]["observed_fill_lots"] == 1
+    expected_lots = 1 if pending else 2
+    assert terminal["account"]["fields"]["net_position_lots"] == expected_lots
+    assert terminal["account"]["fields"]["observed_commission"] == str(expected_lots)
+    assert terminal["account"]["fields"]["observed_fill_lots"] == expected_lots
     assert audit["cash_lock_verification"] == "nonnegative_and_total_equals_free_plus_locked_v1"
-    assert len(result["fill_trace"]) == 1
-    assert result["fill_trace"][0]["source_ref"]["capture_seq"] == 3
-    assert result["fill_trace"][0]["fields"]["quantity_lots"] == 1
-    assert audit["replay_evaluation"]["ledger"]["actual_commission"] == "1"
-    assert audit["replay_evaluation"]["ledger"]["filled_quantity_lots"] == 1
+    assert [row["source_ref"]["capture_seq"] for row in result["fill_trace"]] == (
+        [3] if pending else [3, 5]
+    )
+    assert [row["fields"]["quantity_lots"] for row in result["fill_trace"]] == [1] * expected_lots
+    assert [row["fields"]["commission"] for row in result["fill_trace"]] == ["1"] * expected_lots
+    assert [row["native_time_ns"] for row in result["fill_trace"]] == (
+        [expected_times[2]] if pending else [expected_times[2], expected_times[4]]
+    )
+    assert audit["replay_evaluation"]["ledger"]["actual_commission"] == str(expected_lots)
+    assert audit["replay_evaluation"]["ledger"]["filled_quantity_lots"] == expected_lots
     if pending:
         assert submitted["execution_status"] == receipt["execution_status"] == "incomplete"
         assert audit["execution_status"] == result["execution_status"] == "incomplete"
@@ -321,8 +333,38 @@ def _check_inspection(
         assert submitted["execution_status"] == receipt["execution_status"] == "completed"
         assert audit["execution_status"] == result["execution_status"] == "completed"
         assert terminal["open_orders"] == terminal["pending_commands"] == []
-        assert any(row["kind"] == "OrderCanceled" for row in result["order_trace"])
-        assert terminal["account"]["fields"]["orders"][0]["status"] == "CANCELED"
+        assert terminal["stop_reason"] == "input_exhausted"
+        assert not any(row["kind"] == "OrderCanceled" for row in result["order_trace"])
+        second_fills = [
+            (index, row)
+            for index, row in enumerate(result["order_trace"])
+            if row["kind"] == "OrderFilled" and row["source_ref"]["capture_seq"] == 5
+        ]
+        rejections = [
+            (index, row)
+            for index, row in enumerate(result["order_trace"])
+            if row["kind"] == "OrderCancelRejected"
+        ]
+        assert len(second_fills) == len(rejections) == 1
+        fill_index, second_fill = second_fills[0]
+        rejection_index, rejection = rejections[0]
+        assert fill_index < rejection_index
+        for row in (second_fill, rejection):
+            assert row["source_ref"] == {"line": 5, "capture_seq": 5, "event_type": "trade"}
+            assert row["native_time_ns"] == 1_700_000_003_000_000_000
+            assert row["fields"]["status"] == "FILLED"
+        assert second_fill["fields"]["pending_command_ids"] == ["command-1"]
+        assert rejection["fields"]["pending_command_ids"] == []
+        assert rejection["fields"]["order_id"] == second_fill["fields"]["order_id"]
+        account_orders = [
+            order
+            for order in terminal["account"]["fields"]["orders"]
+            if order["order_id"] == second_fill["fields"]["order_id"]
+        ]
+        assert len(account_orders) == 1
+        assert account_orders[0]["status"] == "FILLED"
+        assert account_orders[0]["filled_quantity_lots"] == 2
+        assert account_orders[0]["remaining_quantity_lots"] == 0
     verified = inspected["verification"]
     for key in (
         "integrity_verified",
@@ -487,7 +529,7 @@ def _native_lifecycle(
     cases = []
     for name, focus, through, slot, pending in (
         ("pending-cancel", 4, 4, 4, True),
-        ("settled-cancel", 5, 6, 5, False),
+        ("filled-cancel-rejected", 5, 6, 5, False),
     ):
         (inputs / (name + ".json")).write_bytes(_canonical(_request(focus, through)))
         prepared = run(
@@ -565,7 +607,7 @@ def _native_lifecycle(
     exhausted_before = _tree(runs)
     exhausted = run(
         "run-reduction-input",
-        str(preparations / "settled-cancel"),
+        str(preparations / "filled-cancel-rejected"),
         "--source-evidence",
         "live-source",
         "--input-root",

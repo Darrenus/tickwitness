@@ -78,8 +78,10 @@ Inspect 只读重载真实 reservation／intent／outcome／CAS，用保存的�
 | 实际 prefix case | 必须观察的 native 结果 |
 | --- | --- |
 | A：focus4／through4／delay1e9，实际输入1..4、warmup1..3，slot4 | 部分 fill1、fee1、position1、剩余1／PENDING_CANCEL、cap3发出的 command-1 尚在途；EOF incomplete |
-| B：focus5／through6／delay1e9，实际输入1..6、warmup1..4，slot5 | 真实撤单完成、fill1／fee1、pending空，EOF completed；warmup含被改钟的cap4 |
+| B `filled-cancel-rejected`：focus5／through6／delay1e9，实际输入1..6、warmup1..4，slot5 | cap3／cap5各fill1、各fee1；最终position2／fee2、订单FILLED剩0、open／pending空，EOF completed；cap5第二次成交后同一步才返回OrderCancelRejected |
 | 再执行同一 preparation | 原五槽耗尽退出8，不构造 engine、不增加槽或改旧记录 |
+
+较长 prefix 不保证撤单成功。这里原撤单延迟1.5s，cap3在1s发出命令；被改钟的cap4到达2.000000001s，尚未到2.5s窗口。现有输入步语义在cap5的3s先处理交易撮合，再drain命令，因此先完成第二次成交，随后同cap5／同3s返回撤单拒绝，不能按连续时间先撤单来预填结果。Smoke严格检查该顺序、第二次成交时command-1仍pending、拒绝后pending清空，并拒绝出现OrderCanceled。这与既有时钟资格中的trade-step-before-command-drain边界一致，不改变生产引擎语义。
 
 精确原生 oracle 若不符应诊断真实语义，不修改为预填成功。A 和 B 各从原点新执行一次，均不宣称 CE 仍成立、恢复 checkpoint 或全局最小。
 

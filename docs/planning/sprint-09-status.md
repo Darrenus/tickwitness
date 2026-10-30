@@ -67,6 +67,6 @@ Ubuntu 24.04／macOS 15 × Python 3.12／3.13／3.14 六组合各 **3092 passed 
 
 状态边界固定为`after_native_run_before_dispose_v1`：这是engine.run返回后的账户／订单／显式在途投影，不能声称focus边界完整初态、engine.end前状态或可恢复checkpoint。native初始账户被核对且全部warmup真实回放；隐藏队列／RNG／策略内部状态不导出，cash lock只核非负及free+locked=total，不认证完整保证金分配算法。01a准备flags、真实run audit flags与当前只读inspect flags分别表达各自阶段，不改旧格式、engine语义或原source命题权限。
 
-远端验收将新qualification协议从一开始冻结5槽：baseline1、两个实际search候选2／3，导出不可变source快照后再准备并执行两段前缀4／5，之后预算拒绝必须不构造引擎。旧3槽已耗尽golden保持原样。实际短prefix需观察部分成交和取消在途的INCOMPLETE，较长prefix需观察取消完成／pending为空；不预填原生结果。core-only安装只验证拒绝／审计边界，actual-native由Ubuntu、macOS与实际sdist安装链路单独执行，不能把fake port标成native。
+远端验收将新qualification协议从一开始冻结5槽：baseline1、两个实际search候选2／3，导出不可变source快照后再准备并执行两段前缀4／5，之后预算拒绝必须不构造引擎。旧3槽已耗尽golden保持原样。短prefix已实际观察部分成交和取消在途的INCOMPLETE；较长prefix在cap5先发生第二次成交，随后显式OrderCancelRejected才清除在途取消，最终FILLED／pending为空。原固定语义按输入步先撮合再处理到期命令，不能从名义due time推断撤单必定先于下一条trade；精确oracle按该既有资格语义与实际轨迹修正，生产引擎不变，完整安装验收仍待通过。core-only安装只验证拒绝／审计边界，actual-native由Ubuntu、macOS与实际sdist安装链路单独执行，不能把fake port标成native。
 
 当前实现与远端验收尚未完成；#25保持打开，S09-02／03另验，外部真人0／PENDING，无新release或研究收益声明。
