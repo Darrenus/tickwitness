@@ -1,6 +1,6 @@
 # ADR 0029 — Execute reduction prefixes against the original live budget
 
-Status: Proposed; S09-01b remote implementation acceptance and owner review pending.
+Status: Proposed; S09-01b implementation remotely qualified, owner review pending in PR #98.
 
 ## Context
 

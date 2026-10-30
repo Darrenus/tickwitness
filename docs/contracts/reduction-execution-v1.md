@@ -1,6 +1,6 @@
 # Reduction Execution v1
 
-状态：S09-01b 合同冻结，远端实现验收待完成。基线为 owner 已合并 [PR #97](https://github.com/Darrenus/tickwitness/pull/97)，merge `4e3691cccbe28f76b777814d1bac297082ed13c1`。决策见 [ADR 0029](../adr/0029-origin-prefix-execution.md)，静态准备沿用 [Reduction Input v1](reduction-input-v1.md)。本切片增加从原点实际回放与状态审计，不添加自动缩减、checkpoint 或反例保持结论。真实外部尝试仍 `0 / PENDING`。
+状态：S09-01b 合同冻结，功能head已通过13项远端检查，实际证据见[Sprint 9验收记录](../planning/sprint-09-status.md)；[PR #98](https://github.com/Darrenus/tickwitness/pull/98)待owner审阅接受。基线为 owner 已合并 [PR #97](https://github.com/Darrenus/tickwitness/pull/97)，merge `4e3691cccbe28f76b777814d1bac297082ed13c1`。决策见 [ADR 0029](../adr/0029-origin-prefix-execution.md)，静态准备沿用 [Reduction Input v1](reduction-input-v1.md)。本切片增加从原点实际回放与状态审计，不添加自动缩减、checkpoint 或反例保持结论。真实外部尝试仍 `0 / PENDING`。
 
 ## 1. 原始来源与共同预算
 

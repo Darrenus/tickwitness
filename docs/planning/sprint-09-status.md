@@ -7,7 +7,7 @@
 | 故事／切片 | 范围 | 状态 |
 | --- | --- | --- |
 | S09-01a / #25 | 合法缩减recipe、完整必要前缀输入准备与独立重建 | Owner已合并 [PR #95](https://github.com/Darrenus/tickwitness/pull/95) 接受软件 |
-| S09-01b / #25 | 在原协议共同预算下真实从头执行前缀，持久关联intent／attempt／outcome，审计账户／订单／显式在途状态 | 实现中，远端验收待完成，#25待owner接受后才关闭 |
+| S09-01b / #25 | 在原协议共同预算下真实从头执行前缀，持久关联intent／attempt／outcome，审计账户／订单／显式在途状态 | 13项远端检查通过，[PR #98](https://github.com/Darrenus/tickwitness/pull/98)待owner接受，#25继续打开 |
 | S09-02 / #26 | 预算内自动局部缩减、取消、反例保持判定 | Planned，不能以准备好输入代替实际反例保持 |
 | S09-03 / #27 | 原／缩减证据对比、实际首次分歧定位 | Planned，不能将输入字节差异提升为业务因果 |
 
@@ -21,7 +21,7 @@
 
 每个准备包只有manifest、recipe、materialization和normalized四个固定文件。独立verify需要原source evidence和显式preparation ID，重新计算所有语义和输入字节；重算外层hash无法把伪造descriptor变成有效准备。目标必须在原输入root之外，以原子不覆盖方式发布；提交前失败清理stage，提交后同步不确定保留完整目标并报错。
 
-`prefix_context_id`表示计划输入上下文，`PreparedReplay`仅静态预检。所有回执明确 `native_replayed=false`、`initial_state_materialized=false`、`attempt_reserved=false`、`witness_preservation_verified=false`，必须从原点完整重放。原始预算已耗尽的portable见证不能恢复成空ledger、新增额度或授权实际缩减执行。截短EOF可能改变未成交、部分成交、在途取消和估值范围，实际完成度及真值只能在01b的真实运行中判定。
+`prefix_context_id`表示计划输入上下文，`PreparedReplay`仅静态预检。所有回执明确 `native_replayed=false`、`initial_state_materialized=false`、`attempt_reserved=false`、`witness_preservation_verified=false`，必须从原点完整重放。原始预算已耗尽的portable见证不能恢复成空ledger、新增额度或授权实际缩减执行。截短EOF可能改变未成交、部分成交、在途取消和估值范围；实际完成度由01b真实运行审计，反例保持真值留待S09-02按原命题另行评价。
 
 ## 远端验收要求
 
@@ -67,6 +67,37 @@ Ubuntu 24.04／macOS 15 × Python 3.12／3.13／3.14 六组合各 **3092 passed 
 
 状态边界固定为`after_native_run_before_dispose_v1`：这是engine.run返回后的账户／订单／显式在途投影，不能声称focus边界完整初态、engine.end前状态或可恢复checkpoint。native初始账户被核对且全部warmup真实回放；隐藏队列／RNG／策略内部状态不导出，cash lock只核非负及free+locked=total，不认证完整保证金分配算法。01a准备flags、真实run audit flags与当前只读inspect flags分别表达各自阶段，不改旧格式、engine语义或原source命题权限。
 
-远端验收将新qualification协议从一开始冻结5槽：baseline1、两个实际search候选2／3，导出不可变source快照后再准备并执行两段前缀4／5，之后预算拒绝必须不构造引擎。旧3槽已耗尽golden保持原样。短prefix已实际观察部分成交和取消在途的INCOMPLETE；较长prefix在cap5先发生第二次成交，随后显式OrderCancelRejected才清除在途取消，最终FILLED／pending为空。原固定语义按输入步先撮合再处理到期命令，不能从名义due time推断撤单必定先于下一条trade；精确oracle按该既有资格语义与实际轨迹修正，生产引擎不变，完整安装验收仍待通过。core-only安装只验证拒绝／审计边界，actual-native由Ubuntu、macOS与实际sdist安装链路单独执行，不能把fake port标成native。
+远端验收的新qualification协议从一开始冻结5槽：baseline1、两个实际search候选2／3，导出不可变source快照后再准备并执行两段前缀4／5，之后预算拒绝不构造引擎。旧3槽已耗尽golden保持原样。短prefix实际观察部分成交和取消在途的INCOMPLETE；较长prefix在cap5先发生第二次成交，随后显式OrderCancelRejected才清除在途取消，最终FILLED／pending为空。原固定语义按输入步先撮合再处理到期命令，不能从名义due time推断撤单必定先于下一条trade；精确oracle按该既有资格语义与实际轨迹修正，生产引擎不变。core-only安装只验证拒绝／审计边界，actual-native由Ubuntu、macOS与实际sdist安装链路单独执行，不能把fake port标成native。
 
-当前实现与远端验收尚未完成；#25保持打开，S09-02／03另验，外部真人0／PENDING，无新release或研究收益声明。
+实现和功能head远端验收已完成，owner接受待定；#25保持打开，S09-02／03另验，外部真人0／PENDING，无新release或研究收益声明。
+
+## S09-01b 远端验收记录
+
+功能head `5ebd9e8dbcb190849853076a2af15ff7042f3add` 的[Engineering 41015920228](https://github.com/Darrenus/tickwitness/actions/runs/41015920228)与[Documentation 41015920219](https://github.com/Darrenus/tickwitness/actions/runs/41015920219)共13 checks全部通过。实际merge checkout为 `835429bfca761443eba8bfd6467c7a31095aa0e7`，与PR head分别记录；后续验收文档提交有独立的最新head检查，不冒充相同功能head。
+
+Ubuntu 24.04／macOS 15 × Python 3.12／3.13／3.14六组core各 **3156 passed / 112 optional-native skips**；Ubuntu 24.04与macOS 26／Python 3.12的native各 **3265 passed / 3 core-only skips / 313 warnings**。Lint、284文件格式、129 source files严格类型检查、91文档／470本地链接通过。数字属于上述功能run，warnings保留。全部项目测试、运行、格式化、构建和安装在远端CPU执行；本机只有文本编辑、静态审阅、Git／gh控制及产物读取。
+
+| 实际artifact（共同后缀 `835429bfca761443eba8bfd6467c7a31095aa0e7`） | 安装与审计范围 |
+| --- | --- |
+| `reduction-execution-core-…` [12959194347](https://github.com/Darrenus/tickwitness/actions/runs/41015920228/artifacts/12959194347) | 独立core wheel，native_execution=false；52个声明文件哈希、9份实际transcript |
+| `reduction-execution-ubuntu-24.04-…` [12959584304](https://github.com/Darrenus/tickwitness/actions/runs/41015920228/artifacts/12959584304) | 实际native wheel＋独立core verifier；277个声明文件哈希、30份实际transcript |
+| `reduction-execution-macos-26-…` [12959607587](https://github.com/Darrenus/tickwitness/actions/runs/41015920228/artifacts/12959607587) | macOS实际native wheel＋core verifier；277个声明文件哈希、30份实际transcript |
+| `reduction-execution-source-wheel-…` [12960201647](https://github.com/Darrenus/tickwitness/actions/runs/41015920228/artifacts/12960201647) | 实际sdist内脚本与语料、重建安装的native／core wheel；277个声明文件哈希、30份实际transcript |
+
+四份报告均为`installed_reduction_execution_acceptance_v1`且accepted=true；内外report字节相同，声明哈希逐一静态核验。清单不自含`artifact-files.json`：core目录实际53文件，native各278文件，另各有外部report。Core退出分布0×5／2×1／4×1／5×2；native各0×24／2×2／4×1／5×2／8×1，实际退出与expected全部一致，成功stderr和拒绝stdout均空。Producer实际native版本1.231.0，verifier未安装native；venv prefix与base prefix分别核对，macOS `/tmp`／`/private/tmp`别名不当作环境隔离。产物与诊断保留30天。
+
+| 实际核验 | 观察与范围 |
+| --- | --- |
+| 原协议共同预算 | qualification在第一次执行前冻结max_attempts=5、max_events=1000、max_wall_seconds=60；campaign只允许2次搜索evaluation。真实slot1为baseline，2／3为原search，4／5为新reduction；before前三槽与after前三槽exact相等。旧三槽golden与其复制包不变，不能由portable证据创建或补建live预算 |
+| A：完整必要前缀 | input／processed均4，原refs1..4，warmup1..3；初始cash10000／pos0／orders空。最终fill1／fee1／pos1、订单剩1／PENDING_CANCEL、cap3发出的command-1在途，EOF INCOMPLETE且valuation not_eligible |
+| B：追加事件后的真实路径 | input／processed均6，原refs1..6、warmup1..4，前4行与A逐字节相同；独立从cash10000／pos0重放。fills在cap3／5各1、fee各1；cap5的3s先OrderFilled且command-1仍pending，随后同cap5／同3s的OrderCancelRejected才清空pending。最终FILLED／剩0／pos2／fee2、open／pending空，COMPLETED；没有OrderCanceled |
+| 会计与边界 | A终cash9999=free9699+locked300，B终cash9998=free9798+locked200；实际余额与独立fills／fees／订单审计一致。这里只认证非负与分量守恒，不认证另一套margin lock算法。边界始终after_native_run_before_dispose_v1，未导出focus初态、pre-engine-end或隐藏可恢复state |
+| 持久化与只读复验 | intent与4件preparation先于engine可读；实际result／audit／receipt绑定CAS。独立core guard禁止native、worker、reserve、publish、旧研究stores、SQLite及网络，重新构造全部audit，字节树不变，inspect本身不再次执行或消耗槽位 |
+| 实际拒绝 | 5槽后再次run真实退出8且没有slot6；改变focus_state_captured并重算audit／receipt／outcome外层哈希仍inspect退出2，原结果不变。两次confirmation CLI退出5，应用pre-IO tripwire另核2次；旧源配missing ledger退出4、existing empty ledger退出2，无恢复槽位 |
+| 受控故障回归 | core domain／application／ledger测试独立覆盖错输入／漏warmup、账户／成交／订单／pending矛盾、fake completed、bind／native／timeout失败、中断保留consumed unfinalized、晚publish／错ID不覆盖成功receipt。这些不冒充installed native故障注入、物理断电或S10恢复认证 |
+
+Ubuntu实际原protocol ID为 `b632cb5786b96056fb1ff5f574808a5d18c266ca31820f2053aa2a1046ab54a2`，source bundle为 `dda14f172427e447b60f1ce56f60f87807c90bef40fc3efb10dca196ea353ea9`。A run／audit分别为 `97593d9b1e2885083cbc37da8e2aa4ce80a838732a977044f2599a8d88614bec`／`b0c70e8c96b058b50814a5964bb1fa27040010fc57c290c3f952c26b9ae3f27a`；B分别为 `439d8eb9465886cc586232ea59e59da8ca5e83d3355fd3c6bbccb390ff1a45e2`／`0ed3bee4a14bd9a9c6ee664b06973b5f4551f271810516f29ca8b4d98a94d8b4`。各安装路径的nonce／时间与source绑定会产生不同run／preparation IDs，只核各自完整内容链，不要求跨生命周期同ID。
+
+远端迭代暴露并修正了pin抄写、结构无效的负例夹具、open_orders与account订单字段位置，以及B被预设为撤单成功的错误oracle。B修正依据既有时钟资格与两平台实际轨迹：名义due2.5s不是独立推进时钟，cap4仅2.000000001s，下一步cap5 trade先撮合再处理到期撤单。生产引擎与原协议预算均未放宽；严格oracle新增fill-before-rejection与pending清理顺序检查。
+
+[PR #98](https://github.com/Darrenus/tickwitness/pull/98)交付S09-01b软件，待owner审阅接受；#25继续打开。S09-02的自动缩减与反例保持、S09-03对比另验。外部真人复验0／PENDING，AI交叉审阅／CI／owner合并不充当外部真人尝试；原PR94转交归档及pin不变，无新release、实际工时、采用或研究收益记录。
