@@ -1,13 +1,13 @@
 # Sprint 9 合法反例缩减状态
 
-更新：2026-10-29（Asia/Singapore）。Owner 已合并 [PR #95](https://github.com/Darrenus/tickwitness/pull/95)，接受merge为 `a2c711861d1d776c78b4b5f5471f8afa388d390f`。下述01a功能基线仍为PR94 merge `3ab62bf97dd21609638e9f887f68f450bc345aaf`，不改写历史run。[S08-03 / #24](https://github.com/Darrenus/tickwitness/issues/24) 的真实外部复验仍为0／PENDING；已返回的owner请求AI自动化记录另行登记，不计外部真人。[#96](https://github.com/Darrenus/tickwitness/issues/96) 先处理这些记录发现的兼容性问题，再接续01b。原PR94转交归档与pin不变，无新release。
+更新：2026-10-30（Asia/Singapore）。Owner 已合并 [PR #97](https://github.com/Darrenus/tickwitness/pull/97)，接受merge为 `4e3691cccbe28f76b777814d1bac297082ed13c1`，#96兼容性修复接受后进入S09-01b。S09-01a已由[PR #95](https://github.com/Darrenus/tickwitness/pull/95) merge `a2c711861d1d776c78b4b5f5471f8afa388d390f`接受；其功能基线及历史run保持原值。[S08-03 / #24](https://github.com/Darrenus/tickwitness/issues/24) 真实外部复验仍0／PENDING，owner请求的AI自动化回传另记技术证据。原PR94转交归档与pin不变，无新release。
 
 ## 切片与验收门
 
 | 故事／切片 | 范围 | 状态 |
 | --- | --- | --- |
 | S09-01a / #25 | 合法缩减recipe、完整必要前缀输入准备与独立重建 | Owner已合并 [PR #95](https://github.com/Darrenus/tickwitness/pull/95) 接受软件 |
-| S09-01b / #25 | 在原协议共同预算下真实从头执行前缀，持久关联intent／attempt／outcome，审计真实账户／订单／在途状态 | 尚未实现，#25整体保持打开 |
+| S09-01b / #25 | 在原协议共同预算下真实从头执行前缀，持久关联intent／attempt／outcome，审计账户／订单／显式在途状态 | 实现中，远端验收待完成，#25待owner接受后才关闭 |
 | S09-02 / #26 | 预算内自动局部缩减、取消、反例保持判定 | Planned，不能以准备好输入代替实际反例保持 |
 | S09-03 / #27 | 原／缩减证据对比、实际首次分歧定位 | Planned，不能将输入字节差异提升为业务因果 |
 
@@ -56,3 +56,17 @@ Ubuntu 24.04／macOS 15 × Python 3.12／3.13／3.14 六组合各 **3092 passed 
 初轮远端发现格式／导入排序问题，应用远端生成补丁；CLI测试夹具抄写bundle pin漏了两位，按实际manifest SHA修正后原严格断言通过，没有放宽身份校验。并行交叉审阅与下载产物审计均为AI辅助，不冒充外部用户、人类领域接受或完整历史认证。
 
 [PR #95](https://github.com/Darrenus/tickwitness/pull/95) 仅交付S09-01a软件，现已由owner合并接受。#25因01b实际执行与状态验收未实现而继续打开；S09-02／03独立推进。#24继续打开，真实外部复验0／PENDING，现有PR94转交归档和pin不变；无新release、采用、访谈、实际工时或研究收益记录。
+
+## S09-01b 实现与验收门
+
+合同见[Reduction Execution v1](../contracts/reduction-execution-v1.md)，决策见[ADR 0029](../adr/0029-origin-prefix-execution.md)。真实执行仍从原始首snapshot开始，保留完整warmup与候选prefix，不向引擎注入静态盘口或旧账户状态。实际native结果经原有`evaluate_replay`独立核对全部输入、初始账户、fills／fees、订单生命周期、final账户和显式pending ledger。
+
+执行前核对完整source/preparation及现有live ledger的全部已观察reservation prefix、候选intent／outcome和CAS。只允许同一源ExecutableProtocol拥有槽位，不从portable恢复空ledger、改protocol或返还预算；允许live追加合法suffix。记录中未观察的baseline outcome不伪造为“应当不存在”。原max_attempts、max_events、max_wall_seconds保持；本轮不延长既有搜索candidate journal或其campaign限额，也不实现S09-02的自动缩减循环。
+
+每次运行先reserve，再持久绑定新reduction intent及4件准备CAS，确认可读后才构造worker。完整处理N个retained事件才允许成功state audit；EOF仍有挂单或命令可为INCOMPLETE，其估值保持原core规则的not_eligible，不变成反例保持。native失败、非法轨迹、超时、bind失败均消费原槽位；terminal发布异常／错ID只报不确定，不用failure覆盖已提交receipt、不重跑不退款。只读inspect重建准备与全部状态audit，缺件失败不修复、不占slot；reserved_unfinalized不是S10恢复授权。
+
+状态边界固定为`after_native_run_before_dispose_v1`：这是engine.run返回后的账户／订单／显式在途投影，不能声称focus边界完整初态、engine.end前状态或可恢复checkpoint。native初始账户被核对且全部warmup真实回放；隐藏队列／RNG／策略内部状态不导出，cash lock只核非负及free+locked=total，不认证完整保证金分配算法。01a准备flags、真实run audit flags与当前只读inspect flags分别表达各自阶段，不改旧格式、engine语义或原source命题权限。
+
+远端验收将新qualification协议从一开始冻结5槽：baseline1、两个实际search候选2／3，导出不可变source快照后再准备并执行两段前缀4／5，之后预算拒绝必须不构造引擎。旧3槽已耗尽golden保持原样。实际短prefix需观察部分成交和取消在途的INCOMPLETE，较长prefix需观察取消完成／pending为空；不预填原生结果。core-only安装只验证拒绝／审计边界，actual-native由Ubuntu、macOS与实际sdist安装链路单独执行，不能把fake port标成native。
+
+当前实现与远端验收尚未完成；#25保持打开，S09-02／03另验，外部真人0／PENDING，无新release或研究收益声明。

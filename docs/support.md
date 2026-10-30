@@ -4,6 +4,8 @@
 
 未发行开发分支的[完整搜索证据](contracts/search-evidence-v1.md)、[一次确认窗口](contracts/confirmation-access-v1.md)、[技术alpha复验包](contracts/alpha-scorecard-v1.md)与[合法缩减输入准备](contracts/reduction-input-v1.md)分别遵循各自版本合同及实际PR验收，不追记到0.1发行认证。缩减准备只生成完整必要前缀输入；不执行引擎、不生成运行态、不验证反例保持，当前没有checkpoint恢复能力。[Sprint 9状态](planning/sprint-09-status.md)区分输入准备与后续实际执行；真实外部复验仍为0／PENDING。
 
+开发分支的[前缀执行合同](contracts/reduction-execution-v1.md)另行消费原协议共同attempt预算，从首snapshot实际回放并审计terminal账户／订单／显式pending投影。它要求原有live ledger与source快照相符，不能由portable包初始化一个空预算。INCOMPLETE保留；不提供focus初态、checkpoint／隐藏队列状态或S10续跑。实际支持组合以对应PR的远端证据为准，不把core fake port案例或只读inspect计作native执行。
+
 ## 按任务划分的环境矩阵
 
 以下是现有 [Engineering CI](../.github/workflows/engineering.yml) 配置对应的验收组合。只有候选 commit 的实际 job 成功后，才能在发布记录中记为该组合通过；历史 PR 成功或配置存在不能替代本候选的结果。

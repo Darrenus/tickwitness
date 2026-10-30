@@ -26,6 +26,12 @@ from tickwitness.domain.evidence.queue_records import (
     load_queue_intent,
     load_queue_run_receipt,
 )
+from tickwitness.domain.evidence.reduction_records import (
+    ReductionExecutionIntent,
+    load_reduction_failure,
+    load_reduction_intent,
+    load_reduction_run_receipt,
+)
 from tickwitness.domain.evidence.run_records import (
     AttemptReservation,
     EvidenceValidationError,
@@ -71,7 +77,7 @@ _ARTIFACT_COUNT = 16
 # The file lock remains necessary for independent processes sharing the root.
 _NAMED_RESERVATION_MUTEX = Lock()
 type _Owner = ExecutableProtocol | QueueFamilyProtocol | TaggedQueueProtocol
-type _Intent = ScenarioIntent | QueueRunIntent | TaggedQueueRunIntent
+type _Intent = ScenarioIntent | QueueRunIntent | TaggedQueueRunIntent | ReductionExecutionIntent
 
 
 class AttemptLedgerError(ValueError):
@@ -161,6 +167,12 @@ def _outcome(raw: bytes, reservation: AttemptReservation) -> _Intent | None:
             else:
                 load_scenario_failure(raw)
             intent = load_scenario_intent(canonical(cast("dict[str, object]", document["intent"])))
+        elif document.get("kind") in ("reduction_run_receipt_v1", "reduction_attempt_failure_v1"):
+            if document["kind"] == "reduction_run_receipt_v1":
+                load_reduction_run_receipt(raw)
+            else:
+                load_reduction_failure(raw)
+            intent = load_reduction_intent(canonical(cast("dict[str, object]", document["intent"])))
         elif document.get("kind") == "replay_attempt_failure_v1":
             parse(raw, limit=_RECORD_LIMIT)
             if (
@@ -535,6 +547,8 @@ class LocalAttemptLedger:
                 intent = load_tagged_queue_intent(raw)
             elif type(reservation) is QueueAttemptReservation:
                 intent = load_queue_intent(raw)
+            elif parse(raw, limit=_RECORD_LIMIT).get("kind") == "reduction_execution_intent_v1":
+                intent = load_reduction_intent(raw)
             else:
                 intent = load_scenario_intent(raw)
             if intent.document["protocol_id"] != reservation.protocol_id:
