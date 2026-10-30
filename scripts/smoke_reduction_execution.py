@@ -302,8 +302,16 @@ def _check_inspection(
         assert audit["execution_status"] == result["execution_status"] == "incomplete"
         assert terminal["stop_reason"] == "pending_commands_at_data_end"
         assert len(terminal["open_orders"]) == len(terminal["pending_commands"]) == 1
-        assert terminal["open_orders"][0]["status"] == "PENDING_CANCEL"
-        assert terminal["open_orders"][0]["remaining_quantity_lots"] == 1
+        open_order = terminal["open_orders"][0]
+        assert open_order["status"] == "PENDING_CANCEL"
+        account_orders = [
+            order
+            for order in terminal["account"]["fields"]["orders"]
+            if order["order_id"] == open_order["order_id"]
+        ]
+        assert len(account_orders) == 1
+        assert account_orders[0]["status"] == "PENDING_CANCEL"
+        assert account_orders[0]["remaining_quantity_lots"] == 1
         command = terminal["pending_commands"][0]
         assert command["command_id"] == "command-1" and command["command_type"] == "cancel"
         assert command["source_ref"] == {"line": 3, "capture_seq": 3, "event_type": "trade"}
@@ -749,6 +757,7 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
         assert not (root / "missing-input-root").exists()
         assert not (root / "missing-runs").exists()
         shutil.copytree(examples / "alpha" / "counterexample", inputs / "old-exhausted-source")
+        old_source_before = _tree(inputs / "old-exhausted-source")
         (inputs / "old-prefix.json").write_bytes(_canonical(_request(4, 4)))
         old_prepared = run(
             "prepare-reduction-input",
@@ -804,6 +813,7 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
         lifecycle = None
         if not arguments.core_only:
             lifecycle = _native_lifecycle(run, helper, examples, root, inputs, preparations)
+        assert _tree(inputs / "old-exhausted-source") == old_source_before
         assert _tree(examples / "alpha") == committed_before
         report = {
             "kind": "installed_reduction_execution_acceptance_v1",
@@ -814,7 +824,10 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
             "core_rejections": errors,
             "committed_exhausted_source_pins": _GOLDEN,
             "old_source_not_restored_or_renewed": True,
-            "old_source_and_empty_ledger_unchanged": _tree(empty) == empty_before,
+            "old_source_and_empty_ledger_unchanged": (
+                _tree(inputs / "old-exhausted-source") == old_source_before
+                and _tree(empty) == empty_before
+            ),
             "lifecycle": lifecycle,
             "readonly_inspection_guard": {
                 "core_only": True,
