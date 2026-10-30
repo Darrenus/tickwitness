@@ -97,6 +97,7 @@ jobs:
           python3 scripts/smoke_confirmation.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/confirmation-core.json --records-dir /tmp/confirmation-core-records
           python3 scripts/smoke_alpha.py --python /tmp/tickwitness-wheel/bin/python --wheel dist/*.whl --corpus-root examples/alpha --guide docs/alpha-reproduction.md --runner scripts/reproduce_alpha.py --source-revision "${{ github.sha }}" --report /tmp/alpha-core.json --records-dir /tmp/alpha-core-records
           python3 scripts/smoke_reduction.py --python /tmp/tickwitness-wheel/bin/python --corpus-root examples/alpha --report /tmp/reduction-input-core.json --records-dir /tmp/reduction-input-core-records
+          python3 scripts/smoke_reduction_execution.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/reduction-execution-core.json --records-dir /tmp/reduction-execution-core-records
           python3 scripts/smoke_queue_constraints.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_queue_execution.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_tagged_queue.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/tagged-queue-core.json
@@ -114,6 +115,17 @@ jobs:
           path: |
             /tmp/alpha-compatibility-core.json
             /tmp/alpha-compatibility-core-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve installed-core reduction execution rejection and audit boundaries
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reduction-execution-core-${{ github.sha }}
+          path: |
+            /tmp/reduction-execution-core.json
+            /tmp/reduction-execution-core-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30
@@ -328,6 +340,20 @@ jobs:
       - name: Recompute legal reduction inputs in the installed core-only environment
         run: |
           python3 scripts/smoke_reduction.py --python /tmp/tickwitness-tagged-verifier/bin/python --corpus-root examples/alpha --report /tmp/reduction-input.json --records-dir /tmp/reduction-input-records
+      - name: Execute real origin prefixes on the original shared protocol budget
+        run: |
+          python3 scripts/smoke_reduction_execution.py --python .venv/bin/python --verifier-python /tmp/tickwitness-tagged-verifier/bin/python --report /tmp/reduction-execution.json --records-dir /tmp/reduction-execution-records
+      - name: Preserve actual prefix execution and terminal state audits
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reduction-execution-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            /tmp/reduction-execution.json
+            /tmp/reduction-execution-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve legal reduction input preparation
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -522,6 +548,7 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_search_evidence.py" --python /tmp/tickwitness-preview-core/bin/python --finding-report /tmp/search-findings-source-wheel.json --finding-records /tmp/search-findings-source-wheel-records --report /tmp/search-evidence-source-wheel.json --bundles-dir /tmp/search-evidence-source-wheel-bundles
           python3 "$TW_SOURCE/scripts/smoke_queue_constraints.py" --python /tmp/tickwitness-preview-native/bin/python
           python3 "$TW_SOURCE/scripts/smoke_queue_execution.py" --python /tmp/tickwitness-preview-native/bin/python --native --report /tmp/queue-source-wheel-execution.json
+          python3 "$TW_SOURCE/scripts/smoke_reduction_execution.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/reduction-execution-source-wheel.json --records-dir /tmp/reduction-execution-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_tagged_queue.py" --python /tmp/tickwitness-preview-native/bin/python --native --report /tmp/tagged-queue-source-wheel-execution.json
           python3 "$TW_SOURCE/scripts/smoke_tagged_evidence.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/tagged-pair-source-wheel-evidence.json --bundles-dir /tmp/tagged-pair-source-wheel-bundles
           python3 "$TW_SOURCE/scripts/smoke_tagged_findings.py" --python /tmp/tickwitness-preview-core/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --pairs-dir /tmp/tagged-pair-source-wheel-bundles --source-report /tmp/tagged-pair-source-wheel-evidence.json --report /tmp/tagged-findings-source-wheel.json --bundles-dir /tmp/tagged-findings-source-wheel-bundles
@@ -539,6 +566,17 @@ jobs:
             /tmp/search-evidence-source-wheel-core-bundles
             /tmp/search-evidence-source-wheel.json
             /tmp/search-evidence-source-wheel-bundles
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve actual-source prefix execution and read-only terminal state audits
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reduction-execution-source-wheel-${{ github.sha }}
+          path: |
+            /tmp/reduction-execution-source-wheel.json
+            /tmp/reduction-execution-source-wheel-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30

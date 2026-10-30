@@ -150,7 +150,7 @@ Alpine回执保留runner10／CLI3和缺失libc原子发布入口的错误，无s
 
 [#96](https://github.com/Darrenus/tickwitness/issues/96) 本轮实现范围：手册与新sidecar提供macOS／Linux系统checksum命令，实际运行正确与错误digest校验；精确说明发布能力并补missing API安全失败回归；独立runner在版本相关导入／包加载／worker／输出前拒绝不支持Python，exit2且无submission。真实Python3.9拒绝路径在远端core wheel与实际sdist安装链路验证，不扩展项目Python支持、不加入syscall回退。S09-01b真实执行在后续独立切片实现。
 
-[#96](https://github.com/Darrenus/tickwitness/issues/96)修复已在[PR #97](https://github.com/Darrenus/tickwitness/pull/97)完成下述远端验收，尚待owner接受。所有测试／格式／构建／安装仍在远端；不新增Sprint容量、实际工时、外部尝试、release或研究权限。旧PR94归档和返回材料保持原样，新guide／runner／wheel产生的新kit与sidecar单独记录身份，未经owner接受不替换原转交包。
+[#96](https://github.com/Darrenus/tickwitness/issues/96)修复已在[PR #97](https://github.com/Darrenus/tickwitness/pull/97)完成下述远端验收，并由owner合并接受，merge `4e3691cccbe28f76b777814d1bac297082ed13c1`。所有测试／格式／构建／安装仍在远端；不新增Sprint容量、实际工时、外部尝试、release或研究权限。旧PR94归档和返回材料保持原样，新guide／runner／wheel的kit与sidecar单独记录；软件合并不解锁#24外部真人门，也不授权发行或自动替换旧归档。后续进入[S09-01b原预算前缀执行](sprint-09-status.md)。
 
 ## #96 远端兼容性验收记录
 
