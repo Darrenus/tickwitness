@@ -19,7 +19,12 @@ from tickwitness.application.reduction_execution import inspect_reduction_run, r
 from tickwitness.application.reductions import prepare_reduction_input
 from tickwitness.application.research import ConfirmationAccessDenied
 from tickwitness.domain.evidence.reduction_records import load_reduction_failure
-from tickwitness.domain.evidence.run_records import EvidenceValidationError, canonical, digest, parse
+from tickwitness.domain.evidence.run_records import (
+    EvidenceValidationError,
+    canonical,
+    digest,
+    parse,
+)
 from tickwitness.domain.replay.contracts import build_replay_result
 from tickwitness.infrastructure.attempt_ledger import (
     AttemptBudgetExceededError,
@@ -86,7 +91,11 @@ def run(value, **overrides):
 
 
 def inspect(value, run_id, **overrides):
-    options = {"source": value.source, "split": "development", "ledger_factory": lambda: value.ledger}
+    options = {
+        "source": value.source,
+        "split": "development",
+        "ledger_factory": lambda: value.ledger,
+    }
     options.update(overrides)
     return inspect_reduction_run(run_id, **options)
 
@@ -114,14 +123,23 @@ def test_original_owner_intent_and_four_artifacts_are_committed_before_engine(re
     assert calls == [60]
     assert submitted.execution_status == "completed"
     assert submitted.state_audit["coverage"] == {
-        "source_event_count": 7, "retained_event_count": 7, "processed_records": 7,
+        "source_event_count": 7,
+        "retained_event_count": 7,
+        "processed_records": 7,
         "warmup_event_count": 3,
-        **{key: value.prepared.materialization.document["retained"][key]
-           for key in ("origin_ref", "focus_ref", "through_ref")},
+        **{
+            key: value.prepared.materialization.document["retained"][key]
+            for key in ("origin_ref", "focus_ref", "through_ref")
+        },
     }
     assert submitted.state_audit["flags"]["state_projection_audited"] is True
-    for key in ("focus_state_captured", "pre_engine_end_state_captured", "checkpoint_used",
-                "witness_preservation_verified", "reduced_predicate_evaluated"):
+    for key in (
+        "focus_state_captured",
+        "pre_engine_end_state_captured",
+        "checkpoint_used",
+        "witness_preservation_verified",
+        "reduced_predicate_evaluated",
+    ):
         assert submitted.state_audit["flags"][key] is False
     stored = parse(value.ledger.get_outcome(submitted.attempt_id))
     assert stored["kind"] == "reduction_run_receipt_v1"
@@ -130,7 +148,9 @@ def test_original_owner_intent_and_four_artifacts_are_committed_before_engine(re
     assert tree(value.case.root / "portable-source") == source_before
 
 
-def test_inspector_reaudits_persisted_bytes_readonly_with_later_live_suffix(reduction_case, monkeypatch):
+def test_inspector_reaudits_persisted_bytes_readonly_with_later_live_suffix(
+    reduction_case, monkeypatch
+):
     value = reduction_case
     first, second = run(value), run(value)
     before = tree(value.case.root)
@@ -147,8 +167,13 @@ def test_inspector_reaudits_persisted_bytes_readonly_with_later_live_suffix(redu
     assert report["preparation"]["preparation_id"] == value.prepared.preparation_id
     assert report["verification"]["observed_source_prefix_matched"] is True
     assert report["verification"]["state_audit_recomputed"] is True
-    for flag in ("native_replayed", "attempt_reserved", "full_attempt_history_verified",
-                 "global_ledger_authenticity_verified", "source_claim_authority_extended"):
+    for flag in (
+        "native_replayed",
+        "attempt_reserved",
+        "full_attempt_history_verified",
+        "global_ledger_authenticity_verified",
+        "source_claim_authority_extended",
+    ):
         assert report["verification"][flag] is False
     assert tree(value.case.root) == before
 
@@ -201,12 +226,18 @@ def test_preparation_rehash_cannot_authorize_a_changed_prefix(reduction_case):
     changed = package(artifacts)
     with pytest.raises(EvidenceValidationError):
         run_reduction_input(
-            changed, value.source, expected_preparation_id=changed.preparation_id,
-            split="development", ledger_factory=forbidden, engine_factory=forbidden,
+            changed,
+            value.source,
+            expected_preparation_id=changed.preparation_id,
+            split="development",
+            ledger_factory=forbidden,
+            engine_factory=forbidden,
         )
 
 
-@pytest.mark.parametrize("attack", ["warmup", "input_binding", "cash", "pending", "failed", "early"])
+@pytest.mark.parametrize(
+    "attack", ["warmup", "input_binding", "cash", "pending", "failed", "early"]
+)
 def test_invalid_native_projection_consumes_failure_without_success_audit(reduction_case, attack):
     value = reduction_case
 
@@ -234,7 +265,14 @@ def test_invalid_native_projection_consumes_failure_without_success_audit(reduct
     assert failure["attempt"]["attempt_index"] == 3
     assert failure["protocol_id"] == value.case.frozen.protocol_id
     assert "state_audit_sha256" not in failure
-    assert len(value.ledger.list_reservations(value.prepared.materialization.source.validation.protocol)) == 3
+    assert (
+        len(
+            value.ledger.list_reservations(
+                value.prepared.materialization.source.validation.protocol
+            )
+        )
+        == 3
+    )
 
 
 @pytest.mark.parametrize("mode", ["raise_before", "raise_after", "wrong_id"])
@@ -251,7 +289,11 @@ def test_intent_binding_failure_never_constructs_engine_or_refunds(reduction_cas
         return "0" * 64
 
     with pytest.raises(ProtocolRunError) as caught:
-        run(value, ledger_factory=lambda: Proxy(value.ledger, bind_intent=bind), engine_factory=forbidden)
+        run(
+            value,
+            ledger_factory=lambda: Proxy(value.ledger, bind_intent=bind),
+            engine_factory=forbidden,
+        )
     owner = value.prepared.materialization.source.validation.protocol
     assert len(value.ledger.list_reservations(owner)) == 3
     if mode == "raise_before":
@@ -262,7 +304,9 @@ def test_intent_binding_failure_never_constructs_engine_or_refunds(reduction_cas
 
 
 @pytest.mark.parametrize("mode", ["raise_after", "wrong_id", "readback_failure"])
-def test_late_success_publication_failure_preserves_receipt_without_second_publish(reduction_case, mode):
+def test_late_success_publication_failure_preserves_receipt_without_second_publish(
+    reduction_case, mode
+):
     value = reduction_case
     calls = []
     published = [False]
@@ -298,7 +342,9 @@ def test_keyboard_interrupt_leaves_consumed_intent_with_no_outcome(reduction_cas
 
     with pytest.raises(KeyboardInterrupt):
         run(value, engine_factory=lambda _timeout: Interrupted())
-    last = value.ledger.list_reservations(value.prepared.materialization.source.validation.protocol)[-1]
+    last = value.ledger.list_reservations(
+        value.prepared.materialization.source.validation.protocol
+    )[-1]
     assert last.attempt_index == 3
     assert value.ledger.get_intent(last.attempt_id) is not None
     assert value.ledger.get_outcome(last.attempt_id) is None
@@ -335,8 +381,11 @@ def test_failure_outcome_publication_error_does_not_refund_or_return_success(red
         raise OSError("No outcome acknowledgement")
 
     with pytest.raises(ProtocolRunError) as caught:
-        run(value, engine_factory=failed_engine,
-            ledger_factory=lambda: Proxy(value.ledger, publish=failed_publication))
+        run(
+            value,
+            engine_factory=failed_engine,
+            ledger_factory=lambda: Proxy(value.ledger, publish=failed_publication),
+        )
     assert caught.value.code == "attempt_outcome_unconfirmed"
     assert value.ledger.get_intent(caught.value.attempt_id) is not None
     assert value.ledger.get_outcome(caught.value.attempt_id) is None
@@ -346,8 +395,12 @@ def test_failure_outcome_publication_error_does_not_refund_or_return_success(red
 def test_invalid_pin_precedes_any_package_property_or_factory():
     with pytest.raises(EvidenceValidationError):
         run_reduction_input(
-            Unreadable(), Unreadable(), expected_preparation_id="invalid", split="development",
-            ledger_factory=forbidden, engine_factory=forbidden,
+            Unreadable(),
+            Unreadable(),
+            expected_preparation_id="invalid",
+            split="development",
+            ledger_factory=forbidden,
+            engine_factory=forbidden,
         )
 
 
@@ -356,11 +409,17 @@ def test_confirmation_denial_precedes_all_packages_factories_and_identifiers(ope
     with pytest.raises(ConfirmationAccessDenied):
         if operation == "run":
             run_reduction_input(
-                Unreadable(), Unreadable(), expected_preparation_id="invalid", split="confirmation",
-                ledger_factory=forbidden, engine_factory=forbidden,
+                Unreadable(),
+                Unreadable(),
+                expected_preparation_id="invalid",
+                split="confirmation",
+                ledger_factory=forbidden,
+                engine_factory=forbidden,
             )
         else:
-            inspect_reduction_run("invalid", source=Unreadable(), split="confirmation", ledger_factory=forbidden)
+            inspect_reduction_run(
+                "invalid", source=Unreadable(), split="confirmation", ledger_factory=forbidden
+            )
 
 
 def test_inspection_rejects_rehashed_audit_instead_of_trusting_saved_flags(reduction_case):
@@ -383,6 +442,8 @@ def test_inspection_rejects_rehashed_audit_instead_of_trusting_saved_flags(reduc
 
     proxy = Proxy(value.ledger, read_artifact=read, get_outcome=lambda _attempt: forged_receipt)
     # Source observed outcomes must still be exact; only override the new slot.
-    proxy.get_outcome = lambda attempt: forged_receipt if attempt == submitted.attempt_id else value.ledger.get_outcome(attempt)
+    proxy.get_outcome = lambda attempt: (
+        forged_receipt if attempt == submitted.attempt_id else value.ledger.get_outcome(attempt)
+    )
     with pytest.raises(EvidenceValidationError, match="audit differs"):
         inspect(value, digest(forged_receipt), ledger_factory=lambda: proxy)

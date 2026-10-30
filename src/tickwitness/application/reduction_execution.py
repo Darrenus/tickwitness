@@ -249,8 +249,7 @@ def run_reduction_input(
     _require(
         cast("int", cast("Row", descriptor["candidate"])["full_event_count"])
         <= budget["max_events"]
-        and cast("int", cast("Row", descriptor["retained"])["event_count"])
-        <= budget["max_events"],
+        and cast("int", cast("Row", descriptor["retained"])["event_count"]) <= budget["max_events"],
         "Reduction source or retained prefix exceeds the original event budget",
     )
     ledger = ledger_factory()

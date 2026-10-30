@@ -57,22 +57,42 @@ STATE_AUDIT_FLAGS: Mapping[str, object] = MappingProxyType(
         "margin_lock_algorithm_certified": False,
     }
 )
-INTENT_FLAGS: Mapping[str, object] = MappingProxyType(
-    {name: False for name in STATE_AUDIT_FLAGS}
-)
+INTENT_FLAGS: Mapping[str, object] = MappingProxyType({name: False for name in STATE_AUDIT_FLAGS})
 _INTENT_FIELDS = {
-    "kind", "schema_version", "protocol_id", "claim_revision_id", "scope",
-    "bindings", "engine", "state_boundary", "flags",
+    "kind",
+    "schema_version",
+    "protocol_id",
+    "claim_revision_id",
+    "scope",
+    "bindings",
+    "engine",
+    "state_boundary",
+    "flags",
 }
 _INTENT_BINDINGS = {
-    "source_bundle_id", "source_report_id", "source_run_id", "source_finding_protocol_id",
-    "preparation_id", "recipe_id", "materialization_sha256", "prefix_context_id",
-    "normalized_sha256", "replay_spec_id", "candidate_scenario_id",
+    "source_bundle_id",
+    "source_report_id",
+    "source_run_id",
+    "source_finding_protocol_id",
+    "preparation_id",
+    "recipe_id",
+    "materialization_sha256",
+    "prefix_context_id",
+    "normalized_sha256",
+    "replay_spec_id",
+    "candidate_scenario_id",
     "preparation_manifest_sha256",
 }
 _RECEIPT_FIELDS = {
-    "kind", "schema_version", "attempt", "protocol_id", "claim_revision_id", "scope",
-    "intent", "execution_status", "bindings",
+    "kind",
+    "schema_version",
+    "attempt",
+    "protocol_id",
+    "claim_revision_id",
+    "scope",
+    "intent",
+    "execution_status",
+    "bindings",
 }
 type Row = dict[str, object]
 
@@ -96,7 +116,10 @@ def _markers(document: Row, kind: str) -> None:
 
 
 def _checked_materialization(materialized: MaterializedReduction) -> MaterializedReduction:
-    _require(type(materialized) is MaterializedReduction, "Reduction intent needs an actual materialization")
+    _require(
+        type(materialized) is MaterializedReduction,
+        "Reduction intent needs an actual materialization",
+    )
     rebuilt = materialize_reduction(materialized.recipe, source=materialized.source)
     _require(
         rebuilt.canonical_bytes == materialized.canonical_bytes
@@ -121,14 +144,18 @@ def _intent_document(materialized: MaterializedReduction) -> Row:
     )
     preparation_id = digest(manifest)
     return {
-        "kind": "reduction_execution_intent_v1", "schema_version": 1,
-        "protocol_id": protocol.protocol_id, "claim_revision_id": protocol.claim_revision_id,
+        "kind": "reduction_execution_intent_v1",
+        "schema_version": 1,
+        "protocol_id": protocol.protocol_id,
+        "claim_revision_id": protocol.claim_revision_id,
         "scope": dict(REDUCTION_SCOPE),
         "bindings": {
-            "source_bundle_id": source["bundle_id"], "source_report_id": source["report_id"],
+            "source_bundle_id": source["bundle_id"],
+            "source_report_id": source["report_id"],
             "source_run_id": source["source_run_id"],
             "source_finding_protocol_id": source["finding_protocol_id"],
-            "preparation_id": preparation_id, "recipe_id": materialized.recipe.recipe_id,
+            "preparation_id": preparation_id,
+            "recipe_id": materialized.recipe.recipe_id,
             "materialization_sha256": digest(materialized.canonical_bytes),
             "prefix_context_id": descriptor["prefix_context_id"],
             "normalized_sha256": digest(materialized.replay_input.normalized_bytes),
@@ -136,24 +163,41 @@ def _intent_document(materialized: MaterializedReduction) -> Row:
             "candidate_scenario_id": candidate["scenario_id"],
             "preparation_manifest_sha256": preparation_id,
         },
-        "engine": protocol.document["engine"], "state_boundary": STATE_BOUNDARY,
+        "engine": protocol.document["engine"],
+        "state_boundary": STATE_BOUNDARY,
         "flags": dict(INTENT_FLAGS),
     }
 
 
 def _validate_intent(raw: bytes) -> Row:
-    document = _exact(parse(raw, limit=MAX_REDUCTION_RECORD_BYTES), _INTENT_FIELDS, "Reduction intent")
+    document = _exact(
+        parse(raw, limit=MAX_REDUCTION_RECORD_BYTES), _INTENT_FIELDS, "Reduction intent"
+    )
     _markers(document, "reduction_execution_intent_v1")
     identity(document["protocol_id"])
     identity(document["claim_revision_id"])
     bindings = _exact(document["bindings"], _INTENT_BINDINGS, "Reduction intent bindings")
     for value in bindings.values():
         identity(value)
-    _same(bindings["preparation_id"], bindings["preparation_manifest_sha256"], "Preparation manifest identity differs")
-    _same(document["scope"], dict(REDUCTION_SCOPE), "Reduction intent cannot extend source authority")
-    _same(document["flags"], dict(INTENT_FLAGS), "Intent cannot assert a completed execution or state audit")
+    _same(
+        bindings["preparation_id"],
+        bindings["preparation_manifest_sha256"],
+        "Preparation manifest identity differs",
+    )
+    _same(
+        document["scope"], dict(REDUCTION_SCOPE), "Reduction intent cannot extend source authority"
+    )
+    _same(
+        document["flags"],
+        dict(INTENT_FLAGS),
+        "Intent cannot assert a completed execution or state audit",
+    )
     _same(document["state_boundary"], STATE_BOUNDARY, "Unsupported reduction state boundary")
-    _same(document["engine"], {"id": ENGINE_ID, "version": ENGINE_VERSION, "semantic_id": ENGINE_SEMANTIC_ID}, "Reduction engine differs from the supported original profile")
+    _same(
+        document["engine"],
+        {"id": ENGINE_ID, "version": ENGINE_VERSION, "semantic_id": ENGINE_SEMANTIC_ID},
+        "Reduction engine differs from the supported original profile",
+    )
     return document
 
 
@@ -164,7 +208,10 @@ class ReductionExecutionIntent:
 
     def __post_init__(self) -> None:
         _validate_intent(self.canonical_bytes)
-        _require(identity(self.intent_id) == digest(self.canonical_bytes), "Reduction intent identity differs")
+        _require(
+            identity(self.intent_id) == digest(self.canonical_bytes),
+            "Reduction intent identity differs",
+        )
 
     @property
     def document(self) -> Row:
@@ -192,28 +239,49 @@ class ReductionStateAudit:
     def __post_init__(self) -> None:
         try:
             materialized = _checked_materialization(self.materialized)
-            _require(type(self.result) is ReplayResult, "Reduction audit needs an actual replay result")
+            _require(
+                type(self.result) is ReplayResult, "Reduction audit needs an actual replay result"
+            )
             result = ReplayResult(self.result.canonical_bytes)
             raw_result = result.document
-            _require(raw_result["execution_status"] in ("completed", "incomplete"), "Failed replay cannot issue a successful reduction state audit")
+            _require(
+                raw_result["execution_status"] in ("completed", "incomplete"),
+                "Failed replay cannot issue a successful reduction state audit",
+            )
             completeness = cast("Row", raw_result["completeness"])
             count = len(materialized.prepared.events)
-            _same([completeness["input_records"], completeness["processed_records"]], [count, count], "State audit requires every retained prefix event to be processed")
+            _same(
+                [completeness["input_records"], completeness["processed_records"]],
+                [count, count],
+                "State audit requires every retained prefix event to be processed",
+            )
             intent = load_reduction_intent(canonical(_intent_document(materialized)))
-            _same(raw_result["engine"], intent.document["engine"], "Reduction result engine differs from original owner")
+            _same(
+                raw_result["engine"],
+                intent.document["engine"],
+                "Reduction result engine differs from original owner",
+            )
             evaluation = evaluate_replay(materialized.replay_input, result)
             accounts = cast("list[Row]", raw_result["account_trace"])
-            _require(bool(accounts) and accounts[0]["kind"] == "initial_account_snapshot" and accounts[-1]["kind"] == "final_account_snapshot", "Reduction state audit lacks actual initial or terminal accounts")
+            _require(
+                bool(accounts)
+                and accounts[0]["kind"] == "initial_account_snapshot"
+                and accounts[-1]["kind"] == "final_account_snapshot",
+                "Reduction state audit lacks actual initial or terminal accounts",
+            )
             descriptor = materialized.document
             retained = cast("Row", descriptor["retained"])
             candidate = cast("Row", descriptor["candidate"])
             bindings = cast("Row", intent.document["bindings"])
             document: Row = {
-                "kind": "reduction_state_audit_v1", "schema_version": 1,
+                "kind": "reduction_state_audit_v1",
+                "schema_version": 1,
                 "protocol_id": intent.document["protocol_id"],
                 "claim_revision_id": intent.document["claim_revision_id"],
-                "intent_id": intent.intent_id, "scope": dict(REDUCTION_SCOPE),
-                "state_boundary": STATE_BOUNDARY, "audit_status": "verified",
+                "intent_id": intent.intent_id,
+                "scope": dict(REDUCTION_SCOPE),
+                "state_boundary": STATE_BOUNDARY,
+                "audit_status": "verified",
                 "execution_status": raw_result["execution_status"],
                 "bindings": {
                     "preparation_id": bindings["preparation_id"],
@@ -228,17 +296,20 @@ class ReductionStateAudit:
                     "retained_event_count": retained["event_count"],
                     "processed_records": completeness["processed_records"],
                     "warmup_event_count": retained["warmup_event_count"],
-                    "origin_ref": retained["origin_ref"], "focus_ref": retained["focus_ref"],
+                    "origin_ref": retained["origin_ref"],
+                    "focus_ref": retained["focus_ref"],
                     "through_ref": retained["through_ref"],
                 },
                 "initial_account": accounts[0],
                 "terminal_state": {
-                    "account": accounts[-1], "open_orders": completeness["open_orders"],
+                    "account": accounts[-1],
+                    "open_orders": completeness["open_orders"],
                     "pending_commands": completeness["pending_commands"],
                     "stop_reason": completeness["stop_reason"],
                 },
                 "cash_lock_verification": "nonnegative_and_total_equals_free_plus_locked_v1",
-                "replay_evaluation": evaluation.document, "flags": dict(STATE_AUDIT_FLAGS),
+                "replay_evaluation": evaluation.document,
+                "flags": dict(STATE_AUDIT_FLAGS),
             }
             raw = canonical(document)
             parse(raw, limit=MAX_REDUCTION_STATE_AUDIT_BYTES)
@@ -246,7 +317,9 @@ class ReductionStateAudit:
             object.__setattr__(self, "result", result)
             object.__setattr__(self, "canonical_bytes", raw)
         except (ValueError, TypeError, KeyError, AttributeError) as error:
-            raise EvidenceValidationError("Cannot audit reduction terminal state: " + str(error)) from error
+            raise EvidenceValidationError(
+                "Cannot audit reduction terminal state: " + str(error)
+            ) from error
 
     @property
     def audit_id(self) -> str:
@@ -258,22 +331,42 @@ class ReductionStateAudit:
 
 
 def _attempt_and_intent(document: Row) -> tuple[AttemptReservation, ReductionExecutionIntent]:
-    _require(isinstance(document["attempt"], dict) and isinstance(document["intent"], dict), "Reduction outcome requires complete reservation and intent objects")
+    _require(
+        isinstance(document["attempt"], dict) and isinstance(document["intent"], dict),
+        "Reduction outcome requires complete reservation and intent objects",
+    )
     raw_attempt = canonical(cast("Row", document["attempt"]))
     reservation = AttemptReservation(digest(raw_attempt), raw_attempt)
     intent = load_reduction_intent(canonical(cast("Row", document["intent"])))
-    _same([document["protocol_id"], intent.document["protocol_id"]], [reservation.protocol_id] * 2, "Reduction outcome belongs to another original owner")
+    _same(
+        [document["protocol_id"], intent.document["protocol_id"]],
+        [reservation.protocol_id] * 2,
+        "Reduction outcome belongs to another original owner",
+    )
     return reservation, intent
 
 
 def _validate_receipt(raw: bytes) -> Row:
-    document = _exact(parse(raw, limit=MAX_REDUCTION_RECORD_BYTES), _RECEIPT_FIELDS, "Reduction run receipt")
+    document = _exact(
+        parse(raw, limit=MAX_REDUCTION_RECORD_BYTES), _RECEIPT_FIELDS, "Reduction run receipt"
+    )
     _markers(document, "reduction_run_receipt_v1")
     _reservation, intent = _attempt_and_intent(document)
-    _same(document["claim_revision_id"], intent.document["claim_revision_id"], "Reduction receipt claim lineage differs")
+    _same(
+        document["claim_revision_id"],
+        intent.document["claim_revision_id"],
+        "Reduction receipt claim lineage differs",
+    )
     _same(document["scope"], intent.document["scope"], "Reduction receipt scope differs")
-    _require(document["execution_status"] in ("completed", "incomplete"), "Reduction receipts require an audited completed or incomplete run")
-    bindings = _exact(document["bindings"], {"replay_result_sha256", "state_audit_sha256"}, "Reduction receipt bindings")
+    _require(
+        document["execution_status"] in ("completed", "incomplete"),
+        "Reduction receipts require an audited completed or incomplete run",
+    )
+    bindings = _exact(
+        document["bindings"],
+        {"replay_result_sha256", "state_audit_sha256"},
+        "Reduction receipt bindings",
+    )
     for value in bindings.values():
         identity(value)
     return document
@@ -286,7 +379,9 @@ class ReductionRunReceipt:
 
     def __post_init__(self) -> None:
         _validate_receipt(self.canonical_bytes)
-        _require(identity(self.run_id) == digest(self.canonical_bytes), "Reduction run identity differs")
+        _require(
+            identity(self.run_id) == digest(self.canonical_bytes), "Reduction run identity differs"
+        )
 
     @property
     def document(self) -> Row:
@@ -307,18 +402,42 @@ def load_reduction_run_receipt(raw: bytes) -> ReductionRunReceipt:
 
 
 def load_reduction_failure(raw: bytes) -> Row:
-    document = _exact(parse(raw, limit=MAX_REDUCTION_RECORD_BYTES), {"kind", "schema_version", "attempt", "protocol_id", "intent", "error"}, "Reduction failure")
+    document = _exact(
+        parse(raw, limit=MAX_REDUCTION_RECORD_BYTES),
+        {"kind", "schema_version", "attempt", "protocol_id", "intent", "error"},
+        "Reduction failure",
+    )
     _markers(document, "reduction_attempt_failure_v1")
     _attempt_and_intent(document)
     error = _exact(document["error"], {"code", "message"}, "Reduction error")
     code, message = error["code"], error["message"]
-    _require(isinstance(code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", code) is not None, "Reduction failure code is not a bounded identifier")
-    _require(isinstance(message, str) and 0 < len(message) <= 4096, "Reduction failure message is empty or oversized")
+    _require(
+        isinstance(code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", code) is not None,
+        "Reduction failure code is not a bounded identifier",
+    )
+    _require(
+        isinstance(message, str) and 0 < len(message) <= 4096,
+        "Reduction failure message is empty or oversized",
+    )
     return document
 
 
-def build_reduction_failure(reservation: AttemptReservation, intent: ReductionExecutionIntent, code: str, message: str) -> bytes:
-    _require(type(reservation) is AttemptReservation and type(intent) is ReductionExecutionIntent, "Reduction failure requires original reservation and immutable intent")
-    raw = canonical({"kind": "reduction_attempt_failure_v1", "schema_version": 1, "attempt": reservation.document, "protocol_id": reservation.protocol_id, "intent": intent.document, "error": {"code": code, "message": message}})
+def build_reduction_failure(
+    reservation: AttemptReservation, intent: ReductionExecutionIntent, code: str, message: str
+) -> bytes:
+    _require(
+        type(reservation) is AttemptReservation and type(intent) is ReductionExecutionIntent,
+        "Reduction failure requires original reservation and immutable intent",
+    )
+    raw = canonical(
+        {
+            "kind": "reduction_attempt_failure_v1",
+            "schema_version": 1,
+            "attempt": reservation.document,
+            "protocol_id": reservation.protocol_id,
+            "intent": intent.document,
+            "error": {"code": code, "message": message},
+        }
+    )
     load_reduction_failure(raw)
     return raw

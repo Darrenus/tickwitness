@@ -13,7 +13,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 _GOLDEN = {
-    "bundle_id": "2261f5c82bf19d3f088ecd64fed131ae71635d686a4a4b1a8e9e6c43c78369",
+    "bundle_id": "2261f5c82bf19d3f088ecd64fed131ae71635d686a4a4a4b1a8e9e6c43c78369",
     "report_id": "398ead2cd2ed7db4f4ba69a1cd3e4dd4acc6ae9d80abd7897307ca94d4af75bb",
 }
 _FLAGS = {
@@ -216,8 +216,15 @@ def _request(focus: int, through: int) -> dict:
 
 
 def _check_inspection(
-    inspected: dict, submitted: dict, prepared: dict, *, slot: int,
-    focus: int, through: int, pending: bool, result: dict,
+    inspected: dict,
+    submitted: dict,
+    prepared: dict,
+    *,
+    slot: int,
+    focus: int,
+    through: int,
+    pending: bool,
+    result: dict,
 ) -> None:
     assert inspected["run_id"] == submitted["run_id"]
     assert inspected["attempt_id"] == submitted["attempt_id"]
@@ -260,7 +267,8 @@ def _check_inspection(
         "warmup_event_count": focus - 1,
         "origin_ref": {"line": 1, "capture_seq": 1, "event_type": "snapshot"},
         "focus_ref": {
-            "line": focus, "capture_seq": focus,
+            "line": focus,
+            "capture_seq": focus,
             "event_type": "delta" if focus == 4 else "trade",
         },
         "through_ref": {"line": through, "capture_seq": through, "event_type": "delta"},
@@ -309,23 +317,34 @@ def _check_inspection(
         assert terminal["account"]["fields"]["orders"][0]["status"] == "CANCELED"
     verified = inspected["verification"]
     for key in (
-        "integrity_verified", "bindings_verified", "source_package_reaudited",
-        "observed_source_prefix_matched", "preparation_recomputed", "state_audit_recomputed",
+        "integrity_verified",
+        "bindings_verified",
+        "source_package_reaudited",
+        "observed_source_prefix_matched",
+        "preparation_recomputed",
+        "state_audit_recomputed",
     ):
         assert verified[key] is True
     for key in (
-        "native_replayed", "attempt_reserved", "checkpoint_resume_verified",
-        "witness_preservation_verified", "full_attempt_history_verified",
-        "global_ledger_authenticity_verified", "source_claim_authority_extended",
+        "native_replayed",
+        "attempt_reserved",
+        "checkpoint_resume_verified",
+        "witness_preservation_verified",
+        "full_attempt_history_verified",
+        "global_ledger_authenticity_verified",
+        "source_claim_authority_extended",
     ):
         assert verified[key] is False
 
 
-def _native_lifecycle(run, helper, examples: Path, root: Path, inputs: Path,
-                      preparations: Path) -> dict:
+def _native_lifecycle(
+    run, helper, examples: Path, root: Path, inputs: Path, preparations: Path
+) -> dict:
     for filename in (
-        "replay-partials.jsonl", "replay-confirmation.jsonl",
-        "stress-assumption-request.json", "search-execution-grid-request.json",
+        "replay-partials.jsonl",
+        "replay-confirmation.jsonl",
+        "stress-assumption-request.json",
+        "search-execution-grid-request.json",
         "search-finding-request.json",
     ):
         shutil.copyfile(examples / filename, inputs / filename)
@@ -333,47 +352,101 @@ def _native_lifecycle(run, helper, examples: Path, root: Path, inputs: Path,
     request["claim"]["title"] = "Synthetic five-slot origin-prefix qualification"
     request["budget"]["max_attempts"] = 5
     (inputs / "live-experiment.json").write_bytes(_canonical(request))
-    (inputs / "live-budget.json").write_bytes(_canonical({
-        "kind": "campaign_budget_request_v1", "schema_version": 1,
-        "max_evaluations": 2, "max_wall_time_ms": 120000,
-        "max_storage_bytes": 512 * 1024 * 1024,
-    }))
+    (inputs / "live-budget.json").write_bytes(
+        _canonical(
+            {
+                "kind": "campaign_budget_request_v1",
+                "schema_version": 1,
+                "max_evaluations": 2,
+                "max_wall_time_ms": 120000,
+                "max_storage_bytes": 512 * 1024 * 1024,
+            }
+        )
+    )
     data, registry, plans, runs, findings = (
         root / name for name in ("data", "registry", "plans", "live-runs", "findings")
     )
     dataset_ids = [
-        run("import-events", filename, "--input-root", str(inputs), "--store", str(data))
-        ["dataset_id"]
+        run("import-events", filename, "--input-root", str(inputs), "--store", str(data))[
+            "dataset_id"
+        ]
         for filename in ("replay-partials.jsonl", "replay-confirmation.jsonl")
     ]
     frozen = run(
-        "freeze-experiment", "live-experiment.json", "--input-root", str(inputs),
-        "--development-dataset", dataset_ids[0], "--confirmation-dataset", dataset_ids[1],
-        "--store", str(data), "--registry", str(registry),
+        "freeze-experiment",
+        "live-experiment.json",
+        "--input-root",
+        str(inputs),
+        "--development-dataset",
+        dataset_ids[0],
+        "--confirmation-dataset",
+        dataset_ids[1],
+        "--store",
+        str(data),
+        "--registry",
+        str(registry),
     )
     plan = run(
-        "freeze-search-plan", frozen["protocol_id"], "stress-assumption-request.json",
-        "search-execution-grid-request.json", "--input-root", str(inputs),
-        "--store", str(data), "--registry", str(registry), "--plans", str(plans),
+        "freeze-search-plan",
+        frozen["protocol_id"],
+        "stress-assumption-request.json",
+        "search-execution-grid-request.json",
+        "--input-root",
+        str(inputs),
+        "--store",
+        str(data),
+        "--registry",
+        str(registry),
+        "--plans",
+        str(plans),
     )
     authority = run(
-        "freeze-search-finding-protocol", plan["plan_id"], "search-finding-request.json",
-        "--input-root", str(inputs), "--plans", str(plans),
-        "--finding-registry", str(findings),
+        "freeze-search-finding-protocol",
+        plan["plan_id"],
+        "search-finding-request.json",
+        "--input-root",
+        str(inputs),
+        "--plans",
+        str(plans),
+        "--finding-registry",
+        str(findings),
     )
     baseline = run(
-        "replay-protocol", frozen["protocol_id"], "--store", str(data),
-        "--registry", str(registry), "--runs", str(runs), producer=True,
+        "replay-protocol",
+        frozen["protocol_id"],
+        "--store",
+        str(data),
+        "--registry",
+        str(registry),
+        "--runs",
+        str(runs),
+        producer=True,
     )
-    common = ("--plans", str(plans), "--store", str(data),
-              "--registry", str(registry), "--runs", str(runs))
+    common = (
+        "--plans",
+        str(plans),
+        "--store",
+        str(data),
+        "--registry",
+        str(registry),
+        "--runs",
+        str(runs),
+    )
     campaign = run(
-        "run-bounded-search-plan", plan["plan_id"], "live-budget.json",
-        "--input-root", str(inputs), *common, producer=True,
+        "run-bounded-search-plan",
+        plan["plan_id"],
+        "live-budget.json",
+        "--input-root",
+        str(inputs),
+        *common,
+        producer=True,
     )
     finding = run(
-        "evaluate-search-findings", authority["protocol_id"], *common,
-        "--finding-registry", str(findings),
+        "evaluate-search-findings",
+        authority["protocol_id"],
+        *common,
+        "--finding-registry",
+        str(findings),
     )
     report = finding["report"]
     assert report["outcome"] == "COUNTEREXAMPLE_FOUND"
@@ -381,9 +454,15 @@ def _native_lifecycle(run, helper, examples: Path, root: Path, inputs: Path,
     assert [row["ordinal"] for row in report["witnesses"]] == [1, 3]
     assert report["coverage"]["audited_ordinals"] == [1, 3]
     source = run(
-        "export-search-evidence", authority["protocol_id"],
-        "--expected-report-id", finding["report_id"], *common,
-        "--finding-registry", str(findings), "--output", str(inputs / "live-source"),
+        "export-search-evidence",
+        authority["protocol_id"],
+        "--expected-report-id",
+        finding["report_id"],
+        *common,
+        "--finding-registry",
+        str(findings),
+        "--output",
+        str(inputs / "live-source"),
     )
     source_before = _tree(inputs / "live-source")
     ledger_before = _tree(runs)
@@ -393,7 +472,9 @@ def _native_lifecycle(run, helper, examples: Path, root: Path, inputs: Path,
     assert [row["attempt_index"] for row in before["slots"]] == [1, 2, 3]
     assert before["slots"][0]["outcome_id"] == baseline["run_id"]
     assert [row["outcome_kind"] for row in before["slots"]] == [
-        "research_run_receipt_v1", "scenario_run_receipt_v1", "scenario_run_receipt_v1"
+        "research_run_receipt_v1",
+        "scenario_run_receipt_v1",
+        "scenario_run_receipt_v1",
     ]
     cases = []
     for name, focus, through, slot, pending in (
@@ -402,48 +483,91 @@ def _native_lifecycle(run, helper, examples: Path, root: Path, inputs: Path,
     ):
         (inputs / (name + ".json")).write_bytes(_canonical(_request(focus, through)))
         prepared = run(
-            "prepare-reduction-input", "live-source", name + ".json",
-            "--input-root", str(inputs), "--expected-bundle-id", source["bundle_id"],
-            "--expected-report-id", source["report_id"],
-            "--output", str(preparations / name),
+            "prepare-reduction-input",
+            "live-source",
+            name + ".json",
+            "--input-root",
+            str(inputs),
+            "--expected-bundle-id",
+            source["bundle_id"],
+            "--expected-report-id",
+            source["report_id"],
+            "--output",
+            str(preparations / name),
         )
         assert _tree(runs) == (ledger_before if not cases else cases[-1]["ledger_tree"])
         submitted = run(
-            "run-reduction-input", str(preparations / name), "--source-evidence",
-            "live-source", "--input-root", str(inputs), "--expected-preparation-id",
-            prepared["preparation_id"], "--runs", str(runs), producer=True,
+            "run-reduction-input",
+            str(preparations / name),
+            "--source-evidence",
+            "live-source",
+            "--input-root",
+            str(inputs),
+            "--expected-preparation-id",
+            prepared["preparation_id"],
+            "--runs",
+            str(runs),
+            producer=True,
         )
         current_before = _tree(runs)
         inspected = run(
-            "inspect-reduction-run", submitted["run_id"], "--source-evidence",
-            "live-source", "--input-root", str(inputs), "--runs", str(runs), guarded=True,
+            "inspect-reduction-run",
+            submitted["run_id"],
+            "--source-evidence",
+            "live-source",
+            "--input-root",
+            str(inputs),
+            "--runs",
+            str(runs),
+            guarded=True,
         )
         raw = helper(
             _READ_ARTIFACT, str(runs), inspected["receipt"]["bindings"]["replay_result_sha256"]
         )
         _check_inspection(
-            inspected, submitted, prepared, slot=slot, focus=focus,
-            through=through, pending=pending, result=raw,
+            inspected,
+            submitted,
+            prepared,
+            slot=slot,
+            focus=focus,
+            through=through,
+            pending=pending,
+            result=raw,
         )
         assert _tree(runs) == current_before
         assert _tree(inputs / "live-source") == source_before
-        cases.append({
-            "name": name, "request": _request(focus, through), "prepared": prepared,
-            "submission": submitted, "inspection": inspected, "result": raw,
-            "ledger_tree": current_before,
-        })
+        cases.append(
+            {
+                "name": name,
+                "request": _request(focus, through),
+                "prepared": prepared,
+                "submission": submitted,
+                "inspection": inspected,
+                "result": raw,
+                "ledger_tree": current_before,
+            }
+        )
     after = helper(_LEDGER_VIEW, str(inputs / "live-source"), str(runs), source["bundle_id"])
     assert [row["attempt_index"] for row in after["slots"]] == [1, 2, 3, 4, 5]
     assert after["slots"][:3] == before["slots"]
-    assert all(after["slots"][index]["outcome_kind"] == "reduction_run_receipt_v1"
-               for index in (3, 4))
+    assert all(
+        after["slots"][index]["outcome_kind"] == "reduction_run_receipt_v1" for index in (3, 4)
+    )
     assert all(_tree(runs).get(path) == digest for path, digest in ledger_before.items())
     exhausted_before = _tree(runs)
     exhausted = run(
-        "run-reduction-input", str(preparations / "settled-cancel"),
-        "--source-evidence", "live-source", "--input-root", str(inputs),
-        "--expected-preparation-id", cases[1]["prepared"]["preparation_id"],
-        "--runs", str(runs), expected=8, exhaustion=True,
+        "run-reduction-input",
+        str(preparations / "settled-cancel"),
+        "--source-evidence",
+        "live-source",
+        "--input-root",
+        str(inputs),
+        "--expected-preparation-id",
+        cases[1]["prepared"]["preparation_id"],
+        "--runs",
+        str(runs),
+        expected=8,
+        exhaustion=True,
     )
     assert exhausted["error"]["code"] == "attempt_budget_exhausted"
     assert _tree(runs) == exhausted_before
@@ -464,16 +588,31 @@ def _native_lifecycle(run, helper, examples: Path, root: Path, inputs: Path,
     )
     attack_before = _tree(altered)
     attack = run(
-        "inspect-reduction-run", altered_run, "--source-evidence", "live-source",
-        "--input-root", str(inputs), "--runs", str(altered), expected=2, guarded=True,
+        "inspect-reduction-run",
+        altered_run,
+        "--source-evidence",
+        "live-source",
+        "--input-root",
+        str(inputs),
+        "--runs",
+        str(altered),
+        expected=2,
+        guarded=True,
     )
     assert attack["error"]["code"] == "invalid_research_evidence"
     assert _tree(altered) == attack_before and _tree(runs) == exhausted_before
     return {
-        "frozen": frozen, "plan": plan, "campaign": campaign, "baseline": baseline,
-        "finding": finding, "source": source, "before": before, "after": after,
-        "cases": [{key: value for key, value in case.items() if key != "ledger_tree"}
-                  for case in cases],
+        "frozen": frozen,
+        "plan": plan,
+        "campaign": campaign,
+        "baseline": baseline,
+        "finding": finding,
+        "source": source,
+        "before": before,
+        "after": after,
+        "cases": [
+            {key: value for key, value in case.items() if key != "ledger_tree"} for case in cases
+        ],
         "budget_exhaustion": exhausted,
         "rehashed_state_claim_rejected": {"run_id": altered_run, "error": attack},
         "source_bundle_unchanged": _tree(inputs / "live-source") == source_before,
@@ -505,13 +644,21 @@ def main() -> None:
             executable: str, entry: list[str], command: tuple[str, ...], *, expected: int = 0
         ) -> dict:
             completed = subprocess.run(
-                [executable, "-I", *entry, *command], cwd=cwd, capture_output=True,
-                text=True, check=False, timeout=240,
+                [executable, "-I", *entry, *command],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=240,
             )
             record = {
-                "executable": executable, "entry": entry, "command": list(command),
-                "expected_exit_code": expected, "exit_code": completed.returncode,
-                "stdout": completed.stdout, "stderr": completed.stderr,
+                "executable": executable,
+                "entry": entry,
+                "command": list(command),
+                "expected_exit_code": expected,
+                "exit_code": completed.returncode,
+                "stdout": completed.stdout,
+                "stderr": completed.stderr,
             }
             calls.append(record)
             (transcripts / f"{len(calls):04d}.json").write_bytes(_canonical(record))
@@ -525,8 +672,11 @@ def main() -> None:
             return json.loads(payload)
 
         def run(
-            *command: str, expected: int = 0, producer: bool = False,
-            guarded: bool = False, exhaustion: bool = False,
+            *command: str,
+            expected: int = 0,
+            producer: bool = False,
+            guarded: bool = False,
+            exhaustion: bool = False,
         ) -> dict:
             if guarded or exhaustion:
                 entry = ["-c", _GUARD + "\nraise SystemExit(main(sys.argv[1:]))\n"]
@@ -552,14 +702,15 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
 """
         identities = {}
         for name, requested in (
-            ("producer", arguments.python), ("verifier", arguments.verifier_python)
+            ("producer", arguments.python),
+            ("verifier", arguments.verifier_python),
         ):
             runtime = invoke(str(requested.absolute()), ["-c", runtime_query], ())
             expected_prefix = str(requested.absolute().parent.parent.resolve())
             assert str(Path(runtime["prefix"]).resolve()) == expected_prefix, runtime
-            assert (
-                Path(runtime["prefix"]).resolve() != Path(runtime["base_prefix"]).resolve()
-            ), runtime
+            assert Path(runtime["prefix"]).resolve() != Path(runtime["base_prefix"]).resolve(), (
+                runtime
+            )
             identities[name] = {
                 "requested_executable": str(requested.absolute()),
                 "requested_venv_prefix_resolved": expected_prefix,
@@ -576,13 +727,22 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
         for command in ("run-reduction-input", "inspect-reduction-run"):
             positional = (
                 (str(root / "missing-preparation"), "--expected-preparation-id", "invalid")
-                if command == "run-reduction-input" else ("invalid",)
+                if command == "run-reduction-input"
+                else ("invalid",)
             )
             rejected = run(
-                command, *positional, "--source-evidence", "missing-source",
-                "--input-root", str(root / "missing-input-root"),
-                "--runs", str(root / "missing-runs"), "--split", "confirmation",
-                expected=5, guarded=True,
+                command,
+                *positional,
+                "--source-evidence",
+                "missing-source",
+                "--input-root",
+                str(root / "missing-input-root"),
+                "--runs",
+                str(root / "missing-runs"),
+                "--split",
+                "confirmation",
+                expected=5,
+                guarded=True,
             )
             assert rejected["error"]["code"] == "confirmation_access_denied"
             errors.append({"name": command + "-confirmation", "error": rejected})
@@ -591,30 +751,52 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
         shutil.copytree(examples / "alpha" / "counterexample", inputs / "old-exhausted-source")
         (inputs / "old-prefix.json").write_bytes(_canonical(_request(4, 4)))
         old_prepared = run(
-            "prepare-reduction-input", "old-exhausted-source", "old-prefix.json",
-            "--input-root", str(inputs), "--expected-bundle-id", _GOLDEN["bundle_id"],
-            "--expected-report-id", _GOLDEN["report_id"],
-            "--output", str(preparations / "old-prefix"),
+            "prepare-reduction-input",
+            "old-exhausted-source",
+            "old-prefix.json",
+            "--input-root",
+            str(inputs),
+            "--expected-bundle-id",
+            _GOLDEN["bundle_id"],
+            "--expected-report-id",
+            _GOLDEN["report_id"],
+            "--output",
+            str(preparations / "old-prefix"),
         )
         empty = root / "empty-live-ledger"
         invoke(
             verifier,
-            ["-c", "import json,sys; from pathlib import Path; "
-             "from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger; "
-             "LocalAttemptLedger(Path(sys.argv[1])); print(json.dumps({'created_empty':True}))"],
+            [
+                "-c",
+                "import json,sys; from pathlib import Path; "
+                "from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger; "
+                "LocalAttemptLedger(Path(sys.argv[1])); print(json.dumps({'created_empty':True}))",
+            ],
             (str(empty),),
         )
         empty_before = _tree(empty)
         for name, ledger, expected, code in (
-            ("old-source-missing-ledger", root / "never-created-ledger", 4,
-             "research_evidence_not_found"),
+            (
+                "old-source-missing-ledger",
+                root / "never-created-ledger",
+                4,
+                "research_evidence_not_found",
+            ),
             ("old-source-empty-ledger", empty, 2, "invalid_research_evidence"),
         ):
             rejected = run(
-                "run-reduction-input", str(preparations / "old-prefix"),
-                "--source-evidence", "old-exhausted-source", "--input-root", str(inputs),
-                "--expected-preparation-id", old_prepared["preparation_id"],
-                "--runs", str(ledger), expected=expected, guarded=True,
+                "run-reduction-input",
+                str(preparations / "old-prefix"),
+                "--source-evidence",
+                "old-exhausted-source",
+                "--input-root",
+                str(inputs),
+                "--expected-preparation-id",
+                old_prepared["preparation_id"],
+                "--runs",
+                str(ledger),
+                expected=expected,
+                guarded=True,
             )
             assert rejected["error"]["code"] == code
             errors.append({"name": name, "error": rejected})
@@ -635,7 +817,8 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
             "old_source_and_empty_ledger_unchanged": _tree(empty) == empty_before,
             "lifecycle": lifecycle,
             "readonly_inspection_guard": {
-                "core_only": True, "native_and_workers_forbidden": True,
+                "core_only": True,
+                "native_and_workers_forbidden": True,
                 "reservation_and_publication_forbidden": True,
                 "old_dataset_and_registry_access_forbidden": True,
                 "network_and_sqlite_forbidden": True,

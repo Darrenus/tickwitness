@@ -31,8 +31,11 @@ def context():
         source,
         canonical(
             {
-                "kind": "reduction_request_v1", "schema_version": 1, "witness_ordinal": 3,
-                "focus_from_capture_seq": 1, "through_capture_seq": 7,
+                "kind": "reduction_request_v1",
+                "schema_version": 1,
+                "witness_ordinal": 3,
+                "focus_from_capture_seq": 1,
+                "through_capture_seq": 7,
                 "additional_delay_ns": 2_000_000_000,
             }
         ),
@@ -56,23 +59,38 @@ def test_reduction_intent_and_outcome_roundtrip_in_original_protocol_slots(tmp_p
     ledger = LocalAttemptLedger(tmp_path)
     reservation = ledger.reserve(owner)
     intent = build_reduction_intent(prepared.materialization)
-    objects = (prepared.recipe.canonical_bytes, prepared.materialization.canonical_bytes,
-               prepared.artifacts["normalized"])
-    assert ledger.bind_intent(reservation, intent.canonical_bytes, artifacts=objects) == intent.intent_id
+    objects = (
+        prepared.recipe.canonical_bytes,
+        prepared.materialization.canonical_bytes,
+        prepared.artifacts["normalized"],
+    )
+    assert (
+        ledger.bind_intent(reservation, intent.canonical_bytes, artifacts=objects)
+        == intent.intent_id
+    )
     assert ledger.get_intent(reservation.attempt_id) == intent.canonical_bytes
     if kind == "success":
         audit = ReductionStateAudit(prepared.materialization, result)
         receipt = build_reduction_run_receipt(
             {
-                "kind": "reduction_run_receipt_v1", "schema_version": 1,
-                "attempt": reservation.document, "protocol_id": owner.protocol_id,
-                "claim_revision_id": owner.claim_revision_id, "scope": intent.document["scope"],
-                "intent": intent.document, "execution_status": result.document["execution_status"],
-                "bindings": {"replay_result_sha256": digest(result.canonical_bytes),
-                             "state_audit_sha256": audit.audit_id},
+                "kind": "reduction_run_receipt_v1",
+                "schema_version": 1,
+                "attempt": reservation.document,
+                "protocol_id": owner.protocol_id,
+                "claim_revision_id": owner.claim_revision_id,
+                "scope": intent.document["scope"],
+                "intent": intent.document,
+                "execution_status": result.document["execution_status"],
+                "bindings": {
+                    "replay_result_sha256": digest(result.canonical_bytes),
+                    "state_audit_sha256": audit.audit_id,
+                },
             }
         )
-        outcome, artifacts = receipt.canonical_bytes, (result.canonical_bytes, audit.canonical_bytes)
+        outcome, artifacts = (
+            receipt.canonical_bytes,
+            (result.canonical_bytes, audit.canonical_bytes),
+        )
         assert load_reduction_run_receipt(outcome).intent_id == intent.intent_id
     else:
         outcome = build_reduction_failure(reservation, intent, "native_timeout", "Observed timeout")
@@ -132,11 +150,17 @@ def test_baseline_outcome_cannot_finalize_reduction_intent(tmp_path):
     _source, prepared, _result = context()
     ledger = LocalAttemptLedger(tmp_path)
     reservation = ledger.reserve(prepared.materialization.source.validation.protocol)
-    ledger.bind_intent(reservation, build_reduction_intent(prepared.materialization).canonical_bytes)
+    ledger.bind_intent(
+        reservation, build_reduction_intent(prepared.materialization).canonical_bytes
+    )
     baseline_failure = canonical(
-        {"kind": "replay_attempt_failure_v1", "schema_version": 1,
-         "attempt": reservation.document, "protocol_id": reservation.protocol_id,
-         "error": {"code": "native_timeout", "message": "Baseline envelope is wrong"}}
+        {
+            "kind": "replay_attempt_failure_v1",
+            "schema_version": 1,
+            "attempt": reservation.document,
+            "protocol_id": reservation.protocol_id,
+            "error": {"code": "native_timeout", "message": "Baseline envelope is wrong"},
+        }
     )
     with pytest.raises(AttemptLedgerError, match="cannot publish baseline"):
         ledger.publish(reservation, baseline_failure)

@@ -101,8 +101,10 @@ def prepared_case(*, pending=False):
             native_time_ns=first_fill["native_time_ns"],
         )
         cancel["fields"].update(
-            action="cancel", cause="first_partial_fill",
-            command_id="command-1", decision_ref="decision-1",
+            action="cancel",
+            cause="first_partial_fill",
+            command_id="command-1",
+            decision_ref="decision-1",
         )
         document["decision_trace"].append(cancel)
         first_order_fill = next(
@@ -132,14 +134,23 @@ def prepared_case(*, pending=False):
             ],
         )
     source = ReductionSource(
-        "a" * 64, "b" * 64, "c" * 64, "d" * 64,
-        digest(fixture.result.canonical_bytes), 3, validation,
+        "a" * 64,
+        "b" * 64,
+        "c" * 64,
+        "d" * 64,
+        digest(fixture.result.canonical_bytes),
+        3,
+        validation,
     )
     recipe = build_reduction_recipe(
         canonical(
             {
-                "kind": "reduction_request_v1", "schema_version": 1, "witness_ordinal": 3,
-                "focus_from_capture_seq": 4, "through_capture_seq": 7, "additional_delay_ns": 0,
+                "kind": "reduction_request_v1",
+                "schema_version": 1,
+                "witness_ordinal": 3,
+                "focus_from_capture_seq": 4,
+                "through_capture_seq": 7,
+                "additional_delay_ns": 0,
             }
         ),
         source=source,
@@ -161,11 +172,13 @@ def receipt_document(fixture):
     intent = build_reduction_intent(fixture.materialized)
     audit = ReductionStateAudit(fixture.materialized, fixture.result)
     return {
-        "kind": "reduction_run_receipt_v1", "schema_version": 1,
+        "kind": "reduction_run_receipt_v1",
+        "schema_version": 1,
         "attempt": fixture.reservation.document,
         "protocol_id": intent.document["protocol_id"],
         "claim_revision_id": intent.document["claim_revision_id"],
-        "scope": dict(REDUCTION_SCOPE), "intent": intent.document,
+        "scope": dict(REDUCTION_SCOPE),
+        "intent": intent.document,
         "execution_status": fixture.result.document["execution_status"],
         "bindings": {
             "replay_result_sha256": digest(fixture.result.canonical_bytes),
@@ -196,8 +209,15 @@ def test_full_prefix_account_order_and_pending_projections_are_independently_aud
     assert document["state_boundary"] == STATE_BOUNDARY
     assert document["initial_account"] == result.document["account_trace"][0]
     assert document["terminal_state"]["account"] == result.document["account_trace"][-1]
-    assert document["terminal_state"]["pending_commands"] == result.document["completeness"]["pending_commands"]
-    assert document["coverage"]["processed_records"] == document["coverage"]["retained_event_count"] == 7
+    assert (
+        document["terminal_state"]["pending_commands"]
+        == result.document["completeness"]["pending_commands"]
+    )
+    assert (
+        document["coverage"]["processed_records"]
+        == document["coverage"]["retained_event_count"]
+        == 7
+    )
     assert document["coverage"]["warmup_event_count"] == 3
     assert document["flags"] == dict(STATE_AUDIT_FLAGS)
     assert document["replay_evaluation"]["audit_status"] == "verified"
@@ -238,7 +258,8 @@ def test_rehashed_state_or_trace_tampering_cannot_pass_audit(attack):
                 {
                     "command_id": "command-0",
                     "order_id": final["orders"][0]["order_id"],
-                    "command_type": "submit", "decision_ref": "decision-0",
+                    "command_type": "submit",
+                    "decision_ref": "decision-0",
                     "source_ref": document["decision_trace"][0]["source_ref"],
                 }
             ],
@@ -249,27 +270,36 @@ def test_rehashed_state_or_trace_tampering_cannot_pass_audit(attack):
         ReductionStateAudit(fixture.materialized, build_replay_result(document))
 
 
-def test_failed_or_partially_processed_result_cannot_claim_full_origin_replay():
+def test_failed_or_shorter_result_cannot_claim_full_origin_replay():
     fixture = prepared_case()
     failed = fixture.result.document
     failed["execution_status"] = "failed"
     failed["completeness"]["stop_reason"] = "engine_error"
+    failed_result = build_replay_result(failed)
     with pytest.raises(EvidenceValidationError, match="Failed replay"):
-        ReductionStateAudit(fixture.materialized, build_replay_result(failed))
+        ReductionStateAudit(fixture.materialized, failed_result)
     partial = fixture.result.document
     partial["execution_status"] = "incomplete"
+    # ReplayResult requires all declared inputs to be processed for incomplete
+    # EOF. A structurally valid shorter result still cannot satisfy our target N.
     partial["completeness"].update(
+        input_records=6,
         processed_records=6,
         stop_reason="input_exhausted_with_open_orders",
         open_orders=[{"order_id": "partial-invalid", "status": "ACCEPTED"}],
     )
     for channel in ("input_trace", "decision_trace", "order_trace", "fill_trace", "account_trace"):
-        rows = [row for row in partial[channel] if row["source_ref"] is None or row["source_ref"]["line"] <= 6]
+        rows = [
+            row
+            for row in partial[channel]
+            if row["source_ref"] is None or row["source_ref"]["line"] <= 6
+        ]
         for ordinal, row in enumerate(rows):
             row["ordinal"] = ordinal
         partial[channel] = rows
+    partial_result = build_replay_result(partial)
     with pytest.raises(EvidenceValidationError, match="every retained prefix"):
-        ReductionStateAudit(fixture.materialized, build_replay_result(partial))
+        ReductionStateAudit(fixture.materialized, partial_result)
 
 
 def test_fake_completion_cannot_erase_a_real_outstanding_cancel():
@@ -307,7 +337,9 @@ def test_record_markers_flags_and_original_owner_are_strict(target):
 def test_failure_preserves_actual_reservation_intent_and_multiline_error():
     fixture = prepared_case()
     intent = build_reduction_intent(fixture.materialized)
-    raw = build_reduction_failure(fixture.reservation, intent, "engine_timeout", "timed out\nstate unconfirmed")
+    raw = build_reduction_failure(
+        fixture.reservation, intent, "engine_timeout", "timed out\nstate unconfirmed"
+    )
     failure = load_reduction_failure(raw)
     assert failure["attempt"] == fixture.reservation.document
     assert failure["intent"] == intent.document
