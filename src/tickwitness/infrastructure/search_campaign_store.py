@@ -62,6 +62,10 @@ class LocalSearchCampaignStore:
     but are never interpreted as committed campaign evidence.
     """
 
+    _namespace_name = "search-campaigns"
+    _extra_record_names: frozenset[str] = frozenset()
+    _result_limit = _RESULT_LIMIT
+
     def __init__(self, root: Path, *, create: bool = False) -> None:
         if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
             raise SearchCampaignStoreError("Campaign storage requires POSIX no-follow operations")
@@ -102,10 +106,10 @@ class LocalSearchCampaignStore:
         self._put(plan_id, "links", _ordinal(ordinal), raw, _RECORD_LIMIT)
 
     def get_result(self, plan_id: str, ordinal: int) -> bytes | None:
-        return self._get(plan_id, "results", _ordinal(ordinal), _RESULT_LIMIT)
+        return self._get(plan_id, "results", _ordinal(ordinal), self._result_limit)
 
     def write_result(self, plan_id: str, ordinal: int, raw: bytes) -> None:
-        self._put(plan_id, "results", _ordinal(ordinal), raw, _RESULT_LIMIT)
+        self._put(plan_id, "results", _ordinal(ordinal), raw, self._result_limit)
 
     def get_stop(self, plan_id: str) -> bytes | None:
         return self._get(plan_id, None, "stop.json", _RECORD_LIMIT)
@@ -161,7 +165,7 @@ class LocalSearchCampaignStore:
                 except FileNotFoundError:
                     return inventory
                 names = os.listdir(directory)
-                if len(names) > 2 * _MAX_ORDINAL + 6:
+                if len(names) > 2 * _MAX_ORDINAL + 6 + len(self._extra_record_names):
                     raise SearchCampaignStoreError("Campaign directory contains too many files")
                 for name in names:
                     if name in ("dispatches", "links", "results"):
@@ -170,7 +174,7 @@ class LocalSearchCampaignStore:
                             children = os.listdir(child)
                             if len(children) > 2 * _MAX_ORDINAL:
                                 raise SearchCampaignStoreError("Candidate directory is oversized")
-                            limit = _RESULT_LIMIT if name == "results" else _RECORD_LIMIT
+                            limit = self._result_limit if name == "results" else _RECORD_LIMIT
                             ordinals: list[int] = []
                             for filename in children:
                                 match = _ENTRY.fullmatch(filename)
@@ -189,8 +193,10 @@ class LocalSearchCampaignStore:
                                 if match is not None:
                                     ordinals.append(int(match.group(1)))
                             inventory[name] = tuple(sorted(ordinals))
-                    elif name in ("campaign.json", "stop.json", ".lock") or _PENDING.fullmatch(
-                        name
+                    elif (
+                        name in ("campaign.json", "stop.json", ".lock")
+                        or name in self._extra_record_names
+                        or _PENDING.fullmatch(name)
                     ):
                         limit = (
                             _HEADER_LIMIT
@@ -252,7 +258,7 @@ class LocalSearchCampaignStore:
         with ExitStack() as stack:
             root = os.open(self._root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
             stack.callback(os.close, root)
-            yield self._directory(stack, root, "search-campaigns", create)
+            yield self._directory(stack, root, self._namespace_name, create)
 
     @contextmanager
     def _campaign(self, plan_id: str, *, create: bool = False) -> Iterator[int]:

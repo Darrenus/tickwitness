@@ -1,14 +1,14 @@
 # Sprint 9 合法反例缩减状态
 
-更新：2026-10-30（Asia/Singapore）。Owner 已合并 [PR #97](https://github.com/Darrenus/tickwitness/pull/97)，接受merge为 `4e3691cccbe28f76b777814d1bac297082ed13c1`，#96兼容性修复接受后进入S09-01b。S09-01a已由[PR #95](https://github.com/Darrenus/tickwitness/pull/95) merge `a2c711861d1d776c78b4b5f5471f8afa388d390f`接受；其功能基线及历史run保持原值。[S08-03 / #24](https://github.com/Darrenus/tickwitness/issues/24) 真实外部复验仍0／PENDING，owner请求的AI自动化回传另记技术证据。原PR94转交归档与pin不变，无新release。
+更新：2026-11-01（Asia/Singapore）。Owner已合并[PR #98](https://github.com/Darrenus/tickwitness/pull/98)，接受merge为 `3577be7b07fba10a7da70cc95c2d3e887fcb06fd`；S09-01a／01b均已接受，#25已关闭，进入S09-02。此前#97兼容性修复接受merge `4e3691cccbe28f76b777814d1bac297082ed13c1`与#95准备接受merge `a2c711861d1d776c78b4b5f5471f8afa388d390f`及历史run保留。[S08-03 / #24](https://github.com/Darrenus/tickwitness/issues/24)真实外部复验仍0／PENDING，owner请求的AI自动化回传另记技术证据。原PR94转交归档与pin不变，无新release。
 
 ## 切片与验收门
 
 | 故事／切片 | 范围 | 状态 |
 | --- | --- | --- |
 | S09-01a / #25 | 合法缩减recipe、完整必要前缀输入准备与独立重建 | Owner已合并 [PR #95](https://github.com/Darrenus/tickwitness/pull/95) 接受软件 |
-| S09-01b / #25 | 在原协议共同预算下真实从头执行前缀，持久关联intent／attempt／outcome，审计账户／订单／显式在途状态 | 13项远端检查通过，[PR #98](https://github.com/Darrenus/tickwitness/pull/98)待owner接受，#25继续打开 |
-| S09-02 / #26 | 预算内自动局部缩减、取消、反例保持判定 | Planned，不能以准备好输入代替实际反例保持 |
+| S09-01b / #25 | 在原协议共同预算下真实从头执行前缀，持久关联intent／attempt／outcome，审计账户／订单／显式在途状态 | Owner已合并[PR #98](https://github.com/Darrenus/tickwitness/pull/98)接受，#25已关闭 |
+| S09-02 / #26 | 预算内自动局部缩减、候选边界取消、原false数值见证保持判定 | 实现中；远端验收待完成，不能以准备好输入代替实际保持 |
 | S09-03 / #27 | 原／缩减证据对比、实际首次分歧定位 | Planned，不能将输入字节差异提升为业务因果 |
 
 原 [Sprint backlog](sprint-backlog.md#s9--合法反例缩减) 的14h／12h／8h专项估算和持续质量容量保持；01a／01b是同一14h故事的验收拆分，没有新增实际工时或重估容量。没有完整运行态checkpoint的现引擎不能用盘口快照代替策略、账户、队列和在途命令。
@@ -55,7 +55,7 @@ Ubuntu 24.04／macOS 15 × Python 3.12／3.13／3.14 六组合各 **3092 passed 
 
 初轮远端发现格式／导入排序问题，应用远端生成补丁；CLI测试夹具抄写bundle pin漏了两位，按实际manifest SHA修正后原严格断言通过，没有放宽身份校验。并行交叉审阅与下载产物审计均为AI辅助，不冒充外部用户、人类领域接受或完整历史认证。
 
-[PR #95](https://github.com/Darrenus/tickwitness/pull/95) 仅交付S09-01a软件，现已由owner合并接受。#25因01b实际执行与状态验收未实现而继续打开；S09-02／03独立推进。#24继续打开，真实外部复验0／PENDING，现有PR94转交归档和pin不变；无新release、采用、访谈、实际工时或研究收益记录。
+[PR #95](https://github.com/Darrenus/tickwitness/pull/95)仅交付S09-01a软件并由owner合并接受；当时#25因01b缺口继续打开，现已随owner合并#98接受01b而关闭。S09-02／03独立推进。#24继续打开，真实外部复验0／PENDING，现有PR94转交归档和pin不变；无新release、采用、访谈、实际工时或研究收益记录。
 
 ## S09-01b 实现与验收门
 
@@ -69,7 +69,7 @@ Ubuntu 24.04／macOS 15 × Python 3.12／3.13／3.14 六组合各 **3092 passed 
 
 远端验收的新qualification协议从一开始冻结5槽：baseline1、两个实际search候选2／3，导出不可变source快照后再准备并执行两段前缀4／5，之后预算拒绝不构造引擎。旧3槽已耗尽golden保持原样。短prefix实际观察部分成交和取消在途的INCOMPLETE；较长prefix在cap5先发生第二次成交，随后显式OrderCancelRejected才清除在途取消，最终FILLED／pending为空。原固定语义按输入步先撮合再处理到期命令，不能从名义due time推断撤单必定先于下一条trade；精确oracle按该既有资格语义与实际轨迹修正，生产引擎不变。core-only安装只验证拒绝／审计边界，actual-native由Ubuntu、macOS与实际sdist安装链路单独执行，不能把fake port标成native。
 
-实现和功能head远端验收已完成，owner接受待定；#25保持打开，S09-02／03另验，外部真人0／PENDING，无新release或研究收益声明。
+实现和远端验收已完成，现已由owner合并#98接受，#25已关闭；S09-02／03另验，外部真人0／PENDING，无新release或研究收益声明。
 
 ## S09-01b 远端验收记录
 
@@ -100,4 +100,16 @@ Ubuntu实际原protocol ID为 `b632cb5786b96056fb1ff5f574808a5d18c266ca31820f205
 
 远端迭代暴露并修正了pin抄写、结构无效的负例夹具、open_orders与account订单字段位置，以及B被预设为撤单成功的错误oracle。B修正依据既有时钟资格与两平台实际轨迹：名义due2.5s不是独立推进时钟，cap4仅2.000000001s，下一步cap5 trade先撮合再处理到期撤单。生产引擎与原协议预算均未放宽；严格oracle新增fill-before-rejection与pending清理顺序检查。
 
-[PR #98](https://github.com/Darrenus/tickwitness/pull/98)交付S09-01b软件，待owner审阅接受；#25继续打开。S09-02的自动缩减与反例保持、S09-03对比另验。外部真人复验0／PENDING，AI交叉审阅／CI／owner合并不充当外部真人尝试；原PR94转交归档及pin不变，无新release、实际工时、采用或研究收益记录。
+[PR #98](https://github.com/Darrenus/tickwitness/pull/98)交付S09-01b软件，已由owner在2026-10-30合并接受，merge `3577be7b07fba10a7da70cc95c2d3e887fcb06fd`；#25已关闭。S09-02自动缩减／数值保持与S09-03对比另验。外部真人复验0／PENDING，AI交叉审阅／CI／owner合并不充当外部真人尝试；原PR94转交归档及pin不变，无新release、实际工时、采用或研究收益记录。
+
+## S09-02 实现与验收门
+
+合同见[Reduction Search v1](../contracts/reduction-search-v1.md)，决策见[ADR 0030](../adr/0030-bounded-local-reduction.md)。原source finding只能证明其原冻结eligible集合中的false条件见证，不能授予baseline翻转或新输入量词域权限。本步独立评价原authority复制的numeric criterion在实际合法prefix终点是否仍为false，不修改01a准备和01b执行／state-audit的既有flags。
+
+固定focus，按延迟减半、末尾移到前一真实事件的顺序尝试邻域；每次重新构建完整warmup并从原点真实回放。只有PRESERVED且(retained event count,delay)严格下降才更新best并重启邻域。NOT_PRESERVED与NOT_EVALUABLE分别保留；未知或未执行点不当作true。初始best明确引用SOURCE_WITNESS，既不占新slot，也不算新简化或新native执行。即便检查完当前邻域，也只报告已知保持简化及检查范围，不认证局部／全局最小。
+
+所有执行继续使用原ExecutableProtocol／live ledger。新plan的step与elapsed准入限制只额外收紧，不增加原attempt／events／单次timeout、不重开旧search campaign资源预算。Elapsed和取消都在候选边界检查；不宣称总时间／总storage硬限额或S10强制kill。当前有界attempt可先提交，再停止新dispatch。Dispatch先持久化nonce，随后关联原attempt／intent／outcome和独立assessment；重跑已有execution只读inspect，不续跑、退款、修复或覆盖。晚发布不确定必须可见，之前的best与已提交结果保留。
+
+远端资格将从第一次执行前冻结新的合成protocol criterion lt(-1.5 USD)及原预算11槽；不修改旧golden或真实source条件。Baseline与原search占1..3；pre-start取消占0槽；受控hook在第一次真实native返回后请求取消，占slot4并保留实际结果；正式7次邻域执行占5..11，预期依次NOT_PRESERVED／PRESERVED／NOT_PRESERVED／PRESERVED／NOT_PRESERVED／PRESERVED／NOT_EVALUABLE。最后沿用同原source／ledger的新plan必须自然预算停止、没有slot12或engine构造。以上仍待实际远端验证，不预填通过报告。
+
+Core wheel、Ubuntu／macOS native wheel与实际sdist安装链路分别保存原始journal、CAS、执行／状态／保持判定和transcripts；独立core-only inspector禁止native与预算写入，重算而不信任保存的flags。#26保持打开直到owner接受；S09-03、S10、外部真人PENDING及发行门均另验。
