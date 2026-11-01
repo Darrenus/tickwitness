@@ -58,7 +58,7 @@ def _case(*, comparator="gt", threshold="0", pending=False, variant=None):
         rejected = deepcopy(document["order_trace"][2])
         rejected.update(kind="OrderRejected", ordinal=2)
         rejected["fields"].update(status="REJECTED", reason="declared offline rejection")
-        document["order_trace"] = document["order_trace"][:2] + [rejected]
+        document["order_trace"] = [*document["order_trace"][:2], rejected]
         final = deepcopy(document["account_trace"][-1])
         final["ordinal"] = 1
         final["fields"].update(
@@ -138,9 +138,7 @@ def _case(*, comparator="gt", threshold="0", pending=False, variant=None):
         authority.document["predicate_id"],
         original.materialized.source.source_run_id,
         1,
-        validate_scenario_spec(
-            scenario, assumptions, protocol=protocol, replay_input=replay_input
-        ),
+        validate_scenario_spec(scenario, assumptions, protocol=protocol, replay_input=replay_input),
     )
     recipe = build_reduction_recipe(
         canonical(
@@ -402,9 +400,7 @@ def test_noneligible_source_ordinal_cannot_gain_original_predicate_provenance():
     result["dataset_id"] = materialized.replay_input.dataset_id
     result = build_replay_result(result)
     with pytest.raises(EvidenceValidationError, match="eligible witness"):
-        ReductionPreservationAssessment(
-            fixture.authority, materialized, fixture.receipt, result
-        )
+        ReductionPreservationAssessment(fixture.authority, materialized, fixture.receipt, result)
 
 
 @pytest.mark.parametrize("field", ["authority", "materialized", "receipt", "result"])

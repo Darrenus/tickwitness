@@ -11,6 +11,7 @@ import time
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from functools import partial
 from typing import Protocol, cast
 
 from tickwitness.application.experiments import ProtocolRunError
@@ -34,7 +35,6 @@ from tickwitness.domain.evidence.reduction_records import (
 )
 from tickwitness.domain.evidence.run_records import (
     AttemptReservation,
-    EvidenceValidationError,
     canonical,
     digest,
     identity,
@@ -162,9 +162,7 @@ def _source_and_ledger(
     return snapshot, ledger
 
 
-def _build(
-    source: _Source, request_raw: bytes, bundle_id: str, report_id: str
-) -> _Context:
+def _build(source: _Source, request_raw: bytes, bundle_id: str, report_id: str) -> _Context:
     request = load_reduction_search_request(request_raw)
     receipt = verify_search_package(source, expected_bundle_id=identity(bundle_id))
     _require(receipt["report_id"] == identity(report_id), "Original source report pin differs")
@@ -178,14 +176,19 @@ def _build(
     last = parse(lines[-1], limit=8 * 1024 * 1024)
     full = prepare_reduction_input(
         source,
-        canonical({
-            "kind": "reduction_request_v1", "schema_version": 1,
-            "witness_ordinal": ordinal,
-            "focus_from_capture_seq": request["focus_from_capture_seq"],
-            "through_capture_seq": last["capture_seq"],
-            "additional_delay_ns": rows[0]["delay_ns"],
-        }),
-        expected_bundle_id=bundle_id, expected_report_id=report_id, split="development",
+        canonical(
+            {
+                "kind": "reduction_request_v1",
+                "schema_version": 1,
+                "witness_ordinal": ordinal,
+                "focus_from_capture_seq": request["focus_from_capture_seq"],
+                "through_capture_seq": last["capture_seq"],
+                "additional_delay_ns": rows[0]["delay_ns"],
+            }
+        ),
+        expected_bundle_id=bundle_id,
+        expected_report_id=report_id,
+        split="development",
     )
     plan = build_reduction_search_plan(request_raw, materialization=full.materialization)
     return _Context(source, plan, full, authority)
@@ -201,8 +204,10 @@ def _context(
     document = plan.document
     bindings = cast("Row", document["source"])
     context = _build(
-        source, canonical(cast("Row", document["request"])),
-        cast("str", bindings["bundle_id"]), cast("str", bindings["report_id"]),
+        source,
+        canonical(cast("Row", document["request"])),
+        cast("str", bindings["bundle_id"]),
+        cast("str", bindings["report_id"]),
     )
     _require(context.plan.canonical_bytes == raw, "Plan does not reproduce from actual full source")
     _checked_prefix(source, context.protocol, ledger)
@@ -212,15 +217,18 @@ def _context(
 def _prepared(context: _Context, point: Row) -> PreparedReduction:
     bindings = cast("Row", context.plan.document["source"])
     return prepare_reduction_input(
-        context.source, reduction_request(context.plan, point),
+        context.source,
+        reduction_request(context.plan, point),
         expected_bundle_id=cast("str", bindings["bundle_id"]),
-        expected_report_id=cast("str", bindings["report_id"]), split="development",
+        expected_report_id=cast("str", bindings["report_id"]),
+        split="development",
     )
 
 
 def _package(prepared: PreparedReduction) -> _Preparation:
     return _Preparation(
-        prepared.preparation_id, build_reduction_manifest(prepared.artifacts),
+        prepared.preparation_id,
+        build_reduction_manifest(prepared.artifacts),
         tuple(sorted(prepared.artifacts.items())),
     )
 
@@ -238,12 +246,19 @@ def _assessment(
         cast("Row", inspected["preparation"])["preparation_id"] == prepared.preparation_id,
         "Actual run differs from the dispatched reduction preparation",
     )
-    return ReductionPreservationAssessment(context.authority, prepared.materialization, receipt, result)
+    return ReductionPreservationAssessment(
+        context.authority, prepared.materialization, receipt, result
+    )
 
 
 def freeze_reduction_search(
-    source: SearchEvidencePackage, request_raw: bytes, *, expected_bundle_id: str,
-    expected_report_id: str, split: str, ledger_factory: Callable[[], ReductionSearchLedger],
+    source: SearchEvidencePackage,
+    request_raw: bytes,
+    *,
+    expected_bundle_id: str,
+    expected_report_id: str,
+    split: str,
+    ledger_factory: Callable[[], ReductionSearchLedger],
     store_factory: Callable[[], ReductionCampaignStore],
 ) -> Row:
     _development(split)
@@ -260,20 +275,26 @@ def freeze_reduction_search(
         if existing is None:
             _require(
                 not any(store.check_tree(plan.plan_id).values())
-                and store.get_stop(plan.plan_id) is None and store.get_cancel(plan.plan_id) is None,
+                and store.get_stop(plan.plan_id) is None
+                and store.get_cancel(plan.plan_id) is None,
                 "Unfrozen reduction search contains orphaned records",
             )
             _publish(
                 lambda: store.start(plan.plan_id, plan.canonical_bytes),
-                lambda: store.get_campaign(plan.plan_id), plan.canonical_bytes,
+                lambda: store.get_campaign(plan.plan_id),
+                plan.canonical_bytes,
             )
         else:
             _require(existing == plan.canonical_bytes, "Frozen reduction search already differs")
     return {
-        "plan_id": plan.plan_id, "plan": plan.document, "status": "FROZEN",
+        "plan_id": plan.plan_id,
+        "plan": plan.document,
+        "status": "FROZEN",
         "existing_campaign": existing is not None,
-        "attempt_reserved": False, "native_replayed": False,
-        "reduced_predicate_evaluated": False, "witness_preservation_verified": False,
+        "attempt_reserved": False,
+        "native_replayed": False,
+        "reduced_predicate_evaluated": False,
+        "witness_preservation_verified": False,
         "scope": plan.document["scope"],
     }
 
@@ -282,40 +303,61 @@ def _initial_best(plan: ReductionSearchPlan) -> Row:
     source = cast("Row", plan.document["source"])
     point = initial_point(plan)
     return {
-        "origin": "SOURCE_WITNESS", "point": point, "cost": list(point_cost(plan, point)),
-        "run_id": source["source_run_id"], "assessment_id": None,
+        "origin": "SOURCE_WITNESS",
+        "point": point,
+        "cost": list(point_cost(plan, point)),
+        "run_id": source["source_run_id"],
+        "assessment_id": None,
     }
 
 
 def _step(
-    context: _Context, store: ReductionCampaignReader, ledger: ReductionSearchLedger,
-    dispatch: ReductionDispatch, prepared: PreparedReduction,
+    context: _Context,
+    store: ReductionCampaignReader,
+    ledger: ReductionSearchLedger,
+    dispatch: ReductionDispatch,
+    prepared: PreparedReduction,
     reservations: tuple[AttemptReservation, ...],
 ) -> Row:
     plan, document = context.plan, dispatch.document
     index = cast("int", document["index"])
-    matches = [row for row in reservations if row.document["nonce"] == document["reservation_nonce"]]
+    matches = [
+        row for row in reservations if row.document["nonce"] == document["reservation_nonce"]
+    ]
     _require(len(matches) <= 1, "Reduction dispatch nonce matches more than one original slot")
     link = store.get_link(plan.plan_id, index)
     saved = store.get_result(plan.plan_id, index)
     state: Row = {
-        "index": index, "point": document["point"], "dispatch": document,
-        "dispatch_id": dispatch.dispatch_id, "attempt_id": None, "attempt_index": None,
-        "run_id": None, "assessment": None, "assessment_id": None, "execution_error": None,
-        "execution_status": None, "status": "RESERVATION_UNCONFIRMED",
-        "budget_consumed": None, "reservation_link_present": False,
+        "index": index,
+        "point": document["point"],
+        "dispatch": document,
+        "dispatch_id": dispatch.dispatch_id,
+        "attempt_id": None,
+        "attempt_index": None,
+        "run_id": None,
+        "assessment": None,
+        "assessment_id": None,
+        "execution_error": None,
+        "execution_status": None,
+        "status": "RESERVATION_UNCONFIRMED",
+        "budget_consumed": None,
+        "reservation_link_present": False,
     }
     if not matches:
         _require(link is None and saved is None, "Journal artifacts have no original reservation")
         return state
     reservation = matches[0]
     state.update(
-        attempt_id=reservation.attempt_id, attempt_index=reservation.attempt_index,
-        status="RESERVED_UNFINALIZED", budget_consumed=True,
+        attempt_id=reservation.attempt_id,
+        attempt_index=reservation.attempt_index,
+        status="RESERVED_UNFINALIZED",
+        budget_consumed=True,
     )
     if link is not None:
-        _require(load_link(link, dispatch=dispatch, plan=plan) == reservation,
-                 "Reduction link differs from original nonce reservation")
+        _require(
+            load_link(link, dispatch=dispatch, plan=plan) == reservation,
+            "Reduction link differs from original nonce reservation",
+        )
         state["reservation_link_present"] = True
     intent_raw = canonical(cast("Row", document["intent"]))
     intent = ledger.get_intent(reservation.attempt_id)
@@ -324,8 +366,10 @@ def _step(
     if outcome is None:
         _require(saved is None, "Assessment has no actual committed outcome")
         return state
-    _require(link is not None and intent == intent_raw,
-             "Committed outcome lacks exact pre-execution link and intent")
+    _require(
+        link is not None and intent == intent_raw,
+        "Committed outcome lacks exact pre-execution link and intent",
+    )
     outcome_doc = parse(outcome)
     _require(
         canonical(cast("Row", outcome_doc["attempt"])) == reservation.canonical_bytes,
@@ -333,24 +377,32 @@ def _step(
     )
     if outcome_doc.get("kind") == "reduction_attempt_failure_v1":
         failure = load_reduction_failure(outcome)
-        _require(canonical(cast("Row", failure["intent"])) == intent_raw,
-                 "Reduction failure changed its original execution intent")
+        _require(
+            canonical(cast("Row", failure["intent"])) == intent_raw,
+            "Reduction failure changed its original execution intent",
+        )
         _require(saved is None, "Failed execution cannot have a preservation assessment")
         state.update(status="FAILED", execution_error=failure["error"])
         return state
-    _require(outcome_doc.get("kind") == "reduction_run_receipt_v1",
-             "Reduction dispatch was finalized by another outcome kind")
+    _require(
+        outcome_doc.get("kind") == "reduction_run_receipt_v1",
+        "Reduction dispatch was finalized by another outcome kind",
+    )
     run_id = digest(outcome)
     assessment = _assessment(context, prepared, run_id, ledger)
     state.update(
-        run_id=run_id, execution_status=outcome_doc["execution_status"],
+        run_id=run_id,
+        execution_status=outcome_doc["execution_status"],
         status="ASSESSMENT_UNFINALIZED",
     )
     if saved is not None:
-        _require(saved == assessment.canonical_bytes,
-                 "Saved preservation assessment differs from independent actual-result audit")
+        _require(
+            saved == assessment.canonical_bytes,
+            "Saved preservation assessment differs from independent actual-result audit",
+        )
         state.update(
-            status="ASSESSED", assessment=assessment.document,
+            status="ASSESSED",
+            assessment=assessment.document,
             assessment_id=assessment.assessment_id,
         )
     return state
@@ -367,10 +419,14 @@ def _traversal(
     inventory = store.check_tree(plan_id)
     dispatched = inventory["dispatches"]
     maximum = cast("int", cast("Row", plan.document["request"])["max_steps"])
-    _require(dispatched == tuple(range(1, len(dispatched) + 1)) and len(dispatched) <= maximum,
-             "Reduction dispatches are not a bounded contiguous prefix")
-    _require(set(inventory["links"]) <= set(dispatched)
-             and set(inventory["results"]) <= set(dispatched), "Orphaned reduction journal records")
+    _require(
+        dispatched == tuple(range(1, len(dispatched) + 1)) and len(dispatched) <= maximum,
+        "Reduction dispatches are not a bounded contiguous prefix",
+    )
+    _require(
+        set(inventory["links"]) <= set(dispatched) and set(inventory["results"]) <= set(dispatched),
+        "Orphaned reduction journal records",
+    )
     reservations = _checked_prefix(context.source, context.protocol, ledger)
     best, cursor = _initial_best(plan), 0
     steps: list[Row] = []
@@ -386,7 +442,8 @@ def _traversal(
         dispatch = load_dispatch(cast("bytes", raw), plan=plan)
         document, point = dispatch.document, neighbors[cursor]
         _require(
-            document["index"] == index and document["point"] == point
+            document["index"] == index
+            and document["point"] == point
             and document["parent_point"] == best["point"]
             and document["parent_run_id"] == best["run_id"]
             and document["neighbor_index"] == cursor,
@@ -407,11 +464,15 @@ def _traversal(
         all_assessed = assessment is not None
         if assessment is not None:
             if assessment["outcome"] == "PRESERVED":
-                _require(point_cost(plan, point) < tuple(cast("list[int]", best["cost"])),
-                         "Preservation does not strictly reduce the declared cost")
+                _require(
+                    point_cost(plan, point) < tuple(cast("list[int]", best["cost"])),
+                    "Preservation does not strictly reduce the declared cost",
+                )
                 best = {
-                    "origin": "REDUCTION_RUN", "point": point,
-                    "cost": list(point_cost(plan, point)), "run_id": state["run_id"],
+                    "origin": "REDUCTION_RUN",
+                    "point": point,
+                    "cost": list(point_cost(plan, point)),
+                    "run_id": state["run_id"],
                     "assessment_id": state["assessment_id"],
                 }
                 cursor = 0
@@ -425,41 +486,64 @@ def _traversal(
         reason = stop["reason"]
         if reason in ("neighborhood_checked", "step_limit", "admission_deadline", "cancelled"):
             _require(all_assessed, "Intentional stop hides an unassessed or failed candidate")
-            _require(stop["blocked_point"] == next_point,
-                     "Intentional stop differs from the next frozen candidate")
+            _require(
+                stop["blocked_point"] == next_point,
+                "Intentional stop differs from the next frozen candidate",
+            )
             if reason == "neighborhood_checked":
                 _require(next_point is None, "Neighborhood stop leaves a legal unchecked neighbor")
             elif reason == "step_limit":
-                _require(len(steps) == maximum and next_point is not None,
-                         "Step stop lacks exhausted admissions or an actual next candidate")
+                _require(
+                    len(steps) == maximum and next_point is not None,
+                    "Step stop lacks exhausted admissions or an actual next candidate",
+                )
             elif reason == "cancelled":
-                _require(cancel_raw is not None and stop["cancel_id"] == digest(cancel_raw),
-                         "Cancellation stop lacks its exact durable request")
+                _require(
+                    cancel_raw is not None and stop["cancel_id"] == digest(cancel_raw),
+                    "Cancellation stop lacks its exact durable request",
+                )
         elif reason == "original_attempt_budget_exhausted":
-            _require(bool(steps) and steps[-1]["attempt_id"] is None,
-                     "Original-budget stop has an already consumed candidate slot")
-            _require(len(reservations) == cast("Row", plan.document["original_budget"])["max_attempts"],
-                     "Original-budget stop is not supported by the actual full ledger")
-            _require(stop["blocked_point"] == steps[-1]["point"], "Budget stop changed its candidate")
-            steps[-1].update(status="BUDGET_EXHAUSTED", budget_consumed=False,
-                             execution_error=stop["error"])
+            _require(
+                bool(steps) and steps[-1]["attempt_id"] is None,
+                "Original-budget stop has an already consumed candidate slot",
+            )
+            _require(
+                len(reservations) == cast("Row", plan.document["original_budget"])["max_attempts"],
+                "Original-budget stop is not supported by the actual full ledger",
+            )
+            _require(
+                stop["blocked_point"] == steps[-1]["point"], "Budget stop changed its candidate"
+            )
+            steps[-1].update(
+                status="BUDGET_EXHAUSTED", budget_consumed=False, execution_error=stop["error"]
+            )
         else:
             _require(stop["reason"] == "operational_failure", "Unknown reduction stop")
-            _require(bool(steps) and not all_assessed,
-                     "Operational stop lacks an actual failed or unfinalized dispatch")
-            _require(stop["blocked_point"] == steps[-1]["point"],
-                     "Operational stop changed its actual dispatched candidate")
+            _require(
+                bool(steps) and not all_assessed,
+                "Operational stop lacks an actual failed or unfinalized dispatch",
+            )
+            _require(
+                stop["blocked_point"] == steps[-1]["point"],
+                "Operational stop changed its actual dispatched candidate",
+            )
             error = cast("Row", stop["error"])
             if steps and steps[-1]["execution_error"] is not None:
                 actual = cast("Row", steps[-1]["execution_error"])
-                _require(actual["code"] == error["code"], "Stop differs from actual committed failure")
+                _require(
+                    actual["code"] == error["code"], "Stop differs from actual committed failure"
+                )
             if steps and steps[-1]["execution_error"] is None and not all_assessed:
                 steps[-1]["execution_error"] = error
     _require(store.check_tree(plan_id) == inventory, "Reduction journal changed during inspection")
-    _require(store.get_campaign(plan_id) == plan.canonical_bytes,
-             "Frozen reduction header changed during inspection")
+    _require(
+        store.get_campaign(plan_id) == plan.canonical_bytes,
+        "Frozen reduction header changed during inspection",
+    )
     if stop_raw is not None:
-        _require(store.get_stop(plan_id) == stop_raw, "Reduction terminal changed during inspection")
+        _require(
+            store.get_stop(plan_id) == stop_raw, "Reduction terminal changed during inspection"
+        )
     status, reason, exit_code = "UNFINALIZED", "terminal_record_absent", 3
     if stop is None and not steps:
         status, reason, exit_code = "FROZEN", "not_started", 0
@@ -467,6 +551,7 @@ def _traversal(
         reason = cast("str", stop["reason"])
         status = "COMPLETED" if reason == "neighborhood_checked" else "STOPPED"
         exit_code = cast("int", stop["exit_code"])
+
     def assessed_as(item: Row, outcome: str) -> bool:
         observed = item["assessment"]
         return isinstance(observed, dict) and observed.get("outcome") == outcome
@@ -478,30 +563,49 @@ def _traversal(
         "not_preserved": sum(assessed_as(item, "NOT_PRESERVED") for item in steps),
         "not_evaluable": sum(assessed_as(item, "NOT_EVALUABLE") for item in steps),
         "failed": sum(item["status"] == "FAILED" for item in steps),
-        "unfinalized": sum(item["status"] in (
-            "RESERVATION_UNCONFIRMED", "RESERVED_UNFINALIZED", "ASSESSMENT_UNFINALIZED"
-        ) for item in steps),
+        "unfinalized": sum(
+            item["status"]
+            in ("RESERVATION_UNCONFIRMED", "RESERVED_UNFINALIZED", "ASSESSMENT_UNFINALIZED")
+            for item in steps
+        ),
     }
     report: Row = {
-        "kind": "reduction_search_report_v1", "schema_version": 1,
-        "plan_id": plan_id, "plan": plan.document, "source": plan.document["source"],
-        "steps": steps, "best": best, "stop": stop, "status": status,
-        "stop_reason": reason, "exit_code": exit_code, "counts": counts,
+        "kind": "reduction_search_report_v1",
+        "schema_version": 1,
+        "plan_id": plan_id,
+        "plan": plan.document,
+        "source": plan.document["source"],
+        "steps": steps,
+        "best": best,
+        "stop": stop,
+        "status": status,
+        "stop_reason": reason,
+        "exit_code": exit_code,
+        "counts": counts,
         "cancellation": {"request": cancellation, "effective": reason == "cancelled"},
         "scope": plan.document["scope"],
         "verification": {
-            "source_package_reaudited": True, "plan_recomputed": True,
-            "observed_original_prefix_matched": True, "greedy_traversal_recomputed": True,
-            "committed_outcomes_reaudited": True, "saved_assessments_recomputed": True,
-            "native_replayed": False, "attempt_reserved": False,
-            "source_claim_evaluated": False, "baseline_truth_evaluated": False,
-            "original_predicate_domain_extended": False, "local_minimum_verified": False,
-            "global_minimum_verified": False, "checkpoint_resume_verified": False,
+            "source_package_reaudited": True,
+            "plan_recomputed": True,
+            "observed_original_prefix_matched": True,
+            "greedy_traversal_recomputed": True,
+            "committed_outcomes_reaudited": True,
+            "saved_assessments_recomputed": True,
+            "native_replayed": False,
+            "attempt_reserved": False,
+            "source_claim_evaluated": False,
+            "baseline_truth_evaluated": False,
+            "original_predicate_domain_extended": False,
+            "local_minimum_verified": False,
+            "global_minimum_verified": False,
+            "checkpoint_resume_verified": False,
             "global_ledger_authenticity_verified": False,
-            "full_attempt_history_verified": False, "author_signature_verified": False,
+            "full_attempt_history_verified": False,
+            "author_signature_verified": False,
             "monotonic_clock_authenticity_verified": False,
             "physical_storage_usage_verified": False,
-            "hard_total_deadline_enforced": False, "total_storage_quota_enforced": False,
+            "hard_total_deadline_enforced": False,
+            "total_storage_quota_enforced": False,
             "hard_cancel_enforced": False,
         },
     }
@@ -509,7 +613,10 @@ def _traversal(
 
 
 def inspect_reduction_search(
-    plan_id: str, *, source: SearchEvidencePackage, split: str,
+    plan_id: str,
+    *,
+    source: SearchEvidencePackage,
+    split: str,
     ledger_factory: Callable[[], ReductionSearchLedger],
     store_factory: Callable[[], ReductionCampaignReader],
 ) -> Row:
@@ -522,7 +629,10 @@ def inspect_reduction_search(
 
 
 def cancel_reduction_search(
-    plan_id: str, *, source: SearchEvidencePackage, split: str,
+    plan_id: str,
+    *,
+    source: SearchEvidencePackage,
+    split: str,
     ledger_factory: Callable[[], ReductionSearchLedger],
     store_factory: Callable[[], ReductionCampaignStore],
 ) -> Row:
@@ -540,29 +650,45 @@ def cancel_reduction_search(
         _traversal(context, store, ledger)
     if stop is None and raw is None:
         raw = build_cancel(context.plan)
-        _publish(lambda: store.write_cancel(plan_id, cast("bytes", raw)),
-                 lambda: store.get_cancel(plan_id), raw)
+        _publish(
+            partial(store.write_cancel, plan_id, raw),
+            partial(store.get_cancel, plan_id),
+            raw,
+        )
     cancellation = load_cancel(raw, plan=context.plan) if raw is not None else None
     return {
-        "plan_id": plan_id, "status": "ALREADY_TERMINAL" if stop is not None else "CANCEL_REQUESTED",
+        "plan_id": plan_id,
+        "status": "ALREADY_TERMINAL" if stop is not None else "CANCEL_REQUESTED",
         "cancel_id": digest(raw) if raw is not None else None,
-        "cancellation": cancellation, "stop": stop,
-        "cooperative_between_candidates": True, "attempt_reserved": False, "native_replayed": False,
+        "cancellation": cancellation,
+        "stop": stop,
+        "cooperative_between_candidates": True,
+        "attempt_reserved": False,
+        "native_replayed": False,
     }
 
 
 class _DispatchLedger:
     def __init__(
-        self, context: _Context, ledger: ReductionSearchLedger, store: ReductionCampaignStore,
-        dispatch: ReductionDispatch, engine_factory: Callable[[int], ReplayPort],
+        self,
+        context: _Context,
+        ledger: ReductionSearchLedger,
+        store: ReductionCampaignStore,
+        dispatch: ReductionDispatch,
+        engine_factory: Callable[[int], ReplayPort],
     ) -> None:
         self.context, self.ledger, self.store, self.dispatch = context, ledger, store, dispatch
         self.engine_factory = engine_factory
         self.reservation: AttemptReservation | None = None
 
+    def as_ledger(self) -> ReductionLedger:
+        return self
+
     def reserve(self, protocol: ExecutableProtocol) -> AttemptReservation:
-        _require(protocol.canonical_bytes == self.context.protocol.canonical_bytes,
-                 "Reduction dispatch changed the original budget owner")
+        _require(
+            protocol.canonical_bytes == self.context.protocol.canonical_bytes,
+            "Reduction dispatch changed the original budget owner",
+        )
         _require(self.reservation is None, "A dispatched reduction cannot reserve twice")
         reservation = self.ledger.reserve_with_nonce(
             protocol, cast("str", self.dispatch.document["reservation_nonce"])
@@ -570,8 +696,11 @@ class _DispatchLedger:
         self.reservation = reservation
         raw = build_link(self.dispatch, reservation, plan=self.context.plan)
         index = cast("int", self.dispatch.document["index"])
-        _publish(lambda: self.store.write_link(self.context.plan.plan_id, index, raw),
-                 lambda: self.store.get_link(self.context.plan.plan_id, index), raw)
+        _publish(
+            lambda: self.store.write_link(self.context.plan.plan_id, index, raw),
+            lambda: self.store.get_link(self.context.plan.plan_id, index),
+            raw,
+        )
         return reservation
 
     def list_reservations(self, protocol: ExecutableProtocol) -> tuple[AttemptReservation, ...]:
@@ -590,15 +719,25 @@ class _DispatchLedger:
         return self.ledger.read_artifact(content_hash, max_bytes=max_bytes)
 
     def bind_intent(
-        self, reservation: AttemptReservation, intent_bytes: bytes, *, artifacts: tuple[bytes, ...] = (),
+        self,
+        reservation: AttemptReservation,
+        intent_bytes: bytes,
+        *,
+        artifacts: tuple[bytes, ...] = (),
     ) -> str:
-        _require(reservation == self.reservation
-                 and intent_bytes == canonical(cast("Row", self.dispatch.document["intent"])),
-                 "Reduction intent differs from the durable dispatched intent")
+        _require(
+            reservation == self.reservation
+            and intent_bytes == canonical(cast("Row", self.dispatch.document["intent"])),
+            "Reduction intent differs from the durable dispatched intent",
+        )
         return self.ledger.bind_intent(reservation, intent_bytes, artifacts=artifacts)
 
     def publish(
-        self, reservation: AttemptReservation, outcome: bytes, *, artifacts: tuple[bytes, ...] = (),
+        self,
+        reservation: AttemptReservation,
+        outcome: bytes,
+        *,
+        artifacts: tuple[bytes, ...] = (),
     ) -> str:
         _require(reservation == self.reservation, "Reduction outcome changed the linked attempt")
         return self.ledger.publish(reservation, outcome, artifacts=artifacts)
@@ -607,33 +746,50 @@ class _DispatchLedger:
         reservation = self.reservation
         index = cast("int", self.dispatch.document["index"])
         link = self.store.get_link(self.context.plan.plan_id, index)
-        _require(reservation is not None and link is not None,
-                 "Native construction requires a committed original reservation link")
+        _require(
+            reservation is not None and link is not None,
+            "Native construction requires a committed original reservation link",
+        )
         actual = cast("AttemptReservation", reservation)
-        _require(load_link(cast("bytes", link), dispatch=self.dispatch, plan=self.context.plan) == actual
-                 and self.ledger.get_intent(actual.attempt_id)
-                 == canonical(cast("Row", self.dispatch.document["intent"]))
-                 and self.ledger.get_outcome(actual.attempt_id) is None,
-                 "Native construction requires exact durable link and intent without outcome")
+        _require(
+            load_link(cast("bytes", link), dispatch=self.dispatch, plan=self.context.plan) == actual
+            and self.ledger.get_intent(actual.attempt_id)
+            == canonical(cast("Row", self.dispatch.document["intent"]))
+            and self.ledger.get_outcome(actual.attempt_id) is None,
+            "Native construction requires exact durable link and intent without outcome",
+        )
         return self.engine_factory(timeout)
 
 
 def _error(error: Exception, *, default_code: str, default_exit: int) -> Row:
     raw_code = getattr(error, "code", default_code)
-    code = raw_code if isinstance(raw_code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", raw_code) \
+    code = (
+        raw_code
+        if isinstance(raw_code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", raw_code)
         else default_code
+    )
     raw_exit = getattr(error, "exit_code", default_exit)
-    exit_code = raw_exit if type(raw_exit) is int and raw_exit in (2, 3, 4, 6, 7, 8) else default_exit
-    message = "".join(character if ord(character) >= 32 and ord(character) != 127 else " "
-                      for character in (str(error) or type(error).__name__))
-    message = message.encode("utf-8", errors="backslashreplace")[:2048].decode("utf-8", errors="ignore")
+    exit_code = (
+        raw_exit if type(raw_exit) is int and raw_exit in (2, 3, 4, 6, 7, 8) else default_exit
+    )
+    message = "".join(
+        character if ord(character) >= 32 and ord(character) != 127 else " "
+        for character in (str(error) or type(error).__name__)
+    )
+    message = message.encode("utf-8", errors="backslashreplace")[:2048].decode(
+        "utf-8", errors="ignore"
+    )
     return {"code": code, "message": message or "Unknown execution error", "exit_code": exit_code}
 
 
 def run_reduction_search(
-    plan_id: str, *, source: SearchEvidencePackage, split: str,
+    plan_id: str,
+    *,
+    source: SearchEvidencePackage,
+    split: str,
     ledger_factory: Callable[[], ReductionSearchLedger],
-    store_factory: Callable[[], ReductionCampaignStore], engine_factory: Callable[[int], ReplayPort],
+    store_factory: Callable[[], ReductionCampaignStore],
+    engine_factory: Callable[[int], ReplayPort],
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
 ) -> Row:
     _development(split)
@@ -666,8 +822,13 @@ def run_reduction_search(
             if reason == "original_attempt_budget_exhausted":
                 blocked = cast("Row", steps[-1]["point"])
             raw = build_stop(
-                plan, reason, steps=len(steps), elapsed_ns=elapsed(),
-                blocked_point=blocked, error=error, cancel_id=cancel_id,
+                plan,
+                reason,
+                steps=len(steps),
+                elapsed_ns=elapsed(),
+                blocked_point=blocked,
+                error=error,
+                cancel_id=cancel_id,
             )
             _publish(lambda: store.write_stop(plan_id, raw), lambda: store.get_stop(plan_id), raw)
             return _traversal(context, store, ledger).report
@@ -688,9 +849,14 @@ def run_reduction_search(
                 return stop("admission_deadline")
             prepared = _prepared(context, point)
             dispatch = build_dispatch(
-                plan, index=index, point=point, parent_point=cast("Row", state.best["point"]),
-                parent_run_id=cast("str", state.best["run_id"]), neighbor_index=state.cursor,
-                nonce=secrets.token_hex(16), intent=build_reduction_intent(prepared.materialization),
+                plan,
+                index=index,
+                point=point,
+                parent_point=cast("Row", state.best["point"]),
+                parent_run_id=cast("str", state.best["run_id"]),
+                neighbor_index=state.cursor,
+                nonce=secrets.token_hex(16),
+                intent=build_reduction_intent(prepared.materialization),
             )
             # Materialization can be expensive. Recheck at the admission boundary
             # immediately before durable dispatch; the admitted attempt then
@@ -701,26 +867,41 @@ def run_reduction_search(
                 return stop("cancelled", cancel_id=digest(cancellation))
             if elapsed() >= cap * 1_000_000:
                 return stop("admission_deadline")
-            _publish(lambda: store.write_dispatch(plan_id, index, dispatch.canonical_bytes),
-                     lambda: store.get_dispatch(plan_id, index), dispatch.canonical_bytes)
+            _publish(
+                partial(store.write_dispatch, plan_id, index, dispatch.canonical_bytes),
+                partial(store.get_dispatch, plan_id, index),
+                dispatch.canonical_bytes,
+            )
             wrapper = _DispatchLedger(context, ledger, store, dispatch, engine_factory)
             try:
                 submission = run_reduction_input(
-                    _package(prepared), context.source, expected_preparation_id=prepared.preparation_id,
-                    split="development", ledger_factory=lambda: wrapper, engine_factory=wrapper.engine,
+                    _package(prepared),
+                    context.source,
+                    expected_preparation_id=prepared.preparation_id,
+                    split="development",
+                    ledger_factory=wrapper.as_ledger,
+                    engine_factory=wrapper.engine,
                 )
             except ReductionSearchPublicationError:
                 raise
             except ProtocolRunError as error:
-                return stop("operational_failure", error=_error(
-                    error, default_code="reduction_execution_failed", default_exit=7))
+                return stop(
+                    "operational_failure",
+                    error=_error(error, default_code="reduction_execution_failed", default_exit=7),
+                )
             except Exception as error:
                 exhausted = getattr(error, "code", None) == "attempt_budget_exhausted"
                 return stop(
                     "original_attempt_budget_exhausted" if exhausted else "operational_failure",
-                    error=_error(error, default_code="reservation_unconfirmed",
-                                 default_exit=8 if exhausted else 3),
+                    error=_error(
+                        error,
+                        default_code="reservation_unconfirmed",
+                        default_exit=8 if exhausted else 3,
+                    ),
                 )
             assessment = _assessment(context, prepared, submission.run_id, ledger)
-            _publish(lambda: store.write_result(plan_id, index, assessment.canonical_bytes),
-                     lambda: store.get_result(plan_id, index), assessment.canonical_bytes)
+            _publish(
+                partial(store.write_result, plan_id, index, assessment.canonical_bytes),
+                partial(store.get_result, plan_id, index),
+                assessment.canonical_bytes,
+            )

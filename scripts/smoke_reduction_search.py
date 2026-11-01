@@ -222,7 +222,7 @@ from tickwitness.infrastructure.subprocess_replay import SubprocessReplayAdapter
 plan_id, source_path, runs_path = sys.argv[1:]
 source = read_search_evidence_bundle(Path(source_path))
 ledger_factory = lambda: LocalAttemptLedger(Path(runs_path), create=False)
-store_factory = lambda: LocalReductionCampaignStore(Path(runs_path), create=False)
+store_factory = lambda: LocalReductionCampaignStore(Path(runs_path), create=True)
 calls, cancellations = [], []
 class CancelAfterActualNative:
     def __init__(self, timeout):
@@ -428,10 +428,19 @@ def _check_actual_step(step: dict, inspected: dict, result: dict, *, expected, s
         range(1, through + 1)
     )
     base = 1_700_000_000_000_000_000
-    offsets = (0, 500_000_000, 1_000_000_000, 1_000_000_001, 2_000_000_000,
-               2_000_000_001, 3_000_000_000)
-    times = [base + offset + (delay if index >= 3 else 0)
-             for index, offset in enumerate(offsets[:through])]
+    offsets = (
+        0,
+        500_000_000,
+        1_000_000_000,
+        1_000_000_001,
+        2_000_000_000,
+        2_000_000_001,
+        3_000_000_000,
+    )
+    times = [
+        base + offset + (delay if index >= 3 else 0)
+        for index, offset in enumerate(offsets[:through])
+    ]
     assert [row["native_time_ns"] for row in result["input_trace"]] == times
     assert [row["fields"]["receive_time_ns"] for row in result["input_trace"]] == times
     initial, terminal = audit["initial_account"], audit["terminal_state"]
@@ -444,7 +453,10 @@ def _check_actual_step(step: dict, inspected: dict, result: dict, *, expected, s
     assert terminal["pending_commands"] == result["completeness"]["pending_commands"]
     observation = assessment["criterion_observation"]
     assert {key: observation[key] for key in ("metric", "unit", "comparator", "threshold")} == {
-        "metric": "net_marked_pnl_v1", "unit": "USD", "comparator": "lt", "threshold": "-1.5"
+        "metric": "net_marked_pnl_v1",
+        "unit": "USD",
+        "comparator": "lt",
+        "threshold": "-1.5",
     }
     if outcome == "NOT_EVALUABLE":
         assert observation["eligible"] is False
@@ -471,17 +483,24 @@ def _check_actual_step(step: dict, inspected: dict, result: dict, *, expected, s
         assert orders[0]["status"] == ("CANCELED" if outcome == "PRESERVED" else "FILLED")
         assert orders[0]["remaining_quantity_lots"] == (1 if outcome == "PRESERVED" else 0)
         if outcome == "PRESERVED":
-            acknowledgements = [row for row in result["order_trace"]
-                                if row["kind"] == "OrderCanceled"]
+            acknowledgements = [
+                row for row in result["order_trace"] if row["kind"] == "OrderCanceled"
+            ]
             assert len(acknowledgements) == 1
             assert acknowledgements[0]["source_ref"]["capture_seq"] == 4
             assert acknowledgements[0]["native_time_ns"] == base + 3_000_000_001
             assert acknowledgements[0]["fields"]["pending_command_ids"] == []
         else:
-            filled = [(index, row) for index, row in enumerate(result["order_trace"])
-                      if row["kind"] == "OrderFilled" and row["source_ref"]["capture_seq"] == 5]
-            rejected = [(index, row) for index, row in enumerate(result["order_trace"])
-                        if row["kind"] == "OrderCancelRejected"]
+            filled = [
+                (index, row)
+                for index, row in enumerate(result["order_trace"])
+                if row["kind"] == "OrderFilled" and row["source_ref"]["capture_seq"] == 5
+            ]
+            rejected = [
+                (index, row)
+                for index, row in enumerate(result["order_trace"])
+                if row["kind"] == "OrderCancelRejected"
+            ]
             assert len(filled) == len(rejected) == 1
             assert filled[0][0] < rejected[0][0]
             for _, row in (filled[0], rejected[0]):
@@ -504,8 +523,17 @@ def _check_actual_step(step: dict, inspected: dict, result: dict, *, expected, s
 
 def _same_report(actual: dict, expected: dict) -> None:
     for name in (
-        "plan_id", "plan", "source", "steps", "best", "stop", "status",
-        "stop_reason", "exit_code", "counts", "cancellation",
+        "plan_id",
+        "plan",
+        "source",
+        "steps",
+        "best",
+        "stop",
+        "status",
+        "stop_reason",
+        "exit_code",
+        "counts",
+        "cancellation",
     ):
         assert actual[name] == expected[name], name
 
@@ -514,8 +542,11 @@ def _native_lifecycle(
     run, invoke, helper, native: str, verifier: str, examples: Path, root: Path, inputs: Path
 ):
     for name in (
-        "replay-partials.jsonl", "replay-confirmation.jsonl", "stress-assumption-request.json",
-        "search-execution-grid-request.json", "search-finding-request.json",
+        "replay-partials.jsonl",
+        "replay-confirmation.jsonl",
+        "stress-assumption-request.json",
+        "search-execution-grid-request.json",
+        "search-finding-request.json",
     ):
         shutil.copyfile(examples / name, inputs / name)
     experiment = json.loads((examples / "stress-experiment-request.json").read_bytes())
@@ -527,47 +558,99 @@ def _native_lifecycle(
     )
     experiment["budget"]["max_attempts"] = 11
     (inputs / "live-experiment.json").write_bytes(_canonical(experiment))
-    (inputs / "source-search-budget.json").write_bytes(_canonical({
-        "kind": "campaign_budget_request_v1", "schema_version": 1,
-        "max_evaluations": 2, "max_wall_time_ms": 120000,
-        "max_storage_bytes": 512 * 1024 * 1024,
-    }))
+    (inputs / "source-search-budget.json").write_bytes(
+        _canonical(
+            {
+                "kind": "campaign_budget_request_v1",
+                "schema_version": 1,
+                "max_evaluations": 2,
+                "max_wall_time_ms": 120000,
+                "max_storage_bytes": 512 * 1024 * 1024,
+            }
+        )
+    )
     data, registry, plans, runs, findings = (
         root / name for name in ("data", "registry", "plans", "live-runs", "findings")
     )
-    dataset_ids = [run("import-events", name, "--input-root", str(inputs), "--store", str(data))[
-        "dataset_id"
-    ] for name in ("replay-partials.jsonl", "replay-confirmation.jsonl")]
+    dataset_ids = [
+        run("import-events", name, "--input-root", str(inputs), "--store", str(data))["dataset_id"]
+        for name in ("replay-partials.jsonl", "replay-confirmation.jsonl")
+    ]
     frozen = run(
-        "freeze-experiment", "live-experiment.json", "--input-root", str(inputs),
-        "--development-dataset", dataset_ids[0], "--confirmation-dataset", dataset_ids[1],
-        "--store", str(data), "--registry", str(registry),
+        "freeze-experiment",
+        "live-experiment.json",
+        "--input-root",
+        str(inputs),
+        "--development-dataset",
+        dataset_ids[0],
+        "--confirmation-dataset",
+        dataset_ids[1],
+        "--store",
+        str(data),
+        "--registry",
+        str(registry),
     )
     search = run(
-        "freeze-search-plan", frozen["protocol_id"], "stress-assumption-request.json",
-        "search-execution-grid-request.json", "--input-root", str(inputs),
-        "--store", str(data), "--registry", str(registry), "--plans", str(plans),
+        "freeze-search-plan",
+        frozen["protocol_id"],
+        "stress-assumption-request.json",
+        "search-execution-grid-request.json",
+        "--input-root",
+        str(inputs),
+        "--store",
+        str(data),
+        "--registry",
+        str(registry),
+        "--plans",
+        str(plans),
     )
     authority = run(
-        "freeze-search-finding-protocol", search["plan_id"], "search-finding-request.json",
-        "--input-root", str(inputs), "--plans", str(plans),
-        "--finding-registry", str(findings),
+        "freeze-search-finding-protocol",
+        search["plan_id"],
+        "search-finding-request.json",
+        "--input-root",
+        str(inputs),
+        "--plans",
+        str(plans),
+        "--finding-registry",
+        str(findings),
     )
     baseline = run(
-        "replay-protocol", frozen["protocol_id"], "--store", str(data),
-        "--registry", str(registry), "--runs", str(runs), producer=True,
+        "replay-protocol",
+        frozen["protocol_id"],
+        "--store",
+        str(data),
+        "--registry",
+        str(registry),
+        "--runs",
+        str(runs),
+        producer=True,
     )
     common = (
-        "--plans", str(plans), "--store", str(data), "--registry", str(registry),
-        "--runs", str(runs),
+        "--plans",
+        str(plans),
+        "--store",
+        str(data),
+        "--registry",
+        str(registry),
+        "--runs",
+        str(runs),
     )
     campaign = run(
-        "run-bounded-search-plan", search["plan_id"], "source-search-budget.json",
-        "--input-root", str(inputs), *common, producer=True,
+        "run-bounded-search-plan",
+        search["plan_id"],
+        "source-search-budget.json",
+        "--input-root",
+        str(inputs),
+        *common,
+        producer=True,
     )
     finding = run(
-        "evaluate-search-findings", authority["protocol_id"], *common,
-        "--finding-registry", str(findings),
+        "evaluate-search-findings",
+        authority["protocol_id"],
+        *common,
+        "--finding-registry",
+        str(findings),
     )
     source_finding = finding["report"]
     assert source_finding["outcome"] == "COUNTEREXAMPLE_FOUND"
@@ -575,31 +658,48 @@ def _native_lifecycle(
     assert [row["ordinal"] for row in source_finding["witnesses"]] == [3]
     assert source_finding["coverage"]["audited_ordinals"] == [1, 3]
     observed = source_finding["candidate_assessments"]
-    assert [(row["ordinal"], row["metric_observation"]["value"], row["truth"])
-            for row in observed] == [(1, "-2", True), (3, "-1", False)]
+    assert [
+        (row["ordinal"], row["metric_observation"]["value"], row["truth"]) for row in observed
+    ] == [(1, "-2", True), (3, "-1", False)]
     source = run(
-        "export-search-evidence", authority["protocol_id"], "--expected-report-id",
-        finding["report_id"], *common, "--finding-registry", str(findings),
-        "--output", str(inputs / "live-source"),
+        "export-search-evidence",
+        authority["protocol_id"],
+        "--expected-report-id",
+        finding["report_id"],
+        *common,
+        "--finding-registry",
+        str(findings),
+        "--output",
+        str(inputs / "live-source"),
     )
     source_path = inputs / "live-source"
     source_before, original_records = _tree(source_path), _tree(runs)
     before = helper(_LEDGER_VIEW, str(source_path), str(runs), source["bundle_id"])
     assert before["protocol_id"] == frozen["protocol_id"]
-    assert before["budget"] == {"max_attempts": 11, "max_events": 1000,
-                                "max_wall_seconds": 60}
+    assert before["budget"] == {"max_attempts": 11, "max_events": 1000, "max_wall_seconds": 60}
     assert [row["attempt_index"] for row in before["slots"]] == [1, 2, 3]
     assert before["slots"][0]["outcome_id"] == baseline["run_id"]
     assert [row["outcome_kind"] for row in before["slots"]] == [
-        "research_run_receipt_v1", "scenario_run_receipt_v1", "scenario_run_receipt_v1",
+        "research_run_receipt_v1",
+        "scenario_run_receipt_v1",
+        "scenario_run_receipt_v1",
     ]
 
     def freeze(name: str, max_steps: int) -> dict:
         (inputs / (name + ".json")).write_bytes(_canonical(_request(max_steps)))
         plan = run(
-            "freeze-reduction-search", "live-source", name + ".json",
-            "--input-root", str(inputs), "--expected-bundle-id", source["bundle_id"],
-            "--expected-report-id", source["report_id"], "--runs", str(runs), guard="control",
+            "freeze-reduction-search",
+            "live-source",
+            name + ".json",
+            "--input-root",
+            str(inputs),
+            "--expected-bundle-id",
+            source["bundle_id"],
+            "--expected-report-id",
+            source["report_id"],
+            "--runs",
+            str(runs),
+            guard="control",
         )
         assert _sha(_canonical(plan["plan"])) == plan["plan_id"]
         assert plan["plan"]["request"] == _request(max_steps)
@@ -607,15 +707,26 @@ def _native_lifecycle(
         assert plan["plan"]["minimum_through_capture_seq"] == 4
         assert plan["plan"]["source_capture_seqs"] == list(range(1, 8))
         assert plan["plan"]["policy"]["operator_order"] == ["halve_delay", "trim_last_event"]
-        for name in ("attempt_reserved", "native_replayed", "reduced_predicate_evaluated",
-                     "witness_preservation_verified"):
+        for name in (
+            "attempt_reserved",
+            "native_replayed",
+            "reduced_predicate_evaluated",
+            "witness_preservation_verified",
+        ):
             assert plan[name] is False
         _check_scope(plan["plan"]["scope"])
         return plan
 
     def common_reduction(plan: dict) -> tuple[str, ...]:
-        return (plan["plan_id"], "--source-evidence", "live-source", "--input-root",
-                str(inputs), "--runs", str(runs))
+        return (
+            plan["plan_id"],
+            "--source-evidence",
+            "live-source",
+            "--input-root",
+            str(inputs),
+            "--runs",
+            str(runs),
+        )
 
     def inspect(plan: dict) -> dict:
         tree_before = _tree(runs)
@@ -628,15 +739,28 @@ def _native_lifecycle(
         tree_before = _tree(runs)
         for step, expected in zip(report["steps"], expectations, strict=True):
             inspected = run(
-                "inspect-reduction-run", step["run_id"], "--source-evidence", "live-source",
-                "--input-root", str(inputs), "--runs", str(runs), guard="readonly",
+                "inspect-reduction-run",
+                step["run_id"],
+                "--source-evidence",
+                "live-source",
+                "--input-root",
+                str(inputs),
+                "--runs",
+                str(runs),
+                guard="readonly",
             )
-            result = helper(_READ_ARTIFACT, str(runs), inspected["receipt"]["bindings"][
-                "replay_result_sha256"
-            ])
-            cases.append(_check_actual_step(
-                step, inspected, result, expected=expected, slot=first_slot + len(cases),
-            ))
+            result = helper(
+                _READ_ARTIFACT, str(runs), inspected["receipt"]["bindings"]["replay_result_sha256"]
+            )
+            cases.append(
+                _check_actual_step(
+                    step,
+                    inspected,
+                    result,
+                    expected=expected,
+                    slot=first_slot + len(cases),
+                )
+            )
             assert step["assessment"]["source"]["predicate_id"] == source_finding["predicate_id"]
         assert _tree(runs) == tree_before
         return cases
@@ -646,7 +770,9 @@ def _native_lifecycle(
     assert cancellation["status"] == "CANCEL_REQUESTED"
     assert cancellation["attempt_reserved"] is cancellation["native_replayed"] is False
     pre_cancelled = run(
-        "run-reduction-search", *common_reduction(before_start), guard="control",
+        "run-reduction-search",
+        *common_reduction(before_start),
+        guard="control",
     )
     _check_report(pre_cancelled, before_start, reason="cancelled", count=0, exit_code=0)
     assert pre_cancelled["cancellation"]["effective"] is True
@@ -658,7 +784,8 @@ def _native_lifecycle(
 
     after_native = freeze("cancel-after-native", 8)
     hook = invoke(
-        native, ["-c", _CANCEL_AFTER_NATIVE],
+        native,
+        ["-c", _CANCEL_AFTER_NATIVE],
         (after_native["plan_id"], str(source_path), str(runs)),
     )
     cancelled = hook["report"]
@@ -671,18 +798,30 @@ def _native_lifecycle(
     assert cancelled["best"]["point"] == _point(7, 2_000_000_000)
     assert cancelled["best"]["run_id"] == source_finding["witnesses"][0]["run_id"]
     assert cancelled["best"]["assessment_id"] is None
-    assert cancelled["counts"] == {"dispatched": 1, "assessed": 1, "preserved": 0,
-                                   "not_preserved": 1, "not_evaluable": 0,
-                                   "failed": 0, "unfinalized": 0}
+    assert cancelled["counts"] == {
+        "dispatched": 1,
+        "assessed": 1,
+        "preserved": 0,
+        "not_preserved": 1,
+        "not_evaluable": 0,
+        "failed": 0,
+        "unfinalized": 0,
+    }
     cancelled_cases = audit_steps(cancelled, first_slot=4, expectations=(_POINTS[0],))
     _same_report(inspect(after_native), cancelled)
 
     main_plan = freeze("main-search", 7)
     main = run("run-reduction-search", *common_reduction(main_plan), producer=True)
     _check_report(main, main_plan, reason="neighborhood_checked", count=7, exit_code=0)
-    assert main["counts"] == {"dispatched": 7, "assessed": 7, "preserved": 3,
-                              "not_preserved": 3, "not_evaluable": 1,
-                              "failed": 0, "unfinalized": 0}
+    assert main["counts"] == {
+        "dispatched": 7,
+        "assessed": 7,
+        "preserved": 3,
+        "not_preserved": 3,
+        "not_evaluable": 1,
+        "failed": 0,
+        "unfinalized": 0,
+    }
     main_cases = audit_steps(main, first_slot=5, expectations=_POINTS)
     assert main["best"]["origin"] == "REDUCTION_RUN"
     assert main["best"]["point"] == _point(4, 2_000_000_000)
@@ -694,7 +833,9 @@ def _native_lifecycle(
     _same_report(inspect(main_plan), main)
     unchanged = _tree(runs)
     for plan, saved in (
-        (before_start, pre_cancelled), (after_native, cancelled), (main_plan, main)
+        (before_start, pre_cancelled),
+        (after_native, cancelled),
+        (main_plan, main),
     ):
         repeated = run("run-reduction-search", *common_reduction(plan), guard="readonly")
         _same_report(repeated, saved)
@@ -703,7 +844,9 @@ def _native_lifecycle(
     assert re_frozen["plan_id"] == main_plan["plan_id"]
     assert _tree(runs) == unchanged
     terminal_cancel = run(
-        "cancel-reduction-search", *common_reduction(main_plan), guard="control",
+        "cancel-reduction-search",
+        *common_reduction(main_plan),
+        guard="control",
     )
     assert terminal_cancel["status"] == "ALREADY_TERMINAL"
     assert _tree(runs) == unchanged
@@ -716,11 +859,17 @@ def _native_lifecycle(
     exhaustion_plan = freeze("exhausted-search", 10)
     before_exhaustion = _tree(runs)
     exhausted = run(
-        "run-reduction-search", *common_reduction(exhaustion_plan),
-        expected=8, structured=True, guard="exhaustion",
+        "run-reduction-search",
+        *common_reduction(exhaustion_plan),
+        expected=8,
+        structured=True,
+        guard="exhaustion",
     )
     _check_report(
-        exhausted, exhaustion_plan, reason="original_attempt_budget_exhausted", count=1,
+        exhausted,
+        exhaustion_plan,
+        reason="original_attempt_budget_exhausted",
+        count=1,
         exit_code=8,
     )
     assert exhausted["steps"][0]["attempt_id"] is None
@@ -728,39 +877,67 @@ def _native_lifecycle(
     assert exhausted["steps"][0]["assessment"] is None
     assert exhausted["best"]["origin"] == "SOURCE_WITNESS"
     _same_report(inspect(exhaustion_plan), exhausted)
-    _same_report(run(
-        "run-reduction-search", *common_reduction(exhaustion_plan),
-        guard="readonly", expected=8, structured=True,
-    ), exhausted)
+    _same_report(
+        run(
+            "run-reduction-search",
+            *common_reduction(exhaustion_plan),
+            guard="readonly",
+            expected=8,
+            structured=True,
+        ),
+        exhausted,
+    )
     _assert_original_records(runs, before_exhaustion)
     assert helper(_LEDGER_VIEW, str(source_path), str(runs), source["bundle_id"]) == after
     altered = root / "altered-assessment-runs"
     shutil.copytree(runs, altered)
     attack = invoke(
-        verifier, ["-c", _ALTER_ASSESSMENT],
+        verifier,
+        ["-c", _ALTER_ASSESSMENT],
         (str(altered), main_plan["plan_id"]),
     )
     attack_before, original_before_attack = _tree(altered), _tree(runs)
     rejected = run(
-        "inspect-reduction-search", main_plan["plan_id"], "--source-evidence", "live-source",
-        "--input-root", str(inputs), "--runs", str(altered), guard="readonly", expected=2,
+        "inspect-reduction-search",
+        main_plan["plan_id"],
+        "--source-evidence",
+        "live-source",
+        "--input-root",
+        str(inputs),
+        "--runs",
+        str(altered),
+        guard="readonly",
+        expected=2,
     )
     assert rejected["error"]["code"] == "invalid_research_evidence"
     assert _tree(altered) == attack_before and _tree(runs) == original_before_attack
     assert _tree(source_path) == source_before
     return {
-        "frozen": frozen, "search_plan": search, "source_campaign": campaign,
-        "baseline": baseline, "source_finding": finding, "source": source,
-        "before": before, "after": after,
-        "cancel_before_start": {"plan": before_start, "request": cancellation,
-                                "report": pre_cancelled},
-        "cancel_after_actual_native": {"plan": after_native, "hook": hook,
-                                       "cases": cancelled_cases},
+        "frozen": frozen,
+        "search_plan": search,
+        "source_campaign": campaign,
+        "baseline": baseline,
+        "source_finding": finding,
+        "source": source,
+        "before": before,
+        "after": after,
+        "cancel_before_start": {
+            "plan": before_start,
+            "request": cancellation,
+            "report": pre_cancelled,
+        },
+        "cancel_after_actual_native": {
+            "plan": after_native,
+            "hook": hook,
+            "cases": cancelled_cases,
+        },
         "main": {"frozen": main_plan, "report": main, "cases": main_cases},
         "original_budget_exhaustion": {"frozen": exhaustion_plan, "report": exhausted},
         "altered_assessment_rejected": {"mutation": attack, "error": rejected},
-        "source_bundle_unchanged": True, "original_records_unchanged": True,
-        "cooperative_cancellation_only": True, "existing_runs_inspected_only": True,
+        "source_bundle_unchanged": True,
+        "original_records_unchanged": True,
+        "cooperative_cancellation_only": True,
+        "existing_runs_inspected_only": True,
     }
 
 
@@ -784,18 +961,30 @@ def main() -> None:
         calls = []
 
         def invoke(
-            executable: str, entry: list[str], command: tuple[str, ...], *,
-            expected: int = 0, structured: bool = False,
+            executable: str,
+            entry: list[str],
+            command: tuple[str, ...],
+            *,
+            expected: int = 0,
+            structured: bool = False,
         ) -> dict:
             completed = subprocess.run(
-                [executable, "-I", *entry, *command], cwd=cwd,
-                capture_output=True, text=True, check=False, timeout=240,
+                [executable, "-I", *entry, *command],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=240,
             )
             record = {
-                "executable": executable, "entry": entry, "command": list(command),
-                "expected_exit_code": expected, "exit_code": completed.returncode,
+                "executable": executable,
+                "entry": entry,
+                "command": list(command),
+                "expected_exit_code": expected,
+                "exit_code": completed.returncode,
                 "structured_nonzero_report": structured,
-                "stdout": completed.stdout, "stderr": completed.stderr,
+                "stdout": completed.stdout,
+                "stderr": completed.stderr,
             }
             calls.append(record)
             (transcripts / f"{len(calls):04d}.json").write_bytes(_canonical(record))
@@ -810,8 +999,11 @@ def main() -> None:
             return json.loads(payload)
 
         def run(
-            *command: str, expected: int = 0, producer: bool = False,
-            guard: str | None = None, structured: bool = False,
+            *command: str,
+            expected: int = 0,
+            producer: bool = False,
+            guard: str | None = None,
+            structured: bool = False,
         ) -> dict:
             if guard is not None:
                 entry = ["-c", _GUARD + "\nraise SystemExit(main(sys.argv[1:]))\n"]
@@ -819,8 +1011,11 @@ def main() -> None:
             else:
                 entry = ["-m", "tickwitness"]
             return invoke(
-                native if producer else verifier, entry, command,
-                expected=expected, structured=structured,
+                native if producer else verifier,
+                entry,
+                command,
+                expected=expected,
+                structured=structured,
             )
 
         def helper(code: str, *command: str) -> dict:
@@ -839,16 +1034,20 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
                   'project_version': metadata.version('tickwitness')}, sort_keys=True))
 """
         identities = {}
-        for name, requested in (("producer", arguments.python),
-                                ("verifier", arguments.verifier_python)):
+        for name, requested in (
+            ("producer", arguments.python),
+            ("verifier", arguments.verifier_python),
+        ):
             runtime = invoke(str(requested.absolute()), ["-c", runtime_query], ())
             expected_prefix = str(requested.absolute().parent.parent.resolve())
             assert str(Path(runtime["prefix"]).resolve()) == expected_prefix
             assert Path(runtime["prefix"]).resolve() != Path(runtime["base_prefix"]).resolve()
             assert runtime["project_version"] == "0.2.0.dev0"
-            identities[name] = {"requested_executable": str(requested.absolute()),
-                                "requested_venv_prefix_resolved": expected_prefix,
-                                "runtime": runtime}
+            identities[name] = {
+                "requested_executable": str(requested.absolute()),
+                "requested_venv_prefix_resolved": expected_prefix,
+                "runtime": runtime,
+            }
         assert identities["verifier"]["runtime"]["native_distribution"] is None
         assert identities["producer"]["runtime"]["native_distribution"] == (
             None if arguments.core_only else "1.231.0"
@@ -858,18 +1057,33 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
         assert pre_io == {"confirmation_operations_rejected_before_io": 4}
         rejections = []
         for command in (
-            "freeze-reduction-search", "run-reduction-search", "inspect-reduction-search",
+            "freeze-reduction-search",
+            "run-reduction-search",
+            "inspect-reduction-search",
             "cancel-reduction-search",
         ):
             if command == "freeze-reduction-search":
-                positional = ("missing-source", "missing-request.json", "--expected-bundle-id",
-                              "invalid", "--expected-report-id", "invalid")
+                positional = (
+                    "missing-source",
+                    "missing-request.json",
+                    "--expected-bundle-id",
+                    "invalid",
+                    "--expected-report-id",
+                    "invalid",
+                )
             else:
                 positional = ("invalid", "--source-evidence", "missing-source")
             rejected = run(
-                command, *positional, "--input-root", str(root / "missing-input-root"),
-                "--runs", str(root / "missing-runs"), "--split", "confirmation",
-                expected=5, guard="readonly",
+                command,
+                *positional,
+                "--input-root",
+                str(root / "missing-input-root"),
+                "--runs",
+                str(root / "missing-runs"),
+                "--split",
+                "confirmation",
+                expected=5,
+                guard="readonly",
             )
             assert rejected["error"]["code"] == "confirmation_access_denied"
             rejections.append({"name": command + "-confirmation", "error": rejected})
@@ -879,57 +1093,95 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
         old_source_before = _tree(inputs / "old-exhausted-source")
         (inputs / "old-search.json").write_bytes(_canonical(_request(7)))
         empty = root / "empty-live-ledger"
-        invoke(verifier, ["-c", (
-            "import json,sys; from pathlib import Path; "
-            "from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger; "
-            "LocalAttemptLedger(Path(sys.argv[1])); print(json.dumps({'created_empty':True}))"
-        )], (str(empty),))
+        invoke(
+            verifier,
+            [
+                "-c",
+                (
+                    "import json,sys; from pathlib import Path; "
+                    "from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger; "
+                    "LocalAttemptLedger(Path(sys.argv[1])); print(json.dumps({'created_empty':True}))"
+                ),
+            ],
+            (str(empty),),
+        )
         empty_before = _tree(empty)
         for name, ledger, expected, code in (
-            ("old-source-missing-ledger", root / "never-created-ledger", 4,
-             "research_evidence_not_found"),
+            (
+                "old-source-missing-ledger",
+                root / "never-created-ledger",
+                4,
+                "research_evidence_not_found",
+            ),
             ("old-source-empty-ledger", empty, 2, "invalid_research_evidence"),
         ):
             rejected = run(
-                "freeze-reduction-search", "old-exhausted-source", "old-search.json",
-                "--input-root", str(inputs), "--expected-bundle-id", _GOLDEN["bundle_id"],
-                "--expected-report-id", _GOLDEN["report_id"], "--runs", str(ledger),
-                expected=expected, guard="control",
+                "freeze-reduction-search",
+                "old-exhausted-source",
+                "old-search.json",
+                "--input-root",
+                str(inputs),
+                "--expected-bundle-id",
+                _GOLDEN["bundle_id"],
+                "--expected-report-id",
+                _GOLDEN["report_id"],
+                "--runs",
+                str(ledger),
+                expected=expected,
+                guard="control",
             )
             assert rejected["error"]["code"] == code
             rejections.append({"name": name, "error": rejected})
-        assert _tree(empty) == empty_before
+        assert empty.is_dir() and _tree(empty) == empty_before
+        assert not (empty / "reduction-campaigns").exists()
         assert not (root / "never-created-ledger").exists()
         lifecycle = None
         if not arguments.core_only:
             lifecycle = _native_lifecycle(
-                run, invoke, helper, native, verifier, examples, root, inputs,
+                run,
+                invoke,
+                helper,
+                native,
+                verifier,
+                examples,
+                root,
+                inputs,
             )
         assert _tree(inputs / "old-exhausted-source") == old_source_before
         assert _tree(examples / "alpha") == committed_before
         report = {
-            "kind": "installed_reduction_search_acceptance_v1", "accepted": True,
+            "kind": "installed_reduction_search_acceptance_v1",
+            "accepted": True,
             "native_execution": not arguments.core_only,
-            "interpreter_identities": identities, "pre_io": pre_io,
-            "core_rejections": rejections, "committed_exhausted_source_pins": _GOLDEN,
+            "interpreter_identities": identities,
+            "pre_io": pre_io,
+            "core_rejections": rejections,
+            "committed_exhausted_source_pins": _GOLDEN,
             "old_source_and_empty_ledger_unchanged": True,
             "lifecycle": lifecycle,
             "readonly_inspection_guard": {
-                "core_only": True, "native_and_workers_forbidden": True,
+                "core_only": True,
+                "native_and_workers_forbidden": True,
                 "reservation_and_publication_forbidden": True,
-                "old_research_stores_forbidden": True, "network_and_sqlite_forbidden": True,
+                "old_research_stores_forbidden": True,
+                "network_and_sqlite_forbidden": True,
             },
             "cancellation_scope": "between_candidates_after_current_bounded_attempt_v1",
             "elapsed_limit_scope": "between_candidate_admission_not_hard_total_deadline_v1",
-            "hard_total_wall_deadline_verified": False, "hard_storage_quota_verified": False,
+            "hard_total_wall_deadline_verified": False,
+            "hard_storage_quota_verified": False,
             "reducer_evaluation_scope": {
-                "source_claim_evaluated": False, "baseline_truth_evaluated": False,
+                "source_claim_evaluated": False,
+                "baseline_truth_evaluated": False,
                 "original_predicate_domain_extended": False,
             },
             "source_bootstrap_baseline_evaluation_included": not arguments.core_only,
-            "new_baseline_flip_issued": False, "local_minimum_verified": False,
-            "global_minimum_verified": False, "checkpoint_resume_verified": False,
-            "external_attempts": 0, "external_attempt_gate": "PENDING",
+            "new_baseline_flip_issued": False,
+            "local_minimum_verified": False,
+            "global_minimum_verified": False,
+            "checkpoint_resume_verified": False,
+            "external_attempts": 0,
+            "external_attempt_gate": "PENDING",
         }
         inner_report = root / "reduction-search-smoke" / "report.json"
         inner_report.parent.mkdir()

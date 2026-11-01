@@ -7,6 +7,7 @@ source evidence before executing or inspecting their durable journal.
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from itertools import pairwise
 from types import MappingProxyType
 from typing import cast
 
@@ -167,7 +168,7 @@ def _validated(raw: bytes) -> Row:
         "Source capture count exceeds the original event budget",
     )
     checked = [integer(value, "source capture_seq", 1, INT64_MAX) for value in captures]
-    _require(all(left < right for left, right in zip(checked, checked[1:])), "Captures not ordered")
+    _require(all(left < right for left, right in pairwise(checked)), "Captures not ordered")
     focus = cast("int", request["focus_from_capture_seq"])
     minimum = integer(document["minimum_through_capture_seq"], "minimum through", focus, INT64_MAX)
     _require(focus in checked and minimum in checked, "Focus and minimum must be actual captures")

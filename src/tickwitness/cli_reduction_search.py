@@ -78,8 +78,10 @@ def execute(arguments: argparse.Namespace) -> dict[str, object]:
         identity(arguments.plan_id)
         source_name = arguments.source_evidence
     source = read_search_evidence_bundle(_source_path(arguments.input_root, source_name))
+
     def ledger_factory() -> LocalAttemptLedger:
         return LocalAttemptLedger(arguments.runs, create=False)
+
     if arguments.command == "freeze-reduction-search":
         return freeze_reduction_search(
             source,

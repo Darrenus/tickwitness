@@ -108,8 +108,7 @@ def _checked_authority(
 
 def _observation(criterion: Row, evaluation: Row) -> Row:
     eligible = (
-        evaluation["execution_status"] == "completed"
-        and evaluation["valuation_status"] == "valued"
+        evaluation["execution_status"] == "completed" and evaluation["valuation_status"] == "valued"
     )
     _same(
         [criterion["metric"], criterion["unit"], evaluation["unit"]],

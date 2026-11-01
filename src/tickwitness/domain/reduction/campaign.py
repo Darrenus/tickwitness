@@ -30,19 +30,41 @@ from tickwitness.domain.reduction.search import (
 MAX_REDUCTION_CONTROL_BYTES = 64 * 1024
 type Row = dict[str, object]
 _DISPATCH_FIELDS = {
-    "kind", "schema_version", "plan_id", "index", "point", "parent_point",
-    "parent_run_id", "neighbor_index", "reservation_nonce", "intent",
+    "kind",
+    "schema_version",
+    "plan_id",
+    "index",
+    "point",
+    "parent_point",
+    "parent_run_id",
+    "neighbor_index",
+    "reservation_nonce",
+    "intent",
 }
 _LINK_FIELDS = {"kind", "schema_version", "plan_id", "index", "dispatch_id", "reservation"}
 _CANCEL_FIELDS = {"kind", "schema_version", "plan_id", "policy", "hard_kill_requested"}
 _STOP_FIELDS = {
-    "kind", "schema_version", "plan_id", "reason", "steps", "elapsed_ns",
-    "blocked_point", "error", "cancel_id", "exit_code",
+    "kind",
+    "schema_version",
+    "plan_id",
+    "reason",
+    "steps",
+    "elapsed_ns",
+    "blocked_point",
+    "error",
+    "cancel_id",
+    "exit_code",
 }
-STOP_REASONS = frozenset({
-    "neighborhood_checked", "step_limit", "admission_deadline", "cancelled",
-    "original_attempt_budget_exhausted", "operational_failure",
-})
+STOP_REASONS = frozenset(
+    {
+        "neighborhood_checked",
+        "step_limit",
+        "admission_deadline",
+        "cancelled",
+        "original_attempt_budget_exhausted",
+        "operational_failure",
+    }
+)
 
 
 class ReductionCampaignValidationError(EvidenceValidationError):
@@ -80,7 +102,8 @@ def _point(plan: ReductionSearchPlan, value: object) -> Row:
 def _read(raw: bytes, fields: set[str], kind: str, plan: ReductionSearchPlan) -> Row:
     value = _exact(parse(raw, limit=MAX_REDUCTION_CONTROL_BYTES), fields, "Control record")
     _require(
-        value["kind"] == kind and type(value["schema_version"]) is int
+        value["kind"] == kind
+        and type(value["schema_version"]) is int
         and value["schema_version"] == 1,
         "Unsupported reduction coordination markers",
     )
@@ -103,16 +126,20 @@ class ReductionDispatch:
     def __post_init__(self) -> None:
         value = _exact(
             parse(self.canonical_bytes, limit=MAX_REDUCTION_CONTROL_BYTES),
-            _DISPATCH_FIELDS, "Reduction dispatch",
+            _DISPATCH_FIELDS,
+            "Reduction dispatch",
         )
         _require(
             value["kind"] == "reduction_search_dispatch_v1"
-            and type(value["schema_version"]) is int and value["schema_version"] == 1,
+            and type(value["schema_version"]) is int
+            and value["schema_version"] == 1,
             "Unsupported reduction dispatch markers",
         )
-        _require(canonical(value) == self.canonical_bytes
-                 and identity(self.dispatch_id) == digest(self.canonical_bytes),
-                 "Dispatch identity differs from exact canonical bytes")
+        _require(
+            canonical(value) == self.canonical_bytes
+            and identity(self.dispatch_id) == digest(self.canonical_bytes),
+            "Dispatch identity differs from exact canonical bytes",
+        )
 
     @property
     def document(self) -> Row:
@@ -142,8 +169,10 @@ def load_dispatch(raw: bytes, *, plan: ReductionSearchPlan) -> ReductionDispatch
     )
     bindings = cast("Row", intent.document["bindings"])
     for key, source_key in (
-        ("source_bundle_id", "bundle_id"), ("source_report_id", "report_id"),
-        ("source_run_id", "source_run_id"), ("source_finding_protocol_id", "finding_protocol_id"),
+        ("source_bundle_id", "bundle_id"),
+        ("source_report_id", "report_id"),
+        ("source_run_id", "source_run_id"),
+        ("source_finding_protocol_id", "finding_protocol_id"),
         ("replay_spec_id", "replay_spec_id"),
     ):
         _require(bindings[key] == source[source_key], "Dispatch differs from original source")
@@ -151,23 +180,41 @@ def load_dispatch(raw: bytes, *, plan: ReductionSearchPlan) -> ReductionDispatch
 
 
 def build_dispatch(
-    plan: ReductionSearchPlan, *, index: int, point: Row, parent_point: Row,
-    parent_run_id: str, neighbor_index: int, nonce: str, intent: ReductionExecutionIntent,
+    plan: ReductionSearchPlan,
+    *,
+    index: int,
+    point: Row,
+    parent_point: Row,
+    parent_run_id: str,
+    neighbor_index: int,
+    nonce: str,
+    intent: ReductionExecutionIntent,
 ) -> ReductionDispatch:
     _require(type(intent) is ReductionExecutionIntent, "Dispatch requires actual reduction intent")
     checked = load_reduction_intent(intent.canonical_bytes)
     _require(checked.intent_id == intent.intent_id, "Reduction intent identity differs")
-    raw = _bounded({
-        "kind": "reduction_search_dispatch_v1", "schema_version": 1,
-        "plan_id": plan.plan_id, "index": index, "point": point,
-        "parent_point": parent_point, "parent_run_id": parent_run_id,
-        "neighbor_index": neighbor_index, "reservation_nonce": nonce, "intent": checked.document,
-    })
+    raw = _bounded(
+        {
+            "kind": "reduction_search_dispatch_v1",
+            "schema_version": 1,
+            "plan_id": plan.plan_id,
+            "index": index,
+            "point": point,
+            "parent_point": parent_point,
+            "parent_run_id": parent_run_id,
+            "neighbor_index": neighbor_index,
+            "reservation_nonce": nonce,
+            "intent": checked.document,
+        }
+    )
     return load_dispatch(raw, plan=plan)
 
 
 def build_link(
-    dispatch: ReductionDispatch, reservation: AttemptReservation, *, plan: ReductionSearchPlan,
+    dispatch: ReductionDispatch,
+    reservation: AttemptReservation,
+    *,
+    plan: ReductionSearchPlan,
 ) -> bytes:
     checked = load_dispatch(dispatch.canonical_bytes, plan=plan)
     _require(checked.dispatch_id == dispatch.dispatch_id, "Dispatch identity differs")
@@ -183,30 +230,43 @@ def build_link(
         and actual.attempt_index <= cast("int", budget["max_attempts"]),
         "Reservation differs from the dispatched original budget slot",
     )
-    return _bounded({
-        "kind": "reduction_search_attempt_link_v1", "schema_version": 1,
-        "plan_id": plan.plan_id, "index": checked.document["index"],
-        "dispatch_id": checked.dispatch_id, "reservation": actual.document,
-    })
+    return _bounded(
+        {
+            "kind": "reduction_search_attempt_link_v1",
+            "schema_version": 1,
+            "plan_id": plan.plan_id,
+            "index": checked.document["index"],
+            "dispatch_id": checked.dispatch_id,
+            "reservation": actual.document,
+        }
+    )
 
 
 def load_link(
-    raw: bytes, *, dispatch: ReductionDispatch, plan: ReductionSearchPlan,
+    raw: bytes,
+    *,
+    dispatch: ReductionDispatch,
+    plan: ReductionSearchPlan,
 ) -> AttemptReservation:
     value = _read(raw, _LINK_FIELDS, "reduction_search_attempt_link_v1", plan)
     reservation_raw = canonical(cast("Row", value["reservation"]))
     reservation = AttemptReservation(digest(reservation_raw), reservation_raw)
-    _require(build_link(dispatch, reservation, plan=plan) == raw, "Link differs from actual dispatch")
+    _require(
+        build_link(dispatch, reservation, plan=plan) == raw, "Link differs from actual dispatch"
+    )
     return reservation
 
 
 def build_cancel(plan: ReductionSearchPlan) -> bytes:
-    return _bounded({
-        "kind": "reduction_search_cancel_request_v1", "schema_version": 1,
-        "plan_id": _checked(plan).plan_id,
-        "policy": "between_candidates_after_current_bounded_attempt_v1",
-        "hard_kill_requested": False,
-    })
+    return _bounded(
+        {
+            "kind": "reduction_search_cancel_request_v1",
+            "schema_version": 1,
+            "plan_id": _checked(plan).plan_id,
+            "policy": "between_candidates_after_current_bounded_attempt_v1",
+            "hard_kill_requested": False,
+        }
+    )
 
 
 def load_cancel(raw: bytes, *, plan: ReductionSearchPlan) -> Row:
@@ -226,22 +286,33 @@ def _error(value: object) -> Row | None:
     )
     message = error["message"]
     _require(
-        isinstance(message, str) and 0 < len(message) <= 4096
+        isinstance(message, str)
+        and 0 < len(message) <= 4096
         and not any(ord(character) < 32 or ord(character) == 127 for character in message),
         "Error message must be bounded printable Unicode",
     )
     cast("str", message).encode("utf-8", errors="strict")
-    _require(type(error["exit_code"]) is int and error["exit_code"] in (2, 3, 4, 6, 7, 8),
-             "Operational exit code is not supported")
+    _require(
+        type(error["exit_code"]) is int and error["exit_code"] in (2, 3, 4, 6, 7, 8),
+        "Operational exit code is not supported",
+    )
     return error
 
 
 def build_stop(
-    plan: ReductionSearchPlan, reason: str, *, steps: int, elapsed_ns: int,
-    blocked_point: Row | None = None, error: Row | None = None, cancel_id: str | None = None,
+    plan: ReductionSearchPlan,
+    reason: str,
+    *,
+    steps: int,
+    elapsed_ns: int,
+    blocked_point: Row | None = None,
+    error: Row | None = None,
+    cancel_id: str | None = None,
 ) -> bytes:
     plan = _checked(plan)
-    _require(reason in STOP_REASONS, "Unsupported reduction stop reason")
+    _require(
+        isinstance(reason, str) and reason in STOP_REASONS, "Unsupported reduction stop reason"
+    )
     maximum = cast("int", cast("Row", plan.document["request"])["max_steps"])
     _integer(steps, 0, maximum, "Stop step count")
     _integer(elapsed_ns, 0, (1 << 63) - 1, "Observed monotonic elapsed time")
@@ -251,8 +322,10 @@ def build_stop(
     if reason == "operational_failure":
         _require(error is not None, "Operational stop requires its observed error")
     elif reason == "original_attempt_budget_exhausted":
-        _require(error is not None and error["code"] == "attempt_budget_exhausted",
-                 "Budget stop requires original budget exhaustion")
+        _require(
+            error is not None and error["code"] == "attempt_budget_exhausted",
+            "Budget stop requires original budget exhaustion",
+        )
     else:
         _require(error is None, "Intentional stop cannot fabricate execution failure")
     if reason == "neighborhood_checked":
@@ -266,23 +339,39 @@ def build_stop(
     if reason == "admission_deadline":
         limit = cast("int", cast("Row", plan.document["request"])["max_wall_time_ms"])
         _require(elapsed_ns >= limit * 1_000_000, "Admission stop precedes its elapsed cap")
-    exit_code = (8 if reason == "original_attempt_budget_exhausted"
-                 else cast("int", error["exit_code"]) if error is not None else 0)
-    return _bounded({
-        "kind": "reduction_search_stop_v1", "schema_version": 1, "plan_id": plan.plan_id,
-        "reason": reason, "steps": steps, "elapsed_ns": elapsed_ns,
-        "blocked_point": blocked_point, "error": error, "cancel_id": cancel_id,
-        "exit_code": exit_code,
-    })
+    exit_code = (
+        8
+        if reason == "original_attempt_budget_exhausted"
+        else cast("int", error["exit_code"])
+        if error is not None
+        else 0
+    )
+    return _bounded(
+        {
+            "kind": "reduction_search_stop_v1",
+            "schema_version": 1,
+            "plan_id": plan.plan_id,
+            "reason": reason,
+            "steps": steps,
+            "elapsed_ns": elapsed_ns,
+            "blocked_point": blocked_point,
+            "error": error,
+            "cancel_id": cancel_id,
+            "exit_code": exit_code,
+        }
+    )
 
 
 def load_stop(raw: bytes, *, plan: ReductionSearchPlan) -> Row:
     value = _read(raw, _STOP_FIELDS, "reduction_search_stop_v1", plan)
     rebuilt = build_stop(
-        plan, cast("str", value["reason"]), steps=cast("int", value["steps"]),
+        plan,
+        cast("str", value["reason"]),
+        steps=cast("int", value["steps"]),
         elapsed_ns=cast("int", value["elapsed_ns"]),
         blocked_point=cast("Row | None", value["blocked_point"]),
-        error=cast("Row | None", value["error"]), cancel_id=cast("str | None", value["cancel_id"]),
+        error=cast("Row | None", value["error"]),
+        cancel_id=cast("str | None", value["cancel_id"]),
     )
     _require(rebuilt == raw, "Reduction stop differs from its immutable declarations")
     return value

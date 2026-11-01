@@ -98,9 +98,10 @@ def test_decreasing_operators_use_actual_capture_indices_and_respect_delay_minim
     assert reduction_neighbors(frozen, original) == (
         {"through_capture_seq": 9, "additional_delay_ns": 20_000_000},
     )
-    assert reduction_neighbors(
-        frozen, {"through_capture_seq": 5, "additional_delay_ns": 20_000_000}
-    ) == ()
+    assert (
+        reduction_neighbors(frozen, {"through_capture_seq": 5, "additional_delay_ns": 20_000_000})
+        == ()
+    )
     with pytest.raises(ReductionValidationError):
         point_cost(frozen, {"through_capture_seq": 19, "additional_delay_ns": 20_000_000})
 

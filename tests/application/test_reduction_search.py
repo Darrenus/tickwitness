@@ -1,6 +1,7 @@
 """Saved offline callback facts exercise control; actual native runs qualify in CI."""
 
 from copy import deepcopy
+
 import pytest
 from test_reduction_execution import Proxy, forbidden
 from test_reduction_execution import reduction_case as reduction_case
@@ -15,18 +16,28 @@ from tickwitness.application.reduction_search import (
     run_reduction_search,
 )
 from tickwitness.application.research import ConfirmationAccessDenied
-from tickwitness.domain.evidence.run_records import EvidenceValidationError, canonical, digest, parse
+from tickwitness.domain.evidence.run_records import (
+    EvidenceValidationError,
+    canonical,
+    digest,
+    parse,
+)
 from tickwitness.domain.replay.contracts import build_replay_result
 from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger
 from tickwitness.infrastructure.reduction_campaign_store import LocalReductionCampaignStore
 
 
 def request(*, steps=3, cap=60_000):
-    return canonical({
-        "kind": "reduction_search_request_v1", "schema_version": 1,
-        "witness_ordinal": 1, "focus_from_capture_seq": 4,
-        "max_steps": steps, "max_wall_time_ms": cap,
-    })
+    return canonical(
+        {
+            "kind": "reduction_search_request_v1",
+            "schema_version": 1,
+            "witness_ordinal": 1,
+            "focus_from_capture_seq": 4,
+            "max_steps": steps,
+            "max_wall_time_ms": cap,
+        }
+    )
 
 
 class OfflinePrefixEngine:
@@ -36,9 +47,11 @@ class OfflinePrefixEngine:
         self.value = value
 
     def run(self, replay_input):
-        base = self.value.case.engine_factory(60).run(
-            self.value.prepared.materialization.replay_input
-        ).document
+        base = (
+            self.value.case.engine_factory(60)
+            .run(self.value.prepared.materialization.replay_input)
+            .document
+        )
         count = len(replay_input.normalized_bytes.splitlines())
         assert count in (4, 5, 6)
         document = deepcopy(base)
@@ -52,12 +65,15 @@ class OfflinePrefixEngine:
             for ordinal, row in enumerate(document[channel]):
                 row["ordinal"] = ordinal
         accounts = [
-            row for row in document["account_trace"]
+            row
+            for row in document["account_trace"]
             if row["kind"] != "final_account_snapshot"
             and (row["source_ref"] is None or row["source_ref"]["capture_seq"] <= count)
         ]
         final = deepcopy(document["account_trace"][-1])
-        final.update(ordinal=len(accounts), native_time_ns=document["input_trace"][-1]["native_time_ns"])
+        final.update(
+            ordinal=len(accounts), native_time_ns=document["input_trace"][-1]["native_time_ns"]
+        )
         if count == 4:
             final["fields"] = deepcopy(accounts[-1]["fields"])
             order = final["fields"]["orders"][0]
@@ -83,7 +99,8 @@ def freeze(value, *, steps=3, cap=60_000, **overrides):
     options = {
         "expected_bundle_id": value.source.bundle_id,
         "expected_report_id": digest(value.source.artifacts["finding_report"]),
-        "split": "development", "ledger_factory": lambda: value.ledger,
+        "split": "development",
+        "ledger_factory": lambda: value.ledger,
         "store_factory": lambda: value.store,
     }
     options.update(overrides)
@@ -92,8 +109,11 @@ def freeze(value, *, steps=3, cap=60_000, **overrides):
 
 def run(value, plan_id, **overrides):
     options = {
-        "source": value.source, "split": "development", "ledger_factory": lambda: value.ledger,
-        "store_factory": lambda: value.store, "engine_factory": value.engine,
+        "source": value.source,
+        "split": "development",
+        "ledger_factory": lambda: value.ledger,
+        "store_factory": lambda: value.store,
+        "engine_factory": value.engine,
         "monotonic_ns": lambda: 1,
     }
     options.update(overrides)
@@ -102,7 +122,9 @@ def run(value, plan_id, **overrides):
 
 def inspect(value, plan_id, **overrides):
     options = {
-        "source": value.source, "split": "development", "ledger_factory": lambda: value.ledger,
+        "source": value.source,
+        "split": "development",
+        "ledger_factory": lambda: value.ledger,
         "store_factory": lambda: value.store,
     }
     options.update(overrides)
@@ -111,7 +133,9 @@ def inspect(value, plan_id, **overrides):
 
 def cancel(value, plan_id, **overrides):
     options = {
-        "source": value.source, "split": "development", "ledger_factory": lambda: value.ledger,
+        "source": value.source,
+        "split": "development",
+        "ledger_factory": lambda: value.ledger,
         "store_factory": lambda: value.store,
     }
     options.update(overrides)
@@ -139,7 +163,9 @@ def test_greedy_execution_reaudits_real_cas_and_unknown_does_not_certify_minimum
     assert report["stop_reason"] == "neighborhood_checked" and report["exit_code"] == 0
     assert [step["point"]["through_capture_seq"] for step in report["steps"]] == [6, 5, 4]
     assert [step["assessment"]["outcome"] for step in report["steps"]] == [
-        "PRESERVED", "PRESERVED", "NOT_EVALUABLE",
+        "PRESERVED",
+        "PRESERVED",
+        "NOT_EVALUABLE",
     ]
     assert [step["attempt_index"] for step in report["steps"]] == [3, 4, 5]
     assert report["best"]["origin"] == "REDUCTION_RUN"
@@ -160,7 +186,14 @@ def test_existing_execution_only_inspects_without_clock_or_native_retry(search_c
     before = tree(value.case.root)
     for name in ("reserve", "reserve_with_nonce", "bind_intent", "publish"):
         monkeypatch.setattr(value.ledger, name, forbidden)
-    for name in ("start", "write_dispatch", "write_link", "write_result", "write_stop", "write_cancel"):
+    for name in (
+        "start",
+        "write_dispatch",
+        "write_link",
+        "write_result",
+        "write_stop",
+        "write_cancel",
+    ):
         monkeypatch.setattr(value.store, name, forbidden)
     assert run(value, plan_id, engine_factory=forbidden, monotonic_ns=forbidden) == report
     assert inspect(value, plan_id) == report
@@ -200,7 +233,9 @@ def test_inflight_cancel_preserves_current_outcome_before_stopping_next_dispatch
     assert report["verification"]["hard_cancel_enforced"] is False
 
 
-def test_elapsed_admission_cutoff_prevents_first_dispatch_without_claiming_hard_deadline(search_case):
+def test_elapsed_admission_cutoff_prevents_first_dispatch_without_claiming_hard_deadline(
+    search_case,
+):
     value = search_case
     plan_id = freeze(value, cap=1)["plan_id"]
     times = iter([0, 1_000_000, 1_000_000])
@@ -260,7 +295,9 @@ def test_interruption_retains_consumed_unfinalized_slot_and_never_resumes(search
 @pytest.mark.parametrize("method", ["write_dispatch", "write_link", "write_result", "write_stop"])
 @pytest.mark.parametrize("after_commit", [False, True])
 def test_uncertain_control_publication_never_retries_or_reports_success(
-    search_case, method, after_commit,
+    search_case,
+    method,
+    after_commit,
 ):
     value = search_case
     plan_id = freeze(value, steps=1)["plan_id"]
@@ -287,7 +324,17 @@ def test_uncertain_control_publication_never_retries_or_reports_success(
         assert value.ledger.get_outcome(report["steps"][0]["attempt_id"]) is not None
 
 
-@pytest.mark.parametrize("attack", ["assessment", "greedy_point", "operational_stop", "cancel_marker"])
+@pytest.mark.parametrize(
+    "attack",
+    [
+        "assessment",
+        "greedy_point",
+        "operational_stop",
+        "cancel_marker",
+        "stop_reason_list",
+        "stop_reason_object",
+    ],
+)
 def test_rehashed_semantic_control_tampering_is_rejected_without_repair(search_case, attack):
     value = search_case
     plan_id = freeze(value, steps=1)["plan_id"]
@@ -298,6 +345,7 @@ def test_rehashed_semantic_control_tampering_is_rejected_without_repair(search_c
         row = parse(target.read_bytes(), limit=128 * 1024)
         row["outcome"] = "NOT_PRESERVED"
         row["criterion_observation"]["truth"] = True
+        row["criterion_observation"]["value"] = "1"
     elif attack == "greedy_point":
         target = base / "dispatches" / "0001.json"
         row = parse(target.read_bytes())
@@ -305,8 +353,16 @@ def test_rehashed_semantic_control_tampering_is_rejected_without_repair(search_c
     elif attack == "operational_stop":
         target = base / "stop.json"
         row = parse(target.read_bytes())
-        row.update(reason="operational_failure", exit_code=7,
-                   error={"code": "invented_failure", "message": "not observed", "exit_code": 7})
+        row.update(
+            reason="operational_failure",
+            exit_code=7,
+            blocked_point=parse((base / "dispatches" / "0001.json").read_bytes())["point"],
+            error={"code": "invented_failure", "message": "not observed", "exit_code": 7},
+        )
+    elif attack in ("stop_reason_list", "stop_reason_object"):
+        target = base / "stop.json"
+        row = parse(target.read_bytes())
+        row["reason"] = [] if attack == "stop_reason_list" else {}
     else:
         target = base / "cancel.json"
         row = {"kind": "invented_cancel"}
@@ -333,15 +389,29 @@ def test_confirmation_rejection_precedes_identifiers_sources_and_factories(opera
     with pytest.raises(ConfirmationAccessDenied):
         if operation == "freeze":
             freeze_reduction_search(
-                Unreadable(), b"bad", expected_bundle_id="bad", expected_report_id="bad",
-                split="confirmation", ledger_factory=forbidden, store_factory=forbidden,
+                Unreadable(),
+                b"bad",
+                expected_bundle_id="bad",
+                expected_report_id="bad",
+                split="confirmation",
+                ledger_factory=forbidden,
+                store_factory=forbidden,
             )
         else:
-            function = {"run": run_reduction_search, "inspect": inspect_reduction_search,
-                        "cancel": cancel_reduction_search}[operation]
+            function = {
+                "run": run_reduction_search,
+                "inspect": inspect_reduction_search,
+                "cancel": cancel_reduction_search,
+            }[operation]
             extras = {"engine_factory": forbidden} if operation == "run" else {}
-            function("bad", source=Unreadable(), split="confirmation", ledger_factory=forbidden,
-                     store_factory=forbidden, **extras)
+            function(
+                "bad",
+                source=Unreadable(),
+                split="confirmation",
+                ledger_factory=forbidden,
+                store_factory=forbidden,
+                **extras,
+            )
 
 
 def test_forged_plan_does_not_authorize_source_or_budget_changes(search_case):

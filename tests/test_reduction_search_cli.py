@@ -27,7 +27,11 @@ def test_confirmation_denial_precedes_invalid_ids_packages_and_factories(tmp_pat
     args = [command, "invalid"]
     if command == "freeze-reduction-search":
         args += [
-            "missing.json", "--expected-bundle-id", "invalid", "--expected-report-id", "invalid"
+            "missing.json",
+            "--expected-bundle-id",
+            "invalid",
+            "--expected-report-id",
+            "invalid",
         ]
     else:
         args += ["--source-evidence", "missing-source"]
@@ -109,9 +113,7 @@ def test_old_portable_source_cannot_create_or_restore_original_slots(tmp_path, c
     if existing:
         LocalAttemptLedger(runs)
     before = {
-        str(path.relative_to(runs)): path.read_bytes()
-        for path in runs.rglob("*")
-        if path.is_file()
+        str(path.relative_to(runs)): path.read_bytes() for path in runs.rglob("*") if path.is_file()
     }
     assert main(_freeze_args(tmp_path, runs)) == (2 if existing else 4)
     streams = capsys.readouterr()
@@ -121,9 +123,7 @@ def test_old_portable_source_cannot_create_or_restore_original_slots(tmp_path, c
     )
     assert not (runs / "reduction-campaigns").exists()
     after = {
-        str(path.relative_to(runs)): path.read_bytes()
-        for path in runs.rglob("*")
-        if path.is_file()
+        str(path.relative_to(runs)): path.read_bytes() for path in runs.rglob("*") if path.is_file()
     }
     assert after == before
     if not existing:

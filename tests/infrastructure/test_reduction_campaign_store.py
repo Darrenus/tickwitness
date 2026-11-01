@@ -24,7 +24,10 @@ def test_reduction_namespace_does_not_relax_original_search_inventory(tmp_path):
     assert search.get_campaign(PLAN) == b"original search"
     assert reduction.get_campaign(PLAN) == b"independent reduction plan"
     assert reduction.get_cancel(PLAN) == b"cooperative cancellation"
-    assert sorted(path.name for path in root.iterdir()) == ["reduction-campaigns", "search-campaigns"]
+    assert sorted(path.name for path in root.iterdir()) == [
+        "reduction-campaigns",
+        "search-campaigns",
+    ]
     assert reduction.check_tree(PLAN) == {"dispatches": (), "links": (), "results": ()}
     (root / "search-campaigns" / PLAN / "cancel.json").write_bytes(b"not a search path")
     with pytest.raises(SearchCampaignStoreError, match="Unknown"):
