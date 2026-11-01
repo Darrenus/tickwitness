@@ -1100,7 +1100,8 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
                 (
                     "import json,sys; from pathlib import Path; "
                     "from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger; "
-                    "LocalAttemptLedger(Path(sys.argv[1])); print(json.dumps({'created_empty':True}))"
+                    "LocalAttemptLedger(Path(sys.argv[1])); "
+                    "print(json.dumps({'created_empty':True}))"
                 ),
             ],
             (str(empty),),

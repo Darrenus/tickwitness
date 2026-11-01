@@ -47,12 +47,14 @@ from tickwitness.domain.search.plans import build_search_plan
 def _case(*, comparator="gt", threshold="0", pending=False, variant=None):
     original = prepared_case(pending=pending)
     validated = original.materialized.source.validation
-    spec = validated.replay_input.spec
+    source_input = validated.replay_input
+    spec = source_input.spec
     document = original.result.document
     if variant == "ambiguous":
-        changed_input, ambiguous = _ambiguous_fixture()
-        assert changed_input.normalized_bytes == validated.replay_input.normalized_bytes
-        spec, document = changed_input.spec, ambiguous.document
+        # The fee fixture owns a different tape and callback clock. Preserve
+        # its complete input/spec/result binding rather than mixing sources.
+        source_input, ambiguous = _ambiguous_fixture()
+        spec, document = source_input.spec, ambiguous.document
     if variant == "no_fills":
         document["fill_trace"] = []
         rejected = deepcopy(document["order_trace"][2])
@@ -84,12 +86,10 @@ def _case(*, comparator="gt", threshold="0", pending=False, variant=None):
                 "budget": validated.protocol.document["budget"],
             }
         ),
-        development_dataset_id=validated.replay_input.dataset_id,
+        development_dataset_id=source_input.dataset_id,
         confirmation_dataset_id=validated.protocol.document["datasets"]["confirmation"],
     )
-    replay_input = ReplayInput(
-        validated.replay_input.dataset_id, validated.replay_input.normalized_bytes, spec
-    )
+    replay_input = ReplayInput(source_input.dataset_id, source_input.normalized_bytes, spec)
     assumptions_request = validated.assumptions.document
     assumptions_request.pop("bindings")
     assumptions_request["kind"] = "assumption_request_v1"
@@ -152,6 +152,8 @@ def _case(*, comparator="gt", threshold="0", pending=False, variant=None):
         source=source,
     )
     materialized = materialize_reduction(recipe, source=source)
+    assert materialized.replay_input.normalized_bytes == source_input.normalized_bytes
+    assert document["data_sha256"] == digest(materialized.replay_input.normalized_bytes)
     document.update(dataset_id=materialized.replay_input.dataset_id, spec_id=spec.spec_id)
     result = build_replay_result(document)
     attempt_document = original.reservation.document
