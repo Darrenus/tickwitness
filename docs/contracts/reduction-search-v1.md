@@ -1,6 +1,6 @@
 # Reduction Search v1
 
-状态：S09-02合同冻结，实现与远端验收进行中。Owner已合并[PR #98](https://github.com/Darrenus/tickwitness/pull/98)，接受merge为`3577be7b07fba10a7da70cc95c2d3e887fcb06fd`。本切片在[Reduction Input v1](reduction-input-v1.md)和[Reduction Execution v1](reduction-execution-v1.md)之上添加有限、可协作取消的局部搜索；决策见[ADR 0030](../adr/0030-bounded-local-reduction.md)。外部真人复验仍0／PENDING，原PR94转交归档不变。
+状态：S09-02实现与远端验收完成，[PR #99](https://github.com/Darrenus/tickwitness/pull/99)待owner接受，实际run／artifact见[Sprint 9验收记录](../planning/sprint-09-status.md#s09-02-远端验收记录)。Owner已合并[PR #98](https://github.com/Darrenus/tickwitness/pull/98)，接受merge为`3577be7b07fba10a7da70cc95c2d3e887fcb06fd`。本切片在[Reduction Input v1](reduction-input-v1.md)和[Reduction Execution v1](reduction-execution-v1.md)之上添加有限、可协作取消的局部搜索；决策见[ADR 0030](../adr/0030-bounded-local-reduction.md)。外部真人复验仍0／PENDING，原PR94转交归档不变。
 
 ## 1. 复用原证据与原预算
 

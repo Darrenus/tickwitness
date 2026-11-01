@@ -1,6 +1,6 @@
 # ADR 0030 — Search finite reduction neighborhoods on the original budget
 
-Status: Proposed; S09-02 implementation and remote qualification pending, 2026-11-01.
+Status: Proposed for owner acceptance; S09-02 implemented and remotely qualified, 2026-11-01. Actual runs and artifacts are recorded in the [Sprint 9 acceptance record](../planning/sprint-09-status.md#s09-02-远端验收记录).
 
 ## Context
 
