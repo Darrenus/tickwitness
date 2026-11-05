@@ -38,6 +38,9 @@ from tickwitness.cli_queue_execution import execute as execute_queue_execution_c
 from tickwitness.cli_queues import COMMAND as QUEUE_COMMAND
 from tickwitness.cli_queues import add_commands as add_queue_commands
 from tickwitness.cli_queues import execute as execute_queue_command
+from tickwitness.cli_reduction_comparison import COMMANDS as REDUCTION_COMPARISON_COMMANDS
+from tickwitness.cli_reduction_comparison import add_commands as add_reduction_comparison_commands
+from tickwitness.cli_reduction_comparison import execute as execute_reduction_comparison_command
 from tickwitness.cli_reduction_execution import COMMANDS as REDUCTION_EXECUTION_COMMANDS
 from tickwitness.cli_reduction_execution import add_commands as add_reduction_execution_commands
 from tickwitness.cli_reduction_execution import execute as execute_reduction_execution_command
@@ -261,13 +264,17 @@ def main(argv: list[str] | None = None) -> int:
     add_reduction_commands(commands)
     add_reduction_execution_commands(commands)
     add_reduction_search_commands(commands)
+    add_reduction_comparison_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in REDUCTION_SEARCH_COMMANDS:
+        if arguments.command in REDUCTION_COMPARISON_COMMANDS:
+            sys.stdout.write(execute_reduction_comparison_command(arguments))
+            return 0
+        elif arguments.command in REDUCTION_SEARCH_COMMANDS:
             output, identity = execute_reduction_search_command(arguments), ""
         elif arguments.command in REDUCTION_EXECUTION_COMMANDS:
             output, identity = execute_reduction_execution_command(arguments), ""
