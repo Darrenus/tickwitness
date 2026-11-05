@@ -11,6 +11,7 @@ from typing import cast
 
 from tickwitness.application.datasets import import_events, inspect_dataset
 from tickwitness.application.experiments import ProtocolRunError
+from tickwitness.application.jobs import JobStoreError
 from tickwitness.application.reduction_search import ReductionSearchPublicationError
 from tickwitness.application.replay import compare_replays, replay_dataset
 from tickwitness.application.research import (
@@ -32,6 +33,9 @@ from tickwitness.cli_confirmation import execute as execute_confirmation_command
 from tickwitness.cli_experiments import COMMANDS as EXPERIMENT_COMMANDS
 from tickwitness.cli_experiments import add_commands as add_experiment_commands
 from tickwitness.cli_experiments import execute as execute_experiment_command
+from tickwitness.cli_jobs import COMMANDS as JOB_COMMANDS
+from tickwitness.cli_jobs import add_commands as add_job_commands
+from tickwitness.cli_jobs import execute as execute_job_command
 from tickwitness.cli_queue_execution import COMMANDS as QUEUE_EXECUTION_COMMANDS
 from tickwitness.cli_queue_execution import add_commands as add_queue_execution_commands
 from tickwitness.cli_queue_execution import execute as execute_queue_execution_command
@@ -81,6 +85,7 @@ from tickwitness.domain.evidence.alpha_scorecard import AlphaValidationError
 from tickwitness.domain.evidence.evaluation import EvaluationValidationError
 from tickwitness.domain.evidence.run_records import EvidenceValidationError
 from tickwitness.domain.evidence.tagged_finding_report import TaggedFindingIneligibleError
+from tickwitness.domain.jobs.contracts import JobValidationError
 from tickwitness.domain.replay.specs import ReplayValidationError
 from tickwitness.domain.research_contracts.confirmation import (
     ConfirmationAlreadyExposed,
@@ -265,13 +270,20 @@ def main(argv: list[str] | None = None) -> int:
     add_reduction_execution_commands(commands)
     add_reduction_search_commands(commands)
     add_reduction_comparison_commands(commands)
+    add_job_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in REDUCTION_COMPARISON_COMMANDS:
+        if arguments.command in JOB_COMMANDS:
+            job_output = execute_job_command(arguments)
+            if isinstance(job_output, str):
+                sys.stdout.write(job_output)
+                return 0
+            output, identity = job_output, ""
+        elif arguments.command in REDUCTION_COMPARISON_COMMANDS:
             sys.stdout.write(execute_reduction_comparison_command(arguments))
             return 0
         elif arguments.command in REDUCTION_SEARCH_COMMANDS:
@@ -397,6 +409,10 @@ def main(argv: list[str] | None = None) -> int:
             ]
             output = compare_replays(*result_files).document
             identity = ""
+    except JobValidationError as error:
+        return _write_error("invalid_job", error, 2)
+    except JobStoreError as error:
+        return _write_error(error.code, error, error.exit_code)
     except AlphaValidationError as error:
         return _write_error("invalid_alpha_evidence", error, 2)
     except AlphaKitNotFoundError as error:

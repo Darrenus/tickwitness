@@ -100,6 +100,7 @@ jobs:
           python3 scripts/smoke_reduction_execution.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/reduction-execution-core.json --records-dir /tmp/reduction-execution-core-records
           python3 scripts/smoke_reduction_search.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/reduction-search-core.json --records-dir /tmp/reduction-search-core-records
           python3 scripts/smoke_reduction_comparison.py --python /tmp/tickwitness-wheel/bin/python --source-report /tmp/reduction-search-core.json --source-records /tmp/reduction-search-core-records --core-only --report /tmp/reduction-comparison-core.json --records-dir /tmp/reduction-comparison-core-records
+          python3 scripts/smoke_jobs.py --python /tmp/tickwitness-wheel/bin/python --source-report /tmp/reduction-comparison-core.json --source-records /tmp/reduction-comparison-core-records --core-only --report /tmp/jobs-core.json --records-dir /tmp/jobs-core-records
           python3 scripts/smoke_queue_constraints.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_queue_execution.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_tagged_queue.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/tagged-queue-core.json
@@ -109,6 +110,17 @@ jobs:
         run: |
           uv venv /tmp/tickwitness-unsupported --python 3.9
           python3 scripts/smoke_alpha_compatibility.py --python /tmp/tickwitness-wheel/bin/python --unsupported-python /tmp/tickwitness-unsupported/bin/python --runner scripts/reproduce_alpha.py --guide docs/alpha-reproduction.md --report /tmp/alpha-compatibility-core.json --records-dir /tmp/alpha-compatibility-core-records
+      - name: Preserve persistent core Job lifecycle and worker diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jobs-core-${{ github.sha }}
+          path: |
+            /tmp/jobs-core.json
+            /tmp/jobs-core-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve standalone reproduction compatibility acceptance
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -373,6 +385,18 @@ jobs:
       - name: Recompute original and reduced evidence without consuming another attempt
         run: |
           python3 scripts/smoke_reduction_comparison.py --python /tmp/tickwitness-tagged-verifier/bin/python --source-report /tmp/reduction-search.json --source-records /tmp/reduction-search-records --report /tmp/reduction-comparison.json --records-dir /tmp/reduction-comparison-records
+          python3 scripts/smoke_jobs.py --python /tmp/tickwitness-tagged-verifier/bin/python --source-report /tmp/reduction-comparison.json --source-records /tmp/reduction-comparison-records --report /tmp/jobs.json --records-dir /tmp/jobs-records
+      - name: Preserve installed persistent Job lifecycle and worker diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jobs-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            /tmp/jobs.json
+            /tmp/jobs-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve installed read-only reduction comparison evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -603,6 +627,7 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_reduction_execution.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/reduction-execution-source-wheel.json --records-dir /tmp/reduction-execution-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_reduction_search.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/reduction-search-source-wheel.json --records-dir /tmp/reduction-search-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_reduction_comparison.py" --python /tmp/tickwitness-preview-core/bin/python --source-report /tmp/reduction-search-source-wheel.json --source-records /tmp/reduction-search-source-wheel-records --report /tmp/reduction-comparison-source-wheel.json --records-dir /tmp/reduction-comparison-source-wheel-records
+          python3 "$TW_SOURCE/scripts/smoke_jobs.py" --python /tmp/tickwitness-preview-core/bin/python --source-report /tmp/reduction-comparison-source-wheel.json --source-records /tmp/reduction-comparison-source-wheel-records --report /tmp/jobs-source-wheel.json --records-dir /tmp/jobs-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_tagged_queue.py" --python /tmp/tickwitness-preview-native/bin/python --native --report /tmp/tagged-queue-source-wheel-execution.json
           python3 "$TW_SOURCE/scripts/smoke_tagged_evidence.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/tagged-pair-source-wheel-evidence.json --bundles-dir /tmp/tagged-pair-source-wheel-bundles
           python3 "$TW_SOURCE/scripts/smoke_tagged_findings.py" --python /tmp/tickwitness-preview-core/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --pairs-dir /tmp/tagged-pair-source-wheel-bundles --source-report /tmp/tagged-pair-source-wheel-evidence.json --report /tmp/tagged-findings-source-wheel.json --bundles-dir /tmp/tagged-findings-source-wheel-bundles
@@ -620,6 +645,17 @@ jobs:
             /tmp/search-evidence-source-wheel-core-bundles
             /tmp/search-evidence-source-wheel.json
             /tmp/search-evidence-source-wheel-bundles
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve actual-source persistent Job lifecycle and worker diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jobs-source-wheel-${{ github.sha }}
+          path: |
+            /tmp/jobs-source-wheel.json
+            /tmp/jobs-source-wheel-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30
