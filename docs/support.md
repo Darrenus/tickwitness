@@ -6,6 +6,8 @@
 
 开发分支的[前缀执行合同](contracts/reduction-execution-v1.md)另行消费原协议共同attempt预算，从首snapshot实际回放并审计terminal账户／订单／显式pending投影。它要求原有live ledger与source快照相符，不能由portable包初始化一个空预算。INCOMPLETE保留；不提供focus初态、checkpoint／隐藏队列状态或S10续跑。实际支持组合以对应PR的远端证据为准，不把core fake port案例或只读inspect计作native执行。
 
+开发中的[局部缩减合同](contracts/reduction-search-v1.md)固定延迟减半与末尾截短邻域，使用同一原协议账本，独立复算原冻结数值判据。PRESERVED只表示实际简化输入上的false数值见证保持，NOT_PRESERVED与NOT_EVALUABLE单列，不改原finding量词域或颁发baseline翻转／最小性证书。取消与elapsed限制只控制候选间派发；当前attempt仍按原timeout完成，不是总时间／总存储硬限额或S10进程级kill／恢复。候选的实际远端验收待完成，旧记录格式与外部0／PENDING边界保持。
+
 ## 按任务划分的环境矩阵
 
 以下是现有 [Engineering CI](../.github/workflows/engineering.yml) 配置对应的验收组合。只有候选 commit 的实际 job 成功后，才能在发布记录中记为该组合通过；历史 PR 成功或配置存在不能替代本候选的结果。

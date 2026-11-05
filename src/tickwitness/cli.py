@@ -11,6 +11,7 @@ from typing import cast
 
 from tickwitness.application.datasets import import_events, inspect_dataset
 from tickwitness.application.experiments import ProtocolRunError
+from tickwitness.application.reduction_search import ReductionSearchPublicationError
 from tickwitness.application.replay import compare_replays, replay_dataset
 from tickwitness.application.research import (
     ConfirmationAccessDenied,
@@ -40,6 +41,9 @@ from tickwitness.cli_queues import execute as execute_queue_command
 from tickwitness.cli_reduction_execution import COMMANDS as REDUCTION_EXECUTION_COMMANDS
 from tickwitness.cli_reduction_execution import add_commands as add_reduction_execution_commands
 from tickwitness.cli_reduction_execution import execute as execute_reduction_execution_command
+from tickwitness.cli_reduction_search import COMMANDS as REDUCTION_SEARCH_COMMANDS
+from tickwitness.cli_reduction_search import add_commands as add_reduction_search_commands
+from tickwitness.cli_reduction_search import execute as execute_reduction_search_command
 from tickwitness.cli_reductions import COMMANDS as REDUCTION_COMMANDS
 from tickwitness.cli_reductions import add_commands as add_reduction_commands
 from tickwitness.cli_reductions import execute as execute_reduction_command
@@ -256,13 +260,16 @@ def main(argv: list[str] | None = None) -> int:
     add_alpha_commands(commands)
     add_reduction_commands(commands)
     add_reduction_execution_commands(commands)
+    add_reduction_search_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in REDUCTION_EXECUTION_COMMANDS:
+        if arguments.command in REDUCTION_SEARCH_COMMANDS:
+            output, identity = execute_reduction_search_command(arguments), ""
+        elif arguments.command in REDUCTION_EXECUTION_COMMANDS:
             output, identity = execute_reduction_execution_command(arguments), ""
         elif arguments.command in REDUCTION_COMMANDS:
             output, identity = execute_reduction_command(arguments), ""
@@ -480,6 +487,8 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return error.exit_code
+    except ReductionSearchPublicationError as error:
+        return _write_error(error.code, error, error.exit_code)
     except (EvaluationValidationError, EvidenceValidationError) as error:
         return _write_error("invalid_research_evidence", error, 2)
     except AttemptBudgetExceededError as error:
@@ -557,6 +566,6 @@ def main(argv: list[str] | None = None) -> int:
         if isinstance(failures, list) and failures and isinstance(failures[0], dict):
             return int(failures[0].get("exit_code", 7))
         return 7
-    if arguments.command in ("run-search-plan", "run-bounded-search-plan"):
+    if arguments.command in ("run-search-plan", "run-bounded-search-plan", "run-reduction-search"):
         return cast("int", output["exit_code"])
     return 0
