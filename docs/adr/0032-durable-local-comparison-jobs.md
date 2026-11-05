@@ -4,7 +4,7 @@ Date: 2026-11-06 (Asia/Singapore). Status: implementation under review, S10-01.
 
 S09 records immutable research attempts, but a coordinator or worker can die without a durable Job lifecycle. A missing research outcome must continue to mean consumed and unfinalized; adding Job orchestration cannot refund it or imply a completed research verdict.
 
-The first supported operation is `compare_reduction_run_v1`. It invokes the existing pinned-source comparison in an installed, core-only worker and adds no research attempt. This provides a real vertical use case for QUEUED, RUNNING, SUCCEEDED, FAILED and LOST, with a separate one-attempt Job identity. Native research execution and retry are later integration work.
+The first supported operation is `compare_reduction_run_v1`. It invokes the existing pinned-source comparison without constructing a native engine and adds no research attempt. Workers use the coordinator's current interpreter; installed qualification separately exercises a core-only environment. This provides a real vertical use case for QUEUED, RUNNING, SUCCEEDED, FAILED and LOST, with a separate one-attempt Job identity. Native research execution and retry are later integration work.
 
 A trusted single coordinator owns an exclusive POSIX file lock and all SQLite writes. Workers receive a bounded, allowlisted JSON request and emit sequenced JSONL heartbeats or one terminal response. They receive no Catalog path, connection or descriptor. This separates trusted built-in capabilities; it does not sandbox hostile same-user code.
 

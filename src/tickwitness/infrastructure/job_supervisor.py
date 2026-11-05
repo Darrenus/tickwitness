@@ -51,16 +51,19 @@ class _LeaseWindow:
 
 def _signal_group(process: subprocess.Popen[bytes]) -> None:
     # start_new_session establishes pgid == pid. An exited child can race the
-    # group signal on Darwin; only a fresh observed exit can excuse EPERM.
+    # group signal on Darwin; only a confirmed child exit can excuse EPERM.
     if process.pid <= 0 or process.pid == os.getpgrp():
         raise RuntimeError("Refusing to signal the coordinator's own process group")
     try:
         os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
-    except PermissionError:
+    except PermissionError as error:
         if process.poll() is None:
-            raise
+            try:
+                process.wait(timeout=0.5)
+            except subprocess.TimeoutExpired:
+                raise error
 
 
 def _terminate(process: subprocess.Popen[bytes]) -> None:

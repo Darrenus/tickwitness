@@ -98,6 +98,51 @@ def test_live_eperm_remains_visible_and_child_is_not_reported_reaped(monkeypatch
         child.stdout.close()
 
 
+def test_eperm_can_confirm_actual_exit_after_initial_poll_is_still_none(monkeypatch):
+    child = subprocess.Popen(
+        [
+            sys.executable,
+            "-I",
+            "-B",
+            "-c",
+            "import sys; print('ready',flush=True); sys.stdin.buffer.readline()",
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        start_new_session=True,
+    )
+    original_kill = os.killpg
+    original_wait = child.wait
+    released = []
+    try:
+        _ready(child)
+
+        def denied(*args):
+            assert child.poll() is None
+            raise PermissionError(errno.EPERM, "Controlled exit-in-progress group signal")
+
+        def wait_for_release(timeout=None):
+            if not released:
+                assert child.poll() is None
+                assert timeout is not None and 0 < timeout <= 1
+                released.append(timeout)
+                child.stdin.write(b"release\n")
+                child.stdin.flush()
+            return original_wait(timeout=timeout)
+
+        monkeypatch.setattr(job_supervisor.os, "killpg", denied)
+        monkeypatch.setattr(child, "wait", wait_for_release)
+        job_supervisor._terminate(child)
+        assert released and child.returncode == 0
+    finally:
+        if child.poll() is None:
+            with suppress(ProcessLookupError):
+                original_kill(child.pid, signal.SIGKILL)
+        original_wait(timeout=10)
+        child.stdin.close()
+        child.stdout.close()
+
+
 def test_unrelated_signal_io_error_is_not_excused_by_an_exited_child(monkeypatch):
     child = SimpleNamespace(pid=os.getpgrp() + 100_000, poll=lambda: 0)
 
