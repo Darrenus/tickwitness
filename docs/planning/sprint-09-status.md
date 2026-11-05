@@ -9,7 +9,7 @@
 | S09-01a / #25 | 合法缩减recipe、完整必要前缀输入准备与独立重建 | Owner已合并 [PR #95](https://github.com/Darrenus/tickwitness/pull/95) 接受软件 |
 | S09-01b / #25 | 在原协议共同预算下真实从头执行前缀，持久关联intent／attempt／outcome，审计账户／订单／显式在途状态 | Owner已合并[PR #98](https://github.com/Darrenus/tickwitness/pull/98)接受，#25已关闭 |
 | S09-02 / #26 | 预算内自动局部缩减、候选边界取消、原false数值见证保持判定 | Owner已合并[PR #99](https://github.com/Darrenus/tickwitness/pull/99)接受，#26已关闭 |
-| S09-03 / #27 | 原／缩减证据对比、实际首次分歧定位 | 实现与远端验收中；保留输入区间／通道次序／不同EOF范围，不能将差异提升为业务因果 |
+| S09-03 / #27 | 原／缩减证据对比、实际首次分歧定位 | 实现与远端验收完成；[PR #100](https://github.com/Darrenus/tickwitness/pull/100)待owner接受，#27保持打开 |
 
 原 [Sprint backlog](sprint-backlog.md#s9--合法反例缩减) 的14h／12h／8h专项估算和持续质量容量保持；01a／01b是同一14h故事的验收拆分，没有新增实际工时或重估容量。没有完整运行态checkpoint的现引擎不能用盘口快照代替策略、账户、队列和在途命令。
 
@@ -157,6 +157,44 @@ Ubuntu本次原protocol为 `caff3df37816f27c6e80157ae8bcb26490465553538ad95ca071
 
 Compare输出严格canonical JSON导出或同一重算结果的Markdown视图，verify以显式comparison／source pins在原证据上独立重算。重新hash保存的比较报告不能替代真实结果。整个比较／复验过程无worker、reserve、写入、补跑、退款或修复，也不扩原finding量词域或认证最小性；S09-02旧flags不改。
 
-远端installed资格将复用S09-02原11槽内已实际执行的original与8条reduction结果（7main＋1取消后结果），在耗尽之后由独立core-only verifier比较／复验，检查原source、ledger和上游包字节不变。Core安装只验证拒绝边界，不伪造成功native证据。Ubuntu／macOS及实际sdist内脚本／语料对安装wheel的三条正例链路、Markdown、语义伪造、缺件／CAS损坏和confirmation pre-IO均待实际远端验证，不预填通过。
+远端installed资格复用S09-02原11槽内已实际执行的original与8条reduction结果（7main＋1取消后结果），在耗尽之后由独立core-only verifier比较／复验，原source、ledger和上游包字节不变。Core安装只验证拒绝边界，不伪造成功native证据。Ubuntu／macOS及实际sdist内脚本／语料对安装wheel的三条正例链路、Markdown、语义伪造、缺件／CAS损坏和confirmation pre-IO均已实际验证，见下文验收记录。
 
 #27保持打开直到owner接受；原8h预测、持续质量预算与外部真人0／PENDING不变。没有新release、采用、实际工时或研究收益声明。
+
+## S09-03 远端验收记录
+
+功能head `09fdd5c8f26c17c3eeb297b5f55c66bd904a2123` 的[Engineering 42052172007](https://github.com/Darrenus/tickwitness/actions/runs/42052172007)与[Documentation 42052171976](https://github.com/Darrenus/tickwitness/actions/runs/42052171976)共13 checks全部通过。实际merge checkout为 `6edffcfa67b5ecc28a09595d9eeee92a347f59de`，与PR head分别记录；后续验收文档提交须独立核最新head，不冒充本次功能run。
+
+六组Ubuntu 24.04／macOS 15 × Python 3.12／3.13／3.14 core各 **3345 passed / 112 optional-native skips**；Ubuntu 24.04与macOS 26／Python 3.12的native各 **3454 passed / 3 core-only skips / 313 warnings**。Lint、303文件格式、138 source files严格类型检查、95文档／497本地链接通过。以上数字属于功能run，warnings保留。全部项目运行／测试／格式／构建／安装在远端CPU，本机仅静态文本、Git／gh控制与产物读取。
+
+| 实际artifact（共同后缀 `6edffcfa67b5ecc28a09595d9eeee92a347f59de`） | 安装与静态审计范围 |
+| --- | --- |
+| `reduction-comparison-core-…` [13426409527](https://github.com/Darrenus/tickwitness/actions/runs/42052172007/artifacts/13426409527) | core wheel；60个声明文件哈希、6份实际transcript；只证明拒绝／guard，不冒充正例 |
+| `reduction-comparison-ubuntu-24.04-…` [13429165181](https://github.com/Darrenus/tickwitness/actions/runs/42052172007/artifacts/13429165181) | 已实际执行的Ubuntu native源记录＋core-only比较／复验；894个声明哈希、32份transcript |
+| `reduction-comparison-macos-26-…` [13428151877](https://github.com/Darrenus/tickwitness/actions/runs/42052172007/artifacts/13428151877) | 已实际执行的macOS native源记录＋独立core-only比较／复验；894个声明哈希、32份transcript |
+| `reduction-comparison-source-wheel-…` [13428358094](https://github.com/Darrenus/tickwitness/actions/runs/42052172007/artifacts/13428358094) | 实际sdist内脚本／语料＋本轮构建并安装的wheel；894个声明哈希、32份transcript |
+
+四份新报告均为`installed_reduction_comparison_acceptance_v1`且accepted=true，内外report同字节。Core records共61文件，带原生源证据的各895文件，外部report各另计；仅根`artifact-files.json`不自包含，嵌套上游manifest必须保留在新清单中。逐文件SHA与exact文件集合均静态核对。上游core的49个／正例的503个声明哈希、两份上游report和manifest绑定也分别重验，原包字节不变。
+
+实际退出均等于expected：core为0×2／2×1／4×1／5×2；三个正例profile各0×21／2×5／3×1／4×3／5×2。所有成功stderr及拒绝stdout为空；新CLI的JSON成功输出为无尾换行的canonical bytes，另有1份实际Markdown及其真实transcript，runtime／tripwire／ledger辅助命令按各自JSON契约保留。解释器runtime、identity文件和report逐项匹配，比较解释器均为installed core、native_distribution=null；venv prefix与base prefix按真实路径核对，macOS `/tmp`与`/private/tmp`只作别名。
+
+新比较报告的native_execution／native_replayed／native_execution_performed在**所有profile均false**，new_attempts／new_native_runs均0。三个正例的upstream_native_evidence_reused=true，只表示重新审计同作业内已真实执行的原生记录。脚本的8次复用计目标reduction results（7main＋1取消后结果），原false scenario见证另行重审，不是新增8次原生执行或完整全局历史认证。
+
+| 实际核验 | 观察与边界 |
+| --- | --- |
+| 原预算与source | 上游qualification首次执行前冻结lt(-1.5 USD)、原11槽／1000events／60s。比较开始时槽1..11已耗尽，before／after原reservation、intent／outcome／CAS与source字节全相同，无slot12；guard禁止reserve、publish、native／worker、旧研究stores、SQLite／网络，ledger必须create=False |
+| 两版实际证据 | 每个比较重新绑定完整source、原scenario receipt/result/evaluation、目标reduction receipt/result/state-audit/assessment及原intent／slot／nonce；canonical report ID与独立verify输出精确一致。完整source之外未观察的历史仍未认证，原见证不是baseline |
+| 七点实际结果 | 原false scenario完整7事件、delay2e9、value=-1。目标点依次(7,1e9)NP、(6,2e9)P、(6,1e9)NP、(5,2e9)P、(5,1e9)NP、(4,2e9)P、(4,1e9)NE；both_false_witnesses分别false／true／false／true／false／true／null，最后truth/value仍null |
+| 最佳已知见证审阅 | 目标4事件／delay2e9保持false；retained refs1..4、warmup1..3、review4，实际移除cap5 trade／cap6 delta／cap7 delta。Removed payload保留原情景2e9派生时钟，行SHA不含LF；完整实际事件对象可在Markdown和JSON审阅，不用capture编号相减推测数量 |
+| 实际首次差异 | 最佳案例raw／business的input首差为`/input_trace/4`：原cap5 trade存在，缩减侧缺失，两侧source refs分别原cap5与null。1e9路径raw首差落在cap4时钟；business保留真实订单变化和第二次成交，其中cap5填单在cancel rejection之前。各通道独立ordinal与JSON顺序，不称全局最早或因果 |
+| EOF与数值范围 | 两版各自完整输入、through、执行状态、completeness、valuation_status和mark保留；相同事件数也不授予相同运行条件。较短EOF不是长run的共同中间状态，shared_terminal_state_captured与numeric_effect_comparable均false，无收益差额效应或baseline flip |
+| 独立导出与审阅 | 7份主比较export分别实际verify，重复best export同字节；实际Markdown包含comparison／source／两run身份、输入覆盖、移除内容、时钟变化、原数值条件、raw/business差异及scope。比较pin哈希report而非envelope；strict canonical／有界常规JSON输入验证，非法编码／ID在source或ledger IO前拒绝 |
+| 三类语义伪造 | 分别自洽改写数值保持条件、被移除事件与相应行SHA、business首次差异，并重算comparison ID；三者实际verify均exit2。原证据不修改，saved flags与自算hash不能替代独立source/run重建 |
+| 缺件与确认拒绝 | 错source pin实际exit2，缺run／实际audit CAS分别exit4；给audit CAS附加空格则实际完整性exit3。负例保留独立副本，原记录不修复。两个CLI confirmation拒绝exit5，应用pre-IO helper另证2操作拒绝；core只验证这些拒绝与guard边界 |
+| 回归范围 | 远端覆盖合法非1起点capture与source line分离、非法同流gap拒绝、no-op、保留区时钟变化、native ID业务映射、exact原false阈值、P／NP／NE、会计／slot／环境／绑定攻击、读取期间变化、报告上限与编码。离线一致性夹具明确标记，不能代替本轮已有原生记录的installed资格 |
+
+Ubuntu本次source bundle为 `1e7300b79c48ca8629064166d730f1b5b9d2199f469cfccde2d9ac798e2f5780`；best comparison为 `a7dd027a32981e3eff989721eae7e9c1e043eef71d734d810fb7c7c9f4c993e0`，对应实际reduced run `2f8156d69686cb3c963634e04b0d9c4d6600090558cafd60649d7a9f58349d3c`。不同安装生命周期的nonce／run／source ID不同，逐一核各自实际字节链与相同有范围观察，不要求跨生命周期同ID。
+
+首轮远端发现导入／格式问题，应用其实际生成补丁；一个gap引用夹具在源冻结阶段被既有预检拒绝，现以合法连续capture10..16测试line与capture分离，另以负例明确拒绝gap，生产校验未放宽。原生3454个测试完成后，旧15分钟CI总窗口不足以稳妥容纳整套安装资格，因此只把native-replay的CI作业窗口改为20分钟；原协议11槽／1000events／每次60s不变，旧取消run不冒充安装资格通过。
+
+[PR #100](https://github.com/Darrenus/tickwitness/pull/100)交付S09-03软件，#27保持打开直到owner接受。S10恢复／强取消、外部真人0／PENDING和发行门分别验收；CI、AI静态审阅及owner合并不替代真人复验。原PR94手交包与golden不变，无新release、实际工时、市场采用或研究收益记录。

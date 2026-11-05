@@ -1,6 +1,6 @@
 # ADR 0031 — Compare committed original and reduced witness evidence
 
-Status: Proposed; S09-03 implementation and remote qualification in progress, 2026-11-05.
+Status: Proposed for owner acceptance; S09-03 implemented and remotely qualified, 2026-11-05. Actual runs and artifacts are recorded in the [Sprint 9 acceptance record](../planning/sprint-09-status.md#s09-03-远端验收记录).
 
 ## Context
 

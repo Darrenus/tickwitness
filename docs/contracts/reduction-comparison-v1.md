@@ -1,6 +1,6 @@
 # Reduction Comparison v1
 
-状态：S09-03合同冻结，实现与远端资格进行中，2026-11-05。Owner已合并[PR #99](https://github.com/Darrenus/tickwitness/pull/99)接受S09-02，merge `2aaef3e66edba87035a32779122d4858810da2c1`。本合同连接[原点前缀执行](reduction-execution-v1.md)、[原数值条件保持判定](reduction-search-v1.md)与审阅者的差异视图；决策见[ADR 0031](../adr/0031-reduction-evidence-comparison.md)。外部真人复验仍0／PENDING，原PR94转交包不变，无新release。
+状态：S09-03实现与远端资格完成，[PR #100](https://github.com/Darrenus/tickwitness/pull/100)待owner接受，2026-11-05；实际run与artifact见[Sprint 9验收记录](../planning/sprint-09-status.md#s09-03-远端验收记录)。Owner已合并[PR #99](https://github.com/Darrenus/tickwitness/pull/99)接受S09-02，merge `2aaef3e66edba87035a32779122d4858810da2c1`。本合同连接[原点前缀执行](reduction-execution-v1.md)、[原数值条件保持判定](reduction-search-v1.md)与审阅者的差异视图；决策见[ADR 0031](../adr/0031-reduction-evidence-comparison.md)。外部真人复验仍0／PENDING，原PR94转交包不变，无新release。
 
 ## 1. 比较对象与权限
 
