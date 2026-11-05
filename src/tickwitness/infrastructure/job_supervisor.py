@@ -64,7 +64,7 @@ def _signal_group(process: subprocess.Popen[bytes]) -> None:
             try:
                 process.wait(timeout=0.5)
             except subprocess.TimeoutExpired:
-                raise error
+                raise error from None
 
 
 def _terminate(process: subprocess.Popen[bytes]) -> None:
