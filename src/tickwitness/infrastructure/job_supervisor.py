@@ -7,7 +7,6 @@ import signal
 import subprocess
 import sys
 import time
-from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -50,10 +49,22 @@ class _LeaseWindow:
     deadline_ns: int
 
 
-def _terminate(process: subprocess.Popen[bytes]) -> None:
-    # The process starts a fresh session. Never signal the coordinator's group.
-    with suppress(ProcessLookupError):
+def _signal_group(process: subprocess.Popen[bytes]) -> None:
+    # start_new_session establishes pgid == pid. An exited child can race the
+    # group signal on Darwin; only a fresh observed exit can excuse EPERM.
+    if process.pid <= 0 or process.pid == os.getpgrp():
+        raise RuntimeError("Refusing to signal the coordinator's own process group")
+    try:
         os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        if process.poll() is None:
+            raise
+
+
+def _terminate(process: subprocess.Popen[bytes]) -> None:
+    _signal_group(process)
     process.wait(timeout=5)
 
 
@@ -132,8 +143,7 @@ def _exchange(
             if not exit_seen and process.poll() is not None:
                 exit_seen = True
                 # An orphan descendant must not keep either pipe alive forever.
-                with suppress(ProcessLookupError):
-                    os.killpg(process.pid, signal.SIGKILL)
+                _signal_group(process)
             timeout = min(0.1, max(0, window.deadline_ns - time.monotonic_ns()) / 1_000_000_000)
             for key, _ in selector.select(timeout):
                 ready_stream = key.fileobj
