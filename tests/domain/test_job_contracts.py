@@ -47,8 +47,11 @@ def queued(*, now=10, lease=LEASE):
 
 def running(*, created=10, claimed=20, lease=LEASE):
     return claim_job(
-        queued(now=created, lease=lease), coordinator_id="d" * 64,
-        attempt_nonce="e" * 64, lease_token="f" * 64, now_ns=claimed,
+        queued(now=created, lease=lease),
+        coordinator_id="d" * 64,
+        attempt_nonce="e" * 64,
+        lease_token="f" * 64,
+        now_ns=claimed,
     )
 
 
@@ -73,7 +76,12 @@ def finish(row, *, result="1" * 64, failure=None, now=21, **changes):
 
 
 def failure(**changes):
-    return {"code": "worker_failed", "message": "Worker exited without a valid result", "worker_exit_code": -9, **changes}
+    return {
+        "code": "worker_failed",
+        "message": "Worker exited without a valid result",
+        "worker_exit_code": -9,
+        **changes,
+    }
 
 
 def test_spec_is_frozen_content_identity_with_explicit_operation_and_locator_pins():
@@ -81,8 +89,10 @@ def test_spec_is_frozen_content_identity_with_explicit_operation_and_locator_pin
     spec = build_job_spec(original)
     assert spec.spec_id == digest(spec.canonical_bytes)
     assert spec.document == {
-        "kind": "comparison_job_spec_v1", "schema_version": 1,
-        "operation": "compare_reduction_run_v1", "request": original,
+        "kind": "comparison_job_spec_v1",
+        "schema_version": 1,
+        "operation": "compare_reduction_run_v1",
+        "request": original,
         "lease_duration_ns": 30_000_000_000,
     }
     assert load_job_spec(spec.canonical_bytes) == spec
@@ -100,17 +110,30 @@ def test_spec_is_frozen_content_identity_with_explicit_operation_and_locator_pin
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("run_id", False), ("run_id", "a" * 63), ("run_id", "A" * 64),
-        ("expected_bundle_id", None), ("expected_report_id", "g" * 64),
-        ("input_root", "relative/root"), ("runs", ""), ("runs", "/a\x00b"),
-        ("input_root", "/" + "a" * 4096), ("source_evidence", "a" * 4097),
-        ("source_evidence", ""), ("source_evidence", "/absolute"),
-        ("source_evidence", "."), ("source_evidence", ".."),
-        ("source_evidence", "./source"), ("source_evidence", "source/./nested"),
-        ("source_evidence", "source/../nested"), ("source_evidence", "../source"),
-        ("source_evidence", "source\x00name"), ("source_evidence", "..\\source"),
-        ("source_evidence", "source\\..\\nested"), ("source_evidence", "\\absolute"),
-        ("split", "confirmation"), ("split", None),
+        ("run_id", False),
+        ("run_id", "a" * 63),
+        ("run_id", "A" * 64),
+        ("expected_bundle_id", None),
+        ("expected_report_id", "g" * 64),
+        ("input_root", "relative/root"),
+        ("runs", ""),
+        ("runs", "/a\x00b"),
+        ("input_root", "/" + "a" * 4096),
+        ("source_evidence", "a" * 4097),
+        ("source_evidence", ""),
+        ("source_evidence", "/absolute"),
+        ("source_evidence", "."),
+        ("source_evidence", ".."),
+        ("source_evidence", "./source"),
+        ("source_evidence", "source/./nested"),
+        ("source_evidence", "source/../nested"),
+        ("source_evidence", "../source"),
+        ("source_evidence", "source\x00name"),
+        ("source_evidence", "..\\source"),
+        ("source_evidence", "source\\..\\nested"),
+        ("source_evidence", "\\absolute"),
+        ("split", "confirmation"),
+        ("split", None),
     ],
 )
 def test_request_must_use_development_pins_and_bounded_posix_locators(field, value):
@@ -131,7 +154,9 @@ def test_request_is_exact_and_cannot_add_engine_research_budget_or_retry_authori
         build_job_spec(value)
 
 
-@pytest.mark.parametrize("lease", [True, False, 0, LEASE - 1, MAX_JOB_LEASE_NS + 1, 1.0, "1000000000"])
+@pytest.mark.parametrize(
+    "lease", [True, False, 0, LEASE - 1, MAX_JOB_LEASE_NS + 1, 1.0, "1000000000"]
+)
 def test_lease_is_a_nonboolean_bounded_integer(lease):
     with pytest.raises(JobValidationError):
         build_job_spec(request(), lease_duration_ns=lease)
@@ -144,7 +169,9 @@ def test_lease_boundaries_and_absolute_locator_text_are_preserved(lease):
     assert spec.document["request"]["input_root"] == "/owner/../trusted-inputs"
 
 
-@pytest.mark.parametrize("attack", ["newline", "duplicate", "float", "schema_bool", "operation", "unknown", "oversize"])
+@pytest.mark.parametrize(
+    "attack", ["newline", "duplicate", "float", "schema_bool", "operation", "unknown", "oversize"]
+)
 def test_spec_encoding_and_descriptor_shape_are_strict(attack):
     spec = build_job_spec(request())
     document = spec.document
@@ -172,23 +199,41 @@ def test_initial_job_and_attempt_have_separate_content_bound_identities():
     spec = build_job_spec(request(), lease_duration_ns=LEASE)
     row = queued_job(spec, now_ns=10)
     assert row == {
-        "kind": "job_snapshot_v1", "schema_version": 1, "job_id": spec.spec_id,
-        "spec": spec.document, "state": "QUEUED", "version": 1,
-        "created_at_ns": 10, "updated_at_ns": 10, "attempt": None,
-        "result_sha256": None, "failure": None,
+        "kind": "job_snapshot_v1",
+        "schema_version": 1,
+        "job_id": spec.spec_id,
+        "spec": spec.document,
+        "state": "QUEUED",
+        "version": 1,
+        "created_at_ns": 10,
+        "updated_at_ns": 10,
+        "attempt": None,
+        "result_sha256": None,
+        "failure": None,
     }
-    claimed = claim_job(row, coordinator_id="d" * 64, attempt_nonce="e" * 64, lease_token="f" * 64, now_ns=20)
-    expected_id = digest(canonical({"job_id": row["job_id"], "attempt_number": 1, "nonce": "e" * 64}))
+    claimed = claim_job(
+        row, coordinator_id="d" * 64, attempt_nonce="e" * 64, lease_token="f" * 64, now_ns=20
+    )
+    expected_id = digest(
+        canonical({"job_id": row["job_id"], "attempt_number": 1, "nonce": "e" * 64})
+    )
     assert claimed["state"] == "RUNNING" and claimed["version"] == 2
     assert claimed["attempt"] == {
-        "job_attempt_id": expected_id, "attempt_number": 1, "nonce": "e" * 64,
-        "coordinator_id": "d" * 64, "lease_token": "f" * 64,
-        "heartbeat_sequence": 0, "heartbeat_at_ns": 20, "lease_expires_at_ns": 20 + LEASE,
+        "job_attempt_id": expected_id,
+        "attempt_number": 1,
+        "nonce": "e" * 64,
+        "coordinator_id": "d" * 64,
+        "lease_token": "f" * 64,
+        "heartbeat_sequence": 0,
+        "heartbeat_at_ns": 20,
+        "lease_expires_at_ns": 20 + LEASE,
     }
     assert expected_id not in (row["job_id"], request()["run_id"])
     assert row["state"] == "QUEUED" and row["attempt"] is None
     other = queued_job(build_job_spec(request(run_id="0" * 64)), now_ns=10)
-    other_claim = claim_job(other, coordinator_id="d" * 64, attempt_nonce="e" * 64, lease_token="f" * 64, now_ns=20)
+    other_claim = claim_job(
+        other, coordinator_id="d" * 64, attempt_nonce="e" * 64, lease_token="f" * 64, now_ns=20
+    )
     assert other_claim["attempt"]["job_attempt_id"] != expected_id
 
 
@@ -263,10 +308,18 @@ def test_diagnostic_failure_is_an_operational_terminal_not_a_research_result(exi
 
 @pytest.mark.parametrize(
     ("field", "value"),
-    [("code", ""), ("code", "x" * 129), ("code", False),
-     ("message", "x" * 2049), ("message", None),
-     ("worker_exit_code", -256), ("worker_exit_code", 256),
-     ("worker_exit_code", True), ("worker_exit_code", 1.0), ("worker_exit_code", "7")],
+    [
+        ("code", ""),
+        ("code", "x" * 129),
+        ("code", False),
+        ("message", "x" * 2049),
+        ("message", None),
+        ("worker_exit_code", -256),
+        ("worker_exit_code", 256),
+        ("worker_exit_code", True),
+        ("worker_exit_code", 1.0),
+        ("worker_exit_code", "7"),
+    ],
 )
 def test_failure_diagnostic_shape_and_bounds_are_checked(field, value):
     with pytest.raises(JobValidationError):
@@ -275,8 +328,16 @@ def test_failure_diagnostic_shape_and_bounds_are_checked(field, value):
 
 @pytest.mark.parametrize(
     ("result", "diagnostic"),
-    [(None, None), ("1" * 64, failure()), (False, None), ("", None),
-     ("A" * 64, None), (None, False), (None, {}), (None, failure(extra=True))],
+    [
+        (None, None),
+        ("1" * 64, failure()),
+        (False, None),
+        ("", None),
+        ("A" * 64, None),
+        (None, False),
+        (None, {}),
+        (None, failure(extra=True)),
+    ],
 )
 def test_success_and_failure_are_exclusive_and_false_cannot_replace_null(result, diagnostic):
     with pytest.raises(JobValidationError):
@@ -318,7 +379,9 @@ def test_terminal_attempts_reject_all_late_messages_resets_and_retries(terminal)
         with pytest.raises(JobValidationError, match="running job"):
             action(row, now=22)
     with pytest.raises(JobValidationError, match="queued job"):
-        claim_job(row, coordinator_id="2" * 64, attempt_nonce="3" * 64, lease_token="4" * 64, now_ns=22)
+        claim_job(
+            row, coordinator_id="2" * 64, attempt_nonce="3" * 64, lease_token="4" * 64, now_ns=22
+        )
     with pytest.raises(JobValidationError, match="running job"):
         lose_job(row, reason="coordinator_lost", now_ns=22)
     assert canonical(row) == before
@@ -327,10 +390,19 @@ def test_terminal_attempts_reject_all_late_messages_resets_and_retries(terminal)
 def test_running_job_cannot_be_claimed_twice_and_queued_job_cannot_finish_or_lose():
     row = running()
     with pytest.raises(JobValidationError, match="queued job"):
-        claim_job(row, coordinator_id="d" * 64, attempt_nonce="e" * 64, lease_token="f" * 64, now_ns=21)
+        claim_job(
+            row, coordinator_id="d" * 64, attempt_nonce="e" * 64, lease_token="f" * 64, now_ns=21
+        )
     with pytest.raises(JobValidationError, match="running job"):
-        finish_job(queued(), coordinator_id="d" * 64, job_attempt_id="e" * 64,
-                   lease_token="f" * 64, result_sha256="1" * 64, failure=None, now_ns=21)
+        finish_job(
+            queued(),
+            coordinator_id="d" * 64,
+            job_attempt_id="e" * 64,
+            lease_token="f" * 64,
+            result_sha256="1" * 64,
+            failure=None,
+            now_ns=21,
+        )
     with pytest.raises(JobValidationError, match="running job"):
         lose_job(queued(), reason="coordinator_lost", now_ns=21)
 
@@ -368,8 +440,13 @@ def test_times_are_nonboolean_bounded_integer_nanoseconds(now):
 
 def test_lease_and_version_addition_overflows_never_wrap_or_mutate_the_input():
     with pytest.raises(JobValidationError, match="overflows"):
-        claim_job(queued(now=MAX_JOB_INTEGER), coordinator_id="d" * 64,
-                  attempt_nonce="e" * 64, lease_token="f" * 64, now_ns=MAX_JOB_INTEGER)
+        claim_job(
+            queued(now=MAX_JOB_INTEGER),
+            coordinator_id="d" * 64,
+            attempt_nonce="e" * 64,
+            lease_token="f" * 64,
+            now_ns=MAX_JOB_INTEGER,
+        )
     near_end = running(created=MAX_JOB_INTEGER - 2 * LEASE, claimed=MAX_JOB_INTEGER - 2 * LEASE)
     near_end = heartbeat(near_end, now=MAX_JOB_INTEGER - LEASE - 1)
     before = canonical(near_end)
@@ -389,9 +466,25 @@ def test_lease_and_version_addition_overflows_never_wrap_or_mutate_the_input():
 
 
 @pytest.mark.parametrize(
-    "attack", ["field", "schema_bool", "job_id", "spec", "state", "effective_state",
-               "version", "created", "heartbeat", "expiry", "nonce", "attempt_id",
-               "attempt_number", "running_result", "running_failure", "sequence_bool"],
+    "attack",
+    [
+        "field",
+        "schema_bool",
+        "job_id",
+        "spec",
+        "state",
+        "effective_state",
+        "version",
+        "created",
+        "heartbeat",
+        "expiry",
+        "nonce",
+        "attempt_id",
+        "attempt_number",
+        "running_result",
+        "running_failure",
+        "sequence_bool",
+    ],
 )
 def test_saved_snapshot_cross_bindings_cannot_be_rehashed_into_valid_state(attack):
     row = running()

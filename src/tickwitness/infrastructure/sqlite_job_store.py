@@ -112,10 +112,19 @@ def _load_event(raw: bytes) -> Row:
     try:
         value = parse(raw, limit=_EVENT_LIMIT)
         _require(
-            value.keys() == {
-                "event_id", "kind", "schema_version", "event_type", "aggregate_id",
+            value.keys()
+            == {
+                "event_id",
+                "kind",
+                "schema_version",
+                "event_type",
+                "aggregate_id",
                 "aggregate_version",
-                "occurred_at_ns", "correlation_id", "causation_id", "snapshot_sha256", "snapshot",
+                "occurred_at_ns",
+                "correlation_id",
+                "causation_id",
+                "snapshot_sha256",
+                "snapshot",
             },
             "Stored job event fields differ",
         )
@@ -125,8 +134,10 @@ def _load_event(raw: bytes) -> Row:
         event_type = cast("str", event_type)
         _require(event_type in _EVENT_STATES, "Stored event type is unsupported")
         _require(
-            value["kind"] == "job_event_v1" and type(value["schema_version"]) is int
-            and value["schema_version"] == 1 and _EVENT_STATES[event_type] == snapshot["state"]
+            value["kind"] == "job_event_v1"
+            and type(value["schema_version"]) is int
+            and value["schema_version"] == 1
+            and _EVENT_STATES[event_type] == snapshot["state"]
             and value["aggregate_id"] == value["correlation_id"] == snapshot["job_id"]
             and type(value["aggregate_version"]) is int
             and value["aggregate_version"] == snapshot["version"]
@@ -192,16 +203,20 @@ class SqliteJobStore:
                 lock = self._exists(root_fd, _LOCK)
                 if create and not database and not lock:
                     descriptor = os.open(
-                        _LOCK, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                        0o600, dir_fd=root_fd,
+                        _LOCK,
+                        os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                        0o600,
+                        dir_fd=root_fd,
                     )
                     os.fsync(descriptor)
                     os.close(descriptor)
                     os.fsync(root_fd)
                     with self.coordinator():
                         descriptor = os.open(
-                            _CATALOG, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                            0o600, dir_fd=root_fd,
+                            _CATALOG,
+                            os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                            0o600,
+                            dir_fd=root_fd,
                         )
                         os.close(descriptor)
                         with self._connection(write=True, initializing=True) as connection:
@@ -272,52 +287,77 @@ class SqliteJobStore:
     @contextmanager
     def _regular(root_fd: int, name: str, *, write: bool = False) -> Iterator[int]:
         descriptor = os.open(
-            name, (os.O_RDWR if write else os.O_RDONLY) | os.O_NOFOLLOW | os.O_NONBLOCK,
+            name,
+            (os.O_RDWR if write else os.O_RDONLY) | os.O_NOFOLLOW | os.O_NONBLOCK,
             dir_fd=root_fd,
         )
         try:
             info = os.fstat(descriptor)
-            _require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1,
-                     "Job catalog files must be unaliased regular files")
+            _require(
+                stat.S_ISREG(info.st_mode) and info.st_nlink == 1,
+                "Job catalog files must be unaliased regular files",
+            )
             yield descriptor
             after = os.stat(name, dir_fd=root_fd, follow_symlinks=False)
-            _require((info.st_dev, info.st_ino) == (after.st_dev, after.st_ino)
-                     and stat.S_ISREG(after.st_mode) and after.st_nlink == 1,
-                     "Job catalog path changed while open")
+            _require(
+                (info.st_dev, info.st_ino) == (after.st_dev, after.st_ino)
+                and stat.S_ISREG(after.st_mode)
+                and after.st_nlink == 1,
+                "Job catalog path changed while open",
+            )
         finally:
             os.close(descriptor)
 
     @staticmethod
     def _check_header(descriptor: int) -> None:
         header = os.pread(descriptor, 100, 0)
-        _require(len(header) == 100 and header[:16] == b"SQLite format 3\x00",
-                 "Job catalog SQLite header is invalid")
+        _require(
+            len(header) == 100 and header[:16] == b"SQLite format 3\x00",
+            "Job catalog SQLite header is invalid",
+        )
         _require(header[18:20] == b"\x01\x01", "WAL-mode job catalogs are unsupported")
-        _require(int.from_bytes(header[60:64], "big") == _SCHEMA_VERSION,
-                 "Unsupported job catalog schema version")
-        _require(int.from_bytes(header[68:72], "big") == _APPLICATION_ID,
-                 "Catalog belongs to another application")
+        _require(
+            int.from_bytes(header[60:64], "big") == _SCHEMA_VERSION,
+            "Unsupported job catalog schema version",
+        )
+        _require(
+            int.from_bytes(header[68:72], "big") == _APPLICATION_ID,
+            "Catalog belongs to another application",
+        )
 
     @staticmethod
     def _check_schema(connection: sqlite3.Connection) -> None:
-        _require(connection.execute("PRAGMA user_version").fetchone()[0] == _SCHEMA_VERSION,
-                 "Unsupported job catalog schema version")
-        _require(connection.execute("PRAGMA application_id").fetchone()[0] == _APPLICATION_ID,
-                 "Catalog belongs to another application")
+        _require(
+            connection.execute("PRAGMA user_version").fetchone()[0] == _SCHEMA_VERSION,
+            "Unsupported job catalog schema version",
+        )
+        _require(
+            connection.execute("PRAGMA application_id").fetchone()[0] == _APPLICATION_ID,
+            "Catalog belongs to another application",
+        )
         expected = {**_TABLES, **_INDEXES}
         actual = {
-            name: statement for name, statement in connection.execute(
+            name: statement
+            for name, statement in connection.execute(
                 "SELECT name, sql FROM sqlite_master WHERE name NOT GLOB 'sqlite_*'"
             )
         }
-        _require(actual.keys() == expected.keys() and all(
-            isinstance(actual[name], str) and _sql(actual[name]) == _sql(statement)
-            for name, statement in expected.items()
-        ), "Job catalog schema differs from version 1")
-        _require(connection.execute("PRAGMA quick_check(1)").fetchone()[0] == "ok",
-                 "Job catalog integrity check failed")
-        _require(not connection.execute("PRAGMA foreign_key_check").fetchall(),
-                 "Job catalog references are inconsistent")
+        _require(
+            actual.keys() == expected.keys()
+            and all(
+                isinstance(actual[name], str) and _sql(actual[name]) == _sql(statement)
+                for name, statement in expected.items()
+            ),
+            "Job catalog schema differs from version 1",
+        )
+        _require(
+            connection.execute("PRAGMA quick_check(1)").fetchone()[0] == "ok",
+            "Job catalog integrity check failed",
+        )
+        _require(
+            not connection.execute("PRAGMA foreign_key_check").fetchall(),
+            "Job catalog references are inconsistent",
+        )
 
     @contextmanager
     def _connection(
@@ -330,15 +370,19 @@ class SqliteJobStore:
                 if not initializing:
                     self._check_header(descriptor)
                 for suffix in ("-wal", "-shm"):
-                    _require(not self._exists(root_fd, _CATALOG + suffix),
-                             "Unexpected job catalog WAL sidecar")
+                    _require(
+                        not self._exists(root_fd, _CATALOG + suffix),
+                        "Unexpected job catalog WAL sidecar",
+                    )
                 if self._exists(root_fd, _CATALOG + "-journal"):
                     with self._regular(root_fd, _CATALOG + "-journal"):
                         pass
                 uri = "file:" + quote(str(self._root / _CATALOG), safe="/")
                 connection = sqlite3.connect(
                     uri + ("?mode=rw" if write else "?mode=ro"),
-                    uri=True, isolation_level=None, timeout=0.1,
+                    uri=True,
+                    isolation_level=None,
+                    timeout=0.1,
                 )
                 try:
                     connection.execute("PRAGMA foreign_keys=ON")
@@ -370,7 +414,9 @@ class SqliteJobStore:
                     raise JobConflictError("Another coordinator owns this catalog") from error
                 os.set_inheritable(descriptor, False)
                 self._owner, self._owner_pid, self._owner_fd = (
-                    secrets.token_hex(32), os.getpid(), descriptor
+                    secrets.token_hex(32),
+                    os.getpid(),
+                    descriptor,
                 )
                 try:
                     yield self._owner
@@ -389,8 +435,10 @@ class SqliteJobStore:
             held = os.fstat(self._owner_fd)
             with self._root_fd() as root_fd, self._regular(root_fd, _LOCK) as descriptor:
                 current = os.fstat(descriptor)
-                _require((held.st_dev, held.st_ino) == (current.st_dev, current.st_ino),
-                         "Coordinator lock path was replaced")
+                _require(
+                    (held.st_dev, held.st_ino) == (current.st_dev, current.st_ino),
+                    "Coordinator lock path was replaced",
+                )
         except OSError as error:
             raise JobStoreError("Coordinator descriptor is invalid: " + str(error)) from error
         return self._owner
@@ -417,8 +465,12 @@ class SqliteJobStore:
         ).fetchone()
         _require(record is not None, "Job event history has a missing committed version")
         event = _load_event(_bytes(record[1], "Event"))
-        _require(event["event_id"] == record[0] and event["aggregate_id"] == job_id
-                 and event["aggregate_version"] == version, "Event index differs from its bytes")
+        _require(
+            event["event_id"] == record[0]
+            and event["aggregate_id"] == job_id
+            and event["aggregate_version"] == version,
+            "Event index differs from its bytes",
+        )
         return event
 
     def _fetch(self, connection: sqlite3.Connection, job_id: str) -> tuple[Row, bytes | None, Row]:
@@ -430,26 +482,40 @@ class SqliteJobStore:
             raise JobNotFoundError("Managed job does not exist: " + job_id)
         raw = _bytes(record[3], "Snapshot")
         snapshot = _snapshot(raw)
-        _require(snapshot["job_id"] == job_id and snapshot["state"] == record[0]
-                 and snapshot["version"] == record[1] and digest(raw) == record[2],
-                 "Job index differs from its exact snapshot")
+        _require(
+            snapshot["job_id"] == job_id
+            and snapshot["state"] == record[0]
+            and snapshot["version"] == record[1]
+            and digest(raw) == record[2],
+            "Job index differs from its exact snapshot",
+        )
         result = None if record[4] is None else _bytes(record[4], "Result")
         if snapshot["state"] == "SUCCEEDED":
             _require(result is not None, "Successful job is missing its result BLOB")
-            _require(_check_result(snapshot, cast("bytes", result)) == snapshot["result_sha256"],
-                     "Stored job result hash differs")
+            _require(
+                _check_result(snapshot, cast("bytes", result)) == snapshot["result_sha256"],
+                "Stored job result hash differs",
+            )
         else:
             _require(result is None, "Unsuccessful job contains an unexpected result BLOB")
         version = cast("int", snapshot["version"])
-        _require(connection.execute(
-            "SELECT max(version) FROM job_events WHERE job_id=?", (job_id,)
-        ).fetchone()[0] == version, "Job event index has an unexpected later version")
+        _require(
+            connection.execute(
+                "SELECT max(version) FROM job_events WHERE job_id=?", (job_id,)
+            ).fetchone()[0]
+            == version,
+            "Job event index has an unexpected later version",
+        )
         event = self._stored_event(connection, job_id, version)
-        _require(canonical(cast("Row", event["snapshot"])) == raw,
-                 "Latest event differs from the current snapshot")
-        previous_id = job_id if version == 1 else self._stored_event(
-            connection, job_id, version - 1
-        )["event_id"]
+        _require(
+            canonical(cast("Row", event["snapshot"])) == raw,
+            "Latest event differs from the current snapshot",
+        )
+        previous_id = (
+            job_id
+            if version == 1
+            else self._stored_event(connection, job_id, version - 1)["event_id"]
+        )
         _require(event["causation_id"] == previous_id, "Latest event causation differs")
         return snapshot, result, event
 
@@ -472,21 +538,27 @@ class SqliteJobStore:
         with self._connection() as connection:
             connection.execute("BEGIN")
             snapshot, _, _ = self._fetch(connection, key)
-            versions = [record[0] for record in connection.execute(
-                "SELECT version FROM job_events WHERE job_id=? ORDER BY version DESC LIMIT ?",
-                (key, limit),
-            )]
+            versions = [
+                record[0]
+                for record in connection.execute(
+                    "SELECT version FROM job_events WHERE job_id=? ORDER BY version DESC LIMIT ?",
+                    (key, limit),
+                )
+            ]
             versions.reverse()
             latest = cast("int", snapshot["version"])
             _require(
-                bool(versions) and versions[0] == latest - len(versions) + 1
+                bool(versions)
+                and versions[0] == latest - len(versions) + 1
                 and all(version == versions[0] + index for index, version in enumerate(versions)),
                 "Bounded event suffix is not contiguous",
             )
             output = [self._stored_event(connection, key, version) for version in versions]
-            previous = key if versions[0] == 1 else self._stored_event(
-                connection, key, versions[0] - 1
-            )["event_id"]
+            previous = (
+                key
+                if versions[0] == 1
+                else self._stored_event(connection, key, versions[0] - 1)["event_id"]
+            )
             for event in output:
                 _require(event["causation_id"] == previous, "Event causation chain differs")
                 previous = event["event_id"]
@@ -513,7 +585,9 @@ class SqliteJobStore:
         connection.execute(
             "INSERT INTO job_events(job_id,version,event_id,event) VALUES(?,?,?,?)",
             (
-                event["aggregate_id"], event["aggregate_version"], event["event_id"],
+                event["aggregate_id"],
+                event["aggregate_version"],
+                event["event_id"],
                 canonical(event),
             ),
         )
@@ -530,8 +604,10 @@ class SqliteJobStore:
             ).fetchone()
             if found is not None:
                 existing = self._fetch(connection, spec.spec_id)[0]
-                _require(canonical(cast("Row", existing["spec"])) == spec.canonical_bytes,
-                         "Existing job belongs to a different specification")
+                _require(
+                    canonical(cast("Row", existing["spec"])) == spec.canonical_bytes,
+                    "Existing job belongs to a different specification",
+                )
                 return existing
             raw = canonical(snapshot)
             connection.execute(
@@ -543,8 +619,13 @@ class SqliteJobStore:
         return snapshot
 
     def _change(
-        self, job_id: str, expected_version: int, event_type: str,
-        transform: Callable[[Row], Row], *, result: bytes | None = None,
+        self,
+        job_id: str,
+        expected_version: int,
+        event_type: str,
+        transform: Callable[[Row], Row],
+        *,
+        result: bytes | None = None,
     ) -> Row:
         self._ownership()
         key = identity(job_id)
@@ -554,9 +635,13 @@ class SqliteJobStore:
             snapshot, _, previous = self._fetch(connection, key)
             if snapshot["version"] != expected_version:
                 raise JobConflictError("Job version changed before mutation")
-            if event_type == "JobClaimed" and connection.execute(
-                "SELECT job_id FROM jobs WHERE state='RUNNING' AND job_id<>? LIMIT 1", (key,)
-            ).fetchone() is not None:
+            if (
+                event_type == "JobClaimed"
+                and connection.execute(
+                    "SELECT job_id FROM jobs WHERE state='RUNNING' AND job_id<>? LIMIT 1", (key,)
+                ).fetchone()
+                is not None
+            ):
                 raise JobConflictError("Single-worker catalog already has a running job")
             try:
                 updated = transform(snapshot)
@@ -567,8 +652,13 @@ class SqliteJobStore:
                 "UPDATE jobs SET state=?,version=?,snapshot_sha256=?,snapshot=?,result=? "
                 "WHERE job_id=? AND version=?",
                 (
-                    updated["state"], updated["version"], digest(raw), raw, result,
-                    key, expected_version,
+                    updated["state"],
+                    updated["version"],
+                    digest(raw),
+                    raw,
+                    result,
+                    key,
+                    expected_version,
                 ),
             )
             if cursor.rowcount != 1:
@@ -579,59 +669,128 @@ class SqliteJobStore:
         return updated
 
     def claim(
-        self, job_id: str, *, expected_version: int, coordinator_id: str,
-        attempt_nonce: str, lease_token: str, now_ns: int,
-    ) -> Row:
-        self._ownership(coordinator_id)
-        return self._change(job_id, expected_version, "JobClaimed", lambda row: claim_job(
-            row, coordinator_id=coordinator_id, attempt_nonce=attempt_nonce,
-            lease_token=lease_token, now_ns=now_ns,
-        ))
-
-    def heartbeat(
-        self, job_id: str, *, expected_version: int, coordinator_id: str,
-        job_attempt_id: str, lease_token: str, sequence: int, now_ns: int,
+        self,
+        job_id: str,
+        *,
+        expected_version: int,
+        coordinator_id: str,
+        attempt_nonce: str,
+        lease_token: str,
+        now_ns: int,
     ) -> Row:
         self._ownership(coordinator_id)
         return self._change(
-            job_id, expected_version, "JobHeartbeatRecorded", lambda row: heartbeat_job(
-                row, coordinator_id=coordinator_id, job_attempt_id=job_attempt_id,
-                lease_token=lease_token, sequence=sequence, now_ns=now_ns,
+            job_id,
+            expected_version,
+            "JobClaimed",
+            lambda row: claim_job(
+                row,
+                coordinator_id=coordinator_id,
+                attempt_nonce=attempt_nonce,
+                lease_token=lease_token,
+                now_ns=now_ns,
+            ),
+        )
+
+    def heartbeat(
+        self,
+        job_id: str,
+        *,
+        expected_version: int,
+        coordinator_id: str,
+        job_attempt_id: str,
+        lease_token: str,
+        sequence: int,
+        now_ns: int,
+    ) -> Row:
+        self._ownership(coordinator_id)
+        return self._change(
+            job_id,
+            expected_version,
+            "JobHeartbeatRecorded",
+            lambda row: heartbeat_job(
+                row,
+                coordinator_id=coordinator_id,
+                job_attempt_id=job_attempt_id,
+                lease_token=lease_token,
+                sequence=sequence,
+                now_ns=now_ns,
             ),
         )
 
     def complete(
-        self, job_id: str, raw: bytes, *, expected_version: int, coordinator_id: str,
-        job_attempt_id: str, lease_token: str, now_ns: int,
+        self,
+        job_id: str,
+        raw: bytes,
+        *,
+        expected_version: int,
+        coordinator_id: str,
+        job_attempt_id: str,
+        lease_token: str,
+        now_ns: int,
     ) -> Row:
         self._ownership(coordinator_id)
         # Parsing/hash/pin validation happens before the short write transaction.
         checked = self.get(job_id)
         result_sha = _check_result(checked, raw)
-        return self._change(job_id, expected_version, "JobSucceeded", lambda row: finish_job(
-            row, coordinator_id=coordinator_id, job_attempt_id=job_attempt_id,
-            lease_token=lease_token, result_sha256=result_sha, failure=None, now_ns=now_ns,
-        ), result=raw)
+        return self._change(
+            job_id,
+            expected_version,
+            "JobSucceeded",
+            lambda row: finish_job(
+                row,
+                coordinator_id=coordinator_id,
+                job_attempt_id=job_attempt_id,
+                lease_token=lease_token,
+                result_sha256=result_sha,
+                failure=None,
+                now_ns=now_ns,
+            ),
+            result=raw,
+        )
 
     def fail(
-        self, job_id: str, failure: Row, *, expected_version: int, coordinator_id: str,
-        job_attempt_id: str, lease_token: str, now_ns: int,
+        self,
+        job_id: str,
+        failure: Row,
+        *,
+        expected_version: int,
+        coordinator_id: str,
+        job_attempt_id: str,
+        lease_token: str,
+        now_ns: int,
     ) -> Row:
         self._ownership(coordinator_id)
-        return self._change(job_id, expected_version, "JobFailed", lambda row: finish_job(
-            row, coordinator_id=coordinator_id, job_attempt_id=job_attempt_id,
-            lease_token=lease_token, result_sha256=None, failure=failure, now_ns=now_ns,
-        ))
+        return self._change(
+            job_id,
+            expected_version,
+            "JobFailed",
+            lambda row: finish_job(
+                row,
+                coordinator_id=coordinator_id,
+                job_attempt_id=job_attempt_id,
+                lease_token=lease_token,
+                result_sha256=None,
+                failure=failure,
+                now_ns=now_ns,
+            ),
+        )
 
     def mark_lost(
-        self, job_id: str, *, expected_version: int, reason: str, now_ns: int,
+        self,
+        job_id: str,
+        *,
+        expected_version: int,
+        reason: str,
+        now_ns: int,
     ) -> Row:
         owner = self._ownership()
 
         def lost(row: Row) -> Row:
             attempt = row["attempt"]
             if (
-                reason == "coordinator_lost" and isinstance(attempt, dict)
+                reason == "coordinator_lost"
+                and isinstance(attempt, dict)
                 and attempt["coordinator_id"] == owner
             ):
                 raise JobConflictError("Active owner cannot classify itself as coordinator-lost")
@@ -644,15 +803,22 @@ class SqliteJobStore:
         # A new exclusive owner may let SQLite recover its own rollback journal.
         # Standalone queries remain mode=ro and never repair a crashed write.
         with self._connection(write=True) as connection:
-            keys = [record[0] for record in connection.execute(
-                "SELECT job_id FROM jobs WHERE state='RUNNING' ORDER BY job_id"
-            )]
+            keys = [
+                record[0]
+                for record in connection.execute(
+                    "SELECT job_id FROM jobs WHERE state='RUNNING' ORDER BY job_id"
+                )
+            ]
         output = []
         for job_id in keys:
             row = self.get(job_id)
             if cast("Row", row["attempt"])["coordinator_id"] != owner:
-                output.append(self.mark_lost(
-                    job_id, expected_version=cast("int", row["version"]),
-                    reason="coordinator_lost", now_ns=now_ns,
-                ))
+                output.append(
+                    self.mark_lost(
+                        job_id,
+                        expected_version=cast("int", row["version"]),
+                        reason="coordinator_lost",
+                        now_ns=now_ns,
+                    )
+                )
         return output

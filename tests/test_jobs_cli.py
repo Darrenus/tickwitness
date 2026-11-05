@@ -10,13 +10,22 @@ from tickwitness.cli import main
 
 def _submit(tmp_path, *, split="development", jobs=None):
     return [
-        "submit-comparison-job", "0" * 64,
-        "--input-root", str(tmp_path / "inputs"),
-        "--source-evidence", "portable/source",
-        "--runs", str(tmp_path / "runs"),
-        "--expected-bundle-id", "1" * 64,
-        "--expected-report-id", "2" * 64,
-        "--jobs", str(jobs or tmp_path / "jobs"), "--split", split,
+        "submit-comparison-job",
+        "0" * 64,
+        "--input-root",
+        str(tmp_path / "inputs"),
+        "--source-evidence",
+        "portable/source",
+        "--runs",
+        str(tmp_path / "runs"),
+        "--expected-bundle-id",
+        "1" * 64,
+        "--expected-report-id",
+        "2" * 64,
+        "--jobs",
+        str(jobs or tmp_path / "jobs"),
+        "--split",
+        split,
     ]
 
 

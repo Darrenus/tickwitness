@@ -11,8 +11,8 @@ import signal
 import subprocess
 import sys
 import time
+from contextlib import suppress
 from copy import deepcopy
-from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
 
@@ -23,8 +23,8 @@ from test_reduction_execution import run as execute_prefix
 from tickwitness.application.jobs import JobConflictError, JobStoreError, job_view
 from tickwitness.application.reduction_comparison import compare_reduction_run
 from tickwitness.domain.evidence.run_records import EvidenceValidationError, canonical, digest
-from tickwitness.infrastructure import job_supervisor
 from tickwitness.domain.jobs.contracts import build_job_spec
+from tickwitness.infrastructure import job_supervisor
 from tickwitness.infrastructure.job_supervisor import run_job
 from tickwitness.infrastructure.job_worker import MAX_JOB_FRAME_BYTES
 from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
@@ -88,19 +88,20 @@ def _wait_for(predicate, *, timeout=15):
 
 
 def _kill(pid):
-    try:
+    with suppress(ProcessLookupError):
         os.killpg(pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
 
 
 def _comparison_case(value):
     submitted = execute_prefix(value)
     report_id = digest(value.source.artifacts["finding_report"])
     comparison = compare_reduction_run(
-        submitted.run_id, source=value.source,
-        expected_bundle_id=value.source.bundle_id, expected_report_id=report_id,
-        split="development", ledger_factory=lambda: value.ledger,
+        submitted.run_id,
+        source=value.source,
+        expected_bundle_id=value.source.bundle_id,
+        expected_report_id=report_id,
+        split="development",
+        ledger_factory=lambda: value.ledger,
     )
     return comparison, {
         "run_id": submitted.run_id,
@@ -135,7 +136,8 @@ def test_authenticated_failure_frame_requires_matching_actual_exit_and_never_ret
     row = run_job(store, queued["job_id"], _worker_command=command)
     assert row["state"] == "FAILED"
     assert row["failure"] == {
-        "code": "controlled_failure", "message": "declared transport fixture",
+        "code": "controlled_failure",
+        "message": "declared transport fixture",
         "worker_exit_code": 7,
     }
     assert row["attempt"]["heartbeat_sequence"] == 2
@@ -188,8 +190,7 @@ def test_silent_worker_lease_expires_and_child_is_reaped(tmp_path):
     gate = tmp_path / "silent-pid.json"
     command = _command(
         tmp_path,
-        f"Path({str(gate)!r}).write_text(json.dumps({{'pid':os.getpid()}}))\n"
-        "Event().wait(30)\n",
+        f"Path({str(gate)!r}).write_text(json.dumps({{'pid':os.getpid()}}))\nEvent().wait(30)\n",
     )
     row = run_job(store, queued["job_id"], _worker_command=command)
     assert row["state"] == "LOST" and row["failure"]["code"] == "lease_expired"
@@ -232,12 +233,24 @@ def test_actual_sigkill_after_persisted_heartbeat_has_honest_liveness_and_reconc
         "Event().wait(30)\n",
     )
     process = subprocess.Popen(
-        [sys.executable, "-I", "-B", "-c", _COORDINATOR,
-         str(tmp_path / "jobs"), queued["job_id"], command[-1], str(gate)],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+        [
+            sys.executable,
+            "-I",
+            "-B",
+            "-c",
+            _COORDINATOR,
+            str(tmp_path / "jobs"),
+            queued["job_id"],
+            command[-1],
+            str(gate),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
     )
     worker_pid = None
     try:
+
         def ready():
             if not gate.is_file():
                 return None
@@ -278,11 +291,13 @@ def test_actual_sigkill_after_persisted_heartbeat_has_honest_liveness_and_reconc
                 credentials = before["attempt"]
                 with pytest.raises(JobConflictError):
                     store.heartbeat(
-                        queued["job_id"], expected_version=lost["version"],
+                        queued["job_id"],
+                        expected_version=lost["version"],
                         coordinator_id=credentials["coordinator_id"],
                         job_attempt_id=credentials["job_attempt_id"],
                         lease_token=credentials["lease_token"],
-                        sequence=credentials["heartbeat_sequence"] + 1, now_ns=time.time_ns(),
+                        sequence=credentials["heartbeat_sequence"] + 1,
+                        now_ns=time.time_ns(),
                     )
             assert store.result(queued["job_id"]) is None
     finally:
@@ -312,16 +327,19 @@ def test_worker_has_no_catalog_locator_or_inherited_coordinator_lock(tmp_path):
     assert row["state"] == "FAILED"
     evidence = json.loads(captured.read_text())
     assert evidence["request"].keys() == {
-        "kind", "schema_version", "spec", "job_id", "coordinator_id", "job_attempt_id",
+        "kind",
+        "schema_version",
+        "spec",
+        "job_id",
+        "coordinator_id",
+        "job_attempt_id",
         "lease_token",
     }
     assert str(tmp_path / "jobs") not in json.dumps(evidence["request"])
     assert [lock_stat.st_dev, lock_stat.st_ino] not in evidence["fds"]
 
 
-def test_pinned_self_rehashed_worker_export_is_independently_rejected(
-    tmp_path, reduction_case
-):
+def test_pinned_self_rehashed_worker_export_is_independently_rejected(tmp_path, reduction_case):
     comparison, request = _comparison_case(reduction_case)
     forged = deepcopy(json.loads(comparison.export_bytes))
     assessment = forged["report"]["reduced_assessment"]
@@ -384,9 +402,7 @@ def test_original_monotonic_lease_fences_both_reaudit_outcomes_despite_utc_windo
     monotonic_ns = time.monotonic_ns
     utc_ns = time.time_ns
     offset = [0]
-    clock = SimpleNamespace(
-        monotonic_ns=lambda: monotonic_ns() + offset[0], time_ns=utc_ns
-    )
+    clock = SimpleNamespace(monotonic_ns=lambda: monotonic_ns() + offset[0], time_ns=utc_ns)
 
     def verify(spec, *, saved=None):
         result = original_verify(spec, saved=saved)
@@ -405,7 +421,9 @@ def test_original_monotonic_lease_fences_both_reaudit_outcomes_despite_utc_windo
         run_job(store, queued["job_id"], _worker_command=command)
     current = store.get(queued["job_id"])
     assert current["state"] == "RUNNING" and current["result_sha256"] is None
-    assert job_view(current, now_ns=utc_ns(), coordinator_active=False)["state"] == "COORDINATOR_LOST"
+    assert (
+        job_view(current, now_ns=utc_ns(), coordinator_active=False)["state"] == "COORDINATOR_LOST"
+    )
     with store.coordinator():
         changed = store.reconcile_orphans(now_ns=utc_ns())
     assert len(changed) == 1 and changed[0]["state"] == "LOST"

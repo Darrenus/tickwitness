@@ -15,17 +15,37 @@ MIN_JOB_LEASE_NS = 1_000_000_000
 MAX_JOB_LEASE_NS = 60_000_000_000
 MAX_JOB_INTEGER = (1 << 63) - 1
 _REQUEST_FIELDS = {
-    "run_id", "expected_bundle_id", "expected_report_id", "input_root", "runs",
-    "source_evidence", "split",
+    "run_id",
+    "expected_bundle_id",
+    "expected_report_id",
+    "input_root",
+    "runs",
+    "source_evidence",
+    "split",
 }
 _SPEC_FIELDS = {"kind", "schema_version", "operation", "request", "lease_duration_ns"}
 _SNAPSHOT_FIELDS = {
-    "kind", "schema_version", "job_id", "spec", "state", "version", "created_at_ns",
-    "updated_at_ns", "attempt", "result_sha256", "failure",
+    "kind",
+    "schema_version",
+    "job_id",
+    "spec",
+    "state",
+    "version",
+    "created_at_ns",
+    "updated_at_ns",
+    "attempt",
+    "result_sha256",
+    "failure",
 }
 _ATTEMPT_FIELDS = {
-    "job_attempt_id", "attempt_number", "nonce", "coordinator_id", "lease_token",
-    "heartbeat_sequence", "heartbeat_at_ns", "lease_expires_at_ns",
+    "job_attempt_id",
+    "attempt_number",
+    "nonce",
+    "coordinator_id",
+    "lease_token",
+    "heartbeat_sequence",
+    "heartbeat_at_ns",
+    "lease_expires_at_ns",
 }
 _STATES = {"QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "LOST"}
 _LOST_REASONS = {"coordinator_lost", "lease_expired"}
@@ -64,7 +84,8 @@ def _path(value: object, *, relative: bool) -> str:
     path = cast("str", value)
     if relative:
         _require(
-            not path.startswith("/") and "\\" not in path
+            not path.startswith("/")
+            and "\\" not in path
             and not any(part in (".", "..") for part in path.split("/")),
             "Job source evidence must be relative without dot or dotdot segments",
         )
@@ -115,13 +136,13 @@ class JobSpec:
 def build_job_spec(request: Row, *, lease_duration_ns: int = 30_000_000_000) -> JobSpec:
     try:
         checked = _request(request)
-        lease = _integer(
-            lease_duration_ns, "lease_duration_ns", MIN_JOB_LEASE_NS, MAX_JOB_LEASE_NS
-        )
+        lease = _integer(lease_duration_ns, "lease_duration_ns", MIN_JOB_LEASE_NS, MAX_JOB_LEASE_NS)
         raw = canonical(
             {
-                "kind": "comparison_job_spec_v1", "schema_version": 1,
-                "operation": "compare_reduction_run_v1", "request": checked,
+                "kind": "comparison_job_spec_v1",
+                "schema_version": 1,
+                "operation": "compare_reduction_run_v1",
+                "request": checked,
                 "lease_duration_ns": lease,
             }
         )
@@ -174,8 +195,11 @@ def _validated_snapshot(raw: bytes) -> Row:
     _require(created <= updated, "Job time moved backwards before its creation")
     if state == "QUEUED":
         _require(
-            version == 1 and updated == created and row["attempt"] is None
-            and row["result_sha256"] is None and row["failure"] is None,
+            version == 1
+            and updated == created
+            and row["attempt"] is None
+            and row["result_sha256"] is None
+            and row["failure"] is None,
             "Queued job cannot contain execution or terminal facts",
         )
         return row
@@ -256,14 +280,23 @@ def queued_job(spec: JobSpec, *, now_ns: int) -> Row:
         checked = load_job_spec(spec.canonical_bytes)
         _require(checked.spec_id == spec.spec_id, "Queued job spec identity differs")
         now = _integer(now_ns, "now_ns")
-        return load_job_snapshot(canonical(
-            {
-                "kind": "job_snapshot_v1", "schema_version": 1, "job_id": checked.spec_id,
-                "spec": checked.document, "state": "QUEUED", "version": 1,
-                "created_at_ns": now, "updated_at_ns": now, "attempt": None,
-                "result_sha256": None, "failure": None,
-            }
-        ))
+        return load_job_snapshot(
+            canonical(
+                {
+                    "kind": "job_snapshot_v1",
+                    "schema_version": 1,
+                    "job_id": checked.spec_id,
+                    "spec": checked.document,
+                    "state": "QUEUED",
+                    "version": 1,
+                    "created_at_ns": now,
+                    "updated_at_ns": now,
+                    "attempt": None,
+                    "result_sha256": None,
+                    "failure": None,
+                }
+            )
+        )
     except (ValueError, TypeError, KeyError, AttributeError) as error:
         raise JobValidationError("Cannot queue job: " + str(error)) from error
 
@@ -280,8 +313,12 @@ def claim_job(
         lease = cast("int", cast("Row", output["spec"])["lease_duration_ns"])
         output["attempt"] = {
             "job_attempt_id": _attempt_id(cast("str", output["job_id"]), attempt_nonce),
-            "attempt_number": 1, "nonce": attempt_nonce, "coordinator_id": coordinator_id,
-            "lease_token": lease_token, "heartbeat_sequence": 0, "heartbeat_at_ns": now,
+            "attempt_number": 1,
+            "nonce": attempt_nonce,
+            "coordinator_id": coordinator_id,
+            "lease_token": lease_token,
+            "heartbeat_sequence": 0,
+            "heartbeat_at_ns": now,
             "lease_expires_at_ns": _addition(now, lease, "Claim lease"),
         }
         output["state"] = "RUNNING"
@@ -298,7 +335,8 @@ def _active(
     now = _now(output, now_ns)
     attempt = cast("Row", output["attempt"])
     for name, value in (
-        ("coordinator_id", coordinator_id), ("job_attempt_id", job_attempt_id),
+        ("coordinator_id", coordinator_id),
+        ("job_attempt_id", job_attempt_id),
         ("lease_token", lease_token),
     ):
         identity(value)
@@ -308,13 +346,21 @@ def _active(
 
 
 def heartbeat_job(
-    row: Row, *, coordinator_id: str, job_attempt_id: str, lease_token: str,
-    sequence: int, now_ns: int,
+    row: Row,
+    *,
+    coordinator_id: str,
+    job_attempt_id: str,
+    lease_token: str,
+    sequence: int,
+    now_ns: int,
 ) -> Row:
     try:
         output, attempt, now = _active(
-            row, coordinator_id=coordinator_id, job_attempt_id=job_attempt_id,
-            lease_token=lease_token, now_ns=now_ns,
+            row,
+            coordinator_id=coordinator_id,
+            job_attempt_id=job_attempt_id,
+            lease_token=lease_token,
+            now_ns=now_ns,
         )
         actual = _integer(sequence, "heartbeat sequence", 1)
         expected = _addition(cast("int", attempt["heartbeat_sequence"]), 1, "Heartbeat sequence")
@@ -329,13 +375,22 @@ def heartbeat_job(
 
 
 def finish_job(
-    row: Row, *, coordinator_id: str, job_attempt_id: str, lease_token: str,
-    result_sha256: str | None, failure: Row | None, now_ns: int,
+    row: Row,
+    *,
+    coordinator_id: str,
+    job_attempt_id: str,
+    lease_token: str,
+    result_sha256: str | None,
+    failure: Row | None,
+    now_ns: int,
 ) -> Row:
     try:
         output, _attempt, now = _active(
-            row, coordinator_id=coordinator_id, job_attempt_id=job_attempt_id,
-            lease_token=lease_token, now_ns=now_ns,
+            row,
+            coordinator_id=coordinator_id,
+            job_attempt_id=job_attempt_id,
+            lease_token=lease_token,
+            now_ns=now_ns,
         )
         if result_sha256 is not None and failure is None:
             identity(result_sha256)
@@ -369,7 +424,8 @@ def lose_job(row: Row, *, reason: str, now_ns: int) -> Row:
             "code": reason,
             "message": (
                 "Coordinator ownership was lost"
-                if reason == "coordinator_lost" else "Heartbeat lease expired"
+                if reason == "coordinator_lost"
+                else "Heartbeat lease expired"
             ),
             "worker_exit_code": None,
         }

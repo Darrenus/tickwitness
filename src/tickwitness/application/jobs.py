@@ -44,27 +44,59 @@ class JobRepository(Protocol):
     def result(self, job_id: str) -> bytes | None: ...
 
     def claim(
-        self, job_id: str, *, expected_version: int, coordinator_id: str,
-        attempt_nonce: str, lease_token: str, now_ns: int,
+        self,
+        job_id: str,
+        *,
+        expected_version: int,
+        coordinator_id: str,
+        attempt_nonce: str,
+        lease_token: str,
+        now_ns: int,
     ) -> Row: ...
 
     def heartbeat(
-        self, job_id: str, *, expected_version: int, coordinator_id: str,
-        job_attempt_id: str, lease_token: str, sequence: int, now_ns: int,
+        self,
+        job_id: str,
+        *,
+        expected_version: int,
+        coordinator_id: str,
+        job_attempt_id: str,
+        lease_token: str,
+        sequence: int,
+        now_ns: int,
     ) -> Row: ...
 
     def complete(
-        self, job_id: str, raw: bytes, *, expected_version: int, coordinator_id: str,
-        job_attempt_id: str, lease_token: str, now_ns: int,
+        self,
+        job_id: str,
+        raw: bytes,
+        *,
+        expected_version: int,
+        coordinator_id: str,
+        job_attempt_id: str,
+        lease_token: str,
+        now_ns: int,
     ) -> Row: ...
 
     def fail(
-        self, job_id: str, failure: Row, *, expected_version: int, coordinator_id: str,
-        job_attempt_id: str, lease_token: str, now_ns: int,
+        self,
+        job_id: str,
+        failure: Row,
+        *,
+        expected_version: int,
+        coordinator_id: str,
+        job_attempt_id: str,
+        lease_token: str,
+        now_ns: int,
     ) -> Row: ...
 
     def mark_lost(
-        self, job_id: str, *, expected_version: int, reason: str, now_ns: int,
+        self,
+        job_id: str,
+        *,
+        expected_version: int,
+        reason: str,
+        now_ns: int,
     ) -> Row: ...
 
     def reconcile_orphans(self, *, now_ns: int) -> list[Row]: ...

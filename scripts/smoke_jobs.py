@@ -319,15 +319,24 @@ def _workspace(records: Path, report: Path) -> Iterator[Path]:
         try:
             yield root
         except BaseException as error:
-            for accepted in (report, root / "jobs-smoke" / "report.json",
-                             records / "jobs-smoke" / "report.json"):
+            for accepted in (
+                report,
+                root / "jobs-smoke" / "report.json",
+                records / "jobs-smoke" / "report.json",
+            ):
                 with suppress(OSError):
                     accepted.unlink(missing_ok=True)
             try:
                 shutil.copytree(root, records, dirs_exist_ok=True)
                 (records / "diagnostic-capture.json").write_bytes(
-                    _canonical({"kind": "jobs_workspace_diagnostics_v1", "accepted": False,
-                                "exception_type": type(error).__name__, "message": str(error)})
+                    _canonical(
+                        {
+                            "kind": "jobs_workspace_diagnostics_v1",
+                            "accepted": False,
+                            "exception_type": type(error).__name__,
+                            "message": str(error),
+                        }
+                    )
                 )
             except Exception as diagnostic_error:
                 print("Failed to preserve diagnostics: " + str(diagnostic_error), file=sys.stderr)
@@ -361,9 +370,10 @@ def main() -> None:
     assert source["accepted"] is True and source["core_only_profile"] is arguments.core_only
     assert source["native_execution"] is False
     assert source["upstream_native_evidence_reused"] is (not arguments.core_only)
-    assert original_report == (
-        arguments.source_records / "reduction-comparison-smoke" / "report.json"
-    ).read_bytes()
+    assert (
+        original_report
+        == (arguments.source_records / "reduction-comparison-smoke" / "report.json").read_bytes()
+    )
     assert {name: sha for name, sha in original_tree.items() if name != "artifact-files.json"} == (
         json.loads((arguments.source_records / "artifact-files.json").read_bytes())
     )
@@ -383,12 +393,22 @@ def main() -> None:
 
         def invoke(entry, command, *, expected=0):
             completed = subprocess.run(
-                [verifier, "-I", "-B", *entry, *command], cwd=cwd,
-                capture_output=True, text=True, check=False, timeout=120,
+                [verifier, "-I", "-B", *entry, *command],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=120,
             )
-            record = {"executable": verifier, "entry": entry, "command": list(command),
-                      "exit_code": completed.returncode, "expected_exit_code": expected,
-                      "stdout": completed.stdout, "stderr": completed.stderr}
+            record = {
+                "executable": verifier,
+                "entry": entry,
+                "command": list(command),
+                "exit_code": completed.returncode,
+                "expected_exit_code": expected,
+                "stdout": completed.stdout,
+                "stderr": completed.stderr,
+            }
             calls.append(record)
             (transcripts / f"{len(calls):04d}.json").write_bytes(_canonical(record))
             assert len(completed.stdout.encode()) <= 32 * 1024 * 1024
@@ -418,16 +438,32 @@ def main() -> None:
         assert str(Path(runtime["prefix"]).resolve()) == prefix
         assert Path(runtime["prefix"]).resolve() != Path(runtime["base_prefix"]).resolve()
         assert runtime["native_distribution"] is None and runtime["project_version"] == "0.2.0.dev0"
-        identity = {"requested_executable": verifier, "requested_venv_prefix_resolved": prefix,
-                    "runtime": runtime}
+        identity = {
+            "requested_executable": verifier,
+            "requested_venv_prefix_resolved": prefix,
+            "runtime": runtime,
+        }
         (root / "interpreter-identity.json").write_bytes(_canonical(identity))
         pre_io = helper(_PRE_IO, str(root / "never-catalog"))
         assert pre_io == {"confirmation_rejected_before_spec_locator_catalog_io": True}
         refused = run(
-            "submit-comparison-job", "invalid", "--input-root", str(root / "never-input"),
-            "--source-evidence", "missing-source", "--runs", str(root / "never-runs"),
-            "--expected-bundle-id", "invalid", "--expected-report-id", "invalid",
-            "--split", "confirmation", "--jobs", str(root / "never-catalog"), expected=5,
+            "submit-comparison-job",
+            "invalid",
+            "--input-root",
+            str(root / "never-input"),
+            "--source-evidence",
+            "missing-source",
+            "--runs",
+            str(root / "never-runs"),
+            "--expected-bundle-id",
+            "invalid",
+            "--expected-report-id",
+            "invalid",
+            "--split",
+            "confirmation",
+            "--jobs",
+            str(root / "never-catalog"),
+            expected=5,
         )
         assert refused["error"]["code"] == "confirmation_access_denied"
         missing = run("inspect-job", "0" * 64, "--jobs", str(root / "never-catalog"), expected=4)
@@ -451,8 +487,11 @@ def main() -> None:
             run_id = source["lifecycle"]["repeated_best"]["report"]["bindings"]["reduced"]["run_id"]
             source_name = "live-source"
             before = helper(
-                _LEDGER, str(catalog), str(research_input / source_name),
-                str(research_runs), bundle,
+                _LEDGER,
+                str(catalog),
+                str(research_input / source_name),
+                str(research_runs),
+                bundle,
             )
             assert before == source["lifecycle"]["after"]
             assert [row["attempt_index"] for row in before["slots"]] == list(range(1, 12))
@@ -461,10 +500,22 @@ def main() -> None:
 
         def submit(name, lease, *, selected=run_id):
             queued = run(
-                "submit-comparison-job", selected, "--input-root", str(research_input),
-                "--source-evidence", source_name, "--runs", str(research_runs),
-                "--expected-bundle-id", bundle, "--expected-report-id", report_pin,
-                "--lease-seconds", str(lease), "--jobs", str(catalog),
+                "submit-comparison-job",
+                selected,
+                "--input-root",
+                str(research_input),
+                "--source-evidence",
+                source_name,
+                "--runs",
+                str(research_runs),
+                "--expected-bundle-id",
+                bundle,
+                "--expected-report-id",
+                report_pin,
+                "--lease-seconds",
+                str(lease),
+                "--jobs",
+                str(catalog),
             )
             _view(queued, state="QUEUED")
             assert queued["version"] == 1 and queued["attempt"] is None
@@ -481,10 +532,22 @@ def main() -> None:
         repeated = run("run-job", main_job, "--jobs", str(catalog))
         assert repeated == finished
         resubmitted = run(
-            "submit-comparison-job", run_id, "--input-root", str(research_input),
-            "--source-evidence", source_name, "--runs", str(research_runs),
-            "--expected-bundle-id", bundle, "--expected-report-id", report_pin,
-            "--lease-seconds", "30", "--jobs", str(catalog),
+            "submit-comparison-job",
+            run_id,
+            "--input-root",
+            str(research_input),
+            "--source-evidence",
+            source_name,
+            "--runs",
+            str(research_runs),
+            "--expected-bundle-id",
+            bundle,
+            "--expected-report-id",
+            report_pin,
+            "--lease-seconds",
+            "30",
+            "--jobs",
+            str(catalog),
         )
         assert resubmitted == finished
         jobs["main"]["idempotent_resubmission"] = resubmitted
@@ -525,10 +588,16 @@ def main() -> None:
             job_id = submit(name, lease)
             directory = controls / name
             definition = controls / (name + "-definition.json")
-            definition.write_bytes(_canonical({"worker": _WORKER + body,
-                                                "coordinator": coordinator_code}))
+            definition.write_bytes(
+                _canonical({"worker": _WORKER + body, "coordinator": coordinator_code})
+            )
             outcome = helper(
-                _CONTROL, str(catalog), job_id, name, str(directory), str(definition),
+                _CONTROL,
+                str(catalog),
+                job_id,
+                name,
+                str(directory),
+                str(definition),
             )
             path = controls / (name + "-outcome.json")
             path.write_bytes(_canonical(outcome))
@@ -557,10 +626,15 @@ def main() -> None:
         assert len(reconciliation["jobs"]) == 1
         _view(reconciliation["jobs"][0], state="LOST")
         assert reconciliation["jobs"][0]["failure"]["code"] == "coordinator_lost"
-        assert all(reconciliation[key] is False for key in (
-            "worker_started", "research_attempt_reserved", "automatic_retry_performed",
-            "checkpoint_restored",
-        ))
+        assert all(
+            reconciliation[key] is False
+            for key in (
+                "worker_started",
+                "research_attempt_reserved",
+                "automatic_retry_performed",
+                "checkpoint_restored",
+            )
+        )
         stale = helper(_STALE, str(catalog), str(orphan_path))
         assert stale["code"] == "job_conflict" and stale["before"] == stale["after"]
         jobs["coordinator_kill"]["reconciliation"] = reconciliation
@@ -569,7 +643,8 @@ def main() -> None:
         assert stopped == reconciliation["jobs"][0]
         jobs["coordinator_kill"]["terminal_run_did_not_resume"] = stopped
         _, pulsed, _ = control(
-            "heartbeat", 2,
+            "heartbeat",
+            2,
             "for sequence in range(1,9):\n"
             "    emit('job_heartbeat_v1',sequence)\n    Event().wait(0.35)\n"
             "emit('job_failure_v1',9,failure={'code':'controlled_failure','message':'pulse train',"
@@ -580,7 +655,8 @@ def main() -> None:
         assert pulsed["snapshot"]["failure"]["code"] == "controlled_failure"
         assert pulsed["snapshot"]["attempt"]["heartbeat_sequence"] == 9
         _, expired, _ = control(
-            "silent_expiry", 3,
+            "silent_expiry",
+            3,
             "Path(sys.argv[1]).write_text(json.dumps({'pid':os.getpid()}))\nEvent().wait(30)\n",
         )
         assert expired["snapshot"]["state"] == "LOST"
@@ -597,7 +673,8 @@ def main() -> None:
             forged["comparison_id"] = _sha(_canonical(forged["report"]))
             (root / "forged-worker-export.json").write_bytes(_canonical(forged))
             _, rejected, _ = control(
-                "forged_result", 15,
+                "forged_result",
+                15,
                 f"emit('job_result_v1',1,export=json.loads({_canonical(forged).decode()!r}))\n",
             )
             assert rejected["snapshot"]["state"] == "FAILED"
@@ -618,7 +695,9 @@ def main() -> None:
             jobs["postcommit_acknowledgement_loss"]["resolved"] = resolved
 
         catalog_state = helper(
-            _CATALOG, str(catalog), json.dumps([item["job_id"] for item in jobs.values()]),
+            _CATALOG,
+            str(catalog),
+            json.dumps([item["job_id"] for item in jobs.values()]),
         )
         assert catalog_state["coordinator_active"] is False
         assert len(catalog_state["jobs"]) == len(jobs)
@@ -636,27 +715,38 @@ def main() -> None:
         after = None
         if not arguments.core_only:
             after = helper(
-                _LEDGER, str(catalog), str(research_input / source_name),
-                str(research_runs), bundle,
+                _LEDGER,
+                str(catalog),
+                str(research_input / source_name),
+                str(research_runs),
+                bundle,
             )
             assert after == before and len(after["slots"]) == 11
         assert _tree(upstream) == protected and _tree(arguments.source_records) == original_tree
         assert arguments.source_report.read_bytes() == original_report
         report = {
-            "kind": "installed_jobs_acceptance_v1", "accepted": True,
+            "kind": "installed_jobs_acceptance_v1",
+            "accepted": True,
             "core_only_profile": arguments.core_only,
-            "interpreter_identity": identity, "pre_io": pre_io,
-            "confirmation_refusal": refused, "missing_catalog_refusal": missing,
+            "interpreter_identity": identity,
+            "pre_io": pre_io,
+            "confirmation_refusal": refused,
+            "missing_catalog_refusal": missing,
             "source_comparison_report_sha256": _sha(original_report),
             "source_comparison_records_manifest_sha256": original_tree["artifact-files.json"],
             "source_records_path": "input-root/upstream",
             "source_report_path": "source-comparison-report.json",
-            "source_bytes_unchanged": True, "jobs": jobs, "catalog": catalog_state,
+            "source_bytes_unchanged": True,
+            "jobs": jobs,
+            "catalog": catalog_state,
             "managed_job_count": len(jobs),
-            "research_before": before, "research_after": after,
+            "research_before": before,
+            "research_after": after,
             "comparison_positive_results": positives,
-            "native_execution": False, "native_replayed": False,
-            "research_attempts_added": 0, "new_native_runs": 0,
+            "native_execution": False,
+            "native_replayed": False,
+            "research_attempts_added": 0,
+            "new_native_runs": 0,
             "actual_native_source_records": not arguments.core_only,
             "signals": {
                 "worker_sigkill_after_persisted_heartbeat": True,
@@ -666,21 +756,29 @@ def main() -> None:
                 "orphan_cleanup_signal_only_no_strong_cleanup_certification": True,
                 "readonly_orphan_diagnosis_and_explicit_lost_reconciliation": True,
             },
-            "guard": {"scope": "coordinator_and_qualification_helpers_v1", "core_only": True,
-                      "research_writer_ports_forbidden_in_coordinator": True,
-                      "old_research_store_construction_forbidden": True,
-                      "network_forbidden": True, "sqlite_allowed_only_for_job_catalog": True,
-                      "trusted_job_worker_spawn_allowed": True},
-            "scope": {"operation": "compare_reduction_run_v1",
-                      "job_attempt_is_research_attempt": False,
-                      "native_research_execution_supported": False,
-                      "automatic_retry_supported": False,
-                      "checkpoint_resume_verified": False, "strong_cancellation_verified": False,
-                      "hard_job_deadline_verified": False,
-                      "physical_crash_durability_verified": False,
-                      "global_history_authenticated": False,
-                      "human_domain_approval_verified": False},
-            "external_attempts": 0, "external_attempt_gate": "PENDING",
+            "guard": {
+                "scope": "coordinator_and_qualification_helpers_v1",
+                "core_only": True,
+                "research_writer_ports_forbidden_in_coordinator": True,
+                "old_research_store_construction_forbidden": True,
+                "network_forbidden": True,
+                "sqlite_allowed_only_for_job_catalog": True,
+                "trusted_job_worker_spawn_allowed": True,
+            },
+            "scope": {
+                "operation": "compare_reduction_run_v1",
+                "job_attempt_is_research_attempt": False,
+                "native_research_execution_supported": False,
+                "automatic_retry_supported": False,
+                "checkpoint_resume_verified": False,
+                "strong_cancellation_verified": False,
+                "hard_job_deadline_verified": False,
+                "physical_crash_durability_verified": False,
+                "global_history_authenticated": False,
+                "human_domain_approval_verified": False,
+            },
+            "external_attempts": 0,
+            "external_attempt_gate": "PENDING",
         }
         inner = root / "jobs-smoke" / "report.json"
         inner.parent.mkdir()

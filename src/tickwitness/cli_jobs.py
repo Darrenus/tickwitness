@@ -1,9 +1,10 @@
 """CLI composition for durable, trusted local comparison Jobs."""
 
+from __future__ import annotations
+
 import argparse
 import time
 from pathlib import Path
-from typing import cast
 
 from tickwitness.application.jobs import JobConflictError, job_view
 from tickwitness.application.research import ConfirmationAccessDenied
@@ -12,12 +13,16 @@ from tickwitness.domain.jobs.contracts import JobValidationError, build_job_spec
 from tickwitness.infrastructure.job_supervisor import run_job
 from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
 
-COMMANDS = frozenset({"submit-comparison-job", "run-job", "inspect-job", "reconcile-jobs", "read-job-result"})
+COMMANDS = frozenset(
+    {"submit-comparison-job", "run-job", "inspect-job", "reconcile-jobs", "read-job-result"}
+)
 type Row = dict[str, object]
 
 
 def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    submit = commands.add_parser("submit-comparison-job", help="Queue one pinned read-only comparison")
+    submit = commands.add_parser(
+        "submit-comparison-job", help="Queue one pinned read-only comparison"
+    )
     submit.add_argument("run_id")
     submit.add_argument("--input-root", type=Path, required=True)
     submit.add_argument("--source-evidence", required=True)
@@ -37,7 +42,9 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
         command.add_argument("--jobs", type=Path, required=True)
         if name == "inspect-job":
             command.add_argument("--events", action="store_true")
-    reconcile = commands.add_parser("reconcile-jobs", help="Diagnose orphan Jobs as LOST; never resume")
+    reconcile = commands.add_parser(
+        "reconcile-jobs", help="Diagnose orphan Jobs as LOST; never resume"
+    )
     reconcile.add_argument("--jobs", type=Path, required=True)
 
 
@@ -52,7 +59,9 @@ def _disjoint(jobs: Path, roots: tuple[Path, ...]) -> None:
 def execute(arguments: argparse.Namespace) -> Row | str:
     if arguments.command == "submit-comparison-job":
         if arguments.split != "development":
-            raise ConfirmationAccessDenied("Managed comparison Jobs permit development evidence only")
+            raise ConfirmationAccessDenied(
+                "Managed comparison Jobs permit development evidence only"
+            )
         spec = build_job_spec(
             {
                 "run_id": arguments.run_id,
@@ -78,10 +87,15 @@ def execute(arguments: argparse.Namespace) -> Row | str:
         with store.coordinator():
             changed = store.reconcile_orphans(now_ns=time.time_ns())
         return {
-            "kind": "job_reconciliation_receipt_v1", "schema_version": 1,
-            "jobs": [job_view(row, now_ns=time.time_ns(), coordinator_active=False) for row in changed],
-            "worker_started": False, "research_attempt_reserved": False,
-            "automatic_retry_performed": False, "checkpoint_restored": False,
+            "kind": "job_reconciliation_receipt_v1",
+            "schema_version": 1,
+            "jobs": [
+                job_view(row, now_ns=time.time_ns(), coordinator_active=False) for row in changed
+            ],
+            "worker_started": False,
+            "research_attempt_reserved": False,
+            "automatic_retry_performed": False,
+            "checkpoint_restored": False,
         }
     if arguments.command == "read-job-result":
         row = store.get(arguments.job_id)
@@ -91,14 +105,28 @@ def execute(arguments: argparse.Namespace) -> Row | str:
         if raw is None:
             raise JobConflictError("Job result is unavailable")
         return raw.decode("utf-8")
-    row = run_job(store, arguments.job_id) if arguments.command == "run-job" else store.get(arguments.job_id)
+    row = (
+        run_job(store, arguments.job_id)
+        if arguments.command == "run-job"
+        else store.get(arguments.job_id)
+    )
     view = job_view(row, now_ns=time.time_ns(), coordinator_active=store.coordinator_active())
     if arguments.command == "inspect-job" and arguments.events:
         fields = {
-            "event_id", "event_type", "schema_version", "aggregate_id", "aggregate_version",
-            "occurred_at_ns", "correlation_id", "causation_id", "snapshot_sha256",
+            "event_id",
+            "event_type",
+            "schema_version",
+            "aggregate_id",
+            "aggregate_version",
+            "occurred_at_ns",
+            "correlation_id",
+            "causation_id",
+            "snapshot_sha256",
         }
-        view["events"] = [{key: value for key, value in event.items() if key in fields} for event in store.events(arguments.job_id)]
+        view["events"] = [
+            {key: value for key, value in event.items() if key in fields}
+            for event in store.events(arguments.job_id)
+        ]
         view["event_limit"] = 100
         view["complete_history_claimed"] = False
-    return cast("Row", view)
+    return view

@@ -27,7 +27,13 @@ from tickwitness.infrastructure.job_worker import (
 type Row = dict[str, object]
 MAX_JOB_STDERR_BYTES = 64 * 1024
 _COMMON = {
-    "kind", "schema_version", "job_id", "coordinator_id", "job_attempt_id", "lease_token", "sequence"
+    "kind",
+    "schema_version",
+    "job_id",
+    "coordinator_id",
+    "job_attempt_id",
+    "lease_token",
+    "sequence",
 }
 
 
@@ -54,7 +60,13 @@ def _terminate(process: subprocess.Popen[bytes]) -> None:
 def _checked_frame(raw: bytes, row: Row) -> Row:
     frame = parse(raw, limit=MAX_JOB_FRAME_BYTES)
     kind = frame.get("kind")
-    extra = {"export"} if kind == "job_result_v1" else {"failure"} if kind == "job_failure_v1" else set()
+    extra = (
+        {"export"}
+        if kind == "job_result_v1"
+        else {"failure"}
+        if kind == "job_failure_v1"
+        else set()
+    )
     attempt = cast("Row", row["attempt"])
     if (
         not isinstance(kind, str)
@@ -63,7 +75,10 @@ def _checked_frame(raw: bytes, row: Row) -> Row:
         or type(frame["schema_version"]) is not int
         or frame["schema_version"] != 1
         or frame["job_id"] != row["job_id"]
-        or any(frame[key] != attempt[key] for key in ("coordinator_id", "job_attempt_id", "lease_token"))
+        or any(
+            frame[key] != attempt[key]
+            for key in ("coordinator_id", "job_attempt_id", "lease_token")
+        )
         or type(frame["sequence"]) is not int
         or frame["sequence"] != cast("int", attempt["heartbeat_sequence"]) + 1
     ):
@@ -87,7 +102,10 @@ def _checked_frame(raw: bytes, row: Row) -> Row:
 
 
 def _exchange(
-    process: subprocess.Popen[bytes], raw: bytes, store: JobRepository, row: Row,
+    process: subprocess.Popen[bytes],
+    raw: bytes,
+    store: JobRepository,
+    row: Row,
     window: _LeaseWindow,
 ) -> tuple[Row, Row | None, bytes]:
     if process.stdin is None or process.stdout is None or process.stderr is None:
@@ -118,22 +136,22 @@ def _exchange(
                     os.killpg(process.pid, signal.SIGKILL)
             timeout = min(0.1, max(0, window.deadline_ns - time.monotonic_ns()) / 1_000_000_000)
             for key, _ in selector.select(timeout):
-                stream = key.fileobj
+                ready_stream = key.fileobj
                 descriptor = key.fd
                 if key.data == "stdin":
                     try:
-                        pending = pending[os.write(descriptor, pending):]
+                        pending = pending[os.write(descriptor, pending) :]
                     except BlockingIOError:
                         continue
                     except BrokenPipeError:
                         pending = pending[:0]
                     if not pending:
-                        selector.unregister(stream)
+                        selector.unregister(ready_stream)
                         process.stdin.close()
                     continue
                 chunk = os.read(descriptor, 64 * 1024)
                 if not chunk:
-                    selector.unregister(stream)
+                    selector.unregister(ready_stream)
                     if key.data == "stdout" and buffer:
                         raise _WorkerFault("Worker output ended inside an IPC frame")
                     continue
@@ -172,24 +190,32 @@ def _exchange(
 
 def _lost_lease(store: JobRepository, row: Row, *, now_ns: int) -> Row:
     if now_ns < cast("int", cast("Row", row["attempt"])["lease_expires_at_ns"]):
-        raise JobConflictError("Monotonic lease expired but UTC cannot confirm it; inspect or reconcile")
+        raise JobConflictError(
+            "Monotonic lease expired but UTC cannot confirm it; inspect or reconcile"
+        )
     return store.mark_lost(
-        cast("str", row["job_id"]), expected_version=cast("int", row["version"]),
-        reason="lease_expired", now_ns=now_ns,
+        cast("str", row["job_id"]),
+        expected_version=cast("int", row["version"]),
+        reason="lease_expired",
+        now_ns=now_ns,
     )
 
 
 def _finish_failure(store: JobRepository, row: Row, failure: Row, window: _LeaseWindow) -> Row:
     now = time.time_ns()
     attempt = cast("Row", row["attempt"])
-    if time.monotonic_ns() >= window.deadline_ns or now >= cast("int", attempt["lease_expires_at_ns"]):
+    if time.monotonic_ns() >= window.deadline_ns or now >= cast(
+        "int", attempt["lease_expires_at_ns"]
+    ):
         return _lost_lease(store, row, now_ns=now)
     return store.fail(
-        cast("str", row["job_id"]), failure,
+        cast("str", row["job_id"]),
+        failure,
         expected_version=cast("int", row["version"]),
         coordinator_id=cast("str", attempt["coordinator_id"]),
         job_attempt_id=cast("str", attempt["job_attempt_id"]),
-        lease_token=cast("str", attempt["lease_token"]), now_ns=now,
+        lease_token=cast("str", attempt["lease_token"]),
+        now_ns=now,
     )
 
 
@@ -212,23 +238,44 @@ def run_job(
             raise JobConflictError("Only a queued Job may start a worker")
         claim_clock = time.monotonic_ns()
         row = store.claim(
-            job_id, expected_version=cast("int", row["version"]),
-            coordinator_id=coordinator_id, attempt_nonce=secrets.token_hex(32),
-            lease_token=secrets.token_hex(32), now_ns=time.time_ns(),
+            job_id,
+            expected_version=cast("int", row["version"]),
+            coordinator_id=coordinator_id,
+            attempt_nonce=secrets.token_hex(32),
+            lease_token=secrets.token_hex(32),
+            now_ns=time.time_ns(),
         )
-        window = _LeaseWindow(claim_clock + cast("int", cast("Row", row["spec"])["lease_duration_ns"]))
+        window = _LeaseWindow(
+            claim_clock + cast("int", cast("Row", row["spec"])["lease_duration_ns"])
+        )
         attempt = cast("Row", row["attempt"])
         raw = canonical(
             {
-                "kind": "job_worker_request_v1", "schema_version": 1,
-                "spec": row["spec"], "job_id": job_id,
-                **{key: attempt[key] for key in ("coordinator_id", "job_attempt_id", "lease_token")},
+                "kind": "job_worker_request_v1",
+                "schema_version": 1,
+                "spec": row["spec"],
+                "job_id": job_id,
+                **{
+                    key: attempt[key] for key in ("coordinator_id", "job_attempt_id", "lease_token")
+                },
             }
         )
         if len(raw) > MAX_JOB_REQUEST_BYTES:
-            return _finish_failure(store, row, {"code": "job_request_too_large", "message": "Job IPC request exceeds 64 KiB", "worker_exit_code": None}, window)
+            return _finish_failure(
+                store,
+                row,
+                {
+                    "code": "job_request_too_large",
+                    "message": "Job IPC request exceeds 64 KiB",
+                    "worker_exit_code": None,
+                },
+                window,
+            )
         command = _worker_command or (
-            str(Path(sys.executable).absolute()), "-I", "-B", "-m",
+            str(Path(sys.executable).absolute()),
+            "-I",
+            "-B",
+            "-m",
             "tickwitness.infrastructure.job_worker",
         )
         process: subprocess.Popen[bytes] | None = None
@@ -239,8 +286,13 @@ def run_job(
         with TemporaryDirectory(prefix="tickwitness-job-") as cwd:
             try:
                 process = subprocess.Popen(
-                    command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE, cwd=cwd, start_new_session=True, close_fds=True,
+                    command,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    cwd=cwd,
+                    start_new_session=True,
+                    close_fds=True,
                 )
                 row, terminal, errors = _exchange(process, raw, store, row, window)
             except _LeaseExpired:
@@ -262,15 +314,36 @@ def run_job(
         if expired or time.monotonic_ns() >= window.deadline_ns:
             return _lost_lease(store, row, now_ns=time.time_ns())
         exit_code = process.returncode if process is not None else None
-        if fault is not None or terminal is None or (terminal["kind"] == "job_result_v1" and exit_code != 0):
-            message = str(fault) if fault is not None else "Worker exited without a valid successful result"
+        if (
+            fault is not None
+            or terminal is None
+            or (terminal["kind"] == "job_result_v1" and exit_code != 0)
+        ):
+            message = (
+                str(fault)
+                if fault is not None
+                else "Worker exited without a valid successful result"
+            )
             if errors:
                 message += ": " + errors.decode("utf-8", errors="replace")
-            return _finish_failure(store, row, {"code": "job_worker_failed", "message": message[:2048], "worker_exit_code": exit_code}, window)
+            return _finish_failure(
+                store,
+                row,
+                {
+                    "code": "job_worker_failed",
+                    "message": message[:2048],
+                    "worker_exit_code": exit_code,
+                },
+                window,
+            )
         if terminal["kind"] == "job_failure_v1":
             diagnostic = cast("Row", terminal["failure"])
             if diagnostic["worker_exit_code"] != exit_code:
-                diagnostic = {"code": "job_worker_protocol_error", "message": "Failure frame and actual process exit differ", "worker_exit_code": exit_code}
+                diagnostic = {
+                    "code": "job_worker_protocol_error",
+                    "message": "Failure frame and actual process exit differ",
+                    "worker_exit_code": exit_code,
+                }
             return _finish_failure(store, row, diagnostic, window)
         output = canonical(cast("Row", terminal["export"]))
         spec = load_job_spec(canonical(cast("Row", row["spec"])))
@@ -289,13 +362,18 @@ def run_job(
             return _finish_failure(store, row, diagnostic, window)
         attempt = cast("Row", row["attempt"])
         now = time.time_ns()
-        if time.monotonic_ns() >= window.deadline_ns or now >= cast("int", attempt["lease_expires_at_ns"]):
+        if time.monotonic_ns() >= window.deadline_ns or now >= cast(
+            "int", attempt["lease_expires_at_ns"]
+        ):
             return _lost_lease(store, row, now_ns=now)
         # Deliberately outside error->failure handling: a commit failure may have
         # published SUCCEEDED. Only later independent inspection may resolve it.
         return store.complete(
-            job_id, output, expected_version=cast("int", row["version"]),
+            job_id,
+            output,
+            expected_version=cast("int", row["version"]),
             coordinator_id=cast("str", attempt["coordinator_id"]),
             job_attempt_id=cast("str", attempt["job_attempt_id"]),
-            lease_token=cast("str", attempt["lease_token"]), now_ns=now,
+            lease_token=cast("str", attempt["lease_token"]),
+            now_ns=now,
         )

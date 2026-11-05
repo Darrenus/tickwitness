@@ -55,7 +55,8 @@ with store.coordinator():
 def tree(root):
     return {
         str(path.relative_to(root)): path.read_bytes()
-        for path in root.rglob("*") if path.is_file() and not path.is_symlink()
+        for path in root.rglob("*")
+        if path.is_file() and not path.is_symlink()
     }
 
 
@@ -75,24 +76,34 @@ def job_case(tmp_path):
     spec = build_job_spec(request, lease_duration_ns=1_000_000_000)
     root = tmp_path / "jobs"
     return SimpleNamespace(
-        root=root, store=SqliteJobStore(root, create=True), spec=spec,
-        request=request, comparison=comparison,
+        root=root,
+        store=SqliteJobStore(root, create=True),
+        spec=spec,
+        request=request,
+        comparison=comparison,
     )
 
 
 def claim(value, owner, *, version=1, now=NOW + 1):
     return value.store.claim(
-        value.spec.spec_id, expected_version=version, coordinator_id=owner,
-        attempt_nonce="a" * 64, lease_token="b" * 64, now_ns=now,
+        value.spec.spec_id,
+        expected_version=version,
+        coordinator_id=owner,
+        attempt_nonce="a" * 64,
+        lease_token="b" * 64,
+        now_ns=now,
     )
 
 
 def heartbeat(value, row, *, now=NOW + 2, **changes):
     attempt = row["attempt"]
     options = {
-        "expected_version": row["version"], "coordinator_id": attempt["coordinator_id"],
-        "job_attempt_id": attempt["job_attempt_id"], "lease_token": attempt["lease_token"],
-        "sequence": attempt["heartbeat_sequence"] + 1, "now_ns": now,
+        "expected_version": row["version"],
+        "coordinator_id": attempt["coordinator_id"],
+        "job_attempt_id": attempt["job_attempt_id"],
+        "lease_token": attempt["lease_token"],
+        "sequence": attempt["heartbeat_sequence"] + 1,
+        "now_ns": now,
     }
     options.update(changes)
     return value.store.heartbeat(value.spec.spec_id, **options)
@@ -101,8 +112,10 @@ def heartbeat(value, row, *, now=NOW + 2, **changes):
 def complete(value, row, *, now=NOW + 3, raw=None, **changes):
     attempt = row["attempt"]
     options = {
-        "expected_version": row["version"], "coordinator_id": attempt["coordinator_id"],
-        "job_attempt_id": attempt["job_attempt_id"], "lease_token": attempt["lease_token"],
+        "expected_version": row["version"],
+        "coordinator_id": attempt["coordinator_id"],
+        "job_attempt_id": attempt["job_attempt_id"],
+        "lease_token": attempt["lease_token"],
         "now_ns": now,
     }
     options.update(changes)
@@ -157,12 +170,10 @@ def test_all_mutations_need_exclusive_ownership_and_lock_descriptor_is_not_inher
         assert value.store.coordinator_active() is other.coordinator_active() is True
         assert value.store._owner_fd is not None
         assert not os.get_inheritable(value.store._owner_fd)
-        with pytest.raises(JobConflictError):
-            with other.coordinator():
-                pass
-        with pytest.raises(JobConflictError):
-            with value.store.coordinator():
-                pass
+        with pytest.raises(JobConflictError), other.coordinator():
+            pass
+        with pytest.raises(JobConflictError), value.store.coordinator():
+            pass
         value.store.submit(value.spec, now_ns=NOW)
         row = claim(value, owner)
     assert other.coordinator_active() is False
@@ -182,7 +193,10 @@ def test_heartbeat_then_atomic_success_binds_real_export_and_event_chain(job_cas
         assert value.store.result(value.spec.spec_id) == value.comparison.export_bytes
         events = value.store.events(value.spec.spec_id)
         assert [event["event_type"] for event in events] == [
-            "JobSubmitted", "JobClaimed", "JobHeartbeatRecorded", "JobSucceeded",
+            "JobSubmitted",
+            "JobClaimed",
+            "JobHeartbeatRecorded",
+            "JobSucceeded",
         ]
         assert [event["aggregate_version"] for event in events] == [1, 2, 3, 4]
         previous = value.spec.spec_id
@@ -200,9 +214,13 @@ def test_heartbeat_then_atomic_success_binds_real_export_and_event_chain(job_cas
 
 
 @pytest.mark.parametrize(
-    "changed", [
-        {"expected_version": 1}, {"coordinator_id": "0" * 64},
-        {"job_attempt_id": "0" * 64}, {"lease_token": "0" * 64}, {"sequence": 2},
+    "changed",
+    [
+        {"expected_version": 1},
+        {"coordinator_id": "0" * 64},
+        {"job_attempt_id": "0" * 64},
+        {"lease_token": "0" * 64},
+        {"sequence": 2},
     ],
 )
 def test_wrong_version_epoch_attempt_token_or_sequence_never_mutates(job_case, changed):
@@ -226,8 +244,12 @@ def test_only_one_running_job_can_be_claimed_even_by_same_owner(job_case):
         claim(value, owner)
         with pytest.raises(JobConflictError, match="Single-worker"):
             value.store.claim(
-                other.spec_id, expected_version=1, coordinator_id=owner,
-                attempt_nonce="c" * 64, lease_token="d" * 64, now_ns=NOW + 2,
+                other.spec_id,
+                expected_version=1,
+                coordinator_id=owner,
+                attempt_nonce="c" * 64,
+                lease_token="d" * 64,
+                now_ns=NOW + 2,
             )
         assert value.store.get(other.spec_id)["state"] == "QUEUED"
 
@@ -261,7 +283,9 @@ def test_killed_owner_hot_journal_requires_explicit_rw_owner_recovery(job_case, 
     gate = tmp_path / "hot-journal-ready"
     process = subprocess.Popen(
         [sys.executable, "-c", _HOT_JOURNAL_CHILD, str(value.root), str(gate)],
-        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         close_fds=True,
     )
     try:
@@ -292,7 +316,9 @@ def test_killed_owner_hot_journal_requires_explicit_rw_owner_recovery(job_case, 
         assert lost["version"] == original["version"] + 1
         assert reader.result(value.spec.spec_id) is None
         assert [event["event_type"] for event in reader.events(value.spec.spec_id)] == [
-            "JobSubmitted", "JobClaimed", "JobLost",
+            "JobSubmitted",
+            "JobClaimed",
+            "JobLost",
         ]
         assert not (value.root / "catalog.sqlite3-journal").exists()
     finally:
@@ -329,12 +355,16 @@ def test_expired_lease_refuses_late_heartbeat_completion_and_becomes_lost(job_ca
             complete(value, running, now=expired)
         with pytest.raises(JobConflictError):
             value.store.mark_lost(
-                value.spec.spec_id, expected_version=running["version"],
-                reason="coordinator_lost", now_ns=NOW + 2,
+                value.spec.spec_id,
+                expected_version=running["version"],
+                reason="coordinator_lost",
+                now_ns=NOW + 2,
             )
         lost = value.store.mark_lost(
-            value.spec.spec_id, expected_version=running["version"],
-            reason="lease_expired", now_ns=expired,
+            value.spec.spec_id,
+            expected_version=running["version"],
+            reason="lease_expired",
+            now_ns=expired,
         )
         assert lost["state"] == "LOST" and lost["result_sha256"] is None
 
@@ -364,9 +394,13 @@ def test_failed_job_keeps_diagnostic_and_never_becomes_a_research_verdict(job_ca
         value.store.submit(value.spec, now_ns=NOW)
         row = claim(value, owner)
         failed = value.store.fail(
-            value.spec.spec_id, failure(), expected_version=row["version"],
-            coordinator_id=owner, job_attempt_id=row["attempt"]["job_attempt_id"],
-            lease_token=row["attempt"]["lease_token"], now_ns=NOW + 2,
+            value.spec.spec_id,
+            failure(),
+            expected_version=row["version"],
+            coordinator_id=owner,
+            job_attempt_id=row["attempt"]["job_attempt_id"],
+            lease_token=row["attempt"]["lease_token"],
+            now_ns=NOW + 2,
         )
         assert failed["state"] == "FAILED" and failed["failure"] == failure()
         assert value.store.result(value.spec.spec_id) is None
@@ -401,7 +435,8 @@ def test_event_insert_failure_rolls_back_snapshot_and_result_together(job_case, 
 
 
 def test_error_after_commit_keeps_actual_success_and_refuses_failure_overwrite(
-    job_case, monkeypatch,
+    job_case,
+    monkeypatch,
 ):
     value = job_case
 
@@ -420,9 +455,13 @@ def test_error_after_commit_keeps_actual_success_and_refuses_failure_overwrite(
         assert value.store.result(value.spec.spec_id) == value.comparison.export_bytes
         with pytest.raises(JobConflictError):
             value.store.fail(
-                value.spec.spec_id, failure(), expected_version=finished["version"],
-                coordinator_id=owner, job_attempt_id=running["attempt"]["job_attempt_id"],
-                lease_token=running["attempt"]["lease_token"], now_ns=NOW + 4,
+                value.spec.spec_id,
+                failure(),
+                expected_version=finished["version"],
+                coordinator_id=owner,
+                job_attempt_id=running["attempt"]["job_attempt_id"],
+                lease_token=running["attempt"]["lease_token"],
+                now_ns=NOW + 4,
             )
         assert value.store.get(value.spec.spec_id) == finished
 
@@ -473,11 +512,13 @@ def test_sparse_high_version_event_suffix_is_rejected_with_bounded_work(job_case
         original = claim(value, owner)
     high = 2**62
     previous = {
-        **original, "version": high - 1,
+        **original,
+        "version": high - 1,
         "attempt": {**original["attempt"], "heartbeat_sequence": high - 3},
     }
     current = {
-        **original, "version": high,
+        **original,
+        "version": high,
         "attempt": {**original["attempt"], "heartbeat_sequence": high - 2},
     }
     previous_event = _event(previous, "JobHeartbeatRecorded", "0" * 64)
@@ -492,7 +533,9 @@ def test_sparse_high_version_event_suffix_is_rejected_with_bounded_work(job_case
             connection.execute(
                 "INSERT INTO job_events(job_id,version,event_id,event) VALUES(?,?,?,?)",
                 (
-                    value.spec.spec_id, event["aggregate_version"], event["event_id"],
+                    value.spec.spec_id,
+                    event["aggregate_version"],
+                    event["event_id"],
                     canonical(event),
                 ),
             )
