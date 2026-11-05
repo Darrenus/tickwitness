@@ -430,3 +430,44 @@ def test_original_monotonic_lease_fences_both_reaudit_outcomes_despite_utc_windo
     with store.coordinator():
         changed = store.reconcile_orphans(now_ns=utc_ns())
     assert len(changed) == 1 and changed[0]["state"] == "LOST"
+
+
+def test_uncertain_termination_closes_real_ipc_without_inventing_a_terminal(tmp_path, monkeypatch):
+    store, queued = _queued(tmp_path)
+    command = _command(
+        tmp_path,
+        "emit('job_heartbeat_v1',1)\n"
+        "sys.stdout.write('{}\\n'); sys.stdout.flush()\n"
+        "Event().wait(30)\n",
+    )
+    actual_popen = subprocess.Popen
+    actual_kill = os.killpg
+    children = []
+
+    def capture(*args, **kwargs):
+        child = actual_popen(*args, **kwargs)
+        children.append(child)
+        return child
+
+    def uncertain(child):
+        assert child.poll() is None
+        raise PermissionError("Controlled live-child termination uncertainty")
+
+    monkeypatch.setattr(job_supervisor.subprocess, "Popen", capture)
+    monkeypatch.setattr(job_supervisor, "_terminate", uncertain)
+    try:
+        with pytest.raises(JobStoreError, match="termination uncertainty"):
+            run_job(store, queued["job_id"], _worker_command=command)
+        assert len(children) == 1
+        child = children[0]
+        assert all(stream.closed for stream in (child.stdin, child.stdout, child.stderr))
+        current = store.get(queued["job_id"])
+        assert current["state"] == "RUNNING" and current["result_sha256"] is None
+        assert job_view(current, now_ns=time.time_ns(), coordinator_active=False)["state"] == (
+            "COORDINATOR_LOST"
+        )
+    finally:
+        for child in children:
+            with suppress(ProcessLookupError):
+                actual_kill(child.pid, signal.SIGKILL)
+            child.wait(timeout=10)

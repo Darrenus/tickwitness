@@ -7,6 +7,7 @@ import signal
 import subprocess
 import sys
 import time
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -317,10 +318,13 @@ def run_job(
                 fault = error
             finally:
                 if process is not None:
-                    _terminate(process)
-                    for stream in (process.stdin, process.stdout, process.stderr):
-                        if stream is not None:
-                            stream.close()
+                    try:
+                        _terminate(process)
+                    finally:
+                        for stream in (process.stdin, process.stdout, process.stderr):
+                            if stream is not None:
+                                with suppress(OSError):
+                                    stream.close()
         # Heartbeats may have committed before an interrupted exchange. Never
         # finish against an old version or turn an uncertain DB write into FAILED.
         row = store.get(job_id)
