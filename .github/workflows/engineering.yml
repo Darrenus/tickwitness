@@ -99,6 +99,7 @@ jobs:
           python3 scripts/smoke_reduction.py --python /tmp/tickwitness-wheel/bin/python --corpus-root examples/alpha --report /tmp/reduction-input-core.json --records-dir /tmp/reduction-input-core-records
           python3 scripts/smoke_reduction_execution.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/reduction-execution-core.json --records-dir /tmp/reduction-execution-core-records
           python3 scripts/smoke_reduction_search.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/reduction-search-core.json --records-dir /tmp/reduction-search-core-records
+          python3 scripts/smoke_reduction_comparison.py --python /tmp/tickwitness-wheel/bin/python --source-report /tmp/reduction-search-core.json --source-records /tmp/reduction-search-core-records --core-only --report /tmp/reduction-comparison-core.json --records-dir /tmp/reduction-comparison-core-records
           python3 scripts/smoke_queue_constraints.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_queue_execution.py --python /tmp/tickwitness-wheel/bin/python
           python3 scripts/smoke_tagged_queue.py --python /tmp/tickwitness-wheel/bin/python --report /tmp/tagged-queue-core.json
@@ -138,6 +139,17 @@ jobs:
           path: |
             /tmp/reduction-search-core.json
             /tmp/reduction-search-core-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve installed-core reduction comparison refusal boundaries
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reduction-comparison-core-${{ github.sha }}
+          path: |
+            /tmp/reduction-comparison-core.json
+            /tmp/reduction-comparison-core-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30
@@ -358,6 +370,20 @@ jobs:
       - name: Qualify bounded local reduction with real numeric witness preservation
         run: |
           python3 scripts/smoke_reduction_search.py --python .venv/bin/python --verifier-python /tmp/tickwitness-tagged-verifier/bin/python --report /tmp/reduction-search.json --records-dir /tmp/reduction-search-records
+      - name: Recompute original and reduced evidence without consuming another attempt
+        run: |
+          python3 scripts/smoke_reduction_comparison.py --python /tmp/tickwitness-tagged-verifier/bin/python --source-report /tmp/reduction-search.json --source-records /tmp/reduction-search-records --report /tmp/reduction-comparison.json --records-dir /tmp/reduction-comparison-records
+      - name: Preserve installed read-only reduction comparison evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reduction-comparison-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            /tmp/reduction-comparison.json
+            /tmp/reduction-comparison-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Preserve actual reduction search, cancellation and assessment evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -576,6 +602,7 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_queue_execution.py" --python /tmp/tickwitness-preview-native/bin/python --native --report /tmp/queue-source-wheel-execution.json
           python3 "$TW_SOURCE/scripts/smoke_reduction_execution.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/reduction-execution-source-wheel.json --records-dir /tmp/reduction-execution-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_reduction_search.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/reduction-search-source-wheel.json --records-dir /tmp/reduction-search-source-wheel-records
+          python3 "$TW_SOURCE/scripts/smoke_reduction_comparison.py" --python /tmp/tickwitness-preview-core/bin/python --source-report /tmp/reduction-search-source-wheel.json --source-records /tmp/reduction-search-source-wheel-records --report /tmp/reduction-comparison-source-wheel.json --records-dir /tmp/reduction-comparison-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_tagged_queue.py" --python /tmp/tickwitness-preview-native/bin/python --native --report /tmp/tagged-queue-source-wheel-execution.json
           python3 "$TW_SOURCE/scripts/smoke_tagged_evidence.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/tagged-pair-source-wheel-evidence.json --bundles-dir /tmp/tagged-pair-source-wheel-bundles
           python3 "$TW_SOURCE/scripts/smoke_tagged_findings.py" --python /tmp/tickwitness-preview-core/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --pairs-dir /tmp/tagged-pair-source-wheel-bundles --source-report /tmp/tagged-pair-source-wheel-evidence.json --report /tmp/tagged-findings-source-wheel.json --bundles-dir /tmp/tagged-findings-source-wheel-bundles
@@ -593,6 +620,17 @@ jobs:
             /tmp/search-evidence-source-wheel-core-bundles
             /tmp/search-evidence-source-wheel.json
             /tmp/search-evidence-source-wheel-bundles
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve actual-source read-only original and reduced comparison audits
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reduction-comparison-source-wheel-${{ github.sha }}
+          path: |
+            /tmp/reduction-comparison-source-wheel.json
+            /tmp/reduction-comparison-source-wheel-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30

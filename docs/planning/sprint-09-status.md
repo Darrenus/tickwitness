@@ -1,6 +1,6 @@
 # Sprint 9 合法反例缩减状态
 
-更新：2026-11-01（Asia/Singapore）。Owner已合并[PR #98](https://github.com/Darrenus/tickwitness/pull/98)，接受merge为 `3577be7b07fba10a7da70cc95c2d3e887fcb06fd`；S09-01a／01b均已接受，#25已关闭，进入S09-02。此前#97兼容性修复接受merge `4e3691cccbe28f76b777814d1bac297082ed13c1`与#95准备接受merge `a2c711861d1d776c78b4b5f5471f8afa388d390f`及历史run保留。[S08-03 / #24](https://github.com/Darrenus/tickwitness/issues/24)真实外部复验仍0／PENDING，owner请求的AI自动化回传另记技术证据。原PR94转交归档与pin不变，无新release。
+更新：2026-11-05（Asia/Singapore）。Owner已合并[PR #99](https://github.com/Darrenus/tickwitness/pull/99)，接受merge `2aaef3e66edba87035a32779122d4858810da2c1`；S09-02已接受，#26已关闭，进入S09-03。此前#98接受merge `3577be7b07fba10a7da70cc95c2d3e887fcb06fd`、#97兼容性修复接受merge `4e3691cccbe28f76b777814d1bac297082ed13c1`与#95准备接受merge `a2c711861d1d776c78b4b5f5471f8afa388d390f`及历史run保留，S09-01已接受、#25已关闭。[S08-03 / #24](https://github.com/Darrenus/tickwitness/issues/24)真实外部复验仍0／PENDING，owner请求的AI自动化回传另记技术证据。原PR94转交归档与pin不变，无新release。
 
 ## 切片与验收门
 
@@ -8,8 +8,8 @@
 | --- | --- | --- |
 | S09-01a / #25 | 合法缩减recipe、完整必要前缀输入准备与独立重建 | Owner已合并 [PR #95](https://github.com/Darrenus/tickwitness/pull/95) 接受软件 |
 | S09-01b / #25 | 在原协议共同预算下真实从头执行前缀，持久关联intent／attempt／outcome，审计账户／订单／显式在途状态 | Owner已合并[PR #98](https://github.com/Darrenus/tickwitness/pull/98)接受，#25已关闭 |
-| S09-02 / #26 | 预算内自动局部缩减、候选边界取消、原false数值见证保持判定 | 实现与远端验收完成；[PR #99](https://github.com/Darrenus/tickwitness/pull/99)待owner接受，#26保持打开 |
-| S09-03 / #27 | 原／缩减证据对比、实际首次分歧定位 | Planned，不能将输入字节差异提升为业务因果 |
+| S09-02 / #26 | 预算内自动局部缩减、候选边界取消、原false数值见证保持判定 | Owner已合并[PR #99](https://github.com/Darrenus/tickwitness/pull/99)接受，#26已关闭 |
+| S09-03 / #27 | 原／缩减证据对比、实际首次分歧定位 | 实现与远端验收中；保留输入区间／通道次序／不同EOF范围，不能将差异提升为业务因果 |
 
 原 [Sprint backlog](sprint-backlog.md#s9--合法反例缩减) 的14h／12h／8h专项估算和持续质量容量保持；01a／01b是同一14h故事的验收拆分，没有新增实际工时或重估容量。没有完整运行态checkpoint的现引擎不能用盘口快照代替策略、账户、队列和在途命令。
 
@@ -112,7 +112,7 @@ Ubuntu实际原protocol ID为 `b632cb5786b96056fb1ff5f574808a5d18c266ca31820f205
 
 远端资格从第一次执行前冻结新的合成protocol criterion lt(-1.5 USD)及原预算11槽；不修改旧golden或真实source条件。Baseline与原search占1..3；pre-start取消占0槽；受控hook在第一次真实native返回后请求取消，占slot4并保留实际结果；正式7次邻域执行占5..11，实际依次NOT_PRESERVED／PRESERVED／NOT_PRESERVED／PRESERVED／NOT_PRESERVED／PRESERVED／NOT_EVALUABLE。最后沿用同原source／ledger的新plan自然预算停止，没有slot12或engine构造；实际run与产物审计见下文验收记录。
 
-Core wheel、Ubuntu／macOS native wheel与实际sdist安装链路分别保存原始journal、CAS、执行／状态／保持判定和transcripts；独立core-only inspector禁止native与预算写入，重算而不信任保存的flags。#26保持打开直到owner接受；S09-03、S10、外部真人PENDING及发行门均另验。
+Core wheel、Ubuntu／macOS native wheel与实际sdist安装链路分别保存原始journal、CAS、执行／状态／保持判定和transcripts；独立core-only inspector禁止native与预算写入，重算而不信任保存的flags。#26已随owner合并#99接受关闭；S09-03、S10、外部真人PENDING及发行门均另验。
 
 ## S09-02 远端验收记录
 
@@ -147,4 +147,16 @@ Ubuntu本次原protocol为 `caff3df37816f27c6e80157ae8bcb26490465553538ad95ca071
 
 远端迭代先发现pytest同名测试模块导致collection失败，以及格式／类型问题；修正后再实际执行。手续费歧义负例误把独立夹具与golden输入混合，被严格字节断言拒绝，现完整沿用该夹具的input／spec／result并增加实际prefix bytes／data SHA核对；NOT_EVALUABLE/null oracle与生产校验未放宽。全部修正经后续远端完整检查。
 
-[PR #99](https://github.com/Darrenus/tickwitness/pull/99)交付S09-02软件，#26保持打开直到owner接受。取消和elapsed仅候选间协作／准入限制，不宣称硬总deadline、总storage额度、native进程组kill或S10恢复。S09-03对比、外部真人0／PENDING与发行门另验；CI、AI交叉审阅和owner合并不替代真人复验。无新release、实际工时、采用或研究收益记录。
+[PR #99](https://github.com/Darrenus/tickwitness/pull/99)交付S09-02软件，已由owner于2026-11-05合并接受，merge `2aaef3e66edba87035a32779122d4858810da2c1`，#26已关闭。取消和elapsed仅候选间协作／准入限制，不宣称硬总deadline、总storage额度、native进程组kill或S10恢复。S09-03对比、外部真人0／PENDING与发行门另验；CI、AI交叉审阅和owner合并不替代真人复验。无新release、实际工时、采用或研究收益记录。
+
+## S09-03 实现与验收门
+
+合同见[Reduction Comparison v1](../contracts/reduction-comparison-v1.md)，决策见[ADR 0031](../adr/0031-reduction-evidence-comparison.md)。比较原false scenario见证与一个已提交的实际reduction run；原见证不是baseline。先完整复验source与原live ledger已观察前缀，再重新派生原输入及缩减preparation，重审两版实际result／receipt／state及原criterion。保持、不保持与不可评价分别输出，未知仍为null。
+
+审阅者可定位原点保留前缀、必要warmup、固定focus、实际移除尾部事件，以及保留事件的接收时间变化。Raw与既有business投影逐通道定位首次差异，保留JSON pointer、稳定source引用和raw值；各通道的ordinal不是全局时间序，不发因果或全局最早结论。两版EOF及估值终点独立展示，不把不同观察范围的数值差当作可比收益效果。
+
+Compare输出严格canonical JSON导出或同一重算结果的Markdown视图，verify以显式comparison／source pins在原证据上独立重算。重新hash保存的比较报告不能替代真实结果。整个比较／复验过程无worker、reserve、写入、补跑、退款或修复，也不扩原finding量词域或认证最小性；S09-02旧flags不改。
+
+远端installed资格将复用S09-02原11槽内已实际执行的original与8条reduction结果（7main＋1取消后结果），在耗尽之后由独立core-only verifier比较／复验，检查原source、ledger和上游包字节不变。Core安装只验证拒绝边界，不伪造成功native证据。Ubuntu／macOS及实际sdist内脚本／语料对安装wheel的三条正例链路、Markdown、语义伪造、缺件／CAS损坏和confirmation pre-IO均待实际远端验证，不预填通过。
+
+#27保持打开直到owner接受；原8h预测、持续质量预算与外部真人0／PENDING不变。没有新release、采用、实际工时或研究收益声明。
