@@ -205,7 +205,9 @@ try:
     before=None
     while time.monotonic()<deadline:
         if gate.exists():
-            row=store.get(job_id)
+            try:row=store.get(job_id)
+            except JobConflictError:
+                Event().wait(0.02);continue
             if row['state']=='RUNNING' and row['attempt']['heartbeat_sequence']>=1:
                 before=row;break
         if process.poll() is not None:
@@ -610,11 +612,11 @@ def main() -> None:
             "'job_id':request['job_id']}))\n"
             "Event().wait(30)\n"
         )
-        _, killed, _ = control("worker_kill", 10, gated)
+        _, killed, _ = control("worker_kill", 25, gated)
         assert killed["worker_reaped"] is True
         assert killed["snapshot"]["state"] == "FAILED"
         assert killed["snapshot"]["failure"]["worker_exit_code"] == -9
-        owner_job, orphan, orphan_path = control("coordinator_kill", 20, gated)
+        owner_job, orphan, orphan_path = control("coordinator_kill", 26, gated)
         assert orphan["coordinator_exit_code"] == -9
         assert orphan["effective_view"]["state"] == "COORDINATOR_LOST"
         catalog_before_query = _tree(catalog)

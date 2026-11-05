@@ -254,7 +254,10 @@ def test_actual_sigkill_after_persisted_heartbeat_has_honest_liveness_and_reconc
         def ready():
             if not gate.is_file():
                 return None
-            current = store.get(queued["job_id"])
+            try:
+                current = store.get(queued["job_id"])
+            except JobConflictError:
+                return None  # A busy read has not observed the heartbeat yet.
             if current["state"] != "RUNNING" or current["attempt"]["heartbeat_sequence"] < 1:
                 return None
             return current

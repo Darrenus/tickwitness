@@ -34,6 +34,8 @@ Read-only inspection presents `stored_state` separately from effective `state`. 
 
 Only a trusted coordinator holding the Catalog's exclusive nonblocking POSIX lock can mutate it. SQLite transactions use optimistic version checks and contain snapshot, result BLOB and event updates together. No transaction spans process execution or evidence verification. Schema version 1 rejects unsupported versions and malformed data. Read-only queries do not create a Catalog or perform recovery. Explicit writer ownership may let SQLite recover its own rollback journal; uncertain commit or required recovery remains visible. This is not a tamper-proof ledger or a physical power-loss guarantee.
 
+SQLite lock acquisition waits at most five seconds. A BUSY/LOCKED response from a read-only connection is a visible, retryable conflict (exit 9); other read errors remain integrity/IO failures. Write and commit errors remain unconfirmed IO failures and are never automatically retried. Observer gates may retry only the read conflict within their own finite waiting interval; this cannot restart a Job or reserve research budget.
+
 Workers run in a fresh process group and temporary working directory with `-I -B`, and no inherited Catalog descriptor or request field. Only the built-in operation is allowlisted; there is no arbitrary command flag. The private transport override exists solely for trusted test harnesses. Same-UID workers are trusted code, without a hostile-code sandbox claim.
 
 One active coordinator owns at most one worker and one RUNNING Catalog row. This is not an instantaneous global OS-process limit across coordinator death: an orphan may briefly overlap new ownership. The built-in read-only worker exits when it observes a broken heartbeat channel. Scheduled detection and complete orphan process/directory reclamation are separate from S10-01 and remain part of S10-03.
@@ -59,7 +61,7 @@ tickwitness reconcile-jobs --jobs /owner/jobs
 
 Only submit creates a Catalog. Confirmation is rejected before identifiers, paths or Catalog access. Inspect and result reads never reconcile or start execution. Run owns the coordinator until its one worker completes; repeated terminal runs return the same state without another worker. Reconcile is explicit and never resumes.
 
-Valid state operations, including a returned FAILED or LOST view, exit 0. Automation must inspect the returned state; exit 0 alone is not Job or research success. Validation exits 2, Catalog/integrity/uncertain IO 3, missing Job/Catalog 4, confirmation 5 and ownership/version/terminal conflicts 9. Reading a non-succeeded Job result is conflict 9. `--events` exposes at most the latest 100 event metadata records, without tokens or a full-history claim.
+Valid state operations, including a returned FAILED or LOST view, exit 0. Automation must inspect the returned state; exit 0 alone is not Job or research success. Validation exits 2, Catalog/integrity/uncertain IO 3, missing Job/Catalog 4, confirmation 5 and ownership/version/terminal/read-busy conflicts 9. Reading a non-succeeded Job result is conflict 9. `--events` exposes at most the latest 100 event metadata records, without tokens or a full-history claim.
 
 ## Remote qualification
 

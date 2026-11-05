@@ -26,6 +26,7 @@ from tickwitness.application.jobs import (
 )
 from tickwitness.domain.evidence.run_records import canonical, digest
 from tickwitness.domain.jobs import JobValidationError, build_job_spec
+from tickwitness.infrastructure import sqlite_job_store
 from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore, _event
 
 NOW = 1_700_000_000_000_000_000
@@ -147,6 +148,46 @@ def test_queries_are_byte_unchanged_and_never_create_wal_or_sidecars(job_case):
     assert reader.coordinator_active() is False
     assert tree(value.root) == before
     assert set(before) == {"catalog.sqlite3", "coordinator.lock"}
+
+
+@pytest.mark.parametrize("method", ["get", "events", "result"])
+def test_exclusive_sql_lock_yields_bounded_retryable_read_conflict_without_mutation(
+    job_case, monkeypatch, method
+):
+    value = job_case
+    with value.store.coordinator():
+        queued = value.store.submit(value.spec, now_ns=NOW)
+    before = tree(value.root)
+    reader = SqliteJobStore(value.root, create=False)
+    monkeypatch.setattr(sqlite_job_store, "_BUSY_TIMEOUT_SECONDS", 0.02)
+    with sqlite3.connect(value.root / "catalog.sqlite3") as blocker:
+        blocker.execute("BEGIN EXCLUSIVE")
+        started = time.monotonic()
+        with pytest.raises(JobConflictError, match="read is busy; retry read") as caught:
+            getattr(reader, method)(value.spec.spec_id)
+        assert time.monotonic() - started < 5
+        assert caught.value.exit_code == 9
+        assert tree(value.root) == before
+    assert reader.get(value.spec.spec_id) == queued
+    assert tree(value.root) == before
+
+
+def test_exclusive_sql_lock_keeps_writer_failure_unconfirmed_without_automatic_retry(
+    job_case, monkeypatch
+):
+    value = job_case
+    with value.store.coordinator():
+        queued = value.store.submit(value.spec, now_ns=NOW)
+        before = tree(value.root)
+        monkeypatch.setattr(sqlite_job_store, "_BUSY_TIMEOUT_SECONDS", 0.02)
+        with sqlite3.connect(value.root / "catalog.sqlite3") as blocker:
+            blocker.execute("BEGIN EXCLUSIVE")
+            with pytest.raises(JobStoreError, match="publication is unconfirmed") as caught:
+                value.store.submit(value.spec, now_ns=NOW + 1)
+            assert not isinstance(caught.value, JobConflictError)
+            assert tree(value.root) == before
+        assert value.store.get(value.spec.spec_id) == queued
+        assert tree(value.root) == before
 
 
 def test_submission_is_idempotent_without_new_events_or_timestamp_reset(job_case):

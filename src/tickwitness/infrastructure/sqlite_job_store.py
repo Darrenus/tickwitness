@@ -40,6 +40,7 @@ _APPLICATION_ID = 0x54574A42
 _SCHEMA_VERSION = 1
 _CATALOG = "catalog.sqlite3"
 _LOCK = "coordinator.lock"
+_BUSY_TIMEOUT_SECONDS = 5.0
 _EVENT_LIMIT = MAX_JOB_SNAPSHOT_BYTES + 16 * 1024
 _TABLES = {
     "jobs": """CREATE TABLE jobs (
@@ -382,7 +383,7 @@ class SqliteJobStore:
                     uri + ("?mode=rw" if write else "?mode=ro"),
                     uri=True,
                     isolation_level=None,
-                    timeout=0.1,
+                    timeout=_BUSY_TIMEOUT_SECONDS,
                 )
                 try:
                     connection.execute("PRAGMA foreign_keys=ON")
@@ -395,6 +396,14 @@ class SqliteJobStore:
                 finally:
                     connection.close()
         except (sqlite3.Error, OSError) as error:
+            code = getattr(error, "sqlite_errorcode", None)
+            if (
+                not write
+                and isinstance(error, sqlite3.Error)
+                and isinstance(code, int)
+                and (code & 0xFF) in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}
+            ):
+                raise JobConflictError("Job catalog read is busy; retry read") from error
             raise JobStoreError(
                 "Job catalog IO or publication is unconfirmed: " + str(error)
             ) from error
