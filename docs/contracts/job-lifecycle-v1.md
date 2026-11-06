@@ -1,6 +1,6 @@
 # Job lifecycle v1
 
-S10-01, implementation under review, 2026-11-06 (Asia/Singapore). [ADR 0032](../adr/0032-durable-local-comparison-jobs.md), [Sprint 10 status](../planning/sprint-10-status.md), [story #28](https://github.com/Darrenus/tickwitness/issues/28). Actual qualification is recorded on the implementation PR and its CI artifacts; this contract does not predeclare a passing run. External human reproduction remains **0 / PENDING**.
+S10-01, accepted by owner merge of [PR #101](https://github.com/Darrenus/tickwitness/pull/101), 2026-11-06 (Asia/Singapore). [ADR 0032](../adr/0032-durable-local-comparison-jobs.md), [Sprint 10 status](../planning/sprint-10-status.md), [story #28](https://github.com/Darrenus/tickwitness/issues/28). Actual qualification is recorded on the implementation PR and its CI artifacts. External human reproduction remains **0 / PENDING**.
 
 ## Supported operation and identity
 

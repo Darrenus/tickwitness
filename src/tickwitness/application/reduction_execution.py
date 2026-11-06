@@ -26,7 +26,13 @@ from tickwitness.domain.evidence.reduction_records import (
     build_reduction_failure,
     build_reduction_intent,
     build_reduction_run_receipt,
+    load_reduction_failure,
+    load_reduction_intent,
     load_reduction_run_receipt,
+)
+from tickwitness.domain.evidence.reduction_recovery import (
+    build_reduction_attempt_recovery,
+    load_reduction_attempt_recovery,
 )
 from tickwitness.domain.evidence.run_records import (
     AttemptReservation,
@@ -459,3 +465,174 @@ def inspect_reduction_run(
             "source_claim_authority_extended": False,
         },
     }
+
+
+def inspect_reduction_attempt(
+    attempt_id: str,
+    preparation: ReductionPackage,
+    source: SearchEvidencePackage,
+    *,
+    expected_preparation_id: str,
+    expected_bundle_id: str,
+    expected_report_id: str,
+    split: str,
+    ledger_factory: Callable[[], ReductionLedger],
+) -> Row:
+    """Observe an original attempt without authorizing execution or repairing it.
+
+    Absence is an observation of these reads, not a sealed global absence.
+    Recovery dispositions describe the required boundary for later work; this
+    inspector never consumes a slot, restores engine state or retries a run.
+    """
+    _development(split)
+    requested = identity(attempt_id)
+    expected = identity(expected_preparation_id)
+    bundle_id, report_id = identity(expected_bundle_id), identity(expected_report_id)
+    snapshot = _snapshot(source)
+    report_raw = snapshot.artifacts.get("finding_report")
+    _require(
+        snapshot.bundle_id == bundle_id
+        and isinstance(report_raw, bytes)
+        and digest(report_raw) == report_id,
+        "Recovery source differs from the expected pinned bundle or report",
+    )
+    prepared, _ = _prepare(preparation, snapshot, expected)
+    source_context = prepared.materialization.source
+    _require(
+        source_context.bundle_id == bundle_id and source_context.report_id == report_id,
+        "Recovery preparation differs from the expected source identities",
+    )
+    protocol = source_context.validation.protocol
+    expected_intent = build_reduction_intent(prepared.materialization)
+    ledger = ledger_factory()
+    reservations = _checked_prefix(snapshot, protocol, ledger)
+    reservation = ledger.get_reservation(requested)
+    _require(type(reservation) is AttemptReservation, "Recovery requires an original attempt")
+    reservation = AttemptReservation(reservation.attempt_id, reservation.canonical_bytes)
+    budget = cast("dict[str, int]", protocol.document["budget"])
+    _require(
+        reservation.attempt_id == requested
+        and reservation.protocol_id == protocol.protocol_id
+        and reservation in reservations
+        and reservation.attempt_index <= budget["max_attempts"]
+        and reservation.document["max_wall_seconds"] == budget["max_wall_seconds"],
+        "Recovery reservation differs from the verified original owner and budget",
+    )
+    intent_raw = ledger.get_intent(requested)
+    outcome = ledger.get_outcome(requested)
+    if intent_raw is None and outcome is not None:
+        # An independent writer may bind and finalize between these reads.
+        # Reobserve once; a terminal still requires its exact durable intent.
+        intent_raw = ledger.get_intent(requested)
+    status, disposition = "reserved_without_intent", "owner_review_required"
+    intent_id: str | None = None
+    outcome_id: str | None = None
+    run_id: str | None = None
+    final_manifest: object = None
+    bound = intent_raw is not None
+    terminal = outcome is not None
+    if not bound:
+        _require(outcome is None, "Recovery outcome has no observed immutable reduction intent")
+    else:
+        intent = load_reduction_intent(cast("bytes", intent_raw))
+        _require(
+            intent.canonical_bytes == expected_intent.canonical_bytes,
+            "Recovery intent differs from the exact frozen preparation",
+        )
+        intent_id = intent.intent_id
+        _require(
+            ledger.read_artifact(intent_id, max_bytes=MAX_REDUCTION_RECORD_BYTES)
+            == intent.canonical_bytes,
+            "Recovery intent CAS differs from the committed immutable intent",
+        )
+        for raw in _preparation_artifacts(prepared):
+            _require(
+                ledger.read_artifact(digest(raw), max_bytes=16 * 1024 * 1024) == raw,
+                "Recovery preparation CAS differs from the exact frozen artifacts",
+            )
+        status, disposition = (
+            "reserved_unfinalized",
+            "new_original_attempt_required_for_execution",
+        )
+        if outcome is not None:
+            outcome_id = digest(outcome)
+            _require(
+                ledger.read_artifact(outcome_id, max_bytes=MAX_REDUCTION_RECORD_BYTES)
+                == outcome,
+                "Recovery outcome CAS differs from the committed terminal",
+            )
+            document = parse(outcome, limit=MAX_REDUCTION_RECORD_BYTES)
+            _require(
+                isinstance(document.get("attempt"), dict)
+                and canonical(cast("Row", document["attempt"]))
+                == reservation.canonical_bytes,
+                "Recovery terminal belongs to another original reservation",
+            )
+            if document.get("kind") == "reduction_attempt_failure_v1":
+                failure = load_reduction_failure(outcome)
+                _require(
+                    canonical(cast("Row", failure["intent"])) == intent.canonical_bytes,
+                    "Recovery failure differs from the exact committed intent",
+                )
+                status, disposition = "committed_failure", "failure_reverified"
+            else:
+                _require(
+                    document.get("kind") == "reduction_run_receipt_v1",
+                    "Recovery terminal is not a reduction result or failure",
+                )
+                inspected = inspect_reduction_run(
+                    outcome_id,
+                    source=snapshot,
+                    split="development",
+                    ledger_factory=lambda: ledger,
+                )
+                _require(
+                    canonical(cast("Row", inspected["receipt"])) == outcome
+                    and cast("Row", inspected["preparation"])["preparation_id"] == expected,
+                    "Recovery reverified result differs from the requested preparation",
+                )
+                run_id, final_manifest = outcome_id, inspected["receipt"]
+                status, disposition = (
+                    "committed_result",
+                    "result_reverified_without_execution",
+                )
+    report: Row = {
+        "kind": "reduction_attempt_recovery_v1",
+        "schema_version": 1,
+        "source": {
+            "bundle_id": bundle_id,
+            "report_id": report_id,
+            "protocol_id": protocol.protocol_id,
+        },
+        "preparation_id": expected,
+        "attempt": reservation.document,
+        "status": status,
+        "recovery": {
+            "disposition": disposition,
+            "restart_mode": "frozen_origin_new_attempt_only_v1",
+            "checkpoint_supported": False,
+            "execution_authorized": False,
+        },
+        "bindings": {"intent_id": intent_id, "outcome_id": outcome_id, "run_id": run_id},
+        "final_manifest": final_manifest,
+        "verification": {
+            "source_reaudited": True,
+            "preparation_recomputed": True,
+            "observed_source_prefix_matched": True,
+            "reservation_verified": True,
+            "preparation_binding_verified": bound,
+            "preparation_cas_verified": bound,
+            "terminal_reverified": terminal,
+            "observation_only": True,
+            "attempt_reserved": False,
+            "native_replayed": False,
+            "research_published": False,
+            "job_state_changed": False,
+            "checkpoint_restored": False,
+            "retry_performed": False,
+            "budget_refunded": False,
+            "global_absence_verified": False,
+            "global_ledger_authenticity_verified": False,
+        },
+    }
+    return load_reduction_attempt_recovery(build_reduction_attempt_recovery(report))

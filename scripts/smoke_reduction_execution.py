@@ -85,31 +85,43 @@ for repository in (LocalCampaignBudgetStore, LocalExecutableProtocolRegistry,
     repository.__init__ = forbidden
 for name in ('bind_intent', 'publish', 'reserve_with_nonce'):
     setattr(LocalAttemptLedger, name, forbidden)
+ledger_init = LocalAttemptLedger.__init__
+def readonly_ledger_init(self, *args, **kwargs):
+    if kwargs.get('create', True) is not False:
+        forbidden()
+    return ledger_init(self, *args, **kwargs)
+LocalAttemptLedger.__init__ = readonly_ledger_init
 if mode != 'exhaustion':
     LocalAttemptLedger.reserve = forbidden
 """
 _PRE_IO = """
 from tickwitness.application.reduction_execution import (
-    run_reduction_input, inspect_reduction_run,
+    run_reduction_input, inspect_reduction_run, inspect_reduction_attempt,
 )
 from tickwitness.application.research import ConfirmationAccessDenied
 class Unreadable:
     def __getattribute__(self, name):
         raise AssertionError('Confirmation operation accessed source/preparation: ' + name)
-for operation in ('run', 'inspect'):
+for operation in ('run', 'inspect', 'recover'):
     try:
         if operation == 'run':
             run_reduction_input(Unreadable(), Unreadable(),
                                 expected_preparation_id='invalid', split='confirmation',
                                 ledger_factory=forbidden, engine_factory=forbidden)
-        else:
+        elif operation == 'inspect':
             inspect_reduction_run('invalid', source=Unreadable(), split='confirmation',
                                   ledger_factory=forbidden)
+        else:
+            inspect_reduction_attempt('invalid', Unreadable(), Unreadable(),
+                                      expected_preparation_id='invalid',
+                                      expected_bundle_id='invalid',
+                                      expected_report_id='invalid',split='confirmation',
+                                      ledger_factory=forbidden)
     except ConfirmationAccessDenied:
         pass
     else:
         raise AssertionError('Confirmation access returned a result')
-print(json.dumps({'confirmation_operations_rejected_before_package_and_factory_io': 2}))
+print(json.dumps({'confirmation_operations_rejected_before_package_and_factory_io': 3}))
 """
 _LEDGER_VIEW = """
 from tickwitness.application.search_evidence import verify_search_package
@@ -140,6 +152,37 @@ print(json.dumps({'protocol_id': protocol.protocol_id,
 _READ_ARTIFACT = """
 ledger = LocalAttemptLedger(Path(sys.argv[1]), create=False)
 print(ledger.read_artifact(sys.argv[2]).decode('utf-8'))
+"""
+_READ_OUTCOME = """
+ledger = LocalAttemptLedger(Path(sys.argv[1]), create=False)
+raw = ledger.get_outcome(sys.argv[2])
+assert raw is not None
+print(raw.decode('utf-8'))
+"""
+_ACK_LOSS = """
+import hashlib,json,sys
+from pathlib import Path
+from tickwitness.cli import main
+from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger
+from tickwitness.infrastructure.subprocess_replay import SubprocessReplayAdapter
+trace=Path(sys.argv.pop(1))
+native_run=SubprocessReplayAdapter.run
+publish=LocalAttemptLedger.publish
+def record(value):
+    with trace.open('a') as stream:
+        stream.write(json.dumps(value,sort_keys=True,separators=(',',':'))+'\\n')
+def counted_run(self,replay_input):
+    record({'kind':'native_adapter_run_started_v1','dataset_id':replay_input.dataset_id})
+    return native_run(self,replay_input)
+def lost_ack(self,reservation,raw,*,artifacts=()):
+    committed=publish(self,reservation,raw,artifacts=artifacts)
+    record({'kind':'actual_research_outcome_committed_before_injected_ack_loss_v1',
+            'attempt_id':reservation.attempt_id,'outcome_id':committed,
+            'outcome_sha256':hashlib.sha256(raw).hexdigest()})
+    raise OSError('Qualification injected acknowledgement loss after actual outcome commit')
+SubprocessReplayAdapter.run=counted_run
+LocalAttemptLedger.publish=lost_ack
+raise SystemExit(main(sys.argv[1:]))
 """
 
 
@@ -387,6 +430,63 @@ def _check_inspection(
         assert verified[key] is False
 
 
+def _check_attempt_recovery(
+    recovered: dict, source: dict, prepared: dict, inspected: dict
+) -> None:
+    assert recovered["kind"] == "reduction_attempt_recovery_v1"
+    assert recovered["schema_version"] == 1
+    assert recovered["source"] == {
+        "bundle_id": source["bundle_id"],
+        "report_id": source["report_id"],
+        "protocol_id": inspected["protocol_id"],
+    }
+    assert recovered["preparation_id"] == prepared["preparation_id"]
+    assert recovered["attempt"] == inspected["receipt"]["attempt"]
+    assert recovered["status"] == "committed_result"
+    assert recovered["recovery"] == {
+        "disposition": "result_reverified_without_execution",
+        "restart_mode": "frozen_origin_new_attempt_only_v1",
+        "checkpoint_supported": False,
+        "execution_authorized": False,
+    }
+    assert recovered["bindings"] == {
+        "intent_id": inspected["intent_id"],
+        "outcome_id": inspected["run_id"],
+        "run_id": inspected["run_id"],
+    }
+    assert recovered["final_manifest"] == inspected["receipt"]
+    assert _sha(_canonical(recovered["final_manifest"])) == inspected["run_id"]
+    assert recovered["verification"] == {
+        **dict.fromkeys(
+            (
+                "source_reaudited",
+                "preparation_recomputed",
+                "observed_source_prefix_matched",
+                "reservation_verified",
+                "preparation_binding_verified",
+                "preparation_cas_verified",
+                "terminal_reverified",
+                "observation_only",
+            ),
+            True,
+        ),
+        **dict.fromkeys(
+            (
+                "attempt_reserved",
+                "native_replayed",
+                "research_published",
+                "job_state_changed",
+                "checkpoint_restored",
+                "retry_performed",
+                "budget_refunded",
+                "global_absence_verified",
+                "global_ledger_authenticity_verified",
+            ),
+            False,
+        ),
+    }
+
+
 def _native_lifecycle(
     run, helper, examples: Path, root: Path, inputs: Path, preparations: Path
 ) -> dict:
@@ -546,7 +646,7 @@ def _native_lifecycle(
             str(preparations / name),
         )
         assert _tree(runs) == (ledger_before if not cases else cases[-1]["ledger_tree"])
-        submitted = run(
+        command = (
             "run-reduction-input",
             str(preparations / name),
             "--source-evidence",
@@ -557,8 +657,43 @@ def _native_lifecycle(
             prepared["preparation_id"],
             "--runs",
             str(runs),
-            producer=True,
         )
+        acknowledgement = None
+        if pending:
+            submitted = run(*command, producer=True)
+        else:
+            trace = root / "outcome-ack-loss.jsonl"
+            acknowledgement = run(
+                *command, producer=True, expected=3, ack_loss_trace=trace
+            )
+            assert acknowledgement["error"]["code"] == "attempt_outcome_unconfirmed"
+            attempt_id = acknowledgement["error"]["attempt_id"]
+            committed = helper(_READ_OUTCOME, str(runs), attempt_id)
+            assert committed["kind"] == "reduction_run_receipt_v1"
+            assert _sha(_canonical(committed["attempt"])) == attempt_id
+            audit = helper(
+                _READ_ARTIFACT, str(runs), committed["bindings"]["state_audit_sha256"]
+            )
+            submitted = {
+                "run_id": _sha(_canonical(committed)),
+                "attempt_id": attempt_id,
+                "intent_id": _sha(_canonical(committed["intent"])),
+                "execution_status": committed["execution_status"],
+                "state_audit": audit,
+            }
+            observed = [json.loads(line) for line in trace.read_bytes().splitlines()]
+            assert observed == [
+                {
+                    "kind": "native_adapter_run_started_v1",
+                    "dataset_id": prepared["prefix_context_id"],
+                },
+                {
+                    "kind": "actual_research_outcome_committed_before_injected_ack_loss_v1",
+                    "attempt_id": attempt_id,
+                    "outcome_id": submitted["run_id"],
+                    "outcome_sha256": submitted["run_id"],
+                },
+            ]
         current_before = _tree(runs)
         inspected = run(
             "inspect-reduction-run",
@@ -586,6 +721,38 @@ def _native_lifecycle(
         )
         assert _tree(runs) == current_before
         assert _tree(inputs / "live-source") == source_before
+        recovery_command = (
+            "inspect-reduction-attempt",
+            submitted["attempt_id"],
+            str(preparations / name),
+            "--expected-preparation-id",
+            prepared["preparation_id"],
+            "--expected-bundle-id",
+            source["bundle_id"],
+            "--expected-report-id",
+            source["report_id"],
+            "--source-evidence",
+            "live-source",
+            "--input-root",
+            str(inputs),
+            "--runs",
+            str(runs),
+        )
+        protected = {
+            "source": _tree(inputs / "live-source"),
+            "preparation": _tree(preparations / name),
+            "ledger": _tree(runs),
+        }
+        recovered = run(*recovery_command, guarded=True)
+        repeated = run(*recovery_command, guarded=True)
+        _check_attempt_recovery(recovered, source, prepared, inspected)
+        assert recovered == repeated
+        assert _canonical(recovered) == _canonical(repeated)
+        assert {
+            "source": _tree(inputs / "live-source"),
+            "preparation": _tree(preparations / name),
+            "ledger": _tree(runs),
+        } == protected
         cases.append(
             {
                 "name": name,
@@ -594,6 +761,15 @@ def _native_lifecycle(
                 "submission": submitted,
                 "inspection": inspected,
                 "result": raw,
+                "attempt_recovery": recovered,
+                "repeated_attempt_recovery": repeated,
+                "submission_acknowledgement": {
+                    "confirmed": acknowledgement is None,
+                    "injected_post_commit_exception": acknowledgement,
+                    "submission_fields_reconstructed_from_committed_evidence": (
+                        acknowledgement is not None
+                    ),
+                },
                 "ledger_tree": current_before,
             }
         )
@@ -621,6 +797,31 @@ def _native_lifecycle(
     )
     assert exhausted["error"]["code"] == "attempt_budget_exhausted"
     assert _tree(runs) == exhausted_before
+    recovery_errors = []
+    for name, position, replacement, expected, code in (
+        ("missing-original-attempt", 1, "0" * 64, 4, "research_evidence_not_found"),
+        (
+            "wrong-frozen-preparation",
+            1,
+            cases[0]["submission"]["attempt_id"],
+            2,
+            "invalid_research_evidence",
+        ),
+        (
+            "changed-source-pin",
+            recovery_command.index("--expected-bundle-id") + 1,
+            "0" * 64,
+            2,
+            "invalid_research_evidence",
+        ),
+    ):
+        changed = list(recovery_command)
+        changed[position] = replacement
+        rejected = run(*changed, expected=expected, guarded=True)
+        assert rejected["error"]["code"] == code
+        assert _tree(runs) == exhausted_before
+        assert _tree(inputs / "live-source") == source_before
+        recovery_errors.append({"name": name, "error": rejected})
     altered = root / "rehashed-audit-runs"
     shutil.copytree(runs, altered)
     altered_audit = json.loads(_canonical(cases[0]["submission"]["state_audit"]))
@@ -651,6 +852,27 @@ def _native_lifecycle(
     )
     assert attack["error"]["code"] == "invalid_research_evidence"
     assert _tree(altered) == attack_before and _tree(runs) == exhausted_before
+    recovery_attack = run(
+        "inspect-reduction-attempt",
+        cases[0]["submission"]["attempt_id"],
+        str(preparations / cases[0]["name"]),
+        "--expected-preparation-id",
+        cases[0]["prepared"]["preparation_id"],
+        "--expected-bundle-id",
+        source["bundle_id"],
+        "--expected-report-id",
+        source["report_id"],
+        "--source-evidence",
+        "live-source",
+        "--input-root",
+        str(inputs),
+        "--runs",
+        str(altered),
+        expected=2,
+        guarded=True,
+    )
+    assert recovery_attack["error"]["code"] == "invalid_research_evidence"
+    assert _tree(altered) == attack_before and _tree(runs) == exhausted_before
     return {
         "frozen": frozen,
         "plan": plan,
@@ -665,6 +887,25 @@ def _native_lifecycle(
         ],
         "budget_exhaustion": exhausted,
         "rehashed_state_claim_rejected": {"run_id": altered_run, "error": attack},
+        "attempt_recovery": {
+            "actual_native_result_attempts_reverified": 2,
+            "statuses_observed": ["committed_result"],
+            "statuses_not_qualified_by_this_native_lifecycle": [
+                "reserved_without_intent", "reserved_unfinalized", "committed_failure"
+            ],
+            "post_commit_ack_loss_injected": True,
+            "ack_loss_native_adapter_invocations": 1,
+            "ack_loss_trace_path": "outcome-ack-loss.jsonl",
+            "recovery_native_invocations": 0,
+            "recovery_attempt_reservations": 0,
+            "recovery_research_publications": 0,
+            "original_five_slot_budget_unchanged": True,
+            "no_process_death_or_retry_qualified": True,
+            "repeated_reports_equal": True,
+            "protected_source_preparation_ledger_bytes_unchanged": True,
+            "rejections": recovery_errors,
+            "rehashed_state_claim_rejected": recovery_attack,
+        },
         "source_bundle_unchanged": _tree(inputs / "live-source") == source_before,
         "original_records_unchanged": True,
         "preparation_reserved_no_slots": True,
@@ -727,8 +968,13 @@ def main() -> None:
             producer: bool = False,
             guarded: bool = False,
             exhaustion: bool = False,
+            ack_loss_trace: Path | None = None,
         ) -> dict:
-            if guarded or exhaustion:
+            if ack_loss_trace is not None:
+                assert producer and not guarded and not exhaustion and expected == 3
+                entry = ["-c", _ACK_LOSS]
+                command = (str(ack_loss_trace), *command)
+            elif guarded or exhaustion:
                 entry = ["-c", _GUARD + "\nraise SystemExit(main(sys.argv[1:]))\n"]
                 command = ("exhaustion" if exhaustion else "readonly", *command)
             else:
@@ -772,14 +1018,23 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
         )
         (root / "interpreter-identities.json").write_bytes(_canonical(identities))
         pre_io = helper(_PRE_IO)
-        assert pre_io == {"confirmation_operations_rejected_before_package_and_factory_io": 2}
+        assert pre_io == {"confirmation_operations_rejected_before_package_and_factory_io": 3}
         errors = []
-        for command in ("run-reduction-input", "inspect-reduction-run"):
-            positional = (
-                (str(root / "missing-preparation"), "--expected-preparation-id", "invalid")
-                if command == "run-reduction-input"
-                else ("invalid",)
-            )
+        for command in (
+            "run-reduction-input", "inspect-reduction-run", "inspect-reduction-attempt"
+        ):
+            if command == "run-reduction-input":
+                positional = (
+                    str(root / "missing-preparation"), "--expected-preparation-id", "invalid"
+                )
+            elif command == "inspect-reduction-attempt":
+                positional = (
+                    "invalid", str(root / "missing-preparation"),
+                    "--expected-preparation-id", "invalid",
+                    "--expected-bundle-id", "invalid", "--expected-report-id", "invalid",
+                )
+            else:
+                positional = ("invalid",)
             rejected = run(
                 command,
                 *positional,
@@ -851,6 +1106,27 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
             )
             assert rejected["error"]["code"] == code
             errors.append({"name": name, "error": rejected})
+            recovery_rejected = run(
+                "inspect-reduction-attempt",
+                "0" * 64,
+                str(preparations / "old-prefix"),
+                "--source-evidence",
+                "old-exhausted-source",
+                "--input-root",
+                str(inputs),
+                "--expected-preparation-id",
+                old_prepared["preparation_id"],
+                "--expected-bundle-id",
+                _GOLDEN["bundle_id"],
+                "--expected-report-id",
+                _GOLDEN["report_id"],
+                "--runs",
+                str(ledger),
+                expected=expected,
+                guarded=True,
+            )
+            assert recovery_rejected["error"]["code"] == code
+            errors.append({"name": name + "-attempt-recovery", "error": recovery_rejected})
         assert _tree(empty) == empty_before and not (root / "never-created-ledger").exists()
         lifecycle = None
         if not arguments.core_only:
@@ -871,6 +1147,21 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
                 and _tree(empty) == empty_before
             ),
             "lifecycle": lifecycle,
+            "attempt_recovery": {
+                "authority": "readonly_original_reduction_attempt_recovery_v1",
+                "native_statuses_qualified": (
+                    [] if arguments.core_only else ["committed_result"]
+                ),
+                "other_statuses_covered_by_unit_fixtures_only": [
+                    "reserved_without_intent", "reserved_unfinalized", "committed_failure"
+                ],
+                "post_commit_ack_loss_qualified": not arguments.core_only,
+                "new_attempts_for_inspection": 0,
+                "native_replays_for_inspection": 0,
+                "research_publications_for_inspection": 0,
+                "managed_retry_or_job_recovery_qualified": False,
+                "actual_process_death_qualified": False,
+            },
             "readonly_inspection_guard": {
                 "core_only": True,
                 "native_and_workers_forbidden": True,

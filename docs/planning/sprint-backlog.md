@@ -158,6 +158,8 @@
 
 2026-11-06，owner 已合并 #100 接受 S09-03，#27 关闭；S10-01 的 [Job lifecycle v1](../contracts/job-lifecycle-v1.md) 从真实只读 comparison operation 建立持久状态／独立 Job attempt／心跳／失联诊断的完整纵向链路。[Sprint 10 状态](sprint-10-status.md) 跟踪实现与远端证据；原生执行接入／重试、研究 manifest 与 checkpoint 留给 S10-02，强取消／总 deadline 与回收留给 S10-03。原研究预算不变，12h／14h／8h 总估算不变，外部真人仍 0／PENDING。
 
+2026-11-06，owner 合并 #101 接受 S10-01，#28 关闭。S10-02 先以 [只读 attempt recovery](../contracts/reduction-attempt-recovery-v1.md) 复验原研究记录与既有最终 manifest；后续再接持久 dispatch、受管原生执行、幂等 retry、研究发布 fencing 和 Job acknowledgment 恢复。#29 保持打开、原 14h 总估算不变，不以该切片代替整项完成。当前无完整 checkpoint 能力，未来实际重跑必须从冻结原点消耗原协议新槽；无退款或免费复用。
+
 **目标：** 长任务在中断和重试后不损坏研究记录。依赖：S7–S9。计划专项容量 34 小时。
 
 | Story | 用户故事与任务 | 估计 | 可执行验收 |
