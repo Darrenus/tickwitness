@@ -116,6 +116,76 @@ def test_successful_coordinator_exit_still_terminates_surviving_descendants(tmp_
     _assert_dead(pids["child"])
 
 
+def test_confirmed_group_cleanup_is_not_repeated_on_the_exited_group(tmp_path, monkeypatch):
+    marker = tmp_path / "pids.json"
+    executable = fake_interpreter(
+        tmp_path,
+        "import json,os,subprocess,sys\n"
+        "child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(20)'])\n"
+        "pids={'coordinator':os.getpid(),'child':child.pid}\n"
+        f"with open({str(marker)!r},'w') as stream:json.dump(pids,stream)\n"
+        "print(json.dumps(pids),flush=True)\n",
+    )
+    actual_killpg = campaign_supervisor.os.killpg
+    signals = []
+
+    def signal_once(group, requested_signal):
+        signals.append((group, requested_signal))
+        if len(signals) > 1:
+            raise PermissionError(1, "Synthetic repeat signal on an already terminated group")
+        return actual_killpg(group, requested_signal)
+
+    monkeypatch.setattr(campaign_supervisor.os, "killpg", signal_once)
+    try:
+        result = supervise_campaign({}, timeout_ms=5000, python_executable=executable)
+        assert result.reason == "finished" and result.exit_code == 0
+        pids = json.loads(result.stdout)
+        assert signals == [(pids["coordinator"], signal.SIGKILL)]
+        _assert_dead(pids["coordinator"])
+        _assert_dead(pids["child"])
+    finally:
+        if marker.exists():
+            for pid in json.loads(marker.read_bytes()).values():
+                if _alive(pid):
+                    os.kill(pid, signal.SIGKILL)
+
+
+def test_unconfirmed_live_group_permission_failure_is_visible_and_closes_pipes(
+    tmp_path, monkeypatch
+):
+    executable = fake_interpreter(tmp_path, "import time\ntime.sleep(20)\n")
+    actual_popen = campaign_supervisor.subprocess.Popen
+    actual_killpg = campaign_supervisor.os.killpg
+    processes = []
+    denied = PermissionError(1, "Synthetic live process group signal refusal")
+
+    def launch(*args, **kwargs):
+        process = actual_popen(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    def refused_signal(_group, _requested_signal):
+        assert processes[0].poll() is None
+        raise denied
+
+    monkeypatch.setattr(campaign_supervisor.subprocess, "Popen", launch)
+    monkeypatch.setattr(campaign_supervisor.os, "killpg", refused_signal)
+    try:
+        with pytest.raises(PermissionError) as caught:
+            supervise_campaign({}, timeout_ms=1000, python_executable=executable)
+        assert caught.value is denied
+        assert len(processes) == 1 and processes[0].poll() is None
+        assert all(
+            stream is not None and stream.closed
+            for stream in (processes[0].stdin, processes[0].stdout, processes[0].stderr)
+        )
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                actual_killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=5)
+
+
 @pytest.mark.parametrize("stream", [1, 2])
 def test_coordinator_output_flood_stops_at_in_memory_cap(tmp_path, stream):
     executable = fake_interpreter(
