@@ -557,15 +557,13 @@ def inspect_reduction_attempt(
         if outcome is not None:
             outcome_id = digest(outcome)
             _require(
-                ledger.read_artifact(outcome_id, max_bytes=MAX_REDUCTION_RECORD_BYTES)
-                == outcome,
+                ledger.read_artifact(outcome_id, max_bytes=MAX_REDUCTION_RECORD_BYTES) == outcome,
                 "Recovery outcome CAS differs from the committed terminal",
             )
             document = parse(outcome, limit=MAX_REDUCTION_RECORD_BYTES)
             _require(
                 isinstance(document.get("attempt"), dict)
-                and canonical(cast("Row", document["attempt"]))
-                == reservation.canonical_bytes,
+                and canonical(cast("Row", document["attempt"])) == reservation.canonical_bytes,
                 "Recovery terminal belongs to another original reservation",
             )
             if document.get("kind") == "reduction_attempt_failure_v1":

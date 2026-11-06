@@ -153,9 +153,7 @@ def test_bindings_must_follow_the_observed_terminal_status(reports, status, fiel
 
 
 @pytest.mark.parametrize("field", ("intent_id", "outcome_id", "run_id"))
-def test_successful_manifest_identity_is_recomputed_instead_of_trusting_outer_hash(
-    reports, field
-):
+def test_successful_manifest_identity_is_recomputed_instead_of_trusting_outer_hash(reports, field):
     document = reports["committed_result"]
     document["bindings"][field] = "f" * 64
     with pytest.raises(EvidenceValidationError):

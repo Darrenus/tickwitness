@@ -430,9 +430,7 @@ def _check_inspection(
         assert verified[key] is False
 
 
-def _check_attempt_recovery(
-    recovered: dict, source: dict, prepared: dict, inspected: dict
-) -> None:
+def _check_attempt_recovery(recovered: dict, source: dict, prepared: dict, inspected: dict) -> None:
     assert recovered["kind"] == "reduction_attempt_recovery_v1"
     assert recovered["schema_version"] == 1
     assert recovered["source"] == {
@@ -663,17 +661,13 @@ def _native_lifecycle(
             submitted = run(*command, producer=True)
         else:
             trace = root / "outcome-ack-loss.jsonl"
-            acknowledgement = run(
-                *command, producer=True, expected=3, ack_loss_trace=trace
-            )
+            acknowledgement = run(*command, producer=True, expected=3, ack_loss_trace=trace)
             assert acknowledgement["error"]["code"] == "attempt_outcome_unconfirmed"
             attempt_id = acknowledgement["error"]["attempt_id"]
             committed = helper(_READ_OUTCOME, str(runs), attempt_id)
             assert committed["kind"] == "reduction_run_receipt_v1"
             assert _sha(_canonical(committed["attempt"])) == attempt_id
-            audit = helper(
-                _READ_ARTIFACT, str(runs), committed["bindings"]["state_audit_sha256"]
-            )
+            audit = helper(_READ_ARTIFACT, str(runs), committed["bindings"]["state_audit_sha256"])
             submitted = {
                 "run_id": _sha(_canonical(committed)),
                 "attempt_id": attempt_id,
@@ -891,7 +885,9 @@ def _native_lifecycle(
             "actual_native_result_attempts_reverified": 2,
             "statuses_observed": ["committed_result"],
             "statuses_not_qualified_by_this_native_lifecycle": [
-                "reserved_without_intent", "reserved_unfinalized", "committed_failure"
+                "reserved_without_intent",
+                "reserved_unfinalized",
+                "committed_failure",
             ],
             "post_commit_ack_loss_injected": True,
             "ack_loss_native_adapter_invocations": 1,
@@ -1021,17 +1017,26 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
         assert pre_io == {"confirmation_operations_rejected_before_package_and_factory_io": 3}
         errors = []
         for command in (
-            "run-reduction-input", "inspect-reduction-run", "inspect-reduction-attempt"
+            "run-reduction-input",
+            "inspect-reduction-run",
+            "inspect-reduction-attempt",
         ):
             if command == "run-reduction-input":
                 positional = (
-                    str(root / "missing-preparation"), "--expected-preparation-id", "invalid"
+                    str(root / "missing-preparation"),
+                    "--expected-preparation-id",
+                    "invalid",
                 )
             elif command == "inspect-reduction-attempt":
                 positional = (
-                    "invalid", str(root / "missing-preparation"),
-                    "--expected-preparation-id", "invalid",
-                    "--expected-bundle-id", "invalid", "--expected-report-id", "invalid",
+                    "invalid",
+                    str(root / "missing-preparation"),
+                    "--expected-preparation-id",
+                    "invalid",
+                    "--expected-bundle-id",
+                    "invalid",
+                    "--expected-report-id",
+                    "invalid",
                 )
             else:
                 positional = ("invalid",)
@@ -1149,11 +1154,11 @@ print(json.dumps({'executable': sys.executable, 'prefix': sys.prefix,
             "lifecycle": lifecycle,
             "attempt_recovery": {
                 "authority": "readonly_original_reduction_attempt_recovery_v1",
-                "native_statuses_qualified": (
-                    [] if arguments.core_only else ["committed_result"]
-                ),
+                "native_statuses_qualified": ([] if arguments.core_only else ["committed_result"]),
                 "other_statuses_covered_by_unit_fixtures_only": [
-                    "reserved_without_intent", "reserved_unfinalized", "committed_failure"
+                    "reserved_without_intent",
+                    "reserved_unfinalized",
+                    "committed_failure",
                 ],
                 "post_commit_ack_loss_qualified": not arguments.core_only,
                 "new_attempts_for_inspection": 0,

@@ -45,9 +45,7 @@ def observe(value, attempt_id, **changes):
         "ledger_factory": lambda: value.ledger,
     }
     options.update(changes)
-    return inspect_reduction_attempt(
-        attempt_id, value.preparation, value.source, **options
-    )
+    return inspect_reduction_attempt(attempt_id, value.preparation, value.source, **options)
 
 
 def reserved(value, *, bind):
@@ -155,18 +153,22 @@ def test_committed_result_returns_exact_existing_manifest_after_budget_exhaustio
     assert canonical(report["final_manifest"]) == outcome
     assert report["verification"]["terminal_reverified"] is True
     for flag in (
-        "attempt_reserved", "native_replayed", "research_published", "job_state_changed",
-        "checkpoint_restored", "retry_performed", "budget_refunded",
-        "global_absence_verified", "global_ledger_authenticity_verified",
+        "attempt_reserved",
+        "native_replayed",
+        "research_published",
+        "job_state_changed",
+        "checkpoint_restored",
+        "retry_performed",
+        "budget_refunded",
+        "global_absence_verified",
+        "global_ledger_authenticity_verified",
     ):
         assert report["verification"][flag] is False
     assert observe(value, submitted.attempt_id) == report
     assert tree(value.case.root) == before
 
 
-def test_committed_result_survives_lost_publication_acknowledgement(
-    reduction_case, monkeypatch
-):
+def test_committed_result_survives_lost_publication_acknowledgement(reduction_case, monkeypatch):
     value = reduction_case
     calls = []
 
@@ -192,8 +194,13 @@ def test_committed_result_survives_lost_publication_acknowledgement(
 def test_confirmation_precedes_all_ids_packages_and_factories(split):
     with pytest.raises(ConfirmationAccessDenied):
         inspect_reduction_attempt(
-            "invalid", Unreadable(), Unreadable(), expected_preparation_id="invalid",
-            expected_bundle_id="invalid", expected_report_id="invalid", split=split,
+            "invalid",
+            Unreadable(),
+            Unreadable(),
+            expected_preparation_id="invalid",
+            expected_bundle_id="invalid",
+            expected_report_id="invalid",
+            split=split,
             ledger_factory=forbidden,
         )
 
@@ -204,9 +211,14 @@ def test_confirmation_precedes_all_ids_packages_and_factories(split):
 @pytest.mark.parametrize("bad", ["../escape", "A" * 64, True])
 def test_invalid_identity_precedes_any_package_or_factory(field, bad):
     options = {
-        "attempt_id": "0" * 64, "preparation": Unreadable(), "source": Unreadable(),
-        "expected_preparation_id": "1" * 64, "expected_bundle_id": "2" * 64,
-        "expected_report_id": "3" * 64, "split": "development", "ledger_factory": forbidden,
+        "attempt_id": "0" * 64,
+        "preparation": Unreadable(),
+        "source": Unreadable(),
+        "expected_preparation_id": "1" * 64,
+        "expected_bundle_id": "2" * 64,
+        "expected_report_id": "3" * 64,
+        "split": "development",
+        "ledger_factory": forbidden,
         field: bad,
     }
     with pytest.raises(EvidenceValidationError):
@@ -244,7 +256,8 @@ def test_reservation_from_another_owner_cannot_replace_the_original_slot(reducti
 
     with pytest.raises(EvidenceValidationError, match="reservation differs"):
         observe(
-            value, foreign.attempt_id,
+            value,
+            foreign.attempt_id,
             ledger_factory=lambda: Proxy(value.ledger, get_reservation=get),
         )
 
@@ -261,7 +274,8 @@ def test_unbound_slot_does_not_require_uncommitted_preparation_cas(reduction_cas
         return real_read(sha, **kwargs)
 
     report = observe(
-        value, reservation.attempt_id,
+        value,
+        reservation.attempt_id,
         ledger_factory=lambda: Proxy(value.ledger, read_artifact=read),
     )
     assert report["status"] == "reserved_without_intent"
@@ -291,7 +305,8 @@ def test_concurrent_bind_and_publication_reobserves_intent_without_inspector_wri
             # This is the separate writer actor. The inspector receives only
             # the read port below; all its write methods remain forbidden.
             value.ledger.bind_intent(
-                reservation, intent.canonical_bytes,
+                reservation,
+                intent.canonical_bytes,
                 artifacts=(value.preparation.manifest_bytes, *value.prepared.artifacts.values()),
             )
             writer_actions.append("intent_bound")
@@ -300,8 +315,12 @@ def test_concurrent_bind_and_publication_reobserves_intent_without_inspector_wri
         return value.ledger.get_outcome(attempt)
 
     port = Proxy(
-        value.ledger, reserve=forbidden, reserve_with_nonce=forbidden,
-        bind_intent=forbidden, publish=forbidden, get_intent=read_intent,
+        value.ledger,
+        reserve=forbidden,
+        reserve_with_nonce=forbidden,
+        bind_intent=forbidden,
+        publish=forbidden,
+        get_intent=read_intent,
         get_outcome=concurrently_publish,
     )
     monkeypatch.setattr(SubprocessReplayAdapter, "__init__", forbidden)
@@ -339,7 +358,8 @@ def test_bound_attempt_requires_every_exact_preparation_and_intent_cas(reduction
     before = tree(value.case.root)
     with pytest.raises(EvidenceValidationError):
         observe(
-            value, reservation.attempt_id,
+            value,
+            reservation.attempt_id,
             ledger_factory=lambda: Proxy(value.ledger, read_artifact=read),
         )
     assert tree(value.case.root) == before
@@ -349,17 +369,21 @@ def test_another_valid_preparation_cannot_rebind_an_existing_attempt(reduction_c
     value = reduction_case
     reservation = reserved(value, bind=True)
     other = prepare_reduction_input(
-        value.source, request(focus=4, through=6, delay=0, ordinal=1),
+        value.source,
+        request(focus=4, through=6, delay=0, ordinal=1),
         expected_bundle_id=value.source.bundle_id,
         expected_report_id=digest(value.source.artifacts["finding_report"]),
     )
     with pytest.raises(EvidenceValidationError, match="intent differs"):
         inspect_reduction_attempt(
-            reservation.attempt_id, package(other.artifacts), value.source,
+            reservation.attempt_id,
+            package(other.artifacts),
+            value.source,
             expected_preparation_id=other.preparation_id,
             expected_bundle_id=value.source.bundle_id,
             expected_report_id=digest(value.source.artifacts["finding_report"]),
-            split="development", ledger_factory=lambda: value.ledger,
+            split="development",
+            ledger_factory=lambda: value.ledger,
         )
 
 
@@ -393,7 +417,8 @@ def test_malformed_terminal_is_not_classified_as_unfinished(reduction_case):
 
     with pytest.raises(EvidenceValidationError, match="not a reduction result or failure"):
         observe(
-            value, reservation.attempt_id,
+            value,
+            reservation.attempt_id,
             ledger_factory=lambda: Proxy(value.ledger, get_outcome=outcome, read_artifact=read),
         )
 
@@ -421,6 +446,7 @@ def test_rehashed_result_audit_is_recomputed_instead_of_trusting_saved_flags(red
 
     with pytest.raises(EvidenceValidationError, match="audit differs"):
         observe(
-            value, submitted.attempt_id,
+            value,
+            submitted.attempt_id,
             ledger_factory=lambda: Proxy(value.ledger, read_artifact=read, get_outcome=outcome),
         )

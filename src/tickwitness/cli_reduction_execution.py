@@ -19,9 +19,7 @@ from tickwitness.infrastructure.reduction_bundles import LocalReductionBundles
 from tickwitness.infrastructure.search_evidence_bundles import read_search_evidence_bundle
 from tickwitness.infrastructure.subprocess_replay import SubprocessReplayAdapter
 
-COMMANDS = frozenset(
-    {"run-reduction-input", "inspect-reduction-run", "inspect-reduction-attempt"}
-)
+COMMANDS = frozenset({"run-reduction-input", "inspect-reduction-run", "inspect-reduction-attempt"})
 
 
 def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
