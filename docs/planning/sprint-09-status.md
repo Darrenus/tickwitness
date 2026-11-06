@@ -1,5 +1,7 @@
 # Sprint 9 合法反例缩减状态
 
+当前状态：2026-11-06（Asia/Singapore），owner 已合并 [PR #100](https://github.com/Darrenus/tickwitness/pull/100)，接受 merge `6e5d48db480e2e7f471c3f743c4d97eb18be88ee`。S09-03 已接受，#27 已关闭；进入 [Sprint 10](sprint-10-status.md)。下述日期与 run／artifact 记录保留各自的历史验收背景，外部真人复验仍 0 / PENDING。
+
 更新：2026-11-05（Asia/Singapore）。Owner已合并[PR #99](https://github.com/Darrenus/tickwitness/pull/99)，接受merge `2aaef3e66edba87035a32779122d4858810da2c1`；S09-02已接受，#26已关闭，进入S09-03。此前#98接受merge `3577be7b07fba10a7da70cc95c2d3e887fcb06fd`、#97兼容性修复接受merge `4e3691cccbe28f76b777814d1bac297082ed13c1`与#95准备接受merge `a2c711861d1d776c78b4b5f5471f8afa388d390f`及历史run保留，S09-01已接受、#25已关闭。[S08-03 / #24](https://github.com/Darrenus/tickwitness/issues/24)真实外部复验仍0／PENDING，owner请求的AI自动化回传另记技术证据。原PR94转交归档与pin不变，无新release。
 
 ## 切片与验收门
@@ -9,7 +11,7 @@
 | S09-01a / #25 | 合法缩减recipe、完整必要前缀输入准备与独立重建 | Owner已合并 [PR #95](https://github.com/Darrenus/tickwitness/pull/95) 接受软件 |
 | S09-01b / #25 | 在原协议共同预算下真实从头执行前缀，持久关联intent／attempt／outcome，审计账户／订单／显式在途状态 | Owner已合并[PR #98](https://github.com/Darrenus/tickwitness/pull/98)接受，#25已关闭 |
 | S09-02 / #26 | 预算内自动局部缩减、候选边界取消、原false数值见证保持判定 | Owner已合并[PR #99](https://github.com/Darrenus/tickwitness/pull/99)接受，#26已关闭 |
-| S09-03 / #27 | 原／缩减证据对比、实际首次分歧定位 | 实现与远端验收完成；[PR #100](https://github.com/Darrenus/tickwitness/pull/100)待owner接受，#27保持打开 |
+| S09-03 / #27 | 原／缩减证据对比、实际首次分歧定位 | Owner 已合并 [PR #100](https://github.com/Darrenus/tickwitness/pull/100) 接受，#27 已关闭 |
 
 原 [Sprint backlog](sprint-backlog.md#s9--合法反例缩减) 的14h／12h／8h专项估算和持续质量容量保持；01a／01b是同一14h故事的验收拆分，没有新增实际工时或重估容量。没有完整运行态checkpoint的现引擎不能用盘口快照代替策略、账户、队列和在途命令。
 
@@ -197,4 +199,4 @@ Ubuntu本次source bundle为 `1e7300b79c48ca8629064166d730f1b5b9d2199f469cfccde2
 
 首轮远端发现导入／格式问题，应用其实际生成补丁；一个gap引用夹具在源冻结阶段被既有预检拒绝，现以合法连续capture10..16测试line与capture分离，另以负例明确拒绝gap，生产校验未放宽。原生3454个测试完成后，旧15分钟CI总窗口不足以稳妥容纳整套安装资格，因此只把native-replay的CI作业窗口改为20分钟；原协议11槽／1000events／每次60s不变，旧取消run不冒充安装资格通过。
 
-[PR #100](https://github.com/Darrenus/tickwitness/pull/100)交付S09-03软件，#27保持打开直到owner接受。S10恢复／强取消、外部真人0／PENDING和发行门分别验收；CI、AI静态审阅及owner合并不替代真人复验。原PR94手交包与golden不变，无新release、实际工时、市场采用或研究收益记录。
+[PR #100](https://github.com/Darrenus/tickwitness/pull/100)交付 S09-03 软件，已由 owner 于 2026-11-06（Asia/Singapore）合并接受，merge `6e5d48db480e2e7f471c3f743c4d97eb18be88ee`，#27 已关闭。S10 恢复／强取消、外部真人 0／PENDING 和发行门分别验收；CI、AI 静态审阅及 owner 合并不替代真人复验。原 PR94 手交包与 golden 不变，无新 release、实际工时、市场采用或研究收益记录。
