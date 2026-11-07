@@ -56,7 +56,8 @@ jobs:
         os: [ubuntu-24.04, macos-15]
         python: ["3.12", "3.13", "3.14"]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    # Includes persisted-fault and OS-alarm regressions on every supported runtime.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -98,6 +99,7 @@ jobs:
           python3 scripts/smoke_alpha.py --python /tmp/tickwitness-wheel/bin/python --wheel dist/*.whl --corpus-root examples/alpha --guide docs/alpha-reproduction.md --runner scripts/reproduce_alpha.py --source-revision "${{ github.sha }}" --report /tmp/alpha-core.json --records-dir /tmp/alpha-core-records
           python3 scripts/smoke_reduction.py --python /tmp/tickwitness-wheel/bin/python --corpus-root examples/alpha --report /tmp/reduction-input-core.json --records-dir /tmp/reduction-input-core-records
           python3 scripts/smoke_reduction_execution.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/reduction-execution-core.json --records-dir /tmp/reduction-execution-core-records
+          python3 scripts/smoke_native_jobs.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/native-jobs-core.json --records-dir /tmp/native-jobs-core-records
           python3 scripts/smoke_reduction_search.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/reduction-search-core.json --records-dir /tmp/reduction-search-core-records
           python3 scripts/smoke_reduction_comparison.py --python /tmp/tickwitness-wheel/bin/python --source-report /tmp/reduction-search-core.json --source-records /tmp/reduction-search-core-records --core-only --report /tmp/reduction-comparison-core.json --records-dir /tmp/reduction-comparison-core-records
           python3 scripts/smoke_jobs.py --python /tmp/tickwitness-wheel/bin/python --source-report /tmp/reduction-comparison-core.json --source-records /tmp/reduction-comparison-core-records --core-only --report /tmp/jobs-core.json --records-dir /tmp/jobs-core-records
@@ -118,6 +120,17 @@ jobs:
           path: |
             /tmp/jobs-core.json
             /tmp/jobs-core-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve installed-core managed native Job refusals
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-jobs-core-${{ github.sha }}
+          path: |
+            /tmp/native-jobs-core.json
+            /tmp/native-jobs-core-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30
@@ -381,6 +394,9 @@ jobs:
       - name: Execute real origin prefixes on the original shared protocol budget
         run: |
           python3 scripts/smoke_reduction_execution.py --python .venv/bin/python --verifier-python /tmp/tickwitness-tagged-verifier/bin/python --report /tmp/reduction-execution.json --records-dir /tmp/reduction-execution-records
+      - name: Execute managed native Jobs with original reservations and publication fencing
+        run: |
+          python3 scripts/smoke_native_jobs.py --python .venv/bin/python --verifier-python /tmp/tickwitness-tagged-verifier/bin/python --report /tmp/native-jobs.json --records-dir /tmp/native-jobs-records
       - name: Qualify bounded local reduction with real numeric witness preservation
         run: |
           python3 scripts/smoke_reduction_search.py --python .venv/bin/python --verifier-python /tmp/tickwitness-tagged-verifier/bin/python --report /tmp/reduction-search.json --records-dir /tmp/reduction-search-records
@@ -396,6 +412,17 @@ jobs:
           path: |
             /tmp/jobs.json
             /tmp/jobs-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve installed managed native Job execution and failure evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-jobs-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            /tmp/native-jobs.json
+            /tmp/native-jobs-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30
@@ -627,6 +654,7 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_queue_constraints.py" --python /tmp/tickwitness-preview-native/bin/python
           python3 "$TW_SOURCE/scripts/smoke_queue_execution.py" --python /tmp/tickwitness-preview-native/bin/python --native --report /tmp/queue-source-wheel-execution.json
           python3 "$TW_SOURCE/scripts/smoke_reduction_execution.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/reduction-execution-source-wheel.json --records-dir /tmp/reduction-execution-source-wheel-records
+          python3 "$TW_SOURCE/scripts/smoke_native_jobs.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/native-jobs-source-wheel.json --records-dir /tmp/native-jobs-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_reduction_search.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/reduction-search-source-wheel.json --records-dir /tmp/reduction-search-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_reduction_comparison.py" --python /tmp/tickwitness-preview-core/bin/python --source-report /tmp/reduction-search-source-wheel.json --source-records /tmp/reduction-search-source-wheel-records --report /tmp/reduction-comparison-source-wheel.json --records-dir /tmp/reduction-comparison-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_jobs.py" --python /tmp/tickwitness-preview-core/bin/python --source-report /tmp/reduction-comparison-source-wheel.json --source-records /tmp/reduction-comparison-source-wheel-records --report /tmp/jobs-source-wheel.json --records-dir /tmp/jobs-source-wheel-records
@@ -658,6 +686,17 @@ jobs:
           path: |
             /tmp/jobs-source-wheel.json
             /tmp/jobs-source-wheel-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve actual-source managed native Job execution and original budget
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-jobs-source-wheel-${{ github.sha }}
+          path: |
+            /tmp/native-jobs-source-wheel.json
+            /tmp/native-jobs-source-wheel-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30

@@ -684,6 +684,13 @@ class _DispatchLedger:
     def as_ledger(self) -> ReductionLedger:
         return self
 
+    def reserve_with_nonce(self, protocol: ExecutableProtocol, nonce: str) -> AttemptReservation:
+        _require(
+            nonce == self.dispatch.document["reservation_nonce"],
+            "Named reduction reservation differs from its frozen dispatch nonce",
+        )
+        return self.reserve(protocol)
+
     def reserve(self, protocol: ExecutableProtocol) -> AttemptReservation:
         _require(
             protocol.canonical_bytes == self.context.protocol.canonical_bytes,
