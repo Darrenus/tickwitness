@@ -93,6 +93,7 @@ def counted_native(self,replay_input):
 NautilusReplayAdapter.run=counted_native
 actual_stdout=sys.stdout
 class Buffer:
+    def __getattr__(self,name):return getattr(actual_stdout.buffer,name)
     def write(self,data):
         if b'\\n' in data:
             frame=json.loads(data)
@@ -116,6 +117,7 @@ class Buffer:
     def flush(self):return actual_stdout.buffer.flush()
 class Output:
     buffer=Buffer()
+    def __getattr__(self,name):return getattr(actual_stdout,name)
     def write(self,value):return self.buffer.write(value.encode())
     def flush(self):return self.buffer.flush()
 sys.stdin=io.TextIOWrapper(io.BytesIO(raw),encoding='utf-8')
