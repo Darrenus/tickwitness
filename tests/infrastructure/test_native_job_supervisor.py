@@ -6,6 +6,7 @@ Installed eight-slot qualification separately uses actual Nautilus workers.
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -31,16 +32,26 @@ from tickwitness.infrastructure.reduction_bundles import LocalReductionBundles
 from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
 
 
-def queued(value, tmp_path, *, lease_ns=30_000_000_000):
-    preparation = tmp_path / "prepared"
-    LocalReductionBundles(value.case.root).publish(value.prepared, preparation)
+@pytest.fixture
+def native_job_root(tmp_path_factory):
+    # The original research fixture keeps its ledger beside portable evidence.
+    # Give managed input, publication and Catalog their own sibling workspace.
+    return tmp_path_factory.mktemp("native-job-supervisor")
+
+
+def queued(value, native_job_root, *, lease_ns=30_000_000_000):
+    inputs = native_job_root / "inputs"
+    inputs.mkdir()
+    shutil.copytree(value.case.root / "portable-source", inputs / "portable-source")
+    preparation = native_job_root / "prepared"
+    LocalReductionBundles(inputs).publish(value.prepared, preparation)
     spec = build_execution_job_spec(
         {
             "preparation": str(preparation.absolute()),
             "expected_preparation_id": value.prepared.preparation_id,
             "expected_bundle_id": value.source.bundle_id,
             "expected_report_id": digest(value.source.artifacts["finding_report"]),
-            "input_root": str(value.case.root.absolute()),
+            "input_root": str(inputs.absolute()),
             "source_evidence": "portable-source",
             "runs": str((value.case.root / "runs").absolute()),
             "split": "development",
@@ -49,7 +60,7 @@ def queued(value, tmp_path, *, lease_ns=30_000_000_000):
         },
         lease_duration_ns=lease_ns,
     )
-    store = SqliteJobStore(tmp_path / "catalog", create=True)
+    store = SqliteJobStore(native_job_root / "catalog", create=True)
     with store.coordinator():
         row = store.submit(spec, now_ns=time.time_ns())
     return spec, store, row
@@ -74,10 +85,11 @@ def saved_worker(value, tmp_path, *, wrong_context=False):
 def test_coordinator_reserves_and_binds_before_worker_and_terminal_repeat_is_idempotent(
     reduction_case,
     tmp_path,
+    native_job_root,
     monkeypatch,
 ):
     value = reduction_case
-    spec, store, row = queued(value, tmp_path)
+    spec, store, row = queued(value, native_job_root)
     command = saved_worker(value, tmp_path)
     prepared = prepare_native_job(spec)
     actual_popen = subprocess.Popen
@@ -116,11 +128,11 @@ def test_coordinator_reserves_and_binds_before_worker_and_terminal_repeat_is_ide
 
 def test_known_unavailable_runtime_fails_before_consuming_an_original_slot(
     reduction_case,
-    tmp_path,
+    native_job_root,
     monkeypatch,
 ):
     value = reduction_case
-    spec, store, _ = queued(value, tmp_path)
+    spec, store, _ = queued(value, native_job_root)
     before = value.ledger.list_reservations(
         value.prepared.materialization.source.validation.protocol
     )
@@ -143,10 +155,11 @@ def test_known_unavailable_runtime_fails_before_consuming_an_original_slot(
 def test_wrong_result_context_cannot_publish_a_research_manifest(
     reduction_case,
     tmp_path,
+    native_job_root,
     monkeypatch,
 ):
     value = reduction_case
-    spec, store, _ = queued(value, tmp_path)
+    spec, store, _ = queued(value, native_job_root)
     monkeypatch.setattr(job_reduction, "require_native_runtime", lambda: None)
     result = run_job(
         store, spec.spec_id, _worker_command=saved_worker(value, tmp_path, wrong_context=True)
@@ -161,10 +174,11 @@ def test_wrong_result_context_cannot_publish_a_research_manifest(
 def test_publication_rejects_a_stale_catalog_version_without_writing_research(
     reduction_case,
     tmp_path,
+    native_job_root,
     monkeypatch,
 ):
     value = reduction_case
-    spec, store, _ = queued(value, tmp_path)
+    spec, store, _ = queued(value, native_job_root)
     original = job_reduction.publish_reduction_execution
 
     def race(execution, reservation, audited, *, ledger, fence):
@@ -192,10 +206,11 @@ def test_publication_rejects_a_stale_catalog_version_without_writing_research(
 def test_monotonic_publication_expiry_is_not_rebased_from_utc(
     reduction_case,
     tmp_path,
+    native_job_root,
     monkeypatch,
 ):
     value = reduction_case
-    spec, store, _ = queued(value, tmp_path)
+    spec, store, _ = queued(value, native_job_root)
     original = job_reduction.publish_reduction_execution
     mono = time.monotonic_ns
 
@@ -214,10 +229,11 @@ def test_monotonic_publication_expiry_is_not_rebased_from_utc(
 def test_committed_research_ack_loss_is_not_overwritten_or_automatically_replayed(
     reduction_case,
     tmp_path,
+    native_job_root,
     monkeypatch,
 ):
     value = reduction_case
-    spec, store, _ = queued(value, tmp_path)
+    spec, store, _ = queued(value, native_job_root)
     publish = LocalAttemptLedger.publish
     commits = []
 
@@ -303,11 +319,11 @@ def test_native_deadline_is_not_extended_by_renewing_heartbeats(tmp_path):
 
 def test_catalog_read_cannot_spend_the_remaining_research_write_authorization(
     reduction_case,
-    tmp_path,
+    native_job_root,
     monkeypatch,
 ):
     value = reduction_case
-    spec, store, _ = queued(value, tmp_path)
+    spec, store, _ = queued(value, native_job_root)
     owner = value.prepared.materialization.source.validation.protocol
     before = value.ledger.list_reservations(owner)
     actual_assert = store.assert_active
