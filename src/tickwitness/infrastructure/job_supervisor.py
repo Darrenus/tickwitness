@@ -1,4 +1,4 @@
-"""Single-coordinator supervision of a trusted read-only comparison worker."""
+"""Single-coordinator supervision; workers never publish research evidence."""
 
 import os
 import secrets
@@ -17,12 +17,21 @@ from tickwitness.application.jobs import JobConflictError, JobRepository, JobSto
 from tickwitness.domain.evidence.reduction_comparison import load_reduction_comparison_export
 from tickwitness.domain.evidence.run_records import canonical, parse
 from tickwitness.domain.jobs.contracts import load_job_spec
+from tickwitness.domain.jobs.native_requests import build_native_worker_request
+from tickwitness.domain.replay.contracts import load_replay_result
 from tickwitness.infrastructure.job_comparison import execute_comparison
+from tickwitness.infrastructure.job_reduction import (
+    audit_native_job,
+    authorize_native_job,
+    prepare_native_job,
+    publish_native_job,
+)
 from tickwitness.infrastructure.job_worker import (
     MAX_JOB_FRAME_BYTES,
     MAX_JOB_REQUEST_BYTES,
     _failure,
 )
+from tickwitness.infrastructure.nautilus_replay import ReplayDependencyError
 
 type Row = dict[str, object]
 MAX_JOB_STDERR_BYTES = 64 * 1024
@@ -45,9 +54,14 @@ class _WorkerFault(Exception):
     pass
 
 
+class _NativeDeadlineExpired(Exception):
+    pass
+
+
 @dataclass(slots=True)
 class _LeaseWindow:
     deadline_ns: int
+    native_deadline_ns: int | None = None
 
 
 def _signal_group(process: subprocess.Popen[bytes]) -> None:
@@ -75,7 +89,12 @@ def _terminate(process: subprocess.Popen[bytes]) -> None:
 def _checked_frame(raw: bytes, row: Row) -> Row:
     frame = parse(raw, limit=MAX_JOB_FRAME_BYTES)
     kind = frame.get("kind")
+    native = cast("Row", row["spec"])["operation"] == "execute_reduction_input_v1"
+    result_kind = "job_native_result_v1" if native else "job_result_v1"
     extra = (
+        {"replay_result"}
+        if kind == "job_native_result_v1"
+        else
         {"export"}
         if kind == "job_result_v1"
         else {"failure"}
@@ -85,7 +104,7 @@ def _checked_frame(raw: bytes, row: Row) -> Row:
     attempt = cast("Row", row["attempt"])
     if (
         not isinstance(kind, str)
-        or kind not in {"job_heartbeat_v1", "job_result_v1", "job_failure_v1"}
+        or kind not in {"job_heartbeat_v1", result_kind, "job_failure_v1"}
         or set(frame) != _COMMON | extra
         or type(frame["schema_version"]) is not int
         or frame["schema_version"] != 1
@@ -100,6 +119,8 @@ def _checked_frame(raw: bytes, row: Row) -> Row:
         raise _WorkerFault("Worker IPC identity, schema or sequence differs")
     if kind == "job_result_v1":
         load_reduction_comparison_export(canonical(cast("Row", frame["export"])))
+    elif kind == "job_native_result_v1":
+        load_replay_result(canonical(cast("Row", frame["replay_result"])))
     elif kind == "job_failure_v1":
         failure = frame["failure"]
         if (
@@ -142,13 +163,16 @@ def _exchange(
             os.set_blocking(stream.fileno(), False)
             selector.register(stream, events, name)
         while selector.get_map() or process.poll() is None:
+            if window.native_deadline_ns is not None and time.monotonic_ns() >= window.native_deadline_ns:
+                raise _NativeDeadlineExpired
             if time.monotonic_ns() >= window.deadline_ns:
                 raise _LeaseExpired
             if not exit_seen and process.poll() is not None:
                 exit_seen = True
                 # An orphan descendant must not keep either pipe alive forever.
                 _signal_group(process)
-            timeout = min(0.1, max(0, window.deadline_ns - time.monotonic_ns()) / 1_000_000_000)
+            deadline = min(window.deadline_ns, window.native_deadline_ns) if window.native_deadline_ns is not None else window.deadline_ns
+            timeout = min(0.1, max(0, deadline - time.monotonic_ns()) / 1_000_000_000)
             for key, _ in selector.select(timeout):
                 ready_stream = key.fileobj
                 descriptor = key.fd
@@ -182,6 +206,8 @@ def _exchange(
                         raise _WorkerFault("Worker emitted output after its terminal frame")
                     frame = _checked_frame(bytes(line), row)
                     pulse_clock = time.monotonic_ns()
+                    if window.native_deadline_ns is not None and pulse_clock >= window.native_deadline_ns:
+                        raise _NativeDeadlineExpired
                     if pulse_clock >= window.deadline_ns:
                         raise _LeaseExpired
                     attempt = cast("Row", row["attempt"])
@@ -199,6 +225,8 @@ def _exchange(
                         terminal = frame
                 if len(buffer) > MAX_JOB_FRAME_BYTES:
                     raise _WorkerFault("Worker stdout frame exceeds its byte limit")
+        if window.native_deadline_ns is not None and time.monotonic_ns() >= window.native_deadline_ns:
+            raise _NativeDeadlineExpired
         return row, terminal, bytes(errors)
 
 
@@ -233,13 +261,179 @@ def _finish_failure(store: JobRepository, row: Row, failure: Row, window: _Lease
     )
 
 
+def _native_failure(error: Exception, *, worker_exit_code: int | None = None) -> Row:
+    if isinstance(error, ReplayDependencyError):
+        return {"code": "engine_unavailable", "message": str(error)[:2048], "worker_exit_code": worker_exit_code}
+    diagnostic = _failure(error)
+    code = getattr(error, "code", None)
+    if isinstance(code, str) and 0 < len(code) <= 128:
+        diagnostic["code"] = code
+    diagnostic["worker_exit_code"] = worker_exit_code
+    return diagnostic
+
+
+def _run_native_claimed(
+    store: JobRepository,
+    row: Row,
+    window: _LeaseWindow,
+    *,
+    _worker_command: tuple[str, ...] | None,
+) -> Row:
+    job_id = cast("str", row["job_id"])
+    spec = load_job_spec(canonical(cast("Row", row["spec"])))
+
+    def fence() -> None:
+        attempt = cast("Row", row["attempt"])
+        now = time.time_ns()
+        if time.monotonic_ns() >= window.deadline_ns or now >= cast("int", attempt["lease_expires_at_ns"]):
+            raise _LeaseExpired
+        store.assert_active(
+            job_id,
+            expected_version=cast("int", row["version"]),
+            coordinator_id=cast("str", attempt["coordinator_id"]),
+            job_attempt_id=cast("str", attempt["job_attempt_id"]),
+            lease_token=cast("str", attempt["lease_token"]),
+            now_ns=now,
+        )
+        # A Catalog read may wait on SQLite. It cannot silently spend the
+        # remaining authorization window before the actual research write.
+        checked_at = time.time_ns()
+        if checked_at < now:
+            raise JobConflictError("Coordinator UTC moved backwards during admission")
+        if time.monotonic_ns() >= window.deadline_ns or checked_at >= cast("int", attempt["lease_expires_at_ns"]):
+            raise _LeaseExpired
+
+    try:
+        prepared = prepare_native_job(spec)
+        reservation = authorize_native_job(prepared, fence=fence)
+    except _LeaseExpired:
+        return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
+    except JobStoreError:
+        raise
+    except Exception as error:
+        return _finish_failure(store, store.get(job_id), _native_failure(error), window)
+
+    # Research execution time never renews with a Job heartbeat. Startup,
+    # request encoding/delivery, native computation and final IPC share it.
+    native_started = time.monotonic_ns()
+    window.native_deadline_ns = native_started + cast("int", reservation.document["max_wall_seconds"]) * 1_000_000_000
+    attempt = cast("Row", row["attempt"])
+    try:
+        raw = build_native_worker_request(
+            job_id=job_id,
+            coordinator_id=cast("str", attempt["coordinator_id"]),
+            job_attempt_id=cast("str", attempt["job_attempt_id"]),
+            lease_token=cast("str", attempt["lease_token"]),
+            research_attempt=reservation,
+            intent=prepared.execution.intent,
+            replay_input=prepared.execution.replay_input,
+            native_deadline_ns=window.native_deadline_ns,
+        )
+        fence()
+    except _LeaseExpired:
+        return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
+    except JobStoreError:
+        raise
+    except Exception as error:
+        return _finish_failure(store, store.get(job_id), _native_failure(error), window)
+
+    command = _worker_command or (
+        str(Path(sys.executable).absolute()), "-I", "-B", "-m",
+        "tickwitness.infrastructure.native_job_worker",
+    )
+    process: subprocess.Popen[bytes] | None = None
+    terminal: Row | None = None
+    errors = b""
+    fault: Exception | None = None
+    expired, wall_expired = False, False
+    with TemporaryDirectory(prefix="tickwitness-native-job-") as cwd:
+        try:
+            process = subprocess.Popen(
+                command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                cwd=cwd, start_new_session=True, close_fds=True,
+            )
+            row, terminal, errors = _exchange(process, raw, store, row, window)
+        except _NativeDeadlineExpired:
+            wall_expired = True
+        except _LeaseExpired:
+            expired = True
+        except (OSError, _WorkerFault, ValueError) as error:
+            if isinstance(error, JobStoreError):
+                raise
+            fault = error
+        finally:
+            if process is not None:
+                try:
+                    _terminate(process)
+                finally:
+                    for stream in (process.stdin, process.stdout, process.stderr):
+                        if stream is not None:
+                            with suppress(OSError):
+                                stream.close()
+    row = store.get(job_id)
+    if expired or time.monotonic_ns() >= window.deadline_ns:
+        return _lost_lease(store, row, now_ns=time.time_ns())
+    exit_code = process.returncode if process is not None else None
+    if wall_expired or exit_code == -signal.SIGALRM:
+        return _finish_failure(store, row, {
+            "code": "research_wall_time_limit",
+            "message": "Original native attempt wall limit expired; its slot remains consumed",
+            "worker_exit_code": exit_code,
+        }, window)
+    # Only actual exit before the immutable native deadline can be admitted.
+    # Subsequent independent audit/publication has its own current Job lease.
+    window.native_deadline_ns = None
+    if fault is not None or terminal is None or (
+        terminal["kind"] == "job_native_result_v1" and exit_code != 0
+    ):
+        message = str(fault) if fault is not None else "Native worker exited without a valid result"
+        if errors:
+            message += ": " + errors.decode("utf-8", errors="replace")
+        return _finish_failure(store, row, {
+            "code": "job_worker_failed", "message": message[:2048], "worker_exit_code": exit_code,
+        }, window)
+    if terminal["kind"] == "job_failure_v1":
+        diagnostic = cast("Row", terminal["failure"])
+        if diagnostic["worker_exit_code"] != exit_code:
+            diagnostic = {
+                "code": "job_worker_protocol_error",
+                "message": "Native failure frame and actual exit differ",
+                "worker_exit_code": exit_code,
+            }
+        return _finish_failure(store, row, diagnostic, window)
+    try:
+        reopened, audited = audit_native_job(
+            prepared, reservation, canonical(cast("Row", terminal["replay_result"])),
+        )
+    except Exception as error:
+        return _finish_failure(store, row, _native_failure(error, worker_exit_code=exit_code), window)
+    # Never turn publication/confirmation uncertainty into another research
+    # outcome or a new execution. The receipt may already be committed.
+    try:
+        output = publish_native_job(reopened, reservation, audited, fence=fence)
+    except _LeaseExpired:
+        return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
+    try:
+        fence()
+    except _LeaseExpired:
+        return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
+    attempt = cast("Row", row["attempt"])
+    return store.complete(
+        job_id, output, expected_version=cast("int", row["version"]),
+        coordinator_id=cast("str", attempt["coordinator_id"]),
+        job_attempt_id=cast("str", attempt["job_attempt_id"]),
+        lease_token=cast("str", attempt["lease_token"]), now_ns=time.time_ns(),
+    )
+
+
 def run_job(
     store: JobRepository, job_id: str, *, _worker_command: tuple[str, ...] | None = None
 ) -> Row:
     """Execute one allowlisted job; private command override is a trusted test hook.
 
     Terminal jobs return their existing record. There is no automatic retry,
-    research reservation or restoration of an interrupted execution.
+    restoration of an interrupted execution. Native Jobs use the original
+    protocol's independent research reservation, never the Job attempt itself.
     """
     if os.name != "posix":
         raise JobConflictError("Managed Job supervision requires POSIX")
@@ -262,6 +456,8 @@ def run_job(
         window = _LeaseWindow(
             claim_clock + cast("int", cast("Row", row["spec"])["lease_duration_ns"])
         )
+        if cast("Row", row["spec"])["operation"] == "execute_reduction_input_v1":
+            return _run_native_claimed(store, row, window, _worker_command=_worker_command)
         attempt = cast("Row", row["attempt"])
         raw = canonical(
             {

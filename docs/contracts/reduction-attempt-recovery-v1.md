@@ -1,6 +1,6 @@
 # Reduction attempt recovery v1
 
-S10-02a, implementation under review, 2026-11-06 (Asia/Singapore). [Story #29](https://github.com/Darrenus/tickwitness/issues/29), [ADR 0033](../adr/0033-read-only-reduction-recovery.md), [Sprint 10](../planning/sprint-10-status.md). This is a read-only recovery audit. Managed native execution, explicit retry, publication fencing and Job acknowledgment recovery remain subsequent S10-02 work. External human reproduction remains **0 / PENDING**.
+S10-02a, accepted by owner merge of [PR102](https://github.com/Darrenus/tickwitness/pull/102), 2026-11-07 (Asia/Singapore). [Story #29](https://github.com/Darrenus/tickwitness/issues/29), [ADR 0033](../adr/0033-read-only-reduction-recovery.md), [Sprint 10](../planning/sprint-10-status.md). This remains a read-only recovery audit. The [managed native extension](native-reduction-jobs-v1.md) is reviewed separately; explicit retry and Job acknowledgment recovery remain later S10-02 work. External human reproduction remains **0 / PENDING**.
 
 ## User need and authority
 

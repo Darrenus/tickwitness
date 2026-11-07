@@ -22,6 +22,8 @@ from tickwitness.application.search_evidence import SearchEvidencePackage
 from tickwitness.domain.evidence.reduction_records import (
     MAX_REDUCTION_RECORD_BYTES,
     MAX_REDUCTION_STATE_AUDIT_BYTES,
+    ReductionExecutionIntent,
+    ReductionRunReceipt,
     ReductionStateAudit,
     build_reduction_failure,
     build_reduction_intent,
@@ -47,13 +49,17 @@ from tickwitness.domain.reduction.contracts import (
     load_reduction_recipe,
     role_limit,
 )
-from tickwitness.domain.replay.contracts import ReplayPort, load_replay_result
+from tickwitness.domain.replay.contracts import ReplayInput, ReplayPort, load_replay_result
 from tickwitness.domain.research_contracts.executable import ExecutableProtocol
 
 type Row = dict[str, object]
 
 
 class ReductionLedger(AttemptLedger, Protocol):
+    def reserve_with_nonce(
+        self, protocol: ExecutableProtocol, nonce: str
+    ) -> AttemptReservation: ...
+
     def list_reservations(self, protocol: ExecutableProtocol) -> tuple[AttemptReservation, ...]: ...
 
     def bind_intent(
@@ -98,6 +104,64 @@ class _Preparation:
         return dict(self._artifacts)
 
 
+@dataclass(frozen=True, slots=True)
+class PreparedReductionExecution:
+    """Frozen source/preparation bytes, without a reservation or execution grant."""
+
+    _source: _Source
+    _preparation: _Preparation
+    _prepared: PreparedReduction
+
+    @property
+    def protocol(self) -> ExecutableProtocol:
+        return self._prepared.materialization.source.validation.protocol
+
+    @property
+    def replay_input(self) -> ReplayInput:
+        return self._prepared.materialization.replay_input
+
+    @property
+    def intent(self) -> ReductionExecutionIntent:
+        return build_reduction_intent(self._prepared.materialization)
+
+    @property
+    def artifacts(self) -> tuple[bytes, ...]:
+        return _preparation_artifacts(self._prepared)
+
+    @property
+    def source(self) -> SearchEvidencePackage:
+        return self._source
+
+    @property
+    def preparation(self) -> ReductionPackage:
+        return self._preparation
+
+    @property
+    def preparation_id(self) -> str:
+        return self._prepared.preparation_id
+
+
+@dataclass(frozen=True, slots=True)
+class AuditedReductionExecution:
+    """Computed receipt and immutable artifacts; publication must re-audit them."""
+
+    receipt: ReductionRunReceipt
+    result_bytes: bytes
+    audit_bytes: bytes
+
+    @property
+    def submission(self) -> ReductionSubmission:
+        result = load_replay_result(self.result_bytes)
+        attempt_raw = canonical(cast("Row", self.receipt.document["attempt"]))
+        return ReductionSubmission(
+            self.receipt.run_id,
+            digest(attempt_raw),
+            self.receipt.intent_id,
+            cast("str", result.document["execution_status"]),
+            parse(self.audit_bytes, limit=MAX_REDUCTION_STATE_AUDIT_BYTES),
+        )
+
+
 def _development(split: str) -> None:
     if split != "development":
         raise ConfirmationAccessDenied("Reduction execution permits development evidence only")
@@ -110,6 +174,20 @@ def _require(condition: bool, message: str) -> None:
 
 def _snapshot(source: SearchEvidencePackage) -> _Source:
     return _Source(source.bundle_id, source.manifest_bytes, tuple(sorted(source.artifacts.items())))
+
+
+def _pinned_source(
+    source: SearchEvidencePackage, bundle_id: str, report_id: str, *, label: str
+) -> _Source:
+    snapshot = _snapshot(source)
+    report_raw = snapshot.artifacts.get("finding_report")
+    _require(
+        snapshot.bundle_id == bundle_id
+        and isinstance(report_raw, bytes)
+        and digest(report_raw) == report_id,
+        label + " differs from the expected pinned bundle or report",
+    )
+    return snapshot
 
 
 def _prepare(
@@ -212,6 +290,200 @@ def _preparation_artifacts(prepared: PreparedReduction) -> tuple[bytes, ...]:
     )
 
 
+def _check_event_budget(prepared: PreparedReduction) -> None:
+    protocol = prepared.materialization.source.validation.protocol
+    budget = cast("dict[str, int]", protocol.document["budget"])
+    descriptor = prepared.materialization.document
+    _require(
+        cast("int", cast("Row", descriptor["candidate"])["full_event_count"])
+        <= budget["max_events"]
+        and cast("int", cast("Row", descriptor["retained"])["event_count"]) <= budget["max_events"],
+        "Reduction source or retained prefix exceeds the original event budget",
+    )
+
+
+def prepare_reduction_execution(
+    preparation: ReductionPackage,
+    source: SearchEvidencePackage,
+    *,
+    expected_preparation_id: str,
+    expected_bundle_id: str,
+    expected_report_id: str,
+    split: str,
+) -> PreparedReductionExecution:
+    """Rebuild frozen execution inputs without ledger or engine access."""
+    _development(split)
+    expected = identity(expected_preparation_id)
+    bundle_id, report_id = identity(expected_bundle_id), identity(expected_report_id)
+    snapshot = _pinned_source(source, bundle_id, report_id, label="Execution source")
+    checked_preparation = _Preparation(
+        preparation.preparation_id,
+        preparation.manifest_bytes,
+        tuple(sorted(preparation.artifacts.items())),
+    )
+    prepared, _ = _prepare(checked_preparation, snapshot, expected)
+    bindings = prepared.materialization.source
+    _require(
+        bindings.bundle_id == bundle_id and bindings.report_id == report_id,
+        "Execution preparation differs from the expected source identities",
+    )
+    _check_event_budget(prepared)
+    return PreparedReductionExecution(snapshot, checked_preparation, prepared)
+
+
+def _checked_execution(execution: PreparedReductionExecution) -> PreparedReductionExecution:
+    _require(
+        type(execution) is PreparedReductionExecution,
+        "Execution phases require an actual frozen reduction execution",
+    )
+    source = execution._prepared.materialization.source
+    return prepare_reduction_execution(
+        execution.preparation,
+        execution.source,
+        expected_preparation_id=execution.preparation_id,
+        expected_bundle_id=source.bundle_id,
+        expected_report_id=source.report_id,
+        split="development",
+    )
+
+
+def _dispatch_nonce(nonce: str) -> str:
+    _require(
+        isinstance(nonce, str) and re.fullmatch(r"[0-9a-f]{32}", nonce) is not None,
+        "Reduction dispatch nonce requires 32 lowercase hex characters",
+    )
+    return nonce
+
+
+def _nonce_reservation(
+    reservations: tuple[AttemptReservation, ...], nonce: str
+) -> AttemptReservation | None:
+    matches = tuple(row for row in reservations if row.document["nonce"] == nonce)
+    _require(len(matches) <= 1, "Dispatch nonce matches more than one original reservation")
+    return matches[0] if matches else None
+
+
+def find_reduction_execution_reservation(
+    execution: PreparedReductionExecution, *, ledger: ReductionLedger, nonce: str
+) -> AttemptReservation | None:
+    """Observe the original nonce association without repairing or resuming it."""
+    checked_nonce = _dispatch_nonce(nonce)
+    checked = _checked_execution(execution)
+    return _nonce_reservation(
+        _checked_prefix(checked._source, checked.protocol, ledger), checked_nonce
+    )
+
+
+def _execution_reservation(
+    prepared: PreparedReduction, reservation: AttemptReservation
+) -> AttemptReservation:
+    _require(type(reservation) is AttemptReservation, "Execution requires an original reservation")
+    checked = AttemptReservation(reservation.attempt_id, reservation.canonical_bytes)
+    protocol = prepared.materialization.source.validation.protocol
+    budget = cast("dict[str, int]", protocol.document["budget"])
+    _require(
+        checked.protocol_id == protocol.protocol_id
+        and checked.attempt_index <= budget["max_attempts"]
+        and checked.document["max_wall_seconds"] == budget["max_wall_seconds"],
+        "Execution reservation differs from the frozen original owner and budget",
+    )
+    return checked
+
+
+def _bound_preparation(
+    execution: PreparedReductionExecution,
+    reservation: AttemptReservation,
+    ledger: ReductionLedger,
+) -> None:
+    intent = execution.intent
+    _require(
+        ledger.get_intent(reservation.attempt_id) == intent.canonical_bytes,
+        "Execution intent differs from the exact durable preparation",
+    )
+    for raw in (intent.canonical_bytes, *execution.artifacts):
+        _require(
+            ledger.read_artifact(digest(raw), max_bytes=16 * 1024 * 1024) == raw,
+            "Execution intent or preparation CAS is not durably available",
+        )
+
+
+def authorize_reduction_execution(
+    execution: PreparedReductionExecution,
+    *,
+    ledger: ReductionLedger,
+    reservation_nonce: str,
+    fence: Callable[[], None],
+) -> AttemptReservation:
+    """Consume one named original slot and bind its intent before native execution.
+
+    Any existing nonce requires observation or explicit later recovery. It never
+    authorizes replay using an already consumed slot, even after a lost reply.
+    """
+    nonce = _dispatch_nonce(reservation_nonce)
+    checked = _checked_execution(execution)
+    prefix = _checked_prefix(checked._source, checked.protocol, ledger)
+    _require(
+        _nonce_reservation(prefix, nonce) is None,
+        "Original dispatch nonce is already consumed; no execution or retry is authorized",
+    )
+    fence()
+    reservation = ledger.reserve_with_nonce(checked.protocol, nonce)
+    reservation = _execution_reservation(checked._prepared, reservation)
+    _require(
+        reservation.document["nonce"] == nonce
+        and reservation.attempt_index > len(prefix)
+        and ledger.get_reservation(reservation.attempt_id) == reservation
+        and reservation in _checked_prefix(checked._source, checked.protocol, ledger),
+        "Named execution reservation differs from its actual original slot",
+    )
+    _require(
+        ledger.get_outcome(reservation.attempt_id) is None,
+        "New execution reservation already has a terminal outcome",
+    )
+    intent = checked.intent
+    artifacts = checked.artifacts
+    fence()
+    committed = ledger.bind_intent(reservation, intent.canonical_bytes, artifacts=artifacts)
+    _require(committed == intent.intent_id, "Ledger returned a conflicting execution intent")
+    _bound_preparation(checked, reservation, ledger)
+    return reservation
+
+
+def _audit_prepared_result(
+    prepared: PreparedReduction, reservation: AttemptReservation, result_raw: bytes
+) -> AuditedReductionExecution:
+    reservation = _execution_reservation(prepared, reservation)
+    protocol = prepared.materialization.source.validation.protocol
+    intent = build_reduction_intent(prepared.materialization)
+    result = load_replay_result(result_raw)
+    audit = ReductionStateAudit(prepared.materialization, result)
+    receipt = build_reduction_run_receipt(
+        {
+            "kind": "reduction_run_receipt_v1",
+            "schema_version": 1,
+            "attempt": reservation.document,
+            "protocol_id": protocol.protocol_id,
+            "claim_revision_id": protocol.claim_revision_id,
+            "scope": intent.document["scope"],
+            "intent": intent.document,
+            "execution_status": result.document["execution_status"],
+            "bindings": {
+                "replay_result_sha256": digest(result.canonical_bytes),
+                "state_audit_sha256": audit.audit_id,
+            },
+        }
+    )
+    return AuditedReductionExecution(receipt, result.canonical_bytes, audit.canonical_bytes)
+
+
+def audit_reduction_execution(
+    execution: PreparedReductionExecution, reservation: AttemptReservation, result_raw: bytes
+) -> AuditedReductionExecution:
+    """Recompute result accounting and the final receipt without any publication."""
+    checked = _checked_execution(execution)
+    return _audit_prepared_result(checked._prepared, reservation, result_raw)
+
+
 def _confirmed_publication(
     ledger: ReductionLedger,
     reservation: AttemptReservation,
@@ -235,6 +507,74 @@ def _confirmed_publication(
         ) from error
 
 
+def publish_reduction_execution(
+    execution: PreparedReductionExecution,
+    reservation: AttemptReservation,
+    audited: AuditedReductionExecution,
+    *,
+    ledger: ReductionLedger,
+    fence: Callable[[], None],
+) -> ReductionSubmission:
+    """Re-audit frozen and actual facts before one currently fenced publication.
+
+    The research ledger and Job Catalog do not share an atomic transaction.
+    Publication/readback errors remain unconfirmed and never publish a second
+    terminal or authorize re-execution of the already consumed reservation.
+    """
+    checked = _checked_execution(execution)
+    actual = _execution_reservation(checked._prepared, reservation)
+    _require(
+        actual in _checked_prefix(checked._source, checked.protocol, ledger)
+        and ledger.get_reservation(actual.attempt_id) == actual,
+        "Publication reservation differs from the actual original slot",
+    )
+    _bound_preparation(checked, actual, ledger)
+    _require(
+        type(audited) is AuditedReductionExecution,
+        "Publication requires actual audited reduction bytes",
+    )
+    rebuilt = _audit_prepared_result(checked._prepared, actual, audited.result_bytes)
+    _require(
+        rebuilt.receipt.canonical_bytes == audited.receipt.canonical_bytes
+        and rebuilt.result_bytes == audited.result_bytes
+        and rebuilt.audit_bytes == audited.audit_bytes,
+        "Publication artifacts differ from independent result and receipt recomputation",
+    )
+    _require(
+        ledger.get_outcome(actual.attempt_id) is None,
+        "Original attempt already has an outcome; explicit recovery is required",
+    )
+    fence()
+    # Keep all uncertain publication/readback outside execution-failure handling.
+    # A committed outcome must never be replaced by a compensating failure.
+    try:
+        _confirmed_publication(
+            ledger,
+            actual,
+            rebuilt.receipt.canonical_bytes,
+            (rebuilt.result_bytes, rebuilt.audit_bytes),
+        )
+        for raw in (
+            rebuilt.receipt.canonical_bytes,
+            rebuilt.result_bytes,
+            rebuilt.audit_bytes,
+        ):
+            _require(
+                ledger.read_artifact(digest(raw), max_bytes=16 * 1024 * 1024) == raw,
+                "Published reduction receipt or artifact could not be read back exactly",
+            )
+    except ProtocolRunError:
+        raise
+    except Exception as error:
+        raise ProtocolRunError(
+            "attempt_outcome_unconfirmed",
+            "Attempt remains consumed; reduction publication readback could not be confirmed",
+            actual.attempt_id,
+            3,
+        ) from error
+    return rebuilt.submission
+
+
 def run_reduction_input(
     preparation: ReductionPackage,
     source: SearchEvidencePackage,
@@ -251,13 +591,7 @@ def run_reduction_input(
     protocol = prepared.materialization.source.validation.protocol
     intent = build_reduction_intent(prepared.materialization)
     budget = cast("dict[str, int]", protocol.document["budget"])
-    descriptor = prepared.materialization.document
-    _require(
-        cast("int", cast("Row", descriptor["candidate"])["full_event_count"])
-        <= budget["max_events"]
-        and cast("int", cast("Row", descriptor["retained"])["event_count"]) <= budget["max_events"],
-        "Reduction source or retained prefix exceeds the original event budget",
-    )
+    _check_event_budget(prepared)
     ledger = ledger_factory()
     prefix = _checked_prefix(snapshot, protocol, ledger)
     reservation = ledger.reserve(protocol)
@@ -290,24 +624,7 @@ def run_reduction_input(
         returned = engine_factory(budget["max_wall_seconds"]).run(
             prepared.materialization.replay_input
         )
-        result = load_replay_result(returned.canonical_bytes)
-        audit = ReductionStateAudit(prepared.materialization, result)
-        receipt = build_reduction_run_receipt(
-            {
-                "kind": "reduction_run_receipt_v1",
-                "schema_version": 1,
-                "attempt": reservation.document,
-                "protocol_id": protocol.protocol_id,
-                "claim_revision_id": protocol.claim_revision_id,
-                "scope": intent.document["scope"],
-                "intent": intent.document,
-                "execution_status": result.document["execution_status"],
-                "bindings": {
-                    "replay_result_sha256": digest(result.canonical_bytes),
-                    "state_audit_sha256": audit.audit_id,
-                },
-            }
-        )
+        audited = _audit_prepared_result(prepared, reservation, returned.canonical_bytes)
     except Exception as error:
         raw_code, raw_exit = (
             getattr(error, "code", "reduction_run_failed"),
@@ -349,16 +666,10 @@ def run_reduction_input(
     _confirmed_publication(
         ledger,
         reservation,
-        receipt.canonical_bytes,
-        (result.canonical_bytes, audit.canonical_bytes),
+        audited.receipt.canonical_bytes,
+        (audited.result_bytes, audited.audit_bytes),
     )
-    return ReductionSubmission(
-        receipt.run_id,
-        reservation.attempt_id,
-        intent.intent_id,
-        cast("str", result.document["execution_status"]),
-        audit.document,
-    )
+    return audited.submission
 
 
 def inspect_reduction_run(
@@ -488,14 +799,7 @@ def inspect_reduction_attempt(
     requested = identity(attempt_id)
     expected = identity(expected_preparation_id)
     bundle_id, report_id = identity(expected_bundle_id), identity(expected_report_id)
-    snapshot = _snapshot(source)
-    report_raw = snapshot.artifacts.get("finding_report")
-    _require(
-        snapshot.bundle_id == bundle_id
-        and isinstance(report_raw, bytes)
-        and digest(report_raw) == report_id,
-        "Recovery source differs from the expected pinned bundle or report",
-    )
+    snapshot = _pinned_source(source, bundle_id, report_id, label="Recovery source")
     prepared, _ = _prepare(preparation, snapshot, expected)
     source_context = prepared.materialization.source
     _require(

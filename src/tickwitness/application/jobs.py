@@ -43,6 +43,17 @@ class JobRepository(Protocol):
 
     def result(self, job_id: str) -> bytes | None: ...
 
+    def assert_active(
+        self,
+        job_id: str,
+        *,
+        expected_version: int,
+        coordinator_id: str,
+        job_attempt_id: str,
+        lease_token: str,
+        now_ns: int,
+    ) -> Row: ...
+
     def claim(
         self,
         job_id: str,
@@ -110,6 +121,9 @@ def job_view(row: Row, *, now_ns: int, coordinator_active: bool) -> Row:
         attempt = dict(cast("Row", attempt))
         attempt.pop("lease_token")
         attempt.pop("nonce")
+    operation = cast("Row", checked["spec"])["operation"]
+    native = operation == "execute_reduction_input_v1"
+    executed: bool | None = True if checked["state"] == "SUCCEEDED" else None
     return {
         "kind": "job_view_v1",
         "schema_version": 1,
@@ -124,10 +138,10 @@ def job_view(row: Row, *, now_ns: int, coordinator_active: bool) -> Row:
         "result_sha256": checked["result_sha256"],
         "failure": checked["failure"],
         "scope": {
-            "operation": "compare_reduction_run_v1",
+            "operation": operation,
             "job_attempt_is_research_attempt": False,
-            "research_attempt_reserved": False,
-            "native_replayed": False,
+            "research_attempt_reserved": executed if native else False,
+            "native_replayed": executed if native else False,
             "automatic_retry_supported": False,
             "checkpoint_resume_verified": False,
             "strong_cancellation_verified": False,

@@ -1,6 +1,6 @@
 # ADR 0033: Recover committed reduction facts before authorizing retries
 
-Date: 2026-11-06 (Asia/Singapore). Status: implementation under review, S10-02a.
+Date: 2026-11-06 (Asia/Singapore). Status: accepted, S10-02a, owner merge of [PR102](https://github.com/Darrenus/tickwitness/pull/102) on 2026-11-07.
 
 ## Context
 
