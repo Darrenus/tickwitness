@@ -250,55 +250,129 @@ def _bootstrap(run, helper, examples: Path, root: Path, inputs: Path) -> dict:
         for name in ("replay-partials.jsonl", "replay-confirmation.jsonl")
     ]
     frozen = run(
-        "freeze-experiment", "experiment.json", "--input-root", str(inputs),
-        "--development-dataset", datasets[0], "--confirmation-dataset", datasets[1],
-        "--store", str(data), "--registry", str(registry),
+        "freeze-experiment",
+        "experiment.json",
+        "--input-root",
+        str(inputs),
+        "--development-dataset",
+        datasets[0],
+        "--confirmation-dataset",
+        datasets[1],
+        "--store",
+        str(data),
+        "--registry",
+        str(registry),
     )
     assert frozen["document"]["budget"] == {
-        "max_attempts": 8, "max_events": 1000, "max_wall_seconds": 60
+        "max_attempts": 8,
+        "max_events": 1000,
+        "max_wall_seconds": 60,
     }
     plan = run(
-        "freeze-search-plan", frozen["protocol_id"], "stress-assumption-request.json",
-        "search-execution-grid-request.json", "--input-root", str(inputs),
-        "--store", str(data), "--registry", str(registry), "--plans", str(plans),
+        "freeze-search-plan",
+        frozen["protocol_id"],
+        "stress-assumption-request.json",
+        "search-execution-grid-request.json",
+        "--input-root",
+        str(inputs),
+        "--store",
+        str(data),
+        "--registry",
+        str(registry),
+        "--plans",
+        str(plans),
     )
     authority = run(
-        "freeze-search-finding-protocol", plan["plan_id"], "search-finding-request.json",
-        "--input-root", str(inputs), "--plans", str(plans), "--finding-registry", str(findings),
+        "freeze-search-finding-protocol",
+        plan["plan_id"],
+        "search-finding-request.json",
+        "--input-root",
+        str(inputs),
+        "--plans",
+        str(plans),
+        "--finding-registry",
+        str(findings),
     )
     baseline = run(
-        "replay-protocol", frozen["protocol_id"], "--store", str(data),
-        "--registry", str(registry), "--runs", str(runs), producer=True,
+        "replay-protocol",
+        frozen["protocol_id"],
+        "--store",
+        str(data),
+        "--registry",
+        str(registry),
+        "--runs",
+        str(runs),
+        producer=True,
     )
-    common = ("--plans", str(plans), "--store", str(data), "--registry", str(registry),
-              "--runs", str(runs))
+    common = (
+        "--plans",
+        str(plans),
+        "--store",
+        str(data),
+        "--registry",
+        str(registry),
+        "--runs",
+        str(runs),
+    )
     campaign = run(
-        "run-bounded-search-plan", plan["plan_id"], "campaign-budget.json",
-        "--input-root", str(inputs), *common, producer=True,
+        "run-bounded-search-plan",
+        plan["plan_id"],
+        "campaign-budget.json",
+        "--input-root",
+        str(inputs),
+        *common,
+        producer=True,
     )
     finding = run(
-        "evaluate-search-findings", authority["protocol_id"], *common,
-        "--finding-registry", str(findings),
+        "evaluate-search-findings",
+        authority["protocol_id"],
+        *common,
+        "--finding-registry",
+        str(findings),
     )
     assert finding["report"]["outcome"] == "COUNTEREXAMPLE_FOUND"
     assert [row["ordinal"] for row in finding["report"]["witnesses"]] == [1, 3]
     source = run(
-        "export-search-evidence", authority["protocol_id"], "--expected-report-id",
-        finding["report_id"], *common, "--finding-registry", str(findings),
-        "--output", str(inputs / "live-source"),
+        "export-search-evidence",
+        authority["protocol_id"],
+        "--expected-report-id",
+        finding["report_id"],
+        *common,
+        "--finding-registry",
+        str(findings),
+        "--output",
+        str(inputs / "live-source"),
     )
     before = helper(_LEDGER_VIEW, str(inputs / "live-source"), str(runs), source["bundle_id"])
     assert before["protocol_id"] == frozen["protocol_id"]
     assert [row["attempt_index"] for row in before["slots"]] == [1, 2, 3]
     return {
-        "frozen": frozen, "plan": plan, "baseline": baseline,
-        "campaign": campaign, "finding": finding, "source": source, "before": before,
+        "frozen": frozen,
+        "plan": plan,
+        "baseline": baseline,
+        "campaign": campaign,
+        "finding": finding,
+        "source": source,
+        "before": before,
     }
 
 
 def _managed_lifecycle(
-    run, helper, catalog_helper, invoke, capture, catalog_view, lifecycle, native, root,
-    inputs, preparations, catalog, controls, worker, cwd,
+    run,
+    helper,
+    catalog_helper,
+    invoke,
+    capture,
+    catalog_view,
+    lifecycle,
+    native,
+    root,
+    inputs,
+    preparations,
+    catalog,
+    controls,
+    worker,
+    cwd,
 ) -> dict:
     runs = root / "live-runs"
     source = lifecycle["source"]
@@ -314,19 +388,40 @@ def _managed_lifecycle(
         if existing is None:
             (inputs / (name + ".json")).write_bytes(_canonical(_request(focus, through)))
             prepared = run(
-                "prepare-reduction-input", "live-source", name + ".json",
-                "--input-root", str(inputs), "--expected-bundle-id", source["bundle_id"],
-                "--expected-report-id", source["report_id"], "--output", str(preparations / name),
+                "prepare-reduction-input",
+                "live-source",
+                name + ".json",
+                "--input-root",
+                str(inputs),
+                "--expected-bundle-id",
+                source["bundle_id"],
+                "--expected-report-id",
+                source["report_id"],
+                "--output",
+                str(preparations / name),
             )
             preparation = preparations / name
         else:
             prepared, preparation = existing
         command = (
-            "submit-reduction-job", str(preparation), "--expected-preparation-id",
-            prepared["preparation_id"], "--expected-bundle-id", source["bundle_id"],
-            "--expected-report-id", source["report_id"], "--source-evidence", "live-source",
-            "--input-root", str(inputs), "--runs", str(runs), "--jobs", str(jobs_root),
-            "--lease-seconds", str(lease),
+            "submit-reduction-job",
+            str(preparation),
+            "--expected-preparation-id",
+            prepared["preparation_id"],
+            "--expected-bundle-id",
+            source["bundle_id"],
+            "--expected-report-id",
+            source["report_id"],
+            "--source-evidence",
+            "live-source",
+            "--input-root",
+            str(inputs),
+            "--runs",
+            str(runs),
+            "--jobs",
+            str(jobs_root),
+            "--lease-seconds",
+            str(lease),
         )
         queued = run(*command, guarded=True, jobs=jobs_root)
         assert queued["stored_state"] == "QUEUED"
@@ -334,9 +429,12 @@ def _managed_lifecycle(
         assert run(*command, guarded=True, jobs=jobs_root) == queued
         assert (_tree(runs), _tree(jobs_root)) == before_repeat
         value = {
-            "name": name, "preparation": prepared,
+            "name": name,
+            "preparation": prepared,
             "preparation_path": str(preparation.relative_to(root)),
-            "submission": queued, "job_id": queued["job_id"], "lease_seconds": lease,
+            "submission": queued,
+            "job_id": queued["job_id"],
+            "lease_seconds": lease,
         }
         if jobs_root == catalog:
             jobs[name] = value
@@ -352,13 +450,19 @@ def _managed_lifecycle(
         dispatch = observed["dispatch"]
         assert dispatch["kind"] == "native_job_dispatch_observation_v1"
         assert dispatch["job_id"] == value["job_id"]
-        assert dispatch["dispatch_nonce"] == _sha(
-            _canonical({"kind": "reduction_job_dispatch_nonce_v1", "job_id": value["job_id"]})
-        )[:32]
+        assert (
+            dispatch["dispatch_nonce"]
+            == _sha(
+                _canonical({"kind": "reduction_job_dispatch_nonce_v1", "job_id": value["job_id"]})
+            )[:32]
+        )
         assert dispatch["observation_only"] is True
         for key in (
-            "execution_authorized", "job_state_changed", "automatic_retry_performed",
-            "budget_refunded", "global_absence_verified",
+            "execution_authorized",
+            "job_state_changed",
+            "automatic_retry_performed",
+            "budget_refunded",
+            "global_absence_verified",
         ):
             assert dispatch[key] is False
         assert (_tree(runs), _tree(catalog), _tree(inputs / "live-source")) == before
@@ -368,8 +472,13 @@ def _managed_lifecycle(
         directory = controls / value["name"]
         entry = ["-c", _COORDINATOR]
         command = (
-            mode, str(directory), str(worker), "run-job", value["job_id"],
-            "--jobs", str(catalog),
+            mode,
+            str(directory),
+            str(worker),
+            "run-job",
+            value["job_id"],
+            "--jobs",
+            str(catalog),
         )
         return invoke(native, entry, command, expected=expected)
 
@@ -381,10 +490,12 @@ def _managed_lifecycle(
             json.loads(line)
             for line in (directory / "native-calls.jsonl").read_bytes().splitlines()
         ]
-        assert calls == [{
-            "kind": "actual_native_adapter_run_started_v1",
-            "dataset_id": value["preparation"]["prefix_context_id"],
-        }]
+        assert calls == [
+            {
+                "kind": "actual_native_adapter_run_started_v1",
+                "dataset_id": value["preparation"]["prefix_context_id"],
+            }
+        ]
         assert request["job_id"] == produced["job_id"] == value["job_id"]
         assert produced["kind"] == "job_native_result_v1"
         delivered = [
@@ -407,9 +518,9 @@ def _managed_lifecycle(
         assert reservation["attempt_index"] == slot
         assert reservation["protocol_id"] == lifecycle["frozen"]["protocol_id"]
         assert reservation["max_wall_seconds"] == 60
-        expected_nonce = _sha(_canonical({
-            "kind": "reduction_job_dispatch_nonce_v1", "job_id": value["job_id"]
-        }))[:32]
+        expected_nonce = _sha(
+            _canonical({"kind": "reduction_job_dispatch_nonce_v1", "job_id": value["job_id"]})
+        )[:32]
         assert reservation["nonce"] == expected_nonce
         snapshot = ledger()
         actual = snapshot["slots"][slot - 1]
@@ -417,14 +528,20 @@ def _managed_lifecycle(
         assert actual["attempt_id"] == _sha(_canonical(reservation))
         assert actual["intent_id"] == _sha(_canonical(request["payload"]["intent"]))
         for object_name in (
-            "manifest.json", "recipe.json", "materialization.json", "normalized.jsonl"
+            "manifest.json",
+            "recipe.json",
+            "materialization.json",
+            "normalized.jsonl",
         ):
             raw = (root / value["preparation_path"] / object_name).read_bytes()
             assert (runs / "objects" / "sha256" / _sha(raw)).read_bytes() == raw
         return {
-            "request": request, "produced_terminal": produced, "delivered_ipc": delivered,
+            "request": request,
+            "produced_terminal": produced,
+            "delivered_ipc": delivered,
             "native_calls": calls,
-            "ledger_slot": actual, "control_path": str(directory.relative_to(root)),
+            "ledger_slot": actual,
+            "control_path": str(directory.relative_to(root)),
             "worker_research_and_catalog_constructor_tripwires": True,
         }
 
@@ -455,8 +572,15 @@ def _managed_lifecycle(
         assert recovery["status"] == "committed_result"
         run_id = recovery["bindings"]["run_id"]
         inspected = run(
-            "inspect-reduction-run", run_id, "--source-evidence", "live-source",
-            "--input-root", str(inputs), "--runs", str(runs), guarded=True,
+            "inspect-reduction-run",
+            run_id,
+            "--source-evidence",
+            "live-source",
+            "--input-root",
+            str(inputs),
+            "--runs",
+            str(runs),
+            guarded=True,
         )
         _check_attempt_recovery(recovery, source, value["preparation"], inspected)
         raw = helper(
@@ -483,8 +607,12 @@ def _managed_lifecycle(
             assert observation["job"]["stored_state"] == "RUNNING"
             assert observation["job"]["state"] == "COORDINATOR_LOST"
             unavailable = run(
-                "read-job-result", value["job_id"], "--jobs", str(catalog),
-                guarded=True, expected=9,
+                "read-job-result",
+                value["job_id"],
+                "--jobs",
+                str(catalog),
+                guarded=True,
+                expected=9,
             )
             assert unavailable["error"]["code"] == "job_conflict"
             value["job_result_unconfirmed"] = unavailable
@@ -494,13 +622,14 @@ def _managed_lifecycle(
     primary = jobs["pending-cancel"]
     before_duplicate = ledger()
     duplicate = submit(
-        "duplicate", 4, 4, jobs_root=duplicate_catalog,
+        "duplicate",
+        4,
+        4,
+        jobs_root=duplicate_catalog,
         existing=(primary["preparation"], root / primary["preparation_path"]),
     )
     assert duplicate["job_id"] == primary["job_id"]
-    rejected = run(
-        "run-job", duplicate["job_id"], "--jobs", str(duplicate_catalog), producer=True
-    )
+    rejected = run("run-job", duplicate["job_id"], "--jobs", str(duplicate_catalog), producer=True)
     assert rejected["stored_state"] == "FAILED"
     assert ledger() == before_duplicate
     duplicate["refusal"] = rejected
@@ -510,11 +639,22 @@ def _managed_lifecycle(
         value = submit(name, 5, 6)
         directory = controls / name
         entry = ["-c", _COORDINATOR]
-        command = (name, str(directory), str(worker), "run-job", value["job_id"],
-                   "--jobs", str(catalog))
+        command = (
+            name,
+            str(directory),
+            str(worker),
+            "run-job",
+            value["job_id"],
+            "--jobs",
+            str(catalog),
+        )
         process = subprocess.Popen(
-            [native, "-I", *entry, *command], cwd=cwd, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, start_new_session=True, text=True,
+            [native, "-I", *entry, *command],
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+            text=True,
         )
         worker_pid = None
         try:
@@ -586,15 +726,19 @@ def _managed_lifecycle(
                 stale_before = _tree(runs), _tree(catalog)
                 stale = catalog_helper(_STALE, str(catalog), value["job_id"], str(old_path))
                 assert stale == {
-                    "stale_publication_admission_refused": True, "snapshot_unchanged": True
+                    "stale_publication_admission_refused": True,
+                    "snapshot_unchanged": True,
                 }
                 assert (_tree(runs), _tree(catalog)) == stale_before
                 value["stale_coordinator_admission"] = stale
             value["worker_evidence"] = evidence
             value["actual_kill"] = {
-                "target": name, "signal": signal.SIGKILL,
-                "coordinator_pid": process.pid, "worker_pid": worker_pid,
-                "gate": ready, "persisted_before_kill": before_kill,
+                "target": name,
+                "signal": signal.SIGKILL,
+                "coordinator_pid": process.pid,
+                "worker_pid": worker_pid,
+                "gate": ready,
+                "persisted_before_kill": before_kill,
                 "all_preterminal_heartbeats_committed": True,
                 "coordinator_exit_code": process.returncode,
             }
@@ -621,9 +765,12 @@ def _managed_lifecycle(
     value["finished"] = expired
     value["worker_evidence"] = worker_evidence(value, 8)
     assert value["worker_evidence"]["ledger_slot"]["outcome_id"] is None
-    records = [json.loads(line) for line in (
-        controls / "expired_publication" / "coordinator-controls.jsonl"
-    ).read_bytes().splitlines()]
+    records = [
+        json.loads(line)
+        for line in (controls / "expired_publication" / "coordinator-controls.jsonl")
+        .read_bytes()
+        .splitlines()
+    ]
     assert [row["kind"] for row in records] == [
         "actual_native_result_audited_before_publication_delay_v1"
     ]
@@ -643,15 +790,18 @@ def _managed_lifecycle(
         f"{index:04d}.json" for index in range(1, 9)
     ]
     assert all(
-        row["outcome_id"] is None and row["intent_id"] is not None
-        for row in final["slots"][5:]
+        row["outcome_id"] is None and row["intent_id"] is not None for row in final["slots"][5:]
     )
     assert [row["outcome_kind"] for row in final["slots"][3:5]] == [
-        "reduction_run_receipt_v1", "reduction_run_receipt_v1"
+        "reduction_run_receipt_v1",
+        "reduction_run_receipt_v1",
     ]
     before_exhaustion = _tree(runs)
     exhausted = submit(
-        "exhaustion", 4, 4, lease=29,
+        "exhaustion",
+        4,
+        4,
+        lease=29,
         existing=(primary["preparation"], root / primary["preparation_path"]),
     )
     stopped = run("run-job", exhausted["job_id"], "--jobs", str(catalog), producer=True)
@@ -663,25 +813,37 @@ def _managed_lifecycle(
     acknowledgment = inspect_dispatch(jobs["filled-cancel-rejected"])
     assert acknowledgment["job"]["stored_state"] == "LOST"
     assert acknowledgment["dispatch"]["status"] == "committed_result"
-    assert acknowledgment["dispatch"]["recovery"]["bindings"]["run_id"] == (
-        jobs["filled-cancel-rejected"]["recovery"]["dispatch"]["recovery"]["bindings"]["run_id"]
+    assert (
+        acknowledgment["dispatch"]["recovery"]["bindings"]["run_id"]
+        == (
+            jobs["filled-cancel-rejected"]["recovery"]["dispatch"]["recovery"]["bindings"]["run_id"]
+        )
     )
     assert all(_tree(runs).get(relative) == sha for relative, sha in original_records.items())
     assert _tree(inputs / "live-source") == source_before
     return {
-        "jobs": jobs, "duplicate_catalog": duplicate, "after": final,
-        "catalog": catalog_view(ids), "post_ack_reconciliation_observation": acknowledgment,
-        "source_bundle_unchanged": True, "original_records_unchanged": True,
-        "new_research_attempts": 5, "actual_managed_native_runs": 5,
-        "native_result_returned_for_publication": 3, "actual_new_research_results": 2,
+        "jobs": jobs,
+        "duplicate_catalog": duplicate,
+        "after": final,
+        "catalog": catalog_view(ids),
+        "post_ack_reconciliation_observation": acknowledgment,
+        "source_bundle_unchanged": True,
+        "original_records_unchanged": True,
+        "new_research_attempts": 5,
+        "actual_managed_native_runs": 5,
+        "native_result_returned_for_publication": 3,
+        "actual_new_research_results": 2,
         "consumed_unfinalized_original_slots": [6, 7, 8],
         "scope": {
             "positive_managed_native_execution": True,
             "actual_worker_and_coordinator_sigkill_after_native_before_terminal_ipc": True,
-            "expired_publication_refused": True, "retired_coordinator_admission_refused": True,
+            "expired_publication_refused": True,
+            "retired_coordinator_admission_refused": True,
             "post_commit_research_ack_loss_observed": True,
-            "job_ack_recovery_performed": False, "automatic_retry_performed": False,
-            "checkpoint_restored": False, "budget_refunded": False,
+            "job_ack_recovery_performed": False,
+            "automatic_retry_performed": False,
+            "checkpoint_restored": False,
+            "budget_refunded": False,
             "strong_orphan_cleanup_certified": False,
         },
     }
@@ -700,8 +862,14 @@ def main() -> None:
     golden_before = _tree(examples / "alpha")
     with _workspace(args.records_dir, args.report) as root:
         inputs, preparations, catalog, cwd, transcripts, controls = (
-            root / name for name in (
-                "input-root", "preparations", "jobs", "unrelated-cwd", "transcripts", "controls"
+            root / name
+            for name in (
+                "input-root",
+                "preparations",
+                "jobs",
+                "unrelated-cwd",
+                "transcripts",
+                "controls",
             )
         )
         for directory in (inputs, preparations, cwd, transcripts, controls):
@@ -712,16 +880,24 @@ def main() -> None:
 
         def invoke(executable, entry, command=(), *, expected=0):
             completed = subprocess.run(
-                [executable, "-I", *entry, *command], cwd=cwd, capture_output=True,
-                text=True, check=False, timeout=240,
+                [executable, "-I", *entry, *command],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=240,
             )
             return capture(executable, entry, command, completed, expected)
 
         def capture(executable, entry, command, completed, expected):
             record = {
-                "executable": executable, "entry": list(entry), "command": list(command),
-                "expected_exit_code": expected, "exit_code": completed.returncode,
-                "stdout": completed.stdout, "stderr": completed.stderr,
+                "executable": executable,
+                "entry": list(entry),
+                "command": list(command),
+                "expected_exit_code": expected,
+                "exit_code": completed.returncode,
+                "stdout": completed.stdout,
+                "stderr": completed.stderr,
             }
             calls.append(record)
             (transcripts / f"{len(calls):04d}.json").write_bytes(_canonical(record))
@@ -738,8 +914,13 @@ def main() -> None:
 
         def run(*command, producer=False, guarded=False, expected=0, jobs=catalog):
             if guarded:
-                entry = ["-c", _CATALOG_GUARD_PREFIX + _GUARD + _CATALOG_GUARD_SUFFIX
-                         + "\nraise SystemExit(main(sys.argv[1:]))\n"]
+                entry = [
+                    "-c",
+                    _CATALOG_GUARD_PREFIX
+                    + _GUARD
+                    + _CATALOG_GUARD_SUFFIX
+                    + "\nraise SystemExit(main(sys.argv[1:]))\n",
+                ]
                 command = ("readonly", str(jobs), *command)
             else:
                 entry = ["-m", "tickwitness"]
@@ -770,32 +951,65 @@ def main() -> None:
         )
         (root / "interpreter-identities.json").write_bytes(_canonical(identities))
         confirmation = run(
-            "submit-reduction-job", str(root / "missing-preparation"),
-            "--expected-preparation-id", "invalid", "--expected-bundle-id", "invalid",
-            "--expected-report-id", "invalid", "--source-evidence", "missing-source",
-            "--input-root", str(root / "missing-input"), "--runs", str(root / "missing-runs"),
-            "--jobs", str(root / "missing-catalog"), "--split", "confirmation", expected=5,
+            "submit-reduction-job",
+            str(root / "missing-preparation"),
+            "--expected-preparation-id",
+            "invalid",
+            "--expected-bundle-id",
+            "invalid",
+            "--expected-report-id",
+            "invalid",
+            "--source-evidence",
+            "missing-source",
+            "--input-root",
+            str(root / "missing-input"),
+            "--runs",
+            str(root / "missing-runs"),
+            "--jobs",
+            str(root / "missing-catalog"),
+            "--split",
+            "confirmation",
+            expected=5,
         )
         assert confirmation["error"]["code"] == "confirmation_access_denied"
-        assert all(not (root / name).exists() for name in (
-            "missing-input", "missing-runs", "missing-catalog"
-        ))
+        assert all(
+            not (root / name).exists()
+            for name in ("missing-input", "missing-runs", "missing-catalog")
+        )
         lifecycle = None
         if args.core_only:
             shutil.copytree(examples / "alpha" / "counterexample", inputs / "old-source")
             (inputs / "request.json").write_bytes(_canonical(_request(4, 4)))
             prepared = run(
-                "prepare-reduction-input", "old-source", "request.json", "--input-root",
-                str(inputs), "--expected-bundle-id", _GOLDEN["bundle_id"],
-                "--expected-report-id", _GOLDEN["report_id"], "--output",
+                "prepare-reduction-input",
+                "old-source",
+                "request.json",
+                "--input-root",
+                str(inputs),
+                "--expected-bundle-id",
+                _GOLDEN["bundle_id"],
+                "--expected-report-id",
+                _GOLDEN["report_id"],
+                "--output",
                 str(preparations / "old-prefix"),
             )
             queued = run(
-                "submit-reduction-job", str(preparations / "old-prefix"),
-                "--expected-preparation-id", prepared["preparation_id"],
-                "--expected-bundle-id", _GOLDEN["bundle_id"], "--expected-report-id",
-                _GOLDEN["report_id"], "--source-evidence", "old-source", "--input-root",
-                str(inputs), "--runs", str(root / "never-runs"), "--jobs", str(catalog),
+                "submit-reduction-job",
+                str(preparations / "old-prefix"),
+                "--expected-preparation-id",
+                prepared["preparation_id"],
+                "--expected-bundle-id",
+                _GOLDEN["bundle_id"],
+                "--expected-report-id",
+                _GOLDEN["report_id"],
+                "--source-evidence",
+                "old-source",
+                "--input-root",
+                str(inputs),
+                "--runs",
+                str(root / "never-runs"),
+                "--jobs",
+                str(catalog),
                 guarded=True,
             )
             before = _tree(inputs), _tree(preparations)
@@ -804,29 +1018,52 @@ def main() -> None:
             assert failed["failure"]["code"] == "research_evidence_not_found"
             assert (_tree(inputs), _tree(preparations)) == before
             assert not (root / "never-runs").exists()
-            core = {"submission": queued, "finished": failed,
-                    "catalog": catalog_view([queued["job_id"]]),
-                    "scope": "missing_live_ledger_refusal_only_no_native_source"}
+            core = {
+                "submission": queued,
+                "finished": failed,
+                "catalog": catalog_view([queued["job_id"]]),
+                "scope": "missing_live_ledger_refusal_only_no_native_source",
+            }
         else:
             core = None
             lifecycle = _bootstrap(run, helper, examples, root, inputs)
             lifecycle.update(
                 _managed_lifecycle(
-                    run, helper, catalog_helper, invoke, capture, catalog_view, lifecycle,
-                    native, root, inputs, preparations, catalog, controls, worker, cwd,
+                    run,
+                    helper,
+                    catalog_helper,
+                    invoke,
+                    capture,
+                    catalog_view,
+                    lifecycle,
+                    native,
+                    root,
+                    inputs,
+                    preparations,
+                    catalog,
+                    controls,
+                    worker,
+                    cwd,
                 )
             )
         assert _tree(examples / "alpha") == golden_before
         report = {
-            "kind": "installed_managed_native_job_acceptance_v1", "accepted": True,
-            "core_only_profile": args.core_only, "interpreter_identities": identities,
-            "confirmation": confirmation, "core_refusal": core, "lifecycle": lifecycle,
+            "kind": "installed_managed_native_job_acceptance_v1",
+            "accepted": True,
+            "core_only_profile": args.core_only,
+            "interpreter_identities": identities,
+            "confirmation": confirmation,
+            "core_refusal": core,
+            "lifecycle": lifecycle,
             "scope": {
                 "operation": "execute_reduction_input_v1",
                 "restart_mode": "frozen_origin_new_attempt_only_v1",
-                "checkpoint_supported": False, "automatic_retry": False,
-                "job_ack_recovery": False, "strong_cancellation": False,
-                "external_human_attempts": 0, "external_human_gate": "PENDING",
+                "checkpoint_supported": False,
+                "automatic_retry": False,
+                "job_ack_recovery": False,
+                "strong_cancellation": False,
+                "external_human_attempts": 0,
+                "external_human_gate": "PENDING",
             },
         }
         inner = root / "native-jobs-smoke" / "report.json"

@@ -6,10 +6,17 @@ import pytest
 from test_reduction_records import prepared_case
 
 from tickwitness.domain.evidence.reduction_records import build_reduction_intent
-from tickwitness.domain.evidence.run_records import AttemptReservation, EvidenceValidationError, canonical, digest
+from tickwitness.domain.evidence.run_records import (
+    AttemptReservation,
+    EvidenceValidationError,
+    canonical,
+    digest,
+)
 from tickwitness.domain.jobs.contracts import execution_dispatch_nonce
 from tickwitness.domain.jobs.native_requests import (
-    MAX_NATIVE_JOB_REQUEST_BYTES, build_native_worker_request, load_native_worker_request,
+    MAX_NATIVE_JOB_REQUEST_BYTES,
+    build_native_worker_request,
+    load_native_worker_request,
 )
 
 
@@ -22,26 +29,44 @@ def native_request():
     raw = canonical(document)
     reservation = AttemptReservation(digest(raw), raw)
     return build_native_worker_request(
-        job_id=job_id, coordinator_id="b" * 64, job_attempt_id="c" * 64, lease_token="d" * 64,
-        research_attempt=reservation, intent=build_reduction_intent(fixture.materialized),
-        replay_input=fixture.materialized.replay_input, native_deadline_ns=9_000_000_000,
+        job_id=job_id,
+        coordinator_id="b" * 64,
+        job_attempt_id="c" * 64,
+        lease_token="d" * 64,
+        research_attempt=reservation,
+        intent=build_reduction_intent(fixture.materialized),
+        replay_input=fixture.materialized.replay_input,
+        native_deadline_ns=9_000_000_000,
     )
 
 
-def test_bounded_native_request_roundtrip_binds_original_slot_and_exact_frozen_input(native_request):
+def test_bounded_native_request_roundtrip_binds_original_slot_and_exact_frozen_input(
+    native_request,
+):
     document, replay, reservation, intent = load_native_worker_request(native_request)
     payload = document["payload"]
     assert reservation.document["nonce"] == execution_dispatch_nonce(document["job_id"])
     assert payload["normalized"].encode() == replay.normalized_bytes
     assert intent.document["bindings"]["prefix_context_id"] == replay.dataset_id
     assert canonical(document) == native_request
-    assert set(payload) == {"research_attempt", "intent", "dataset_id", "normalized", "replay_spec", "native_deadline_ns"}
-    assert not {"runs", "input_root", "source_evidence", "preparation", "spec", "jobs"} & set(document)
+    assert set(payload) == {
+        "research_attempt",
+        "intent",
+        "dataset_id",
+        "normalized",
+        "replay_spec",
+        "native_deadline_ns",
+    }
+    assert not {"runs", "input_root", "source_evidence", "preparation", "spec", "jobs"} & set(
+        document
+    )
 
 
 @pytest.mark.parametrize("section", [None, "payload"])
 @pytest.mark.parametrize("field", ["runs", "jobs", "input_root", "engine_command", "checkpoint"])
-def test_native_request_refuses_owner_locators_and_execution_extensions(native_request, section, field):
+def test_native_request_refuses_owner_locators_and_execution_extensions(
+    native_request, section, field
+):
     document = json.loads(native_request)
     target = document if section is None else document[section]
     target[field] = "/owner/forbidden"
@@ -49,7 +74,10 @@ def test_native_request_refuses_owner_locators_and_execution_extensions(native_r
         load_native_worker_request(canonical(document))
 
 
-@pytest.mark.parametrize("field", ["dataset_id", "normalized", "replay_spec", "research_attempt", "intent", "native_deadline_ns"])
+@pytest.mark.parametrize(
+    "field",
+    ["dataset_id", "normalized", "replay_spec", "research_attempt", "intent", "native_deadline_ns"],
+)
 @pytest.mark.parametrize("bad", [None, [], True, 1.0])
 def test_native_request_rejects_invalid_payload_types(native_request, field, bad):
     document = json.loads(native_request)

@@ -11,15 +11,25 @@ from tickwitness.application.jobs import JobConflictError, job_view
 from tickwitness.application.research import ConfirmationAccessDenied
 from tickwitness.domain.evidence.run_records import canonical, identity
 from tickwitness.domain.jobs.contracts import (
-    JobValidationError, build_execution_job_spec, build_job_spec, load_job_spec,
+    JobValidationError,
+    build_execution_job_spec,
+    build_job_spec,
+    load_job_spec,
 )
 from tickwitness.infrastructure.job_reduction import inspect_native_job_dispatch
 from tickwitness.infrastructure.job_supervisor import run_job
 from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
 
 COMMANDS = frozenset(
-    {"submit-comparison-job", "submit-reduction-job", "run-job", "inspect-job",
-     "inspect-reduction-job", "reconcile-jobs", "read-job-result"}
+    {
+        "submit-comparison-job",
+        "submit-reduction-job",
+        "run-job",
+        "inspect-job",
+        "inspect-reduction-job",
+        "reconcile-jobs",
+        "read-job-result",
+    }
 )
 type Row = dict[str, object]
 
@@ -79,25 +89,30 @@ def execute(arguments: argparse.Namespace) -> Row | str:
     if arguments.command == "submit-reduction-job":
         if arguments.split != "development":
             raise ConfirmationAccessDenied("Managed native Jobs permit development evidence only")
-        spec = build_execution_job_spec({
-            "preparation": str(arguments.preparation.absolute()),
-            "expected_preparation_id": arguments.expected_preparation_id,
-            "expected_bundle_id": arguments.expected_bundle_id,
-            "expected_report_id": arguments.expected_report_id,
-            "source_evidence": arguments.source_evidence,
-            "input_root": str(arguments.input_root.absolute()),
-            "runs": str(arguments.runs.absolute()),
-            "split": arguments.split,
-            "engine_runtime": "coordinator_interpreter_v1",
-            "restart_mode": "frozen_origin_new_attempt_only_v1",
-        }, lease_duration_ns=arguments.lease_seconds * 1_000_000_000)
+        spec = build_execution_job_spec(
+            {
+                "preparation": str(arguments.preparation.absolute()),
+                "expected_preparation_id": arguments.expected_preparation_id,
+                "expected_bundle_id": arguments.expected_bundle_id,
+                "expected_report_id": arguments.expected_report_id,
+                "source_evidence": arguments.source_evidence,
+                "input_root": str(arguments.input_root.absolute()),
+                "runs": str(arguments.runs.absolute()),
+                "split": arguments.split,
+                "engine_runtime": "coordinator_interpreter_v1",
+                "restart_mode": "frozen_origin_new_attempt_only_v1",
+            },
+            lease_duration_ns=arguments.lease_seconds * 1_000_000_000,
+        )
         _disjoint(arguments.jobs, (arguments.input_root, arguments.runs, arguments.preparation))
         source, runs = arguments.input_root.resolve(), arguments.runs.resolve()
         if source.is_relative_to(runs) or runs.is_relative_to(source):
             raise JobValidationError("Native input and original ledger trees must be disjoint")
         preparation = arguments.preparation.resolve()
         if preparation.is_relative_to(runs) or runs.is_relative_to(preparation):
-            raise JobValidationError("Native preparation and original ledger trees must be disjoint")
+            raise JobValidationError(
+                "Native preparation and original ledger trees must be disjoint"
+            )
         store = SqliteJobStore(arguments.jobs, create=True)
         with store.coordinator():
             store.reconcile_orphans(now_ns=time.time_ns())
@@ -160,8 +175,10 @@ def execute(arguments: argparse.Namespace) -> Row | str:
     if arguments.command == "inspect-reduction-job":
         spec = load_job_spec(canonical(cast("Row", row["spec"])))
         return {
-            "kind": "native_job_inspection_v1", "schema_version": 1,
-            "job": view, "dispatch": inspect_native_job_dispatch(spec),
+            "kind": "native_job_inspection_v1",
+            "schema_version": 1,
+            "job": view,
+            "dispatch": inspect_native_job_dispatch(spec),
         }
     if arguments.command == "inspect-job" and arguments.events:
         fields = {

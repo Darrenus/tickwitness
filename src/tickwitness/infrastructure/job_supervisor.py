@@ -94,8 +94,7 @@ def _checked_frame(raw: bytes, row: Row) -> Row:
     extra = (
         {"replay_result"}
         if kind == "job_native_result_v1"
-        else
-        {"export"}
+        else {"export"}
         if kind == "job_result_v1"
         else {"failure"}
         if kind == "job_failure_v1"
@@ -163,7 +162,10 @@ def _exchange(
             os.set_blocking(stream.fileno(), False)
             selector.register(stream, events, name)
         while selector.get_map() or process.poll() is None:
-            if window.native_deadline_ns is not None and time.monotonic_ns() >= window.native_deadline_ns:
+            if (
+                window.native_deadline_ns is not None
+                and time.monotonic_ns() >= window.native_deadline_ns
+            ):
                 raise _NativeDeadlineExpired
             if time.monotonic_ns() >= window.deadline_ns:
                 raise _LeaseExpired
@@ -171,7 +173,11 @@ def _exchange(
                 exit_seen = True
                 # An orphan descendant must not keep either pipe alive forever.
                 _signal_group(process)
-            deadline = min(window.deadline_ns, window.native_deadline_ns) if window.native_deadline_ns is not None else window.deadline_ns
+            deadline = (
+                min(window.deadline_ns, window.native_deadline_ns)
+                if window.native_deadline_ns is not None
+                else window.deadline_ns
+            )
             timeout = min(0.1, max(0, deadline - time.monotonic_ns()) / 1_000_000_000)
             for key, _ in selector.select(timeout):
                 ready_stream = key.fileobj
@@ -206,7 +212,10 @@ def _exchange(
                         raise _WorkerFault("Worker emitted output after its terminal frame")
                     frame = _checked_frame(bytes(line), row)
                     pulse_clock = time.monotonic_ns()
-                    if window.native_deadline_ns is not None and pulse_clock >= window.native_deadline_ns:
+                    if (
+                        window.native_deadline_ns is not None
+                        and pulse_clock >= window.native_deadline_ns
+                    ):
                         raise _NativeDeadlineExpired
                     if pulse_clock >= window.deadline_ns:
                         raise _LeaseExpired
@@ -225,7 +234,10 @@ def _exchange(
                         terminal = frame
                 if len(buffer) > MAX_JOB_FRAME_BYTES:
                     raise _WorkerFault("Worker stdout frame exceeds its byte limit")
-        if window.native_deadline_ns is not None and time.monotonic_ns() >= window.native_deadline_ns:
+        if (
+            window.native_deadline_ns is not None
+            and time.monotonic_ns() >= window.native_deadline_ns
+        ):
             raise _NativeDeadlineExpired
         return row, terminal, bytes(errors)
 
@@ -263,7 +275,11 @@ def _finish_failure(store: JobRepository, row: Row, failure: Row, window: _Lease
 
 def _native_failure(error: Exception, *, worker_exit_code: int | None = None) -> Row:
     if isinstance(error, ReplayDependencyError):
-        return {"code": "engine_unavailable", "message": str(error)[:2048], "worker_exit_code": worker_exit_code}
+        return {
+            "code": "engine_unavailable",
+            "message": str(error)[:2048],
+            "worker_exit_code": worker_exit_code,
+        }
     diagnostic = _failure(error)
     code = getattr(error, "code", None)
     if isinstance(code, str) and 0 < len(code) <= 128:
@@ -285,7 +301,9 @@ def _run_native_claimed(
     def fence() -> None:
         attempt = cast("Row", row["attempt"])
         now = time.time_ns()
-        if time.monotonic_ns() >= window.deadline_ns or now >= cast("int", attempt["lease_expires_at_ns"]):
+        if time.monotonic_ns() >= window.deadline_ns or now >= cast(
+            "int", attempt["lease_expires_at_ns"]
+        ):
             raise _LeaseExpired
         store.assert_active(
             job_id,
@@ -300,7 +318,9 @@ def _run_native_claimed(
         checked_at = time.time_ns()
         if checked_at < now:
             raise JobConflictError("Coordinator UTC moved backwards during admission")
-        if time.monotonic_ns() >= window.deadline_ns or checked_at >= cast("int", attempt["lease_expires_at_ns"]):
+        if time.monotonic_ns() >= window.deadline_ns or checked_at >= cast(
+            "int", attempt["lease_expires_at_ns"]
+        ):
             raise _LeaseExpired
 
     try:
@@ -316,7 +336,9 @@ def _run_native_claimed(
     # Research execution time never renews with a Job heartbeat. Startup,
     # request encoding/delivery, native computation and final IPC share it.
     native_started = time.monotonic_ns()
-    window.native_deadline_ns = native_started + cast("int", reservation.document["max_wall_seconds"]) * 1_000_000_000
+    window.native_deadline_ns = (
+        native_started + cast("int", reservation.document["max_wall_seconds"]) * 1_000_000_000
+    )
     attempt = cast("Row", row["attempt"])
     try:
         raw = build_native_worker_request(
@@ -338,7 +360,10 @@ def _run_native_claimed(
         return _finish_failure(store, store.get(job_id), _native_failure(error), window)
 
     command = _worker_command or (
-        str(Path(sys.executable).absolute()), "-I", "-B", "-m",
+        str(Path(sys.executable).absolute()),
+        "-I",
+        "-B",
+        "-m",
         "tickwitness.infrastructure.native_job_worker",
     )
     process: subprocess.Popen[bytes] | None = None
@@ -349,8 +374,13 @@ def _run_native_claimed(
     with TemporaryDirectory(prefix="tickwitness-native-job-") as cwd:
         try:
             process = subprocess.Popen(
-                command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                cwd=cwd, start_new_session=True, close_fds=True,
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=cwd,
+                start_new_session=True,
+                close_fds=True,
             )
             row, terminal, errors = _exchange(process, raw, store, row, window)
         except _NativeDeadlineExpired:
@@ -375,23 +405,37 @@ def _run_native_claimed(
         return _lost_lease(store, row, now_ns=time.time_ns())
     exit_code = process.returncode if process is not None else None
     if wall_expired or exit_code == -signal.SIGALRM:
-        return _finish_failure(store, row, {
-            "code": "research_wall_time_limit",
-            "message": "Original native attempt wall limit expired; its slot remains consumed",
-            "worker_exit_code": exit_code,
-        }, window)
+        return _finish_failure(
+            store,
+            row,
+            {
+                "code": "research_wall_time_limit",
+                "message": "Original native attempt wall limit expired; its slot remains consumed",
+                "worker_exit_code": exit_code,
+            },
+            window,
+        )
     # Only actual exit before the immutable native deadline can be admitted.
     # Subsequent independent audit/publication has its own current Job lease.
     window.native_deadline_ns = None
-    if fault is not None or terminal is None or (
-        terminal["kind"] == "job_native_result_v1" and exit_code != 0
+    if (
+        fault is not None
+        or terminal is None
+        or (terminal["kind"] == "job_native_result_v1" and exit_code != 0)
     ):
         message = str(fault) if fault is not None else "Native worker exited without a valid result"
         if errors:
             message += ": " + errors.decode("utf-8", errors="replace")
-        return _finish_failure(store, row, {
-            "code": "job_worker_failed", "message": message[:2048], "worker_exit_code": exit_code,
-        }, window)
+        return _finish_failure(
+            store,
+            row,
+            {
+                "code": "job_worker_failed",
+                "message": message[:2048],
+                "worker_exit_code": exit_code,
+            },
+            window,
+        )
     if terminal["kind"] == "job_failure_v1":
         diagnostic = cast("Row", terminal["failure"])
         if diagnostic["worker_exit_code"] != exit_code:
@@ -403,10 +447,14 @@ def _run_native_claimed(
         return _finish_failure(store, row, diagnostic, window)
     try:
         reopened, audited = audit_native_job(
-            prepared, reservation, canonical(cast("Row", terminal["replay_result"])),
+            prepared,
+            reservation,
+            canonical(cast("Row", terminal["replay_result"])),
         )
     except Exception as error:
-        return _finish_failure(store, row, _native_failure(error, worker_exit_code=exit_code), window)
+        return _finish_failure(
+            store, row, _native_failure(error, worker_exit_code=exit_code), window
+        )
     # Never turn publication/confirmation uncertainty into another research
     # outcome or a new execution. The receipt may already be committed.
     try:
@@ -419,10 +467,13 @@ def _run_native_claimed(
         return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
     attempt = cast("Row", row["attempt"])
     return store.complete(
-        job_id, output, expected_version=cast("int", row["version"]),
+        job_id,
+        output,
+        expected_version=cast("int", row["version"]),
         coordinator_id=cast("str", attempt["coordinator_id"]),
         job_attempt_id=cast("str", attempt["job_attempt_id"]),
-        lease_token=cast("str", attempt["lease_token"]), now_ns=time.time_ns(),
+        lease_token=cast("str", attempt["lease_token"]),
+        now_ns=time.time_ns(),
     )
 
 

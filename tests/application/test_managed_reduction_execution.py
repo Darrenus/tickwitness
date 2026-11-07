@@ -108,8 +108,12 @@ def test_preparation_is_a_frozen_copy_without_ledger_or_native_io(reduction_case
 def test_preparation_confirmation_precedes_any_identity_or_package_io(split):
     with pytest.raises(ConfirmationAccessDenied):
         prepare_reduction_execution(
-            Unreadable(), Unreadable(), expected_preparation_id="invalid",
-            expected_bundle_id="invalid", expected_report_id="invalid", split=split,
+            Unreadable(),
+            Unreadable(),
+            expected_preparation_id="invalid",
+            expected_bundle_id="invalid",
+            expected_report_id="invalid",
+            split=split,
         )
 
 
@@ -119,8 +123,11 @@ def test_preparation_confirmation_precedes_any_identity_or_package_io(split):
 @pytest.mark.parametrize("bad", ["../invalid", "A" * 64, True])
 def test_bad_pins_precede_every_package_property(field, bad):
     options = {
-        "expected_preparation_id": "0" * 64, "expected_bundle_id": "1" * 64,
-        "expected_report_id": "2" * 64, "split": "development", field: bad,
+        "expected_preparation_id": "0" * 64,
+        "expected_bundle_id": "1" * 64,
+        "expected_report_id": "2" * 64,
+        "split": "development",
+        field: bad,
     }
     with pytest.raises(EvidenceValidationError):
         prepare_reduction_execution(Unreadable(), Unreadable(), **options)
@@ -157,15 +164,18 @@ def test_original_reservation_and_binding_have_distinct_current_fences(reduction
         return value.ledger.bind_intent(reservation, raw, **kwargs)
 
     reservation = authorize(
-        value, execution, fence=fence,
+        value,
+        execution,
+        fence=fence,
         ledger=Proxy(value.ledger, reserve_with_nonce=reserve, bind_intent=bind),
     )
     assert actions == ["fence", "reserve", "fence", "bind"]
     assert reservation.attempt_index == 3
     assert reservation.document["nonce"] == NONCE
-    assert find_reduction_execution_reservation(
-        execution, ledger=value.ledger, nonce=NONCE
-    ) == reservation
+    assert (
+        find_reduction_execution_reservation(execution, ledger=value.ledger, nonce=NONCE)
+        == reservation
+    )
     assert value.ledger.get_intent(reservation.attempt_id) == execution.intent.canonical_bytes
     assert value.ledger.get_outcome(reservation.attempt_id) is None
     for raw in (execution.intent.canonical_bytes, *execution.artifacts):
@@ -231,7 +241,8 @@ def test_lost_authorization_ack_keeps_consumed_nonce_without_repair(reduction_ca
 
     with pytest.raises(OSError, match="acknowledgment lost"):
         authorize(
-            value, execution,
+            value,
+            execution,
             ledger=Proxy(value.ledger, reserve_with_nonce=reserve, bind_intent=bind),
         )
     observed = find_reduction_execution_reservation(execution, ledger=value.ledger, nonce=NONCE)
@@ -261,7 +272,9 @@ def test_changed_original_prefix_is_rejected_before_admission(reduction_case):
     execution = prepare(value)
     with pytest.raises(EvidenceValidationError, match="shorter"):
         authorize(
-            value, execution, fence=forbidden,
+            value,
+            execution,
+            fence=forbidden,
             ledger=Proxy(value.ledger, list_reservations=lambda _protocol: ()),
         )
 
@@ -275,7 +288,8 @@ def test_named_reservation_must_match_the_requested_dispatch_nonce(reduction_cas
 
     with pytest.raises(EvidenceValidationError, match="Named execution reservation differs"):
         authorize(
-            value, execution,
+            value,
+            execution,
             ledger=Proxy(value.ledger, reserve_with_nonce=reserve, bind_intent=forbidden),
         )
     suffix = value.ledger.list_reservations(execution.protocol)[-1]
@@ -338,14 +352,19 @@ def test_publication_reaudits_and_fences_one_original_receipt(reduction_case, mo
         return value.ledger.publish(actual, raw, **kwargs)
 
     submitted = publish_reduction_execution(
-        execution, reservation, audited,
-        ledger=Proxy(value.ledger, publish=publish), fence=fence,
+        execution,
+        reservation,
+        audited,
+        ledger=Proxy(value.ledger, publish=publish),
+        fence=fence,
     )
     assert actions == ["fence", "publish"]
     assert submitted == audited.submission
     assert value.ledger.get_outcome(reservation.attempt_id) == audited.receipt.canonical_bytes
     inspected = inspect_reduction_run(
-        submitted.run_id, source=execution.source, split="development",
+        submitted.run_id,
+        source=execution.source,
+        split="development",
         ledger_factory=lambda: value.ledger,
     )
     assert inspected["receipt"] == audited.receipt.document
@@ -362,8 +381,11 @@ def test_stale_publication_fence_leaves_consumed_intent_unfinalized(reduction_ca
 
     with pytest.raises(RuntimeError, match="Stale coordinator"):
         publish_reduction_execution(
-            execution, reservation, audited,
-            ledger=Proxy(value.ledger, publish=forbidden), fence=fence,
+            execution,
+            reservation,
+            audited,
+            ledger=Proxy(value.ledger, publish=forbidden),
+            fence=fence,
         )
     assert tree(value.case.root) == before
     assert value.ledger.get_outcome(reservation.attempt_id) is None
@@ -389,8 +411,11 @@ def test_publication_recomputes_bytes_instead_of_trusting_audited_flags(reductio
     before = tree(value.case.root)
     with pytest.raises(EvidenceValidationError):
         publish_reduction_execution(
-            execution, reservation, altered,
-            ledger=Proxy(value.ledger, publish=forbidden), fence=forbidden,
+            execution,
+            reservation,
+            altered,
+            ledger=Proxy(value.ledger, publish=forbidden),
+            fence=forbidden,
         )
     assert tree(value.case.root) == before
 
@@ -404,8 +429,11 @@ def test_publication_reprepares_frozen_input_before_any_actual_write(reduction_c
     before = tree(value.case.root)
     with pytest.raises(EvidenceValidationError):
         publish_reduction_execution(
-            altered, reservation, audited,
-            ledger=Proxy(value.ledger, publish=forbidden), fence=forbidden,
+            altered,
+            reservation,
+            audited,
+            ledger=Proxy(value.ledger, publish=forbidden),
+            fence=forbidden,
         )
     assert tree(value.case.root) == before
 
@@ -417,8 +445,11 @@ def test_audited_result_cannot_be_published_for_another_original_attempt(reducti
     before = tree(value.case.root)
     with pytest.raises(EvidenceValidationError, match="recomputation"):
         publish_reduction_execution(
-            execution, another, audited,
-            ledger=Proxy(value.ledger, publish=forbidden), fence=forbidden,
+            execution,
+            another,
+            audited,
+            ledger=Proxy(value.ledger, publish=forbidden),
+            fence=forbidden,
         )
     assert tree(value.case.root) == before
     assert value.ledger.get_outcome(another.attempt_id) is None
@@ -444,8 +475,11 @@ def test_publication_requires_original_preexecution_cas_closure(reduction_case, 
     before = tree(value.case.root)
     with pytest.raises(EvidenceValidationError):
         publish_reduction_execution(
-            execution, reservation, audited,
-            ledger=Proxy(value.ledger, read_artifact=read, publish=forbidden), fence=forbidden,
+            execution,
+            reservation,
+            audited,
+            ledger=Proxy(value.ledger, read_artifact=read, publish=forbidden),
+            fence=forbidden,
         )
     assert tree(value.case.root) == before
 
@@ -460,8 +494,11 @@ def test_existing_outcome_is_never_overwritten_or_implicitly_recovered(reduction
     before = tree(value.case.root)
     with pytest.raises(EvidenceValidationError, match="already has an outcome"):
         publish_reduction_execution(
-            execution, reservation, audited,
-            ledger=Proxy(value.ledger, publish=forbidden), fence=forbidden,
+            execution,
+            reservation,
+            audited,
+            ledger=Proxy(value.ledger, publish=forbidden),
+            fence=forbidden,
         )
     assert value.ledger.get_outcome(reservation.attempt_id) == failure
     assert tree(value.case.root) == before
@@ -496,7 +533,9 @@ def test_publication_uncertainty_never_writes_a_compensating_failure(reduction_c
 
     with pytest.raises(ProtocolRunError) as caught:
         publish_reduction_execution(
-            execution, reservation, audited,
+            execution,
+            reservation,
+            audited,
             ledger=Proxy(value.ledger, publish=publish, get_outcome=outcome, read_artifact=read),
             fence=lambda: None,
         )
@@ -519,11 +558,13 @@ def test_nonce_lookup_rejects_multiple_actual_prefix_matches(reduction_case):
     duplicate = AttemptReservation(digest(raw), raw)
     prefix = value.ledger.list_reservations(execution.protocol)
     get = value.ledger.get_reservation
+
     def reservation(attempt):
         return duplicate if attempt == duplicate.attempt_id else get(attempt)
 
     port = Proxy(
-        value.ledger, list_reservations=lambda _protocol: (*prefix, duplicate),
+        value.ledger,
+        list_reservations=lambda _protocol: (*prefix, duplicate),
         get_reservation=reservation,
     )
     before = tree(value.case.root)

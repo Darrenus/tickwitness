@@ -21,11 +21,21 @@ from tickwitness.domain.replay.specs import load_replay_spec
 
 MAX_NATIVE_JOB_REQUEST_BYTES = 16 * 1024 * 1024
 _FIELDS = {
-    "kind", "schema_version", "job_id", "coordinator_id", "job_attempt_id", "lease_token",
+    "kind",
+    "schema_version",
+    "job_id",
+    "coordinator_id",
+    "job_attempt_id",
+    "lease_token",
     "payload",
 }
 _PAYLOAD = {
-    "research_attempt", "intent", "dataset_id", "normalized", "replay_spec", "native_deadline_ns",
+    "research_attempt",
+    "intent",
+    "dataset_id",
+    "normalized",
+    "replay_spec",
+    "native_deadline_ns",
 }
 type Row = dict[str, object]
 
@@ -70,26 +80,37 @@ def load_native_worker_request(
         for key in ("job_id", "coordinator_id", "job_attempt_id", "lease_token"):
             identity(request[key])
         payload = request["payload"]
-        _require(isinstance(payload, dict) and payload.keys() == _PAYLOAD,
-                 "Native Job payload fields differ")
+        _require(
+            isinstance(payload, dict) and payload.keys() == _PAYLOAD,
+            "Native Job payload fields differ",
+        )
         payload = cast("Row", payload)
         deadline = payload["native_deadline_ns"]
-        _require(type(deadline) is int and 0 < deadline <= MAX_JOB_INTEGER,
-                 "Native deadline must be a positive bounded monotonic integer")
-        _require(isinstance(payload["research_attempt"], dict),
-                 "Native Job requires its original reservation")
+        _require(
+            type(deadline) is int and 0 < deadline <= MAX_JOB_INTEGER,
+            "Native deadline must be a positive bounded monotonic integer",
+        )
+        _require(
+            isinstance(payload["research_attempt"], dict),
+            "Native Job requires its original reservation",
+        )
         reservation_raw = canonical(cast("Row", payload["research_attempt"]))
         reservation = AttemptReservation(digest(reservation_raw), reservation_raw)
         _require(
-            reservation.document["nonce"] == execution_dispatch_nonce(cast("str", request["job_id"])),
+            reservation.document["nonce"]
+            == execution_dispatch_nonce(cast("str", request["job_id"])),
             "Native reservation nonce differs from the frozen Job dispatch",
         )
         _require(isinstance(payload["intent"], dict), "Native Job requires its original intent")
         intent = load_reduction_intent(canonical(cast("Row", payload["intent"])))
-        _require(intent.document["protocol_id"] == reservation.protocol_id,
-                 "Native intent and original reservation protocol differ")
-        _require(isinstance(payload["normalized"], str) and isinstance(payload["replay_spec"], dict),
-                 "Native artifacts must be a normalized string and spec document")
+        _require(
+            intent.document["protocol_id"] == reservation.protocol_id,
+            "Native intent and original reservation protocol differ",
+        )
+        _require(
+            isinstance(payload["normalized"], str) and isinstance(payload["replay_spec"], dict),
+            "Native artifacts must be a normalized string and spec document",
+        )
         replay_input = ReplayInput(
             identity(payload["dataset_id"]),
             cast("str", payload["normalized"]).encode("utf-8"),
@@ -119,19 +140,21 @@ def build_native_worker_request(
     replay_input: ReplayInput,
     native_deadline_ns: int,
 ) -> bytes:
-    raw = canonical({
-        "kind": "job_native_worker_request_v1",
-        "schema_version": 1,
-        "job_id": job_id,
-        "coordinator_id": coordinator_id,
-        "job_attempt_id": job_attempt_id,
-        "lease_token": lease_token,
-        "payload": {
-            "research_attempt": research_attempt.document,
-            "intent": intent.document,
-            **native_input_document(replay_input),
-            "native_deadline_ns": native_deadline_ns,
-        },
-    })
+    raw = canonical(
+        {
+            "kind": "job_native_worker_request_v1",
+            "schema_version": 1,
+            "job_id": job_id,
+            "coordinator_id": coordinator_id,
+            "job_attempt_id": job_attempt_id,
+            "lease_token": lease_token,
+            "payload": {
+                "research_attempt": research_attempt.document,
+                "intent": intent.document,
+                **native_input_document(replay_input),
+                "native_deadline_ns": native_deadline_ns,
+            },
+        }
+    )
     load_native_worker_request(raw)
     return raw

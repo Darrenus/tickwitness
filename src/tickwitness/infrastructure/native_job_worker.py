@@ -62,13 +62,17 @@ def main() -> int:
         if not raw.endswith(b"\n") or len(raw) > MAX_NATIVE_JOB_REQUEST_BYTES + 1:
             return 2
         request, replay_input, reservation, _intent = load_native_worker_request(raw[:-1])
-        bindings = {key: request[key] for key in (
-            "job_id", "coordinator_id", "job_attempt_id", "lease_token"
-        )}
+        bindings = {
+            key: request[key]
+            for key in ("job_id", "coordinator_id", "job_attempt_id", "lease_token")
+        }
         payload = cast("Row", request["payload"])
         deadline = cast("int", payload["native_deadline_ns"])
         # The coordinator's original budget includes startup and delivery.
-        if deadline - time.monotonic_ns() > cast("int", reservation.document["max_wall_seconds"]) * 1_000_000_000:
+        if (
+            deadline - time.monotonic_ns()
+            > cast("int", reservation.document["max_wall_seconds"]) * 1_000_000_000
+        ):
             raise EvidenceValidationError("Native deadline exceeds its original reservation")
         arm_native_deadline(deadline)
         emitter = _Emitter(bindings)

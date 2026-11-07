@@ -7,11 +7,26 @@ from tickwitness.cli import main
 
 def submit_args(root, *, split="development", bad=False):
     identity = "invalid" if bad else "a" * 64
-    return ["submit-reduction-job", str(root / "preparation"),
-        "--expected-preparation-id", identity, "--expected-bundle-id", identity,
-        "--expected-report-id", identity, "--input-root", str(root / "input"),
-        "--source-evidence", "missing-source", "--runs", str(root / "runs"),
-        "--jobs", str(root / "jobs"), "--split", split]
+    return [
+        "submit-reduction-job",
+        str(root / "preparation"),
+        "--expected-preparation-id",
+        identity,
+        "--expected-bundle-id",
+        identity,
+        "--expected-report-id",
+        identity,
+        "--input-root",
+        str(root / "input"),
+        "--source-evidence",
+        "missing-source",
+        "--runs",
+        str(root / "runs"),
+        "--jobs",
+        str(root / "jobs"),
+        "--split",
+        split,
+    ]
 
 
 def test_native_confirmation_rejected_before_identifiers_or_any_catalog_io(tmp_path, capsys):

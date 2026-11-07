@@ -34,17 +34,21 @@ from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
 def queued(value, tmp_path, *, lease_ns=30_000_000_000):
     preparation = tmp_path / "prepared"
     LocalReductionBundles(value.case.root).publish(value.prepared, preparation)
-    spec = build_execution_job_spec({
-        "preparation": str(preparation.absolute()),
-        "expected_preparation_id": value.prepared.preparation_id,
-        "expected_bundle_id": value.source.bundle_id,
-        "expected_report_id": digest(value.source.artifacts["finding_report"]),
-        "input_root": str(value.case.root.absolute()),
-        "source_evidence": "portable-source",
-        "runs": str((value.case.root / "runs").absolute()),
-        "split": "development", "engine_runtime": "coordinator_interpreter_v1",
-        "restart_mode": "frozen_origin_new_attempt_only_v1",
-    }, lease_duration_ns=lease_ns)
+    spec = build_execution_job_spec(
+        {
+            "preparation": str(preparation.absolute()),
+            "expected_preparation_id": value.prepared.preparation_id,
+            "expected_bundle_id": value.source.bundle_id,
+            "expected_report_id": digest(value.source.artifacts["finding_report"]),
+            "input_root": str(value.case.root.absolute()),
+            "source_evidence": "portable-source",
+            "runs": str((value.case.root / "runs").absolute()),
+            "split": "development",
+            "engine_runtime": "coordinator_interpreter_v1",
+            "restart_mode": "frozen_origin_new_attempt_only_v1",
+        },
+        lease_duration_ns=lease_ns,
+    )
     store = SqliteJobStore(tmp_path / "catalog", create=True)
     with store.coordinator():
         row = store.submit(spec, now_ns=time.time_ns())
@@ -59,13 +63,18 @@ def saved_worker(value, tmp_path, *, wrong_context=False):
         document["dataset_id"] = "0" * 64
     fixture = tmp_path / "saved-result.json"
     fixture.write_bytes(canonical(document))
-    return _command(tmp_path, "emit('job_heartbeat_v1',1)\n"
+    return _command(
+        tmp_path,
+        "emit('job_heartbeat_v1',1)\n"
         f"result=json.loads(open({str(fixture)!r}).read())\n"
-        "emit('job_native_result_v1',2,replay_result=result)\n")
+        "emit('job_native_result_v1',2,replay_result=result)\n",
+    )
 
 
 def test_coordinator_reserves_and_binds_before_worker_and_terminal_repeat_is_idempotent(
-    reduction_case, tmp_path, monkeypatch,
+    reduction_case,
+    tmp_path,
+    monkeypatch,
 ):
     value = reduction_case
     spec, store, row = queued(value, tmp_path)
@@ -79,7 +88,10 @@ def test_coordinator_reserves_and_binds_before_worker_and_terminal_repeat_is_ide
         reservation = slots[-1]
         assert reservation.attempt_index == 3
         assert reservation.document["nonce"] == job_dispatch_nonce(spec)
-        assert value.ledger.get_intent(reservation.attempt_id) == prepared.execution.intent.canonical_bytes
+        assert (
+            value.ledger.get_intent(reservation.attempt_id)
+            == prepared.execution.intent.canonical_bytes
+        )
         assert value.ledger.get_outcome(reservation.attempt_id) is None
         for artifact in prepared.execution.artifacts:
             assert value.ledger.read_artifact(digest(artifact)) == artifact
@@ -103,11 +115,15 @@ def test_coordinator_reserves_and_binds_before_worker_and_terminal_repeat_is_ide
 
 
 def test_known_unavailable_runtime_fails_before_consuming_an_original_slot(
-    reduction_case, tmp_path, monkeypatch,
+    reduction_case,
+    tmp_path,
+    monkeypatch,
 ):
     value = reduction_case
     spec, store, _ = queued(value, tmp_path)
-    before = value.ledger.list_reservations(value.prepared.materialization.source.validation.protocol)
+    before = value.ledger.list_reservations(
+        value.prepared.materialization.source.validation.protocol
+    )
 
     def unavailable():
         raise ReplayDependencyError("engine_unavailable", "Controlled missing optional runtime")
@@ -118,16 +134,23 @@ def test_known_unavailable_runtime_fails_before_consuming_an_original_slot(
     assert result["state"] == "FAILED" and result["failure"]["worker_exit_code"] is None
     assert result["failure"]["code"] == "engine_unavailable"
     assert inspect_native_job_dispatch(spec)["status"] == "no_reservation_observed"
-    assert value.ledger.list_reservations(value.prepared.materialization.source.validation.protocol) == before
+    assert (
+        value.ledger.list_reservations(value.prepared.materialization.source.validation.protocol)
+        == before
+    )
 
 
 def test_wrong_result_context_cannot_publish_a_research_manifest(
-    reduction_case, tmp_path, monkeypatch,
+    reduction_case,
+    tmp_path,
+    monkeypatch,
 ):
     value = reduction_case
     spec, store, _ = queued(value, tmp_path)
     monkeypatch.setattr(job_reduction, "require_native_runtime", lambda: None)
-    result = run_job(store, spec.spec_id, _worker_command=saved_worker(value, tmp_path, wrong_context=True))
+    result = run_job(
+        store, spec.spec_id, _worker_command=saved_worker(value, tmp_path, wrong_context=True)
+    )
     assert result["state"] == "FAILED" and store.result(spec.spec_id) is None
     assert result["failure"]["worker_exit_code"] == 0
     observation = inspect_native_job_dispatch(spec)
@@ -136,7 +159,9 @@ def test_wrong_result_context_cannot_publish_a_research_manifest(
 
 
 def test_publication_rejects_a_stale_catalog_version_without_writing_research(
-    reduction_case, tmp_path, monkeypatch,
+    reduction_case,
+    tmp_path,
+    monkeypatch,
 ):
     value = reduction_case
     spec, store, _ = queued(value, tmp_path)
@@ -145,10 +170,15 @@ def test_publication_rejects_a_stale_catalog_version_without_writing_research(
     def race(execution, reservation, audited, *, ledger, fence):
         latest = store.get(spec.spec_id)
         attempt = latest["attempt"]
-        store.heartbeat(spec.spec_id, expected_version=latest["version"],
-            coordinator_id=attempt["coordinator_id"], job_attempt_id=attempt["job_attempt_id"],
-            lease_token=attempt["lease_token"], sequence=attempt["heartbeat_sequence"] + 1,
-            now_ns=time.time_ns())
+        store.heartbeat(
+            spec.spec_id,
+            expected_version=latest["version"],
+            coordinator_id=attempt["coordinator_id"],
+            job_attempt_id=attempt["job_attempt_id"],
+            lease_token=attempt["lease_token"],
+            sequence=attempt["heartbeat_sequence"] + 1,
+            now_ns=time.time_ns(),
+        )
         return original(execution, reservation, audited, ledger=ledger, fence=fence)
 
     monkeypatch.setattr(job_reduction, "require_native_runtime", lambda: None)
@@ -160,7 +190,9 @@ def test_publication_rejects_a_stale_catalog_version_without_writing_research(
 
 
 def test_monotonic_publication_expiry_is_not_rebased_from_utc(
-    reduction_case, tmp_path, monkeypatch,
+    reduction_case,
+    tmp_path,
+    monkeypatch,
 ):
     value = reduction_case
     spec, store, _ = queued(value, tmp_path)
@@ -180,7 +212,9 @@ def test_monotonic_publication_expiry_is_not_rebased_from_utc(
 
 
 def test_committed_research_ack_loss_is_not_overwritten_or_automatically_replayed(
-    reduction_case, tmp_path, monkeypatch,
+    reduction_case,
+    tmp_path,
+    monkeypatch,
 ):
     value = reduction_case
     spec, store, _ = queued(value, tmp_path)
@@ -208,28 +242,54 @@ def test_committed_research_ack_loss_is_not_overwritten_or_automatically_replaye
 
 
 def test_native_deadline_is_not_extended_by_renewing_heartbeats(tmp_path):
-    request = {"preparation": "/owner/prepared", "expected_preparation_id": "0" * 64,
-        "expected_bundle_id": "1" * 64, "expected_report_id": "2" * 64,
-        "input_root": "/owner/inputs", "source_evidence": "source", "runs": "/owner/runs",
-        "split": "development", "engine_runtime": "coordinator_interpreter_v1",
-        "restart_mode": "frozen_origin_new_attempt_only_v1"}
+    request = {
+        "preparation": "/owner/prepared",
+        "expected_preparation_id": "0" * 64,
+        "expected_bundle_id": "1" * 64,
+        "expected_report_id": "2" * 64,
+        "input_root": "/owner/inputs",
+        "source_evidence": "source",
+        "runs": "/owner/runs",
+        "split": "development",
+        "engine_runtime": "coordinator_interpreter_v1",
+        "restart_mode": "frozen_origin_new_attempt_only_v1",
+    }
     spec = build_execution_job_spec(request, lease_duration_ns=3_000_000_000)
     store = SqliteJobStore(tmp_path / "catalog", create=True)
     process = None
     with store.coordinator() as owner:
         row = store.submit(spec, now_ns=time.time_ns())
-        row = store.claim(spec.spec_id, expected_version=1, coordinator_id=owner,
-            attempt_nonce="3" * 64, lease_token="4" * 64, now_ns=time.time_ns())
+        row = store.claim(
+            spec.spec_id,
+            expected_version=1,
+            coordinator_id=owner,
+            attempt_nonce="3" * 64,
+            lease_token="4" * 64,
+            now_ns=time.time_ns(),
+        )
         attempt = row["attempt"]
-        raw = canonical({"job_id": spec.spec_id, **{key: attempt[key] for key in (
-            "coordinator_id", "job_attempt_id", "lease_token")}})
-        command = _command(tmp_path, "for seq in range(1,100):\n"
-            "    emit('job_heartbeat_v1',seq)\n    time.sleep(0.1)\n")
+        raw = canonical(
+            {
+                "job_id": spec.spec_id,
+                **{
+                    key: attempt[key] for key in ("coordinator_id", "job_attempt_id", "lease_token")
+                },
+            }
+        )
+        command = _command(
+            tmp_path,
+            "for seq in range(1,100):\n    emit('job_heartbeat_v1',seq)\n    time.sleep(0.1)\n",
+        )
         deadline = time.monotonic_ns() + 2_000_000_000
         window = job_supervisor._LeaseWindow(time.monotonic_ns() + 3_000_000_000, deadline)
         try:
-            process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, start_new_session=True)
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+            )
             with pytest.raises(job_supervisor._NativeDeadlineExpired):
                 job_supervisor._exchange(process, raw, store, row, window)
             assert window.native_deadline_ns == deadline
@@ -242,7 +302,9 @@ def test_native_deadline_is_not_extended_by_renewing_heartbeats(tmp_path):
 
 
 def test_catalog_read_cannot_spend_the_remaining_research_write_authorization(
-    reduction_case, tmp_path, monkeypatch,
+    reduction_case,
+    tmp_path,
+    monkeypatch,
 ):
     value = reduction_case
     spec, store, _ = queued(value, tmp_path)
@@ -254,7 +316,9 @@ def test_catalog_read_cannot_spend_the_remaining_research_write_authorization(
 
     def delayed(*args, **kwargs):
         snapshot = actual_assert(*args, **kwargs)
-        monkeypatch.setattr(job_supervisor.time, "monotonic_ns", lambda: monotonic() + 31_000_000_000)
+        monkeypatch.setattr(
+            job_supervisor.time, "monotonic_ns", lambda: monotonic() + 31_000_000_000
+        )
         return snapshot
 
     def reserve(*args, **kwargs):
@@ -290,18 +354,24 @@ def test_default_os_alarm_terminates_gil_held_c_work_after_coordinator_sigkill(t
     # No native research/budget fixture: an actual libc sleep holds the GIL via
     # PyDLL, proving this deadline does not depend on a Python handler/thread.
     child_code = (
-        "import ctypes,time; from tickwitness.infrastructure.native_job_worker import arm_native_deadline; "
+        "import ctypes,time; "
+        "from tickwitness.infrastructure.native_job_worker import arm_native_deadline; "
         "arm_native_deadline(time.monotonic_ns()+3_000_000_000); print('armed',flush=True); "
         "ctypes.PyDLL(None).sleep(30)"
     )
     coordinator_code = (
         "import json,subprocess,sys,time; "
-        f"child=subprocess.Popen([sys.executable,'-I','-B','-c',{child_code!r}],stdout=subprocess.PIPE); "
+        f"child=subprocess.Popen([sys.executable,'-I','-B','-c',{child_code!r}],"
+        "stdout=subprocess.PIPE); "
         "assert child.stdout.readline()==b'armed\\n'; "
         "print(json.dumps({'child':child.pid}),flush=True); time.sleep(30)"
     )
-    coordinator = subprocess.Popen([sys.executable, "-I", "-B", "-c", coordinator_code],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    coordinator = subprocess.Popen(
+        [sys.executable, "-I", "-B", "-c", coordinator_code],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
     child = None
     try:
         import selectors

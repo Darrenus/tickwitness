@@ -54,9 +54,10 @@ def test_current_owner_admission_does_not_write_or_extend_any_catalog_fact(nativ
         before = tree(value.root)
         events = value.store.events(value.spec.spec_id)
         for timestamp in (NOW + 2, NOW + 500, NOW + 999):
-            assert value.store.assert_active(
-                value.spec.spec_id, **options(row, now_ns=timestamp)
-            ) == row
+            assert (
+                value.store.assert_active(value.spec.spec_id, **options(row, now_ns=timestamp))
+                == row
+            )
         assert tree(value.root) == before
         assert value.store.events(value.spec.spec_id) == events
         assert value.store.get(value.spec.spec_id) == row
@@ -145,6 +146,7 @@ def test_admission_rechecks_owner_after_a_potentially_blocking_snapshot_read(
         before = tree(value.root)
         actual_get = value.store.get
         with monkeypatch.context() as changed:
+
             def lose_owner_after_read(job_id):
                 observed = actual_get(job_id)
                 if lost == "pid":
@@ -173,9 +175,7 @@ def test_new_owner_cannot_admit_a_former_running_attempt_even_before_reconciliat
         with pytest.raises(JobConflictError):
             reopened.assert_active(value.spec.spec_id, **options(stale))
         with pytest.raises(JobConflictError):
-            reopened.assert_active(
-                value.spec.spec_id, **options(stale, coordinator_id=new_owner)
-            )
+            reopened.assert_active(value.spec.spec_id, **options(stale, coordinator_id=new_owner))
         assert tree(value.root) == before
         lost = reopened.reconcile_orphans(now_ns=NOW + 3)
         assert len(lost) == 1 and lost[0]["state"] == "LOST"
@@ -206,7 +206,9 @@ def test_atomic_native_success_stores_exact_original_manifest_without_schema_upg
         assert store.result(case.spec.spec_id) == case.receipt.canonical_bytes
         events = store.events(case.spec.spec_id)
         assert [event["event_type"] for event in events] == [
-            "JobSubmitted", "JobClaimed", "JobSucceeded"
+            "JobSubmitted",
+            "JobClaimed",
+            "JobSucceeded",
         ]
         assert [event["aggregate_version"] for event in events] == [1, 2, 3]
         before = tree(root)

@@ -22,7 +22,6 @@ from tickwitness.domain.jobs import (
     claim_job,
     execution_dispatch_nonce,
     finish_job,
-    heartbeat_job,
     job_dispatch_nonce,
     load_job_snapshot,
     load_job_spec,

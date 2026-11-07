@@ -61,7 +61,9 @@ def prepare_native_job(spec: JobSpec) -> NativeJobPreparation:
     check_native_input_size(execution.replay_input)
     ledger = LocalAttemptLedger(Path(cast("str", request["runs"])), create=False)
     # Validate actual owner/prefix even if no managed dispatch was consumed yet.
-    find_reduction_execution_reservation(execution, ledger=ledger, nonce=job_dispatch_nonce(checked))
+    find_reduction_execution_reservation(
+        execution, ledger=ledger, nonce=job_dispatch_nonce(checked)
+    )
     return NativeJobPreparation(checked, execution, ledger)
 
 
@@ -70,12 +72,18 @@ def require_native_runtime() -> None:
     try:
         installed = metadata.version("nautilus_trader")
     except metadata.PackageNotFoundError as error:
-        raise ReplayDependencyError("engine_unavailable", "Native Jobs require the pinned nautilus extra") from error
+        raise ReplayDependencyError(
+            "engine_unavailable", "Native Jobs require the pinned nautilus extra"
+        ) from error
     if installed != ENGINE_VERSION:
-        raise ReplayDependencyError("engine_unavailable", "Native Job runtime version differs from its frozen profile")
+        raise ReplayDependencyError(
+            "engine_unavailable", "Native Job runtime version differs from its frozen profile"
+        )
 
 
-def authorize_native_job(prepared: NativeJobPreparation, *, fence: Callable[[], None]) -> AttemptReservation:
+def authorize_native_job(
+    prepared: NativeJobPreparation, *, fence: Callable[[], None]
+) -> AttemptReservation:
     require_native_runtime()
     return authorize_reduction_execution(
         prepared.execution,
@@ -86,7 +94,9 @@ def authorize_native_job(prepared: NativeJobPreparation, *, fence: Callable[[], 
 
 
 def audit_native_job(
-    prepared: NativeJobPreparation, reservation: AttemptReservation, result_raw: bytes,
+    prepared: NativeJobPreparation,
+    reservation: AttemptReservation,
+    result_raw: bytes,
 ) -> tuple[NativeJobPreparation, AuditedReductionExecution]:
     # Fresh reads prevent a changed locator from silently switching frozen input.
     reopened = prepare_native_job(prepared.spec)
@@ -104,15 +114,23 @@ def publish_native_job(
     # This publication is deliberately not inside a failure->outcome conversion.
     # The research receipt may be durable even if readback/Catalog ACK is lost.
     submitted = publish_reduction_execution(
-        prepared.execution, reservation, audited, ledger=prepared.ledger, fence=fence,
+        prepared.execution,
+        reservation,
+        audited,
+        ledger=prepared.ledger,
+        fence=fence,
     )
     inspected = inspect_reduction_run(
-        submitted.run_id, source=prepared.execution.source, split="development",
+        submitted.run_id,
+        source=prepared.execution.source,
+        split="development",
         ledger_factory=lambda: prepared.ledger,
     )
     raw = canonical(cast("Row", inspected["receipt"]))
     if raw != audited.receipt.canonical_bytes:
-        raise EvidenceValidationError("Committed native Job receipt differs from its independent audit")
+        raise EvidenceValidationError(
+            "Committed native Job receipt differs from its independent audit"
+        )
     return raw
 
 
@@ -120,17 +138,22 @@ def inspect_native_job_dispatch(spec: JobSpec) -> Row:
     prepared = prepare_native_job(spec)
     nonce = job_dispatch_nonce(prepared.spec)
     reservation = find_reduction_execution_reservation(
-        prepared.execution, ledger=prepared.ledger, nonce=nonce,
+        prepared.execution,
+        ledger=prepared.ledger,
+        nonce=nonce,
     )
     recovery: Row | None = None
     if reservation is not None:
         request = cast("Row", prepared.spec.document["request"])
         recovery = inspect_reduction_attempt(
-            reservation.attempt_id, prepared.execution.preparation, prepared.execution.source,
+            reservation.attempt_id,
+            prepared.execution.preparation,
+            prepared.execution.source,
             expected_preparation_id=cast("str", request["expected_preparation_id"]),
             expected_bundle_id=cast("str", request["expected_bundle_id"]),
             expected_report_id=cast("str", request["expected_report_id"]),
-            split="development", ledger_factory=lambda: prepared.ledger,
+            split="development",
+            ledger_factory=lambda: prepared.ledger,
         )
     return {
         "kind": "native_job_dispatch_observation_v1",
