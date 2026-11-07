@@ -195,6 +195,17 @@ def supervise_campaign(
         return CampaignSupervision("time_limit", 8, max(0, clock_ns() - started), b"", b"")
     executable = str((python_executable or Path(sys.executable)).absolute())
     process: subprocess.Popen[bytes] | None = None
+    group_termination_confirmed = False
+
+    def terminate_owned_group() -> None:
+        nonlocal group_termination_confirmed
+        if process is not None and not group_termination_confirmed:
+            # Only a completed signal/reap operation makes cleanup idempotent.
+            # Leader exit alone says nothing about surviving descendants, and
+            # a permission failure must remain visible rather than set this flag.
+            _terminate_group(process)
+            group_termination_confirmed = True
+
     reason: Literal["finished", "time_limit", "worker_failed"] = "worker_failed"
     exit_code, output, errors = 7, b"", b""
     try:
@@ -206,7 +217,6 @@ def supervise_campaign(
                 stderr=subprocess.PIPE,
                 start_new_session=True,
             )
-        active_process = process
         output, errors = _pipe_exchange(
             process,
             raw,
@@ -214,7 +224,7 @@ def supervise_campaign(
             stdout_limit=MAX_CAMPAIGN_IPC_BYTES,
             stderr_limit=MAX_CAMPAIGN_IPC_BYTES,
             clock_ns=clock_ns,
-            on_process_exit=lambda: _terminate_group(active_process),
+            on_process_exit=terminate_owned_group,
         )
         reason = "finished"
         exit_code = process.returncode if process.returncode is not None else 7
@@ -231,7 +241,7 @@ def supervise_campaign(
         if process is not None:
             with _defer_sigint():
                 try:
-                    _terminate_group(process)
+                    terminate_owned_group()
                 finally:
                     _close_pipes(process)
     # Reject a late completion even if the process exited just before polling.

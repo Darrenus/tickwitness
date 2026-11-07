@@ -14,7 +14,9 @@ from tickwitness.infrastructure.search_evidence_bundles import read_search_evide
 CORPUS = Path(__file__).resolve().parents[1] / "examples" / "alpha"
 
 
-@pytest.mark.parametrize("command", ["run-reduction-input", "inspect-reduction-run"])
+@pytest.mark.parametrize(
+    "command", ["run-reduction-input", "inspect-reduction-run", "inspect-reduction-attempt"]
+)
 def test_confirmation_denied_before_ids_source_preparation_or_ledger(tmp_path, capsys, command):
     args = [
         command,
@@ -30,10 +32,49 @@ def test_confirmation_denied_before_ids_source_preparation_or_ledger(tmp_path, c
     ]
     if command == "run-reduction-input":
         args += ["--expected-preparation-id", "invalid"]
+    elif command == "inspect-reduction-attempt":
+        args += [
+            str(tmp_path / "missing-preparation"),
+            "--expected-preparation-id",
+            "invalid",
+            "--expected-bundle-id",
+            "invalid",
+            "--expected-report-id",
+            "invalid",
+        ]
     assert main(args) == 5
     captured = capsys.readouterr()
     assert not captured.out
     assert json.loads(captured.err)["error"]["code"] == "confirmation_access_denied"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_recovery_pins_validated_before_package_or_ledger_access(tmp_path, capsys):
+    assert (
+        main(
+            [
+                "inspect-reduction-attempt",
+                "0" * 64,
+                str(tmp_path / "missing-preparation"),
+                "--expected-preparation-id",
+                "0" * 64,
+                "--expected-bundle-id",
+                "invalid",
+                "--expected-report-id",
+                "0" * 64,
+                "--source-evidence",
+                "missing-source",
+                "--input-root",
+                str(tmp_path),
+                "--runs",
+                str(tmp_path / "missing-runs"),
+            ]
+        )
+        == 2
+    )
+    captured = capsys.readouterr()
+    assert not captured.out
+    assert json.loads(captured.err)["error"]["code"] == "invalid_research_evidence"
     assert list(tmp_path.iterdir()) == []
 
 

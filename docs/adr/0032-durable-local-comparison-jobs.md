@@ -1,6 +1,6 @@
 # ADR 0032: A coordinator owns durable comparison Jobs
 
-Date: 2026-11-06 (Asia/Singapore). Status: implementation under review, S10-01.
+Date: 2026-11-06 (Asia/Singapore). Status: accepted, S10-01, owner merge of [PR #101](https://github.com/Darrenus/tickwitness/pull/101).
 
 S09 records immutable research attempts, but a coordinator or worker can die without a durable Job lifecycle. A missing research outcome must continue to mean consumed and unfinalized; adding Job orchestration cannot refund it or imply a completed research verdict.
 
