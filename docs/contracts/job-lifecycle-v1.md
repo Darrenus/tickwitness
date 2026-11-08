@@ -4,6 +4,8 @@ S10-01, accepted by owner merge of [PR #101](https://github.com/Darrenus/tickwit
 
 ## Supported operation and identity
 
+The separate [native reduction extension](native-reduction-jobs-v1.md) adds a second allowlisted operation under review. Existing comparison descriptor bytes, snapshot/event rules and Catalog schema1 retain their original semantics.
+
 The first managed operation, `compare_reduction_run_v1`, calls [Reduction Comparison v1](reduction-comparison-v1.md). Its worker reaudits an already committed reduction and the original false scenario. Its coordinator independently reconstructs the saved export before accepting the Job result. Existing source, ledger, findings and research budgets are read-only. The operation does not run a native engine, reserve an attempt or publish a new research manifest.
 
 `comparison_job_spec_v1` has exact fields `kind`, `schema_version=1`, `operation`, `request` and `lease_duration_ns`. Request fields are exactly `run_id`, `expected_bundle_id`, `expected_report_id`, `input_root`, `source_evidence`, `runs` and `split="development"`. The three IDs are lowercase SHA-256 pins, rechecked on actual reads. Paths are trusted owner locators, not evidence authority. Input/ledger trees and the Catalog must be disjoint. Source evidence is a relative path without traversal. Descriptor bytes are bounded at 64 KiB; leases are integer nanoseconds from 1 to 60 seconds, default 30 seconds.

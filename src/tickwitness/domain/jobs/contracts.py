@@ -1,4 +1,4 @@
-"""One-attempt managed audit jobs, independent of research attempt budgets.
+"""One-attempt managed jobs, independent of research attempt budgets.
 
 Times are supplied by the trusted coordinator. Query liveness labels never
 mutate a stored snapshot or certify progress, clock authenticity or recovery.
@@ -7,6 +7,8 @@ mutate a stored snapshot or certify progress, clock authenticity or recovery.
 from dataclasses import dataclass
 from typing import cast
 
+from tickwitness.domain.evidence.reduction_comparison import load_reduction_comparison_export
+from tickwitness.domain.evidence.reduction_records import load_reduction_run_receipt
 from tickwitness.domain.evidence.run_records import canonical, digest, identity, parse
 
 MAX_JOB_SPEC_BYTES = 64 * 1024
@@ -22,6 +24,18 @@ _REQUEST_FIELDS = {
     "runs",
     "source_evidence",
     "split",
+}
+_EXECUTION_REQUEST_FIELDS = {
+    "preparation",
+    "expected_preparation_id",
+    "expected_bundle_id",
+    "expected_report_id",
+    "input_root",
+    "source_evidence",
+    "runs",
+    "split",
+    "engine_runtime",
+    "restart_mode",
 }
 _SPEC_FIELDS = {"kind", "schema_version", "operation", "request", "lease_duration_ns"}
 _SNAPSHOT_FIELDS = {
@@ -105,11 +119,39 @@ def _request(value: object) -> Row:
     return request
 
 
+def _execution_request(value: object) -> Row:
+    request = _exact(value, _EXECUTION_REQUEST_FIELDS, "Execution job request")
+    _require(request["split"] == "development", "Jobs permit development evidence only")
+    _require(
+        request["engine_runtime"] == "coordinator_interpreter_v1",
+        "Execution jobs require the frozen coordinator interpreter policy",
+    )
+    _require(
+        request["restart_mode"] == "frozen_origin_new_attempt_only_v1",
+        "Execution jobs cannot authorize checkpoint resume or same-attempt replay",
+    )
+    for name in ("expected_preparation_id", "expected_bundle_id", "expected_report_id"):
+        identity(request[name])
+    for name in ("preparation", "input_root", "runs"):
+        _path(request[name], relative=False)
+    _path(request["source_evidence"], relative=True)
+    return request
+
+
 def _spec_document(raw: bytes) -> Row:
     row = _exact(parse(raw, limit=MAX_JOB_SPEC_BYTES), _SPEC_FIELDS, "Job spec")
-    _markers(row, "comparison_job_spec_v1")
-    _require(row["operation"] == "compare_reduction_run_v1", "Unsupported managed job operation")
-    _request(row["request"])
+    if row["kind"] == "comparison_job_spec_v1":
+        _markers(row, "comparison_job_spec_v1")
+        _require(
+            row["operation"] == "compare_reduction_run_v1", "Unsupported managed job operation"
+        )
+        _request(row["request"])
+    else:
+        _markers(row, "reduction_execution_job_spec_v1")
+        _require(
+            row["operation"] == "execute_reduction_input_v1", "Unsupported managed job operation"
+        )
+        _execution_request(row["request"])
     _integer(row["lease_duration_ns"], "lease_duration_ns", MIN_JOB_LEASE_NS, MAX_JOB_LEASE_NS)
     return row
 
@@ -151,12 +193,81 @@ def build_job_spec(request: Row, *, lease_duration_ns: int = 30_000_000_000) -> 
         raise JobValidationError("Cannot build job spec: " + str(error)) from error
 
 
+def build_execution_job_spec(request: Row, *, lease_duration_ns: int = 30_000_000_000) -> JobSpec:
+    """Freeze a native operation; actual research authority remains coordinator-owned."""
+    try:
+        checked = _execution_request(request)
+        lease = _integer(lease_duration_ns, "lease_duration_ns", MIN_JOB_LEASE_NS, MAX_JOB_LEASE_NS)
+        return load_job_spec(
+            canonical(
+                {
+                    "kind": "reduction_execution_job_spec_v1",
+                    "schema_version": 1,
+                    "operation": "execute_reduction_input_v1",
+                    "request": checked,
+                    "lease_duration_ns": lease,
+                }
+            )
+        )
+    except (ValueError, TypeError, KeyError, AttributeError) as error:
+        raise JobValidationError("Cannot build execution job spec: " + str(error)) from error
+
+
 def load_job_spec(raw: bytes) -> JobSpec:
     try:
         _spec_document(raw)
         return JobSpec(digest(raw), raw)
     except (ValueError, TypeError, KeyError, AttributeError) as error:
         raise JobValidationError("Cannot load job spec: " + str(error)) from error
+
+
+def execution_dispatch_nonce(job_id: str) -> str:
+    """Derive the original ledger's nonce before any reservation can be consumed."""
+    return digest(
+        canonical({"kind": "reduction_job_dispatch_nonce_v1", "job_id": identity(job_id)})
+    )[:32]
+
+
+def job_dispatch_nonce(spec: JobSpec) -> str:
+    """Return a native Job's immutable association, never replay authorization."""
+    checked = load_job_spec(spec.canonical_bytes)
+    _require(
+        checked.document["operation"] == "execute_reduction_input_v1",
+        "Only native execution Jobs have an original research dispatch nonce",
+    )
+    return execution_dispatch_nonce(checked.spec_id)
+
+
+def check_job_result(spec: JobSpec, raw: bytes) -> str:
+    """Check exact frozen pins; independent source/result reaudit occurs before publication."""
+    checked = load_job_spec(spec.canonical_bytes)
+    request = cast("Row", checked.document["request"])
+    if checked.document["operation"] == "compare_reduction_run_v1":
+        _, report = load_reduction_comparison_export(raw)
+        bindings = cast("Row", report["bindings"])
+        source, reduced = cast("Row", bindings["source"]), cast("Row", bindings["reduced"])
+        _require(
+            source["bundle_id"] == request["expected_bundle_id"]
+            and source["report_id"] == request["expected_report_id"]
+            and reduced["run_id"] == request["run_id"],
+            "Job result does not bind its original request pins",
+        )
+    else:
+        receipt = load_reduction_run_receipt(raw)
+        document = receipt.document
+        intent = cast("Row", document["intent"])
+        bindings = cast("Row", intent["bindings"])
+        _require(
+            bindings["source_bundle_id"] == request["expected_bundle_id"]
+            and bindings["source_report_id"] == request["expected_report_id"]
+            and bindings["preparation_id"] == request["expected_preparation_id"],
+            "Native Job result does not bind its original request pins",
+        )
+        _require(
+            cast("Row", document["attempt"])["nonce"] == job_dispatch_nonce(checked),
+            "Native Job result belongs to another original research dispatch nonce",
+        )
+    return digest(raw)
 
 
 def _attempt_id(job_id: str, nonce: str) -> str:
@@ -343,6 +454,23 @@ def _active(
         _require(attempt[name] == value, "Worker message credentials differ: " + name)
     _require(now < cast("int", attempt["lease_expires_at_ns"]), "Job heartbeat lease has expired")
     return output, attempt, now
+
+
+def assert_active_job(
+    row: Row, *, coordinator_id: str, job_attempt_id: str, lease_token: str, now_ns: int
+) -> Row:
+    """Check current mutation authority without advancing a version or lease."""
+    try:
+        output, _attempt, _now_ns = _active(
+            row,
+            coordinator_id=coordinator_id,
+            job_attempt_id=job_attempt_id,
+            lease_token=lease_token,
+            now_ns=now_ns,
+        )
+        return output
+    except (ValueError, TypeError, KeyError, AttributeError) as error:
+        raise JobValidationError("Cannot admit active job operation: " + str(error)) from error
 
 
 def heartbeat_job(

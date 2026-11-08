@@ -20,12 +20,13 @@ from typing import cast
 from urllib.parse import quote
 
 from tickwitness.application.jobs import JobConflictError, JobNotFoundError, JobStoreError
-from tickwitness.domain.evidence.reduction_comparison import load_reduction_comparison_export
 from tickwitness.domain.evidence.run_records import canonical, digest, identity, parse
 from tickwitness.domain.jobs import (
     MAX_JOB_SNAPSHOT_BYTES,
     JobSpec,
     JobValidationError,
+    assert_active_job,
+    check_job_result,
     claim_job,
     finish_job,
     heartbeat_job,
@@ -168,21 +169,13 @@ def _load_event(raw: bytes) -> Row:
 
 def _check_result(snapshot: Row, raw: bytes) -> str:
     try:
-        _, report = load_reduction_comparison_export(raw)
-        request = cast("Row", cast("Row", snapshot["spec"])["request"])
-        bindings = cast("Row", report["bindings"])
-        source = cast("Row", bindings["source"])
-        reduced = cast("Row", bindings["reduced"])
-        _require(
-            source["bundle_id"] == request["expected_bundle_id"]
-            and source["report_id"] == request["expected_report_id"]
-            and reduced["run_id"] == request["run_id"],
-            "Job result does not bind its original request pins",
-        )
-        return digest(raw)
+        spec = load_job_spec(canonical(cast("Row", snapshot["spec"])))
+        return check_job_result(spec, raw)
     except (ValueError, TypeError, KeyError) as error:
         if isinstance(error, JobStoreError):
             raise
+        if isinstance(error, JobValidationError):
+            raise JobStoreError(str(error)) from error
         raise JobStoreError("Job result export is invalid: " + str(error)) from error
 
 
@@ -700,6 +693,39 @@ class SqliteJobStore:
                 now_ns=now_ns,
             ),
         )
+
+    def assert_active(
+        self,
+        job_id: str,
+        *,
+        expected_version: int,
+        coordinator_id: str,
+        job_attempt_id: str,
+        lease_token: str,
+        now_ns: int,
+    ) -> Row:
+        """Admit an external write under the held owner lock without renewing its lease."""
+        self._ownership(coordinator_id)
+        if type(expected_version) is not int or expected_version < 1:
+            raise JobConflictError("Expected job version must be a positive integer")
+        row = self.get(job_id)
+        if row["version"] != expected_version:
+            raise JobConflictError("Job version changed before external write admission")
+        try:
+            checked = assert_active_job(
+                row,
+                coordinator_id=coordinator_id,
+                job_attempt_id=job_attempt_id,
+                lease_token=lease_token,
+                now_ns=now_ns,
+            )
+        except JobValidationError as error:
+            raise JobConflictError(str(error)) from error
+        # The read above can wait on SQLite. Never carry authority through a
+        # lost/replaced owner descriptor or epoch merely because it was valid
+        # before that wait; the caller separately rechecks its live clocks.
+        self._ownership(coordinator_id)
+        return checked
 
     def heartbeat(
         self,

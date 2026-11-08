@@ -160,6 +160,8 @@
 
 2026-11-06，owner 合并 #101 接受 S10-01，#28 关闭。S10-02 先以 [只读 attempt recovery](../contracts/reduction-attempt-recovery-v1.md) 复验原研究记录与既有最终 manifest；后续再接持久 dispatch、受管原生执行、幂等 retry、研究发布 fencing 和 Job acknowledgment 恢复。#29 保持打开、原 14h 总估算不变，不以该切片代替整项完成。当前无完整 checkpoint 能力，未来实际重跑必须从冻结原点消耗原协议新槽；无退款或免费复用。
 
+2026-11-07，owner 合并 #102 接受 S10-02a。S10-02b 的 [原生 Job 合同](../contracts/native-reduction-jobs-v1.md) 接入确定性原槽关联、coordinator 独占研究写入和受管原生执行／发布 fencing；S10-02c 显式 retry 与 Job acknowledgment 恢复仍 Planned。#29 不关闭，14h 总专项估算与持续质量预算不变，不补造实际工时。八槽 qualification 是执行前冻结的独立合成生命周期，不修改旧五槽／十一槽或导入 portable 额度。
+
 **目标：** 长任务在中断和重试后不损坏研究记录。依赖：S7–S9。计划专项容量 34 小时。
 
 | Story | 用户故事与任务 | 估计 | 可执行验收 |
