@@ -10,10 +10,21 @@ def test_followup_confirmation_is_denied_before_ids_and_catalog_io(tmp_path, cap
         ("retry-reduction-job", "--retry-key"),
         ("recover-reduction-job", "--recovery-key"),
     ):
-        assert main([
-            command, "invalid", key, "invalid key", "--jobs", str(tmp_path / "missing"),
-            "--split", "confirmation",
-        ]) == 5
+        assert (
+            main(
+                [
+                    command,
+                    "invalid",
+                    key,
+                    "invalid key",
+                    "--jobs",
+                    str(tmp_path / "missing"),
+                    "--split",
+                    "confirmation",
+                ]
+            )
+            == 5
+        )
         captured = capsys.readouterr()
         assert not captured.out
         assert json.loads(captured.err)["error"]["code"] == "confirmation_access_denied"

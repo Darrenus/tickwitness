@@ -24,8 +24,12 @@ NOW = 1_700_000_000_000_000_000
 def claim_spec(store, spec, owner, *, now=NOW):
     store.submit(spec, now_ns=now)
     return store.claim(
-        spec.spec_id, expected_version=1, coordinator_id=owner,
-        attempt_nonce="a" * 64, lease_token="b" * 64, now_ns=now + 1,
+        spec.spec_id,
+        expected_version=1,
+        coordinator_id=owner,
+        attempt_nonce="a" * 64,
+        lease_token="b" * 64,
+        now_ns=now + 1,
     )
 
 
@@ -73,7 +77,7 @@ def test_same_key_submission_is_stable_and_only_one_retry_successor_is_admitted(
 
 
 def test_ack_records_do_not_occupy_retry_successor_and_can_use_distinct_recovery_keys(
-    followup_store
+    followup_store,
 ):
     value = followup_store
     origin = value.case.spec
@@ -110,8 +114,12 @@ def test_child_can_only_follow_a_present_durably_terminal_local_root(followup_st
             other.submit(child, now_ns=NOW + 3)
         assert tree(tmp_path / "other") == before
         running = other.claim(
-            origin.spec_id, expected_version=queued["version"], coordinator_id=owner,
-            attempt_nonce="a" * 64, lease_token="b" * 64, now_ns=NOW + 1,
+            origin.spec_id,
+            expected_version=queued["version"],
+            coordinator_id=owner,
+            attempt_nonce="a" * 64,
+            lease_token="b" * 64,
+            now_ns=NOW + 1,
         )
         with pytest.raises(JobConflictError, match="durably terminal"):
             other.submit(child, now_ns=NOW + 3)
@@ -132,7 +140,7 @@ def test_ack_mode_parent_is_rejected_without_mutating_existing_jobs(followup_sto
 
 
 def test_followup_context_rereads_retry_chain_and_does_not_write_or_require_ownership(
-    followup_store
+    followup_store,
 ):
     value = followup_store
     origin = value.case.spec
@@ -170,7 +178,9 @@ def test_ack_complete_atomically_stores_resolution_without_rewriting_original_te
         assert value.store.get(origin.spec_id) == value.original
         assert len(value.store.events(origin.spec_id)) == 3
         assert [event["event_type"] for event in value.store.events(ack.spec_id)] == [
-            "JobSubmitted", "JobClaimed", "JobSucceeded"
+            "JobSubmitted",
+            "JobClaimed",
+            "JobSucceeded",
         ]
         before = tree(value.root)
         assert value.store.submit(ack, now_ns=NOW + 500) == finished
@@ -211,7 +221,8 @@ def test_original_research_receipt_cannot_replace_required_resolution_wrapper(fo
         before = tree(value.root)
         with pytest.raises(JobStoreError):
             value.store.complete(
-                ack.spec_id, value.case.receipt.canonical_bytes,
+                ack.spec_id,
+                value.case.receipt.canonical_bytes,
                 **options(row, now_ns=NOW + 5),
             )
         assert value.store.result(ack.spec_id) is None

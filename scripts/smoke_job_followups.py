@@ -174,19 +174,27 @@ def _workspace(records: Path, report: Path):
             if not records.exists():
                 shutil.copytree(root, records)
                 (records / "diagnostic-capture.json").write_bytes(
-                    _canonical({
-                        "kind": "job_followup_workspace_diagnostics_v1", "accepted": False,
-                        "exception_type": None if failure is None else type(failure).__name__,
-                        "message": None if failure is None else str(failure),
-                    })
+                    _canonical(
+                        {
+                            "kind": "job_followup_workspace_diagnostics_v1",
+                            "accepted": False,
+                            "exception_type": None if failure is None else type(failure).__name__,
+                            "message": None if failure is None else str(failure),
+                        }
+                    )
                 )
 
 
 def _resolution(document, *, job_id, origin_id, parent_id, dispatch_id, action, outcome):
     assert document == {
-        "kind": "reduction_job_resolution_v1", "schema_version": 1,
-        "job_id": job_id, "origin_job_id": origin_id, "parent_job_id": parent_id,
-        "action": action, "dispatch_job_id": dispatch_id, "outcome": outcome,
+        "kind": "reduction_job_resolution_v1",
+        "schema_version": 1,
+        "job_id": job_id,
+        "origin_job_id": origin_id,
+        "parent_job_id": parent_id,
+        "action": action,
+        "dispatch_job_id": dispatch_id,
+        "outcome": outcome,
     }
 
 
@@ -195,16 +203,36 @@ def _core_profile(run, catalog_view, root, inputs, preparations, catalog, contro
     shutil.copytree(examples / "alpha" / "counterexample", inputs / "old-source")
     (inputs / "request.json").write_bytes(_canonical(_request(5, 6)))
     prepared = run(
-        "prepare-reduction-input", "old-source", "request.json", "--input-root", str(inputs),
-        "--expected-bundle-id", _GOLDEN["bundle_id"], "--expected-report-id", _GOLDEN["report_id"],
-        "--output", str(preparations / "old-prefix"),
+        "prepare-reduction-input",
+        "old-source",
+        "request.json",
+        "--input-root",
+        str(inputs),
+        "--expected-bundle-id",
+        _GOLDEN["bundle_id"],
+        "--expected-report-id",
+        _GOLDEN["report_id"],
+        "--output",
+        str(preparations / "old-prefix"),
     )
     queued = run(
-        "submit-reduction-job", str(preparations / "old-prefix"),
-        "--expected-preparation-id", prepared["preparation_id"], "--expected-bundle-id",
-        _GOLDEN["bundle_id"], "--expected-report-id", _GOLDEN["report_id"],
-        "--source-evidence", "old-source", "--input-root", str(inputs),
-        "--runs", str(root / "never-runs"), "--jobs", str(catalog), guarded=True,
+        "submit-reduction-job",
+        str(preparations / "old-prefix"),
+        "--expected-preparation-id",
+        prepared["preparation_id"],
+        "--expected-bundle-id",
+        _GOLDEN["bundle_id"],
+        "--expected-report-id",
+        _GOLDEN["report_id"],
+        "--source-evidence",
+        "old-source",
+        "--input-root",
+        str(inputs),
+        "--runs",
+        str(root / "never-runs"),
+        "--jobs",
+        str(catalog),
+        guarded=True,
     )
     before = _tree(inputs), _tree(preparations), _tree(controls)
     failed = run("run-job", queued["job_id"], "--jobs", str(catalog), guarded=True)
@@ -227,17 +255,35 @@ def _core_profile(run, catalog_view, root, inputs, preparations, catalog, contro
     assert (_tree(inputs), _tree(preparations), _tree(controls)) == before
     assert not (root / "never-runs").exists()
     return {
-        "origin_submission": queued, "origin_refusal": failed,
-        "followup_refusals": refusals, "catalog": catalog_view(ids),
+        "origin_submission": queued,
+        "origin_refusal": failed,
+        "followup_refusals": refusals,
+        "catalog": catalog_view(ids),
         "authority": "missing_original_ledger_refusals_only_v1",
-        "native_positive_qualified": False, "committed_ack_positive_qualified": False,
-        "research_attempts_created": 0, "native_calls": 0,
+        "native_positive_qualified": False,
+        "committed_ack_positive_qualified": False,
+        "research_attempts_created": 0,
+        "native_calls": 0,
     }
 
 
 def _native_profile(
-    run, helper, guard, invoke, capture, catalog_view, lifecycle, native, verifier,
-    root, inputs, preparations, catalog, controls, worker, cwd,
+    run,
+    helper,
+    guard,
+    invoke,
+    capture,
+    catalog_view,
+    lifecycle,
+    native,
+    verifier,
+    root,
+    inputs,
+    preparations,
+    catalog,
+    controls,
+    worker,
+    cwd,
 ):
     runs = root / "live-runs"
     source = lifecycle["source"]
@@ -256,8 +302,12 @@ def _native_profile(
 
     def launch(executable, entry, command):
         return subprocess.Popen(
-            [executable, "-I", *entry, *command], cwd=cwd, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True, start_new_session=True,
+            [executable, "-I", *entry, *command],
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
         )
 
     def collected(process, executable, entry, command, expected):
@@ -285,7 +335,8 @@ def _native_profile(
 
     def submit(parent_id, mode, key, *, jobs=catalog):
         command, flag = (
-            ("retry-reduction-job", "--retry-key") if mode == "retry"
+            ("retry-reduction-job", "--retry-key")
+            if mode == "retry"
             else ("recover-reduction-job", "--recovery-key")
         )
         argv = (command, parent_id, flag, key, "--jobs", str(jobs))
@@ -297,8 +348,13 @@ def _native_profile(
         assert _tree(jobs) == after_submit and _tree(runs) == before
         if jobs == catalog:
             ids.append(queued["job_id"])
-        return {"submission": queued, "job_id": queued["job_id"],
-                "parent_job_id": parent_id, "mode": mode, "key": key}
+        return {
+            "submission": queued,
+            "job_id": queued["job_id"],
+            "parent_job_id": parent_id,
+            "mode": mode,
+            "key": key,
+        }
 
     def native_evidence(directory, job_id, slot):
         request = json.loads((directory / "request.jsonl").read_bytes())
@@ -317,34 +373,61 @@ def _native_profile(
         assert native_calls[0]["dataset_id"] == request["payload"]["dataset_id"]
         for sequence, frame in enumerate(delivered, start=1):
             assert frame["sequence"] == sequence
-            assert all(frame[key] == request[key] for key in (
-                "job_id", "coordinator_id", "job_attempt_id", "lease_token"
-            ))
+            assert all(
+                frame[key] == request[key]
+                for key in ("job_id", "coordinator_id", "job_attempt_id", "lease_token")
+            )
         reservation = request["payload"]["research_attempt"]
         assert reservation["attempt_index"] == slot
-        assert reservation["nonce"] == _sha(_canonical({
-            "kind": "reduction_job_dispatch_nonce_v1", "job_id": job_id
-        }))[:32]
+        assert (
+            reservation["nonce"]
+            == _sha(_canonical({"kind": "reduction_job_dispatch_nonce_v1", "job_id": job_id}))[:32]
+        )
         actual = ledger()["slots"][slot - 1]
         assert actual["reservation"] == reservation
         assert actual["attempt_id"] == _sha(_canonical(reservation))
         assert actual["intent_id"] == _sha(_canonical(request["payload"]["intent"]))
-        return {"request": request, "produced_terminal": terminal, "delivered_ipc": delivered,
-                "native_calls": native_calls, "ledger_slot": actual,
-                "control_path": str(directory.relative_to(root))}
+        return {
+            "request": request,
+            "produced_terminal": terminal,
+            "delivered_ipc": delivered,
+            "native_calls": native_calls,
+            "ledger_slot": actual,
+            "control_path": str(directory.relative_to(root)),
+        }
 
     (inputs / "origin-request.json").write_bytes(_canonical(_request(5, 6)))
     prepared = run(
-        "prepare-reduction-input", "live-source", "origin-request.json",
-        "--input-root", str(inputs), "--expected-bundle-id", source["bundle_id"],
-        "--expected-report-id", source["report_id"], "--output", str(preparations / "origin"),
+        "prepare-reduction-input",
+        "live-source",
+        "origin-request.json",
+        "--input-root",
+        str(inputs),
+        "--expected-bundle-id",
+        source["bundle_id"],
+        "--expected-report-id",
+        source["report_id"],
+        "--output",
+        str(preparations / "origin"),
     )
     origin = run(
-        "submit-reduction-job", str(preparations / "origin"),
-        "--expected-preparation-id", prepared["preparation_id"], "--expected-bundle-id",
-        source["bundle_id"], "--expected-report-id", source["report_id"],
-        "--source-evidence", "live-source", "--input-root", str(inputs),
-        "--runs", str(runs), "--jobs", str(catalog), guarded=True,
+        "submit-reduction-job",
+        str(preparations / "origin"),
+        "--expected-preparation-id",
+        prepared["preparation_id"],
+        "--expected-bundle-id",
+        source["bundle_id"],
+        "--expected-report-id",
+        source["report_id"],
+        "--source-evidence",
+        "live-source",
+        "--input-root",
+        str(inputs),
+        "--runs",
+        str(runs),
+        "--jobs",
+        str(catalog),
+        guarded=True,
     )
     origin_id = origin["job_id"]
     ids.append(origin_id)
@@ -382,9 +465,14 @@ def _native_profile(
     finally:
         cleanup(process)
     origin_record = {
-        "submission": origin, "finished": finished, "preparation": prepared,
-        "worker_evidence": evidence, "actual_worker_pid": worker_pid,
-        "coordinator_pid": process.pid, "gate": gate, "persisted_before_kill": before_kill,
+        "submission": origin,
+        "finished": finished,
+        "preparation": prepared,
+        "worker_evidence": evidence,
+        "actual_worker_pid": worker_pid,
+        "coordinator_pid": process.pid,
+        "gate": gate,
+        "persisted_before_kill": before_kill,
     }
     premature = submit(origin_id, "ack", "no-outcome-yet")
     before = _tree(runs), _tree(controls)
@@ -418,8 +506,13 @@ def _native_profile(
         assert retry_evidence["ledger_slot"]["outcome_id"] is None
         blocked_before = _tree(runs), _tree(controls)
         busy["refusal"] = run(
-            "run-job", busy["job_id"], "--jobs", str(busy_catalog), guarded=True,
-            jobs=busy_catalog, expected=9,
+            "run-job",
+            busy["job_id"],
+            "--jobs",
+            str(busy_catalog),
+            guarded=True,
+            jobs=busy_catalog,
+            expected=9,
         )
         assert busy["refusal"]["error"]["code"] == "job_conflict"
         assert (_tree(runs), _tree(controls)) == blocked_before
@@ -438,17 +531,26 @@ def _native_profile(
     outcome_id = exhausted["slots"][4]["outcome_id"]
     assert exhausted["slots"][4]["outcome_kind"] == "reduction_run_receipt_v1"
     inspected = run(
-        "inspect-reduction-run", outcome_id, "--source-evidence", "live-source",
-        "--input-root", str(inputs), "--runs", str(runs), guarded=True,
+        "inspect-reduction-run",
+        outcome_id,
+        "--source-evidence",
+        "live-source",
+        "--input-root",
+        str(inputs),
+        "--runs",
+        str(runs),
+        guarded=True,
     )
     outcome = inspected["receipt"]
     raw_result = helper(_READ_ARTIFACT, str(runs), outcome["bindings"]["replay_result_sha256"])
     assert raw_result == retry_evidence["produced_terminal"]["replay_result"]
-    assert retry_evidence["request"]["payload"]["normalized"] == (
-        evidence["request"]["payload"]["normalized"]
+    assert (
+        retry_evidence["request"]["payload"]["normalized"]
+        == (evidence["request"]["payload"]["normalized"])
     )
-    assert retry_evidence["request"]["payload"]["dataset_id"] == (
-        evidence["request"]["payload"]["dataset_id"]
+    assert (
+        retry_evidence["request"]["payload"]["dataset_id"]
+        == (evidence["request"]["payload"]["dataset_id"])
     )
     retry["independent_inspection"] = inspected
     retry["raw_result"] = raw_result
@@ -465,7 +567,12 @@ def _native_profile(
     assert old_terminals[origin_id]["state"] == "FAILED"
     assert old_terminals[retry_id]["state"] == "LOST"
     retry["same_key_submission_after_loss"] = run(
-        "retry-reduction-job", origin_id, "--retry-key", "retry-one", "--jobs", str(catalog),
+        "retry-reduction-job",
+        origin_id,
+        "--retry-key",
+        "retry-one",
+        "--jobs",
+        str(catalog),
         guarded=True,
     )
     before_repeat = _tree(runs), _tree(catalog), _tree(controls)
@@ -474,8 +581,14 @@ def _native_profile(
     assert (_tree(runs), _tree(catalog), _tree(controls)) == before_repeat
     before = _tree(runs), _tree(catalog), _tree(controls)
     sibling = run(
-        "retry-reduction-job", origin_id, "--retry-key", "different-sibling",
-        "--jobs", str(catalog), guarded=True, expected=9,
+        "retry-reduction-job",
+        origin_id,
+        "--retry-key",
+        "different-sibling",
+        "--jobs",
+        str(catalog),
+        guarded=True,
+        expected=9,
     )
     assert sibling["error"]["code"] == "job_conflict"
     assert (_tree(runs), _tree(catalog), _tree(controls)) == before
@@ -490,8 +603,13 @@ def _native_profile(
         "read-job-result", retry_id, "--jobs", str(stale_catalog), guarded=True, jobs=stale_catalog
     )
     _resolution(
-        stale["resolution"], job_id=retry_id, origin_id=origin_id, parent_id=origin_id,
-        dispatch_id=retry_id, action="acknowledged_committed", outcome=outcome,
+        stale["resolution"],
+        job_id=retry_id,
+        origin_id=origin_id,
+        parent_id=origin_id,
+        dispatch_id=retry_id,
+        action="acknowledged_committed",
+        outcome=outcome,
     )
     assert (_tree(runs), _tree(controls)) == before_core
     later_retry = submit(retry_id, "retry", "after-committed-result")
@@ -503,8 +621,13 @@ def _native_profile(
         "read-job-result", later_retry["job_id"], "--jobs", str(catalog), guarded=True
     )
     _resolution(
-        later_retry["resolution"], job_id=later_retry["job_id"], origin_id=origin_id,
-        parent_id=retry_id, dispatch_id=retry_id, action="acknowledged_committed", outcome=outcome,
+        later_retry["resolution"],
+        job_id=later_retry["job_id"],
+        origin_id=origin_id,
+        parent_id=retry_id,
+        dispatch_id=retry_id,
+        action="acknowledged_committed",
+        outcome=outcome,
     )
     assert _tree(runs) == research_at_exhaustion
 
@@ -512,8 +635,14 @@ def _native_profile(
     ack_dir = controls / "ack-coordinator-kill"
     ack_entry = guard(_ACK_CONTROL)
     ack_argv = (
-        "readonly", str(catalog), "kill_before_complete", str(ack_dir),
-        "run-job", killed_ack["job_id"], "--jobs", str(catalog),
+        "readonly",
+        str(catalog),
+        "kill_before_complete",
+        str(ack_dir),
+        "run-job",
+        killed_ack["job_id"],
+        "--jobs",
+        str(catalog),
     )
     process = launch(verifier, ack_entry, ack_argv)
     try:
@@ -537,20 +666,26 @@ def _native_profile(
     old_snapshot = ack_dir / "retired-snapshot.json"
     old_snapshot.write_bytes(_canonical(ack_gate["snapshot"]))
     stale_wrapper = {
-        "kind": "reduction_job_resolution_v1", "schema_version": 1,
-        "job_id": killed_ack["job_id"], "origin_job_id": origin_id,
-        "parent_job_id": origin_id, "action": "acknowledged_committed",
-        "dispatch_job_id": retry_id, "outcome": outcome,
+        "kind": "reduction_job_resolution_v1",
+        "schema_version": 1,
+        "job_id": killed_ack["job_id"],
+        "origin_job_id": origin_id,
+        "parent_job_id": origin_id,
+        "action": "acknowledged_committed",
+        "dispatch_job_id": retry_id,
+        "outcome": outcome,
     }
     stale_result = ack_dir / "retired-valid-result.json"
     stale_result.write_bytes(_canonical(stale_wrapper))
     before_stale = _tree(runs), _tree(catalog)
     killed_ack["stale_publication"] = invoke(
-        verifier, guard(_STALE_ACK),
+        verifier,
+        guard(_STALE_ACK),
         ("readonly", str(catalog), str(old_snapshot), str(stale_result)),
     )
     assert killed_ack["stale_publication"] == {
-        "stale_ack_publication_refused": True, "snapshot_unchanged": True
+        "stale_ack_publication_refused": True,
+        "snapshot_unchanged": True,
     }
     assert (_tree(runs), _tree(catalog)) == before_stale
 
@@ -558,9 +693,19 @@ def _native_profile(
     ack_dir = controls / "ack-publication-ack-loss"
     before_ack = _tree(runs)
     ack["completion_ack_loss"] = invoke(
-        verifier, guard(_ACK_CONTROL),
-        ("readonly", str(catalog), "ack_loss", str(ack_dir),
-         "run-job", ack["job_id"], "--jobs", str(catalog)), expected=3,
+        verifier,
+        guard(_ACK_CONTROL),
+        (
+            "readonly",
+            str(catalog),
+            "ack_loss",
+            str(ack_dir),
+            "run-job",
+            ack["job_id"],
+            "--jobs",
+            str(catalog),
+        ),
+        expected=3,
     )
     assert "error" in ack["completion_ack_loss"]
     ack["independent_inspection"] = run(
@@ -569,14 +714,24 @@ def _native_profile(
     assert ack["independent_inspection"]["stored_state"] == "SUCCEEDED"
     ack["resolution"] = run("read-job-result", ack["job_id"], "--jobs", str(catalog), guarded=True)
     _resolution(
-        ack["resolution"], job_id=ack["job_id"], origin_id=origin_id, parent_id=origin_id,
-        dispatch_id=retry_id, action="acknowledged_committed", outcome=outcome,
+        ack["resolution"],
+        job_id=ack["job_id"],
+        origin_id=origin_id,
+        parent_id=origin_id,
+        dispatch_id=retry_id,
+        action="acknowledged_committed",
+        outcome=outcome,
     )
     assert _tree(runs) == before_ack == research_at_exhaustion
     before = _tree(runs), _tree(catalog), _tree(controls)
     ack["same_key_resubmission"] = run(
-        "recover-reduction-job", origin_id, "--recovery-key", "finish-ack",
-        "--jobs", str(catalog), guarded=True,
+        "recover-reduction-job",
+        origin_id,
+        "--recovery-key",
+        "finish-ack",
+        "--jobs",
+        str(catalog),
+        guarded=True,
     )
     ack["terminal_rerun"] = run("run-job", ack["job_id"], "--jobs", str(catalog), guarded=True)
     assert ack["same_key_resubmission"] == ack["independent_inspection"]
@@ -592,16 +747,23 @@ def _native_profile(
     assert all(_tree(runs).get(relative) == sha for relative, sha in original_records.items())
     assert _tree(inputs / "live-source") == source_before
     return {
-        "origin_job": origin_record, "premature_ack": premature, "native_retry": retry,
+        "origin_job": origin_record,
+        "premature_ack": premature,
+        "native_retry": retry,
         "catalog_checkpoint_before_retry": checkpoint,
-        "same_key_busy_catalog": busy, "same_key_stale_catalog": stale,
-        "other_key_sibling_refusal": sibling, "retry_after_committed_outcome": later_retry,
-        "ack_coordinator_kill": killed_ack, "ack_own_completion_ack_loss": ack,
-        "after": exhausted, "old_terminal_snapshots_unchanged": old_terminals,
+        "same_key_busy_catalog": busy,
+        "same_key_stale_catalog": stale,
+        "other_key_sibling_refusal": sibling,
+        "retry_after_committed_outcome": later_retry,
+        "ack_coordinator_kill": killed_ack,
+        "ack_own_completion_ack_loss": ack,
+        "after": exhausted,
+        "old_terminal_snapshots_unchanged": old_terminals,
         "catalog": catalog_view(ids),
-        "busy_catalog": catalog_view(ids[:2] + [retry_id], jobs=busy_catalog),
-        "stale_catalog": catalog_view(ids[:2] + [retry_id], jobs=stale_catalog),
-        "new_original_research_slots": [4, 5], "actual_managed_native_calls": 2,
+        "busy_catalog": catalog_view([*ids[:2], retry_id], jobs=busy_catalog),
+        "stale_catalog": catalog_view([*ids[:2], retry_id], jobs=stale_catalog),
+        "new_original_research_slots": [4, 5],
+        "actual_managed_native_calls": 2,
         "native_retry_started_from_frozen_origin": True,
         "core_ack_after_budget_exhaustion": True,
         "source_and_original_records_unchanged": True,
@@ -624,8 +786,14 @@ def main() -> None:
     golden_before = _tree(examples / "alpha")
     with _workspace(args.records_dir, args.report) as root:
         inputs, preparations, catalog, cwd, transcripts, controls = (
-            root / name for name in (
-                "input-root", "preparations", "jobs", "unrelated-cwd", "transcripts", "controls"
+            root / name
+            for name in (
+                "input-root",
+                "preparations",
+                "jobs",
+                "unrelated-cwd",
+                "transcripts",
+                "controls",
             )
         )
         for directory in (inputs, preparations, cwd, transcripts, controls):
@@ -636,9 +804,13 @@ def main() -> None:
 
         def capture(executable, entry, command, completed, expected):
             record = {
-                "executable": executable, "entry": list(entry), "command": list(command),
-                "expected_exit_code": expected, "exit_code": completed.returncode,
-                "stdout": completed.stdout, "stderr": completed.stderr,
+                "executable": executable,
+                "entry": list(entry),
+                "command": list(command),
+                "expected_exit_code": expected,
+                "exit_code": completed.returncode,
+                "stdout": completed.stdout,
+                "stderr": completed.stderr,
             }
             calls.append(record)
             (transcripts / f"{len(calls):04d}.json").write_bytes(_canonical(record))
@@ -655,8 +827,12 @@ def main() -> None:
 
         def invoke(executable, entry, command=(), *, expected=0):
             completed = subprocess.run(
-                [executable, "-I", *entry, *command], cwd=cwd, capture_output=True,
-                text=True, check=False, timeout=240,
+                [executable, "-I", *entry, *command],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=240,
             )
             return capture(executable, entry, command, completed, expected)
 
@@ -666,7 +842,8 @@ def main() -> None:
         def run(*command, producer=False, guarded=False, jobs=catalog, expected=0):
             entry = (
                 guard("\nraise SystemExit(main(sys.argv[1:]))\n")
-                if guarded else ["-m", "tickwitness"]
+                if guarded
+                else ["-m", "tickwitness"]
             )
             actual = ("readonly", str(jobs), *command) if guarded else command
             return invoke(native if producer else verifier, entry, actual, expected=expected)
@@ -699,8 +876,15 @@ def main() -> None:
             ("recover-reduction-job", "--recovery-key"),
         ):
             refusal = run(
-                command, "invalid", key_flag, "key", "--jobs", str(root / "never-jobs"),
-                "--split", "confirmation", expected=5,
+                command,
+                "invalid",
+                key_flag,
+                "key",
+                "--jobs",
+                str(root / "never-jobs"),
+                "--split",
+                "confirmation",
+                expected=5,
             )
             assert refusal["error"]["code"] == "confirmation_access_denied"
             confirmations.append({"command": command, "refusal": refusal})
@@ -711,27 +895,54 @@ def main() -> None:
         else:
             scope = None
             lifecycle = _bootstrap(
-                run, helper, examples, root, inputs, original_attempts=5,
+                run,
+                helper,
+                examples,
+                root,
+                inputs,
+                original_attempts=5,
                 qualification_title=(
                     "Synthetic five-slot explicit retry and ACK recovery qualification"
                 ),
             )
-            lifecycle.update(_native_profile(
-                run, helper, guard, invoke, capture, catalog_view, lifecycle, native, verifier,
-                root, inputs, preparations, catalog, controls, worker, cwd,
-            ))
+            lifecycle.update(
+                _native_profile(
+                    run,
+                    helper,
+                    guard,
+                    invoke,
+                    capture,
+                    catalog_view,
+                    lifecycle,
+                    native,
+                    verifier,
+                    root,
+                    inputs,
+                    preparations,
+                    catalog,
+                    controls,
+                    worker,
+                    cwd,
+                )
+            )
         assert _tree(examples / "alpha") == golden_before
         report = {
-            "kind": "installed_job_followup_acceptance_v1", "accepted": True,
-            "core_only_profile": args.core_only, "interpreter_identities": identities,
-            "confirmation_refusals": confirmations, "core_refusal": scope,
+            "kind": "installed_job_followup_acceptance_v1",
+            "accepted": True,
+            "core_only_profile": args.core_only,
+            "interpreter_identities": identities,
+            "confirmation_refusals": confirmations,
+            "core_refusal": scope,
             "lifecycle": lifecycle,
             "scope": {
                 "explicit_idempotent_retry": not args.core_only,
                 "committed_outcome_acknowledgment": not args.core_only,
-                "checkpoint_resume": False, "automatic_retry": False,
-                "research_budget_reset": False, "strong_cancellation": False,
-                "external_human_attempts": 0, "external_human_gate": "PENDING",
+                "checkpoint_resume": False,
+                "automatic_retry": False,
+                "research_budget_reset": False,
+                "strong_cancellation": False,
+                "external_human_attempts": 0,
+                "external_human_gate": "PENDING",
             },
         }
         inner = root / "job-followups-smoke" / "report.json"

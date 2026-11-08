@@ -47,7 +47,8 @@ class NativeJobPreparation:
 def prepare_native_job(spec: JobSpec) -> NativeJobPreparation:
     checked = load_job_spec(spec.canonical_bytes)
     if checked.document["operation"] not in {
-        "execute_reduction_input_v1", "resolve_reduction_job_v1"
+        "execute_reduction_input_v1",
+        "resolve_reduction_job_v1",
     }:
         raise EvidenceValidationError("Native preparation requires an execution Job")
     origin = execution_origin_spec(checked)

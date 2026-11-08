@@ -90,9 +90,12 @@ def test_seal_and_retry_chain_are_immutable_without_research_writes(family_case)
 def test_same_original_lock_conflicts_across_coordinator_instances(family_case):
     _, origin = family_case
     first, second = JobFamily(origin), JobFamily(origin)
-    with first.locked():
-        with pytest.raises(JobConflictError, match="Another coordinator"), second.locked():
-            pytest.fail("The second coordinator must not enter")
+    with (
+        first.locked(),
+        pytest.raises(JobConflictError, match="Another coordinator"),
+        second.locked(),
+    ):
+        pytest.fail("The second coordinator must not enter")
     with second.locked():
         assert second.specs() == (origin,)
 
@@ -117,7 +120,7 @@ def test_another_retry_key_cannot_branch_the_shared_parent(family_case):
         with pytest.raises(JobConflictError, match="another retry successor"):
             family.claim_retry(retry(origin, key="another-key"))
         missing_parent = retry(origin, retry(origin, key="unregistered"), "orphan")
-        with pytest.raises(JobConflictError, match="current.*leaf"):
+        with pytest.raises(JobConflictError, match=r"current.*leaf"):
             family.claim_retry(missing_parent)
     assert family.specs() == (origin, child)
 

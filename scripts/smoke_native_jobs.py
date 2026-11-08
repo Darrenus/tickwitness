@@ -221,7 +221,13 @@ def _workspace(records: Path, report: Path):
 
 
 def _bootstrap(
-    run, helper, examples: Path, root: Path, inputs: Path, *, original_attempts: int = 8,
+    run,
+    helper,
+    examples: Path,
+    root: Path,
+    inputs: Path,
+    *,
+    original_attempts: int = 8,
     qualification_title: str = "Synthetic eight-slot managed native Job qualification",
 ) -> dict:
     for name in (

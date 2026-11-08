@@ -119,7 +119,8 @@ def execute(arguments: argparse.Namespace) -> Row | str:
                 origin,
                 parent_id,
                 "retry_from_origin_v1"
-                if arguments.command == "retry-reduction-job" else "acknowledge_committed_v1",
+                if arguments.command == "retry-reduction-job"
+                else "acknowledge_committed_v1",
                 arguments.idempotency_key,
             )
             row = store.submit(spec, now_ns=time.time_ns())

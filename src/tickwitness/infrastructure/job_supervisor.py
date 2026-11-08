@@ -24,8 +24,8 @@ from tickwitness.domain.jobs.contracts import (
 )
 from tickwitness.domain.jobs.native_requests import build_native_worker_request
 from tickwitness.domain.replay.contracts import load_replay_result
-from tickwitness.infrastructure.job_comparison import execute_comparison
 from tickwitness.infrastructure import job_reduction
+from tickwitness.infrastructure.job_comparison import execute_comparison
 from tickwitness.infrastructure.job_followups import find_committed_dispatch
 from tickwitness.infrastructure.job_lineage import JobFamily
 from tickwitness.infrastructure.job_reduction import (
@@ -98,7 +98,8 @@ def _checked_frame(raw: bytes, row: Row) -> Row:
     frame = parse(raw, limit=MAX_JOB_FRAME_BYTES)
     kind = frame.get("kind")
     native = cast("Row", row["spec"])["operation"] in {
-        "execute_reduction_input_v1", "resolve_reduction_job_v1"
+        "execute_reduction_input_v1",
+        "resolve_reduction_job_v1",
     }
     result_kind = "job_native_result_v1" if native else "job_result_v1"
     extra = (
@@ -298,9 +299,7 @@ def _native_failure(error: Exception, *, worker_exit_code: int | None = None) ->
     return diagnostic
 
 
-def _assert_publication_authority(
-    store: JobRepository, row: Row, window: _LeaseWindow
-) -> None:
+def _assert_publication_authority(store: JobRepository, row: Row, window: _LeaseWindow) -> None:
     attempt = cast("Row", row["attempt"])
     now = time.time_ns()
     if time.monotonic_ns() >= window.deadline_ns or now >= cast(
@@ -377,10 +376,14 @@ def _run_native_claimed(
         committed = find_committed_dispatch(origin, family.specs())
         if committed is None:
             return _finish_failure(
-                store, row,
-                {"code": "research_outcome_not_committed",
-                 "message": "No verified committed outcome was observed in this lineage",
-                 "worker_exit_code": None}, window,
+                store,
+                row,
+                {
+                    "code": "research_outcome_not_committed",
+                    "message": "No verified committed outcome was observed in this lineage",
+                    "worker_exit_code": None,
+                },
+                window,
             )
         dispatch, outcome = committed
         try:
@@ -625,7 +628,8 @@ def run_job(
             claim_clock + cast("int", cast("Row", row["spec"])["lease_duration_ns"])
         )
         if cast("Row", row["spec"])["operation"] in {
-            "execute_reduction_input_v1", "resolve_reduction_job_v1"
+            "execute_reduction_input_v1",
+            "resolve_reduction_job_v1",
         }:
             return _run_native_claimed(store, row, window, _worker_command=_worker_command)
         attempt = cast("Row", row["attempt"])

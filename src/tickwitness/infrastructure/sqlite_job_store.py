@@ -34,6 +34,8 @@ from tickwitness.domain.jobs import (
     load_job_spec,
     lose_job,
     queued_job,
+)
+from tickwitness.domain.jobs import (
     validate_followup_context as validate_job_followup_context,
 )
 

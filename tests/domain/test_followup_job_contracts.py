@@ -123,9 +123,12 @@ def test_followup_keys_are_bounded_ascii_identifiers(key):
 @pytest.mark.parametrize("key", ["a", "0", "A._-9", "a" * 128])
 def test_followup_key_boundaries_are_preserved(key):
     origin = build_execution_job_spec(execution_request())
-    assert build_followup_job_spec(origin, origin.spec_id, ACK, key).document["request"][
-        "idempotency_key"
-    ] == key
+    assert (
+        build_followup_job_spec(origin, origin.spec_id, ACK, key).document["request"][
+            "idempotency_key"
+        ]
+        == key
+    )
 
 
 @pytest.mark.parametrize(
@@ -173,12 +176,15 @@ def test_running_or_queued_parent_needs_explicit_reconciliation_not_implicit_res
     child = build_followup_job_spec(origin, origin.spec_id, ACK, "ack")
     queued = queued_job(origin, now_ns=10)
     running = claim_job(
-        queued, coordinator_id="d" * 64, attempt_nonce="e" * 64,
-        lease_token="f" * 64, now_ns=20,
+        queued,
+        coordinator_id="d" * 64,
+        attempt_nonce="e" * 64,
+        lease_token="f" * 64,
+        now_ns=20,
     )
     for row in (queued, running):
         with pytest.raises(JobValidationError, match="durably terminal"):
-            validate_followup_context(child, lambda _id: row)
+            validate_followup_context(child, lambda _id, row=row: row)
 
 
 def test_ack_only_parent_and_missing_or_foreign_history_fail_closed():
@@ -214,7 +220,7 @@ def test_dispatch_chain_bound_includes_original_but_ack_record_needs_no_extra_di
 
 @pytest.mark.parametrize("outcome_kind", ["completed", "incomplete", "failure"])
 def test_ack_wrapper_preserves_exact_original_receipt_or_failure_without_research_authority(
-    outcome_kind
+    outcome_kind,
 ):
     case = execution_case(pending=outcome_kind == "incomplete")
     spec = build_followup_job_spec(case.spec, case.spec.spec_id, ACK, "ack-v1")
@@ -227,10 +233,14 @@ def test_ack_wrapper_preserves_exact_original_receipt_or_failure_without_researc
     assert check_job_result(spec, raw) == digest(raw)
     document = parse(raw, limit=MAX_FOLLOWUP_RESULT_BYTES)
     assert document == {
-        "kind": "reduction_job_resolution_v1", "schema_version": 1,
-        "job_id": spec.spec_id, "origin_job_id": case.spec.spec_id,
-        "parent_job_id": case.spec.spec_id, "action": "acknowledged_committed",
-        "dispatch_job_id": case.spec.spec_id, "outcome": parse(raw_outcome),
+        "kind": "reduction_job_resolution_v1",
+        "schema_version": 1,
+        "job_id": spec.spec_id,
+        "origin_job_id": case.spec.spec_id,
+        "parent_job_id": case.spec.spec_id,
+        "action": "acknowledged_committed",
+        "dispatch_job_id": case.spec.spec_id,
+        "outcome": parse(raw_outcome),
     }
     assert canonical(document["outcome"]) == raw_outcome
 
@@ -259,8 +269,14 @@ def test_replay_wrapper_requires_current_retry_dispatch_and_its_result_not_failu
 @pytest.mark.parametrize(
     "field",
     [
-        "job_id", "origin_job_id", "parent_job_id", "dispatch_job_id",
-        "action", "schema_version", "extra", "outcome",
+        "job_id",
+        "origin_job_id",
+        "parent_job_id",
+        "dispatch_job_id",
+        "action",
+        "schema_version",
+        "extra",
+        "outcome",
     ],
 )
 def test_rehashed_resolution_wrapper_cannot_change_identity_scope_or_actual_dispatch(field):

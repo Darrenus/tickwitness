@@ -14,6 +14,7 @@ import secrets
 import stat
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager, suppress
+from itertools import pairwise
 from pathlib import Path
 from typing import cast
 
@@ -69,7 +70,7 @@ def checked_family_specs(origin_spec: JobSpec, specs: tuple[JobSpec, ...]) -> tu
         "Family dispatch chain does not start with its exact original Job",
     )
     identities, nonces = {origin.spec_id}, {job_dispatch_nonce(origin)}
-    for parent, child in zip(checked, checked[1:], strict=False):
+    for parent, child in pairwise(checked):
         request = cast("Row", child.document["request"])
         _require(
             child.document["kind"] == "reduction_followup_job_spec_v1"
@@ -275,11 +276,7 @@ class JobFamily:
             raise JobStoreError("Cannot read original Job family: " + str(error)) from error
 
     def _ownership(self) -> int:
-        if (
-            self._owner_pid != os.getpid()
-            or self._owner_fd is None
-            or self._directory_fd is None
-        ):
+        if self._owner_pid != os.getpid() or self._owner_fd is None or self._directory_fd is None:
             raise JobConflictError("Retry claim requires current family coordinator ownership")
         held = os.fstat(self._owner_fd)
         with self._regular(self._directory_fd, _LOCK) as descriptor:
@@ -365,7 +362,7 @@ class JobFamily:
             checked_family_specs(self.origin_spec, (*chain, checked))
             self._publish(
                 directory,
-                cast("str", request["parent_job_id"]) + ".json",
+                request["parent_job_id"] + ".json",
                 checked.canonical_bytes,
             )
             _require(

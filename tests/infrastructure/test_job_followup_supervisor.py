@@ -8,8 +8,8 @@ import time
 
 import pytest
 from test_job_supervisor import _command
-from test_native_job_supervisor import queued, saved_worker
 from test_native_job_supervisor import native_job_root as native_job_root
+from test_native_job_supervisor import queued, saved_worker
 from test_reduction_execution import forbidden
 from test_reduction_execution import reduction_case as reduction_case
 from test_search_findings import tree
@@ -33,7 +33,8 @@ def failed_parent(value, root, tmp_path, monkeypatch):
     origin, store, _ = queued(value, root)
     monkeypatch.setattr(job_reduction, "require_native_runtime", lambda: None)
     row = run_job(
-        store, origin.spec_id,
+        store,
+        origin.spec_id,
         _worker_command=_command(tmp_path, "emit('job_heartbeat_v1',1)\nsys.exit(7)\n"),
     )
     assert row["state"] == "FAILED"
@@ -45,7 +46,9 @@ def test_explicit_retry_uses_new_original_slot_and_preserves_failed_parent(
 ):
     value = reduction_case
     origin, store, parent = failed_parent(value, native_job_root, tmp_path, monkeypatch)
-    before = value.ledger.list_reservations(value.prepared.materialization.source.validation.protocol)
+    before = value.ledger.list_reservations(
+        value.prepared.materialization.source.validation.protocol
+    )
     child, _ = submit(store, origin, origin.spec_id, "retry_from_origin_v1", "retry-a")
     completed = run_job(store, child.spec_id, _worker_command=saved_worker(value, tmp_path))
     assert completed["state"] == "SUCCEEDED"
@@ -53,7 +56,9 @@ def test_explicit_retry_uses_new_original_slot_and_preserves_failed_parent(
     assert result["action"] == "replayed_from_origin"
     assert result["dispatch_job_id"] == child.spec_id
     assert result["outcome"]["attempt"]["nonce"] == job_dispatch_nonce(child)
-    after = value.ledger.list_reservations(value.prepared.materialization.source.validation.protocol)
+    after = value.ledger.list_reservations(
+        value.prepared.materialization.source.validation.protocol
+    )
     assert len(after) == len(before) + 1 and after[:-1] == before
     assert after[-1].document["nonce"] != before[-1].document["nonce"]
     assert store.get(origin.spec_id) == parent
