@@ -71,8 +71,8 @@ if mode=='retry_ack_loss':
                'outcome_id':audited.receipt.run_id}
         pending=root/'publication-gate.pending'
         pending.write_text(json.dumps(ready,sort_keys=True,separators=(',',':')))
-        os.replace(pending,root/'publication-gate.json')
         record(ready)
+        os.replace(pending,root/'publication-gate.json')
         deadline=time.monotonic()+20
         while not (root/'release-publication').exists() and time.monotonic()<deadline:
             Event().wait(0.02)
