@@ -34,6 +34,26 @@ jobs:
         run: make type
       - if: always()
         run: make docs
+      - name: Fast installed followup qualification on manual dispatch
+        if: github.event_name == 'workflow_dispatch' && success()
+        run: |
+          uv sync --locked --extra nautilus
+          uv build --no-build-isolation
+          uv pip install --python .venv/bin/python --no-index --no-deps --reinstall dist/*.whl
+          uv venv /tmp/tickwitness-followup-preflight-core --python 3.12
+          uv pip install --python /tmp/tickwitness-followup-preflight-core/bin/python --no-index --no-deps dist/*.whl
+          python3 scripts/smoke_job_followups.py --python .venv/bin/python --verifier-python /tmp/tickwitness-followup-preflight-core/bin/python --report /tmp/followup-preflight.json --records-dir /tmp/followup-preflight-records
+      - name: Preserve manually dispatched followup preflight evidence
+        if: github.event_name == 'workflow_dispatch' && always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: followup-preflight-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            /tmp/followup-preflight.json
+            /tmp/followup-preflight-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Prepare formatting corrections after a quality failure
         if: failure()
         run: |
