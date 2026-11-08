@@ -1,6 +1,6 @@
 # ADR0034: Keep native computation separate from original research publication
 
-Date: 2026-11-07 (Asia/Singapore). Status: implementation under review, S10-02b.
+Date: 2026-11-07 (Asia/Singapore). Status: accepted by owner merge of [PR103](https://github.com/Darrenus/tickwitness/pull/103) on 2026-11-08, S10-02b. Explicit followups are extended by [ADR0035](0035-immutable-job-followups.md); original Job terminal semantics stay immutable.
 
 ## Context and decision
 

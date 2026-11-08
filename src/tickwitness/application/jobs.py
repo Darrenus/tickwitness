@@ -43,6 +43,8 @@ class JobRepository(Protocol):
 
     def result(self, job_id: str) -> bytes | None: ...
 
+    def validate_followup_context(self, job_id: str) -> tuple[Row, ...]: ...
+
     def assert_active(
         self,
         job_id: str,
@@ -123,6 +125,7 @@ def job_view(row: Row, *, now_ns: int, coordinator_active: bool) -> Row:
         attempt.pop("nonce")
     operation = cast("Row", checked["spec"])["operation"]
     native = operation == "execute_reduction_input_v1"
+    followup = operation == "resolve_reduction_job_v1"
     executed: bool | None = True if checked["state"] == "SUCCEEDED" else None
     return {
         "kind": "job_view_v1",
@@ -140,8 +143,8 @@ def job_view(row: Row, *, now_ns: int, coordinator_active: bool) -> Row:
         "scope": {
             "operation": operation,
             "job_attempt_is_research_attempt": False,
-            "research_attempt_reserved": executed if native else False,
-            "native_replayed": executed if native else False,
+            "research_attempt_reserved": executed if native else None if followup else False,
+            "native_replayed": executed if native else None if followup else False,
             "automatic_retry_supported": False,
             "checkpoint_resume_verified": False,
             "strong_cancellation_verified": False,

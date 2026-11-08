@@ -34,6 +34,7 @@ from tickwitness.domain.jobs import (
     load_job_spec,
     lose_job,
     queued_job,
+    validate_followup_context as validate_job_followup_context,
 )
 
 type Row = dict[str, object]
@@ -601,6 +602,40 @@ class SqliteJobStore:
             raise JobValidationError("Job specification identity differs")
         snapshot = queued_job(checked, now_ns=now_ns)
         with self._transaction() as connection:
+            if spec.document["operation"] == "resolve_reduction_job_v1":
+                try:
+                    validate_job_followup_context(
+                        spec, lambda job_id: self._fetch(connection, job_id)[0]
+                    )
+                except JobValidationError as error:
+                    raise JobConflictError(str(error)) from error
+                request = cast("Row", spec.document["request"])
+                if request["mode"] == "retry_from_origin_v1":
+                    # The current owner lock and this short transaction make
+                    # parent-successor admission atomic within this Catalog.
+                    # Shared-ledger family claims fence other Catalog copies.
+                    siblings = connection.execute(
+                        "SELECT job_id FROM jobs WHERE "
+                        "json_extract(CAST(snapshot AS TEXT),'$.spec.operation')=? AND "
+                        "json_extract(CAST(snapshot AS TEXT),'$.spec.request.mode')=? AND "
+                        "json_extract(CAST(snapshot AS TEXT),'$.spec.request.parent_job_id')=? "
+                        "LIMIT 2",
+                        (
+                            "resolve_reduction_job_v1",
+                            "retry_from_origin_v1",
+                            request["parent_job_id"],
+                        ),
+                    ).fetchall()
+                    if len(siblings) > 1:
+                        raise JobStoreError("Parent has conflicting retry successors in Catalog")
+                    for sibling in siblings:
+                        existing_child = self._fetch(connection, sibling[0])[0]
+                        if (
+                            existing_child["job_id"] != spec.spec_id
+                            or canonical(cast("Row", existing_child["spec"]))
+                            != spec.canonical_bytes
+                        ):
+                            raise JobConflictError("Parent already has a different retry successor")
             found = connection.execute(
                 "SELECT job_id FROM jobs WHERE job_id=?", (spec.spec_id,)
             ).fetchone()
@@ -619,6 +654,20 @@ class SqliteJobStore:
             )
             self._insert_event(connection, _event(snapshot, "JobSubmitted", spec.spec_id))
         return snapshot
+
+    def validate_followup_context(self, job_id: str) -> tuple[Row, ...]:
+        """Read child and complete bounded ancestry from one consistent Catalog view."""
+        key = identity(job_id)
+        with self._connection() as connection:
+            connection.execute("BEGIN")
+            child = self._fetch(connection, key)[0]
+            spec = load_job_spec(canonical(cast("Row", child["spec"])))
+            try:
+                return validate_job_followup_context(
+                    spec, lambda parent_id: self._fetch(connection, parent_id)[0]
+                )
+            except JobValidationError as error:
+                raise JobConflictError(str(error)) from error
 
     def _change(
         self,

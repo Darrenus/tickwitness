@@ -1,13 +1,13 @@
 # Sprint 10 作业恢复与取消状态
 
-更新：2026-11-07（Asia/Singapore）。Owner 已合并 [PR #102](https://github.com/Darrenus/tickwitness/pull/102)，接受 S10-02a，merge `4822d60855be17e09590b5a77ab5c09a96868233`；S09-01／02／03、S10-01 与 S10-02a 软件均已接受。#29 仍未整项完成。外部真人复验仍 **0 / PENDING**，[#24](https://github.com/Darrenus/tickwitness/issues/24) 保持打开。原 PR94 转交包与 golden 不变，无新 release。
+更新：2026-11-08（Asia/Singapore）。Owner 已合并 [PR #103](https://github.com/Darrenus/tickwitness/pull/103)，接受 S10-02b，merge `a521abba087d747b306ed1271188a3a5a4da58e4`；S09-01／02／03、S10-01、S10-02a／b 软件均已接受。S10-02c 实现审阅中，#29 仍未整项完成。外部真人复验仍 **0 / PENDING**，[#24](https://github.com/Darrenus/tickwitness/issues/24) 保持打开。原 PR94 转交包与 golden 不变，无新 release。
 
 | 故事 | 当前范围 | 验收状态 |
 | --- | --- | --- |
 | S10-01 / #28 | 持久 Job 状态机、独立 attempt、心跳、单 coordinator、真实只读 comparison worker、失败／失联诊断 | Owner 合并 #101 接受；#28 关闭 |
 | S10-02a / #29 | 按原研究 attempt 只读复验恢复事实与既有最终 manifest，区分未绑定／未完成／失败／已提交结果 | Owner 合并 #102 接受；#29 保持打开 |
-| S10-02b / #29 | 确定性持久 dispatch／原槽绑定、受管原生执行、coordinator 研究发布 fencing、原 receipt 作为 Job 结果 | 实现审阅中；远端实际证据在实现 PR，待 owner 接受 |
-| S10-02c / #29 | 显式幂等 retry、研究提交后 Job acknowledgment 恢复；无完整 checkpoint 时从冻结原点占新槽重跑 | Planned；#29 未整项 Done，原总估算不变 |
+| S10-02b / #29 | 确定性持久 dispatch／原槽绑定、受管原生执行、coordinator 研究发布 fencing、原 receipt 作为 Job 结果 | Owner 合并 #103 接受；#29 保持打开 |
+| S10-02c / #29 | 显式幂等 retry、研究提交后独立 Job acknowledgment；无完整 checkpoint 时从冻结原点占新槽重跑 | 实现审阅中；远端本轮证据在实现 PR，待 owner 接受 |
 | S10-03 / #30 | 强取消、总 deadline／资源上限、临时目录回收 | Planned，单独验收 |
 
 原专项估算 **12h／14h／8h** 与每 Sprint 持续质量容量不变，不补造实际工时，也不扩大本故事到分布式队列。
@@ -36,6 +36,14 @@ Worker 只接收有界 JSONL 请求与心跳／结果 IPC，不获得 Catalog �
 
 新 installed qualification 在执行前冻结独立合成八槽协议：原 source 三槽、两个结果、worker／coordinator 实际故障、过期发布。旧五槽、十一槽、golden 不改，无第九槽或 portable 额度恢复；四档 `native-jobs-*` 保存真实命令、PID／IPC／Catalog／原账本闭包，实际通过状态以实现 PR 为准。
 
+## S10-02c 显式后继与确认边界
+
+[Followups v1](../contracts/job-followups-v1.md) 与 [ADR0035](../adr/0035-immutable-job-followups.md) 保留旧终态和 schema1，新增独立 followup Job。重试 key 与冻结原 spec／parent／mode 形成幂等身份；Catalog 事务限制一个 retry 后继，原账本旁不可变后继记录与共享锁约束当前跨 Catalog 协调者，锁持续到原生执行、研究发布和 Catalog 确认完成。升级前协调者需要先静止，不宣称跨版本活动进程或恶意 owner 的全局认证。
+
+任何已提交 receipt／failure 均先独立复验，只做确认；真正重跑使用原协议新槽和新 nonce，从冻结原点执行。确认模式不创建研究元数据、不 reserve／native／bind／publish，仅在新 Job 中原子保存 resolution wrapper／终态／事件。确认自身提交后丢响应时重复同一请求读取既有成功；旧 FAILED／LOST 终态不改，丢失确认任务用新显式 key。研究账本、后继 journal 和 Catalog 不构成跨库原子事务。
+
+新原生资格在首次 baseline 前冻结独立合成五槽（明确新名称）：source1–3、worker 故障4、显式 retry5 与真实研究提交后 ACK 异常；耗尽后 core-only 确认及其真实故障不产生第6槽。旧五槽／八槽／十一槽、golden 和 PR94 不扩额。完整本轮 CI／四档制品审计通过状态只在实现 PR 回填，不复用旧绿勾。
+
 ## 验证与交付记录
 
 全部项目代码、测试、格式、类型、构建、安装与运行仅在远端 CPU。实际 CI 检查状态和 `jobs-core`、`jobs-ubuntu-24.04`、`jobs-macos-26`、`jobs-source-wheel` 产物链接在实现 PR 回填；未完成的检查不计通过。制品保存实际命令、独立结果复验、Catalog／events／hash 闭包，以及真实 worker／coordinator 死亡诊断。只读 core refusal 不能冒充正例原生见证。
@@ -43,3 +51,5 @@ Worker 只接收有界 JSONL 请求与心跳／结果 IPC，不获得 Catalog �
 S10-01 的 [Engineering 42077246248](https://github.com/Darrenus/tickwitness/actions/runs/42077246248)／[Documentation 42077246306](https://github.com/Darrenus/tickwitness/actions/runs/42077246306) 13/13 通过，四份 Job 制品审计通过；该历史资格不替代 S10-02a 的新检查。S10-01 只验收首个受支持的 managed operation 与作业生命期。S10-02a 只验收只读恢复事实；研究重试／Job manifest acknowledgment、完整引擎状态、强取消、总资源限额与 release 没有提前完成。CI、AI 和 owner 合并均不计外部真人复验，也不记录实际市场采用或研究收益。
 
 S10-02a 的 [Engineering 42233843538](https://github.com/Darrenus/tickwitness/actions/runs/42233843538)／[Documentation 42233843587](https://github.com/Darrenus/tickwitness/actions/runs/42233843587) 13/13 通过，六 core 各3744／112skip、两 native 各3853／3skip；四份本轮制品完整静态审计通过。原生正例仅资格化 committed_result 与真实提交后的受控 ACK 异常；其余恢复状态是单元 fixture，未冒充受管重试或 Job acknowledgment 恢复。S10-02b 的新资格独立执行，不复用历史绿勾充当当前实现通过。
+
+S10-02b 的 [Engineering 42372257409](https://github.com/Darrenus/tickwitness/actions/runs/42372257409)／[Documentation 42372257522](https://github.com/Darrenus/tickwitness/actions/runs/42372257522) 13/13 通过，六 core 各3936／112skip、两 native 各4045／3skip；四份 fresh native-jobs 制品完整静态审计通过。原八槽资格证明受管执行和发布前检查，不替代 S10-02c 的新原生重试／确认故障资格。Owner #103 合并接受此历史范围；#29 原14h／Sprint34h与持续质量容量不变。

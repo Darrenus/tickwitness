@@ -22,7 +22,12 @@ from tickwitness.domain.evidence.run_records import (
     EvidenceValidationError,
     canonical,
 )
-from tickwitness.domain.jobs.contracts import JobSpec, job_dispatch_nonce, load_job_spec
+from tickwitness.domain.jobs.contracts import (
+    JobSpec,
+    execution_origin_spec,
+    job_dispatch_nonce,
+    load_job_spec,
+)
 from tickwitness.domain.jobs.native_requests import check_native_input_size
 from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger
 from tickwitness.infrastructure.nautilus_replay import ENGINE_VERSION, ReplayDependencyError
@@ -41,9 +46,12 @@ class NativeJobPreparation:
 
 def prepare_native_job(spec: JobSpec) -> NativeJobPreparation:
     checked = load_job_spec(spec.canonical_bytes)
-    if checked.document["operation"] != "execute_reduction_input_v1":
+    if checked.document["operation"] not in {
+        "execute_reduction_input_v1", "resolve_reduction_job_v1"
+    }:
         raise EvidenceValidationError("Native preparation requires an execution Job")
-    request = cast("Row", checked.document["request"])
+    origin = execution_origin_spec(checked)
+    request = cast("Row", origin.document["request"])
     root = Path(cast("str", request["input_root"]))
     source_path = root / cast("str", request["source_evidence"])
     if not source_path.resolve().is_relative_to(root.resolve()):
@@ -144,7 +152,7 @@ def inspect_native_job_dispatch(spec: JobSpec) -> Row:
     )
     recovery: Row | None = None
     if reservation is not None:
-        request = cast("Row", prepared.spec.document["request"])
+        request = cast("Row", execution_origin_spec(prepared.spec).document["request"])
         recovery = inspect_reduction_attempt(
             reservation.attempt_id,
             prepared.execution.preparation,

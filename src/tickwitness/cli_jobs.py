@@ -9,13 +9,17 @@ from typing import cast
 
 from tickwitness.application.jobs import JobConflictError, job_view
 from tickwitness.application.research import ConfirmationAccessDenied
-from tickwitness.domain.evidence.run_records import canonical, identity
+from tickwitness.domain.evidence.run_records import canonical, identity, parse
 from tickwitness.domain.jobs.contracts import (
     JobValidationError,
     build_execution_job_spec,
+    build_followup_job_spec,
     build_job_spec,
+    execution_origin_spec,
     load_job_spec,
 )
+from tickwitness.infrastructure.job_followups import find_committed_dispatch
+from tickwitness.infrastructure.job_lineage import JobFamily
 from tickwitness.infrastructure.job_reduction import inspect_native_job_dispatch
 from tickwitness.infrastructure.job_supervisor import run_job
 from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
@@ -24,6 +28,8 @@ COMMANDS = frozenset(
     {
         "submit-comparison-job",
         "submit-reduction-job",
+        "retry-reduction-job",
+        "recover-reduction-job",
         "run-job",
         "inspect-job",
         "inspect-reduction-job",
@@ -60,6 +66,20 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
     native.add_argument("--jobs", type=Path, required=True)
     native.add_argument("--lease-seconds", type=int, default=30)
     native.add_argument("--split", choices=("development", "confirmation"), default="development")
+    for name, option, help_text in (
+        ("retry-reduction-job", "--retry-key", "Queue an explicit retry under a new original slot"),
+        ("recover-reduction-job", "--recovery-key", "Queue acknowledgment of a committed outcome"),
+    ):
+        command = commands.add_parser(name, help=help_text)
+        command.add_argument("parent_job_id")
+        if name == "retry-reduction-job":
+            command.add_argument(option, dest="idempotency_key", required=True)
+        else:
+            command.add_argument(option, dest="idempotency_key", default="acknowledgment-v1")
+        command.add_argument("--jobs", type=Path, required=True)
+        command.add_argument(
+            "--split", choices=("development", "confirmation"), default="development"
+        )
     for name, help_text in (
         ("run-job", "Own the coordinator and execute one allowlisted queued Job"),
         ("inspect-job", "Read persisted and effective Job state without recovery writes"),
@@ -86,6 +106,24 @@ def _disjoint(jobs: Path, roots: tuple[Path, ...]) -> None:
 
 
 def execute(arguments: argparse.Namespace) -> Row | str:
+    if arguments.command in {"retry-reduction-job", "recover-reduction-job"}:
+        if arguments.split != "development":
+            raise ConfirmationAccessDenied("Managed followups permit development evidence only")
+        parent_id = identity(arguments.parent_job_id)
+        store = SqliteJobStore(arguments.jobs, create=False)
+        with store.coordinator():
+            store.reconcile_orphans(now_ns=time.time_ns())
+            parent = store.get(parent_id)
+            origin = execution_origin_spec(load_job_spec(canonical(cast("Row", parent["spec"]))))
+            spec = build_followup_job_spec(
+                origin,
+                parent_id,
+                "retry_from_origin_v1"
+                if arguments.command == "retry-reduction-job" else "acknowledge_committed_v1",
+                arguments.idempotency_key,
+            )
+            row = store.submit(spec, now_ns=time.time_ns())
+        return job_view(row, now_ns=time.time_ns(), coordinator_active=False)
     if arguments.command == "submit-reduction-job":
         if arguments.split != "development":
             raise ConfirmationAccessDenied("Managed native Jobs permit development evidence only")
@@ -174,6 +212,24 @@ def execute(arguments: argparse.Namespace) -> Row | str:
     view = job_view(row, now_ns=time.time_ns(), coordinator_active=store.coordinator_active())
     if arguments.command == "inspect-reduction-job":
         spec = load_job_spec(canonical(cast("Row", row["spec"])))
+        if spec.document["operation"] == "resolve_reduction_job_v1":
+            origin = execution_origin_spec(spec)
+            family = JobFamily(origin)
+            specs = family.specs()
+            committed = find_committed_dispatch(origin, specs)
+            return {
+                "kind": "reduction_job_resolution_observation_v1",
+                "schema_version": 1,
+                "job": view,
+                "origin_job_id": origin.spec_id,
+                "registered_dispatch_job_ids": [item.spec_id for item in specs],
+                "committed_dispatch_job_id": None if committed is None else committed[0].spec_id,
+                "outcome": None if committed is None else parse(committed[1]),
+                "observation_only": True,
+                "execution_authorized": False,
+                "job_state_changed": False,
+                "budget_refunded": False,
+            }
         return {
             "kind": "native_job_inspection_v1",
             "schema_version": 1,

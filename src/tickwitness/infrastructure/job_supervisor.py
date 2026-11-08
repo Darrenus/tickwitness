@@ -16,10 +16,18 @@ from typing import cast
 from tickwitness.application.jobs import JobConflictError, JobRepository, JobStoreError
 from tickwitness.domain.evidence.reduction_comparison import load_reduction_comparison_export
 from tickwitness.domain.evidence.run_records import canonical, parse
-from tickwitness.domain.jobs.contracts import load_job_spec
+from tickwitness.domain.jobs.contracts import (
+    JobSpec,
+    build_followup_result,
+    execution_origin_spec,
+    load_job_spec,
+)
 from tickwitness.domain.jobs.native_requests import build_native_worker_request
 from tickwitness.domain.replay.contracts import load_replay_result
 from tickwitness.infrastructure.job_comparison import execute_comparison
+from tickwitness.infrastructure import job_reduction
+from tickwitness.infrastructure.job_followups import find_committed_dispatch
+from tickwitness.infrastructure.job_lineage import JobFamily
 from tickwitness.infrastructure.job_reduction import (
     audit_native_job,
     authorize_native_job,
@@ -89,7 +97,9 @@ def _terminate(process: subprocess.Popen[bytes]) -> None:
 def _checked_frame(raw: bytes, row: Row) -> Row:
     frame = parse(raw, limit=MAX_JOB_FRAME_BYTES)
     kind = frame.get("kind")
-    native = cast("Row", row["spec"])["operation"] == "execute_reduction_input_v1"
+    native = cast("Row", row["spec"])["operation"] in {
+        "execute_reduction_input_v1", "resolve_reduction_job_v1"
+    }
     result_kind = "job_native_result_v1" if native else "job_result_v1"
     extra = (
         {"replay_result"}
@@ -288,7 +298,129 @@ def _native_failure(error: Exception, *, worker_exit_code: int | None = None) ->
     return diagnostic
 
 
+def _assert_publication_authority(
+    store: JobRepository, row: Row, window: _LeaseWindow
+) -> None:
+    attempt = cast("Row", row["attempt"])
+    now = time.time_ns()
+    if time.monotonic_ns() >= window.deadline_ns or now >= cast(
+        "int", attempt["lease_expires_at_ns"]
+    ):
+        raise _LeaseExpired
+    store.assert_active(
+        cast("str", row["job_id"]),
+        expected_version=cast("int", row["version"]),
+        coordinator_id=cast("str", attempt["coordinator_id"]),
+        job_attempt_id=cast("str", attempt["job_attempt_id"]),
+        lease_token=cast("str", attempt["lease_token"]),
+        now_ns=now,
+    )
+    checked_at = time.time_ns()
+    if checked_at < now:
+        raise JobConflictError("Coordinator UTC moved backwards during admission")
+    if time.monotonic_ns() >= window.deadline_ns or checked_at >= cast(
+        "int", attempt["lease_expires_at_ns"]
+    ):
+        raise _LeaseExpired
+
+
+def _complete_followup(
+    store: JobRepository,
+    row: Row,
+    spec: JobSpec,
+    dispatch: JobSpec,
+    outcome: bytes,
+    action: str,
+    window: _LeaseWindow,
+) -> Row:
+    """Publish a separate acknowledgment; an uncertain commit is never retried here."""
+    raw = build_followup_result(spec, dispatch, outcome, action)
+    _assert_publication_authority(store, row, window)
+    attempt = cast("Row", row["attempt"])
+    return store.complete(
+        spec.spec_id,
+        raw,
+        expected_version=cast("int", row["version"]),
+        coordinator_id=cast("str", attempt["coordinator_id"]),
+        job_attempt_id=cast("str", attempt["job_attempt_id"]),
+        lease_token=cast("str", attempt["lease_token"]),
+        now_ns=time.time_ns(),
+    )
+
+
 def _run_native_claimed(
+    store: JobRepository,
+    row: Row,
+    window: _LeaseWindow,
+    *,
+    _worker_command: tuple[str, ...] | None,
+) -> Row:
+    spec = load_job_spec(canonical(cast("Row", row["spec"])))
+    origin = execution_origin_spec(spec)
+    followup = spec.document["operation"] == "resolve_reduction_job_v1"
+    try:
+        if followup:
+            store.validate_followup_context(spec.spec_id)
+        # Validate actual source/preparation and original live prefix first.
+        prepare_native_job(origin)
+        _assert_publication_authority(store, row, window)
+    except _LeaseExpired:
+        return _lost_lease(store, store.get(spec.spec_id), now_ns=time.time_ns())
+    except JobStoreError:
+        raise
+    except Exception as error:
+        return _finish_failure(store, row, _native_failure(error), window)
+
+    family = JobFamily(origin)
+    if followup and cast("Row", spec.document["request"])["mode"] == "acknowledge_committed_v1":
+        # No lockfile/journal creation, optional-runtime check or research write.
+        committed = find_committed_dispatch(origin, family.specs())
+        if committed is None:
+            return _finish_failure(
+                store, row,
+                {"code": "research_outcome_not_committed",
+                 "message": "No verified committed outcome was observed in this lineage",
+                 "worker_exit_code": None}, window,
+            )
+        dispatch, outcome = committed
+        try:
+            return _complete_followup(
+                store, row, spec, dispatch, outcome, "acknowledged_committed", window
+            )
+        except _LeaseExpired:
+            return _lost_lease(store, store.get(spec.spec_id), now_ns=time.time_ns())
+
+    if not followup:
+        try:
+            job_reduction.require_native_runtime()
+        except Exception as error:
+            return _finish_failure(store, row, _native_failure(error), window)
+    # Every current native publisher for this original Job shares this lock,
+    # including original execution, across Catalogs and their stale backups.
+    with family.locked():
+        try:
+            _assert_publication_authority(store, row, window)
+        except _LeaseExpired:
+            return _lost_lease(store, store.get(spec.spec_id), now_ns=time.time_ns())
+        if followup:
+            committed = find_committed_dispatch(origin, family.specs())
+            if committed is not None:
+                dispatch, outcome = committed
+                try:
+                    return _complete_followup(
+                        store, row, spec, dispatch, outcome, "acknowledged_committed", window
+                    )
+                except _LeaseExpired:
+                    return _lost_lease(store, store.get(spec.spec_id), now_ns=time.time_ns())
+            try:
+                _assert_publication_authority(store, row, window)
+            except _LeaseExpired:
+                return _lost_lease(store, store.get(spec.spec_id), now_ns=time.time_ns())
+            family.claim_retry(spec)
+        return _execute_native_claimed(store, row, window, _worker_command=_worker_command)
+
+
+def _execute_native_claimed(
     store: JobRepository,
     row: Row,
     window: _LeaseWindow,
@@ -299,29 +431,7 @@ def _run_native_claimed(
     spec = load_job_spec(canonical(cast("Row", row["spec"])))
 
     def fence() -> None:
-        attempt = cast("Row", row["attempt"])
-        now = time.time_ns()
-        if time.monotonic_ns() >= window.deadline_ns or now >= cast(
-            "int", attempt["lease_expires_at_ns"]
-        ):
-            raise _LeaseExpired
-        store.assert_active(
-            job_id,
-            expected_version=cast("int", row["version"]),
-            coordinator_id=cast("str", attempt["coordinator_id"]),
-            job_attempt_id=cast("str", attempt["job_attempt_id"]),
-            lease_token=cast("str", attempt["lease_token"]),
-            now_ns=now,
-        )
-        # A Catalog read may wait on SQLite. It cannot silently spend the
-        # remaining authorization window before the actual research write.
-        checked_at = time.time_ns()
-        if checked_at < now:
-            raise JobConflictError("Coordinator UTC moved backwards during admission")
-        if time.monotonic_ns() >= window.deadline_ns or checked_at >= cast(
-            "int", attempt["lease_expires_at_ns"]
-        ):
-            raise _LeaseExpired
+        _assert_publication_authority(store, row, window)
 
     try:
         prepared = prepare_native_job(spec)
@@ -465,6 +575,13 @@ def _run_native_claimed(
         fence()
     except _LeaseExpired:
         return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
+    if spec.document["operation"] == "resolve_reduction_job_v1":
+        try:
+            return _complete_followup(
+                store, row, spec, spec, output, "replayed_from_origin", window
+            )
+        except _LeaseExpired:
+            return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
     attempt = cast("Row", row["attempt"])
     return store.complete(
         job_id,
@@ -507,7 +624,9 @@ def run_job(
         window = _LeaseWindow(
             claim_clock + cast("int", cast("Row", row["spec"])["lease_duration_ns"])
         )
-        if cast("Row", row["spec"])["operation"] == "execute_reduction_input_v1":
+        if cast("Row", row["spec"])["operation"] in {
+            "execute_reduction_input_v1", "resolve_reduction_job_v1"
+        }:
             return _run_native_claimed(store, row, window, _worker_command=_worker_command)
         attempt = cast("Row", row["attempt"])
         raw = canonical(
