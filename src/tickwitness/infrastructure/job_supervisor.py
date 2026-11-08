@@ -20,11 +20,13 @@ from tickwitness.domain.jobs.contracts import (
     JobSpec,
     build_followup_result,
     execution_origin_spec,
+    job_dispatch_nonce,
     load_job_spec,
 )
 from tickwitness.domain.jobs.native_requests import build_native_worker_request
 from tickwitness.domain.replay.contracts import load_replay_result
 from tickwitness.infrastructure import job_reduction
+from tickwitness.infrastructure.attempt_ledger import AttemptBudgetExceededError
 from tickwitness.infrastructure.job_comparison import execute_comparison
 from tickwitness.infrastructure.job_followups import find_committed_dispatch
 from tickwitness.infrastructure.job_lineage import JobFamily
@@ -361,7 +363,7 @@ def _run_native_claimed(
         if followup:
             store.validate_followup_context(spec.spec_id)
         # Validate actual source/preparation and original live prefix first.
-        prepare_native_job(origin)
+        prepared = prepare_native_job(origin)
         _assert_publication_authority(store, row, window)
     except _LeaseExpired:
         return _lost_lease(store, store.get(spec.spec_id), now_ns=time.time_ns())
@@ -396,6 +398,17 @@ def _run_native_claimed(
     if not followup:
         try:
             job_reduction.require_native_runtime()
+            # Immutable exhausted slots cannot become available again. Refuse
+            # a known-full original budget before creating operational family
+            # metadata, while preserving the existing duplicate-nonce path.
+            slots = prepared.ledger.list_reservations(prepared.execution.protocol)
+            budget = cast("dict[str, int]", prepared.execution.protocol.document["budget"])
+            if len(slots) >= budget["max_attempts"] and all(
+                item.document["nonce"] != job_dispatch_nonce(spec) for item in slots
+            ):
+                raise AttemptBudgetExceededError(
+                    "This protocol's immutable attempt budget is exhausted"
+                )
         except Exception as error:
             return _finish_failure(store, row, _native_failure(error), window)
     # Every current native publisher for this original Job shares this lock,

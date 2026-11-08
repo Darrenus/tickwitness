@@ -41,6 +41,25 @@ def failed_parent(value, root, tmp_path, monkeypatch):
     return origin, store, row
 
 
+def test_known_exhaustion_refuses_before_creating_original_family_metadata(
+    reduction_case, native_job_root, monkeypatch
+):
+    value = reduction_case
+    protocol = value.prepared.materialization.source.validation.protocol
+    limit = protocol.document["budget"]["max_attempts"]
+    while len(value.ledger.list_reservations(protocol)) < limit:
+        value.ledger.reserve(protocol)
+    origin, store, _ = queued(value, native_job_root)
+    before = tree(value.case.root / "runs")
+    monkeypatch.setattr(job_reduction, "require_native_runtime", lambda: None)
+    monkeypatch.setattr(job_supervisor.subprocess, "Popen", forbidden)
+    completed = run_job(store, origin.spec_id)
+    assert completed["state"] == "FAILED"
+    assert completed["failure"]["code"] == "attempt_budget_exhausted"
+    assert completed["failure"]["worker_exit_code"] is None
+    assert tree(value.case.root / "runs") == before
+
+
 def test_explicit_retry_uses_new_original_slot_and_preserves_failed_parent(
     reduction_case, native_job_root, tmp_path, monkeypatch
 ):
