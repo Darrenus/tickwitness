@@ -42,4 +42,6 @@ Remote installed qualification freezes a distinct, explicitly titled synthetic *
 
 Manually dispatching the Engineering workflow also runs this installed followup qualification immediately after quality checks, with separate native/core interpreters and a retained preflight artifact. It provides early functional feedback while the full matrix runs; it does not replace the pull request's complete checks or four current profile audits.
 
+CI allowances are20 minutes for the core matrix,40 for the complete native jobs and15 for source/wheel qualification. The native allowance includes the full test suite, all independent installed/fault profiles, artifact uploads and cleanup; the earlier30-minute run reached its limit after passing functional steps and uploading its final artifact, so it is not counted as a successful run. These CI allowances never extend a protocol's original attempt, event or60-second native wall limits.
+
 Explicit retry/acknowledgment do not implement complete checkpoints, strong cancellation, total-resource policy, full orphan/temp reclamation, release, external human approval, market adoption or profit. Those limits remain visible; S10-03 is planned separately.
