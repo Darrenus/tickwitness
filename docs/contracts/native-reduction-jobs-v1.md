@@ -1,6 +1,6 @@
 # Managed native reduction Jobs v1
 
-S10-02b, implementation under review, 2026-11-07 (Asia/Singapore). [Story #29](https://github.com/Darrenus/tickwitness/issues/29), [ADR0034](../adr/0034-coordinator-owned-native-jobs.md), [Sprint10](../planning/sprint-10-status.md). Owner merge of [PR102](https://github.com/Darrenus/tickwitness/pull/102) accepts the earlier [read-only attempt recovery](reduction-attempt-recovery-v1.md). This extension adds real native execution; explicit retry and Job acknowledgment recovery remain subsequent S10-02 work. External human reproduction remains **0 / PENDING**.
+S10-02b accepted by owner merge of [PR103](https://github.com/Darrenus/tickwitness/pull/103), `a521abba087d747b306ed1271188a3a5a4da58e4`, 2026-11-08 (Asia/Singapore). [Story #29](https://github.com/Darrenus/tickwitness/issues/29), [ADR0034](../adr/0034-coordinator-owned-native-jobs.md), [Sprint10](../planning/sprint-10-status.md). Owner merge of [PR102](https://github.com/Darrenus/tickwitness/pull/102) accepts the earlier [read-only attempt recovery](reduction-attempt-recovery-v1.md). This extension adds real native execution; explicit retry and separate acknowledgment are now the [S10-02c followup](job-followups-v1.md) slice under review. External human reproduction remains **0 / PENDING**.
 
 ## Identity and original budget
 

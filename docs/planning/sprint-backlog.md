@@ -162,6 +162,8 @@
 
 2026-11-07，owner 合并 #102 接受 S10-02a。S10-02b 的 [原生 Job 合同](../contracts/native-reduction-jobs-v1.md) 接入确定性原槽关联、coordinator 独占研究写入和受管原生执行／发布 fencing；S10-02c 显式 retry 与 Job acknowledgment 恢复仍 Planned。#29 不关闭，14h 总专项估算与持续质量预算不变，不补造实际工时。八槽 qualification 是执行前冻结的独立合成生命周期，不修改旧五槽／十一槽或导入 portable 额度。
 
+2026-11-08，owner 合并 #103 接受 S10-02b。S10-02c 的 [显式后继合同](../contracts/job-followups-v1.md) 实现独立幂等 retry／确认 Job；共享原账本 family 锁与不可变后继记录约束跨 Catalog 分叉，已提交 outcome 仅复验确认，真实重跑使用原协议新槽。旧终态／schema1 不变。新独立合成五槽资格先冻结预算，不扩充旧五槽／八槽／十一槽；本轮通过证据只在实现 PR 回填。#29 保持 OPEN 待 owner 接受，14h／Sprint34h与持续质量容量不变，外部真人0/PENDING，S10-03 另行验收。
+
 **目标：** 长任务在中断和重试后不损坏研究记录。依赖：S7–S9。计划专项容量 34 小时。
 
 | Story | 用户故事与任务 | 估计 | 可执行验收 |

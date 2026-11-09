@@ -4,11 +4,19 @@ Times are supplied by the trusted coordinator. Query liveness labels never
 mutate a stored snapshot or certify progress, clock authenticity or recovery.
 """
 
+from __future__ import annotations
+
+import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
 
 from tickwitness.domain.evidence.reduction_comparison import load_reduction_comparison_export
-from tickwitness.domain.evidence.reduction_records import load_reduction_run_receipt
+from tickwitness.domain.evidence.reduction_records import (
+    MAX_REDUCTION_RECORD_BYTES,
+    load_reduction_failure,
+    load_reduction_run_receipt,
+)
 from tickwitness.domain.evidence.run_records import canonical, digest, identity, parse
 
 MAX_JOB_SPEC_BYTES = 64 * 1024
@@ -16,6 +24,8 @@ MAX_JOB_SNAPSHOT_BYTES = 128 * 1024
 MIN_JOB_LEASE_NS = 1_000_000_000
 MAX_JOB_LEASE_NS = 60_000_000_000
 MAX_JOB_INTEGER = (1 << 63) - 1
+MAX_FOLLOWUP_ANCESTRY = 32
+MAX_FOLLOWUP_RESULT_BYTES = MAX_REDUCTION_RECORD_BYTES + 64 * 1024
 _REQUEST_FIELDS = {
     "run_id",
     "expected_bundle_id",
@@ -36,6 +46,17 @@ _EXECUTION_REQUEST_FIELDS = {
     "split",
     "engine_runtime",
     "restart_mode",
+}
+_FOLLOWUP_REQUEST_FIELDS = {"origin_spec", "parent_job_id", "mode", "idempotency_key"}
+_FOLLOWUP_RESULT_FIELDS = {
+    "kind",
+    "schema_version",
+    "job_id",
+    "origin_job_id",
+    "parent_job_id",
+    "action",
+    "dispatch_job_id",
+    "outcome",
 }
 _SPEC_FIELDS = {"kind", "schema_version", "operation", "request", "lease_duration_ns"}
 _SNAPSHOT_FIELDS = {
@@ -138,6 +159,28 @@ def _execution_request(value: object) -> Row:
     return request
 
 
+def _followup_request(value: object) -> tuple[Row, JobSpec]:
+    request = _exact(value, _FOLLOWUP_REQUEST_FIELDS, "Followup job request")
+    origin = request["origin_spec"]
+    _require(
+        isinstance(origin, dict) and origin.get("kind") == "reduction_execution_job_spec_v1",
+        "Followup origin must be an original native spec, never a recursive followup",
+    )
+    checked_origin = load_job_spec(canonical(cast("Row", origin)))
+    identity(request["parent_job_id"])
+    mode = request["mode"]
+    _require(
+        isinstance(mode, str) and mode in {"retry_from_origin_v1", "acknowledge_committed_v1"},
+        "Unsupported explicit followup mode",
+    )
+    key = request["idempotency_key"]
+    _require(
+        isinstance(key, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", key) is not None,
+        "Followup key requires 1..128 ASCII identifier characters, starting alphanumeric",
+    )
+    return request, checked_origin
+
+
 def _spec_document(raw: bytes) -> Row:
     row = _exact(parse(raw, limit=MAX_JOB_SPEC_BYTES), _SPEC_FIELDS, "Job spec")
     if row["kind"] == "comparison_job_spec_v1":
@@ -146,12 +189,22 @@ def _spec_document(raw: bytes) -> Row:
             row["operation"] == "compare_reduction_run_v1", "Unsupported managed job operation"
         )
         _request(row["request"])
-    else:
+    elif row["kind"] == "reduction_execution_job_spec_v1":
         _markers(row, "reduction_execution_job_spec_v1")
         _require(
             row["operation"] == "execute_reduction_input_v1", "Unsupported managed job operation"
         )
         _execution_request(row["request"])
+    else:
+        _markers(row, "reduction_followup_job_spec_v1")
+        _require(
+            row["operation"] == "resolve_reduction_job_v1", "Unsupported managed job operation"
+        )
+        _request_row, origin = _followup_request(row["request"])
+        _require(
+            row["lease_duration_ns"] == origin.document["lease_duration_ns"],
+            "Followup lease must equal the frozen original lease",
+        )
     _integer(row["lease_duration_ns"], "lease_duration_ns", MIN_JOB_LEASE_NS, MAX_JOB_LEASE_NS)
     return row
 
@@ -213,12 +266,109 @@ def build_execution_job_spec(request: Row, *, lease_duration_ns: int = 30_000_00
         raise JobValidationError("Cannot build execution job spec: " + str(error)) from error
 
 
+def build_followup_job_spec(
+    origin_spec: JobSpec, parent_job_id: str, mode: str, idempotency_key: str
+) -> JobSpec:
+    """Freeze an explicit resolution request, without changing the parent's terminal state."""
+    try:
+        _require(type(origin_spec) is JobSpec, "Followup requires an actual original JobSpec")
+        origin = load_job_spec(origin_spec.canonical_bytes)
+        request, checked_origin = _followup_request(
+            {
+                "origin_spec": origin.document,
+                "parent_job_id": parent_job_id,
+                "mode": mode,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        return load_job_spec(
+            canonical(
+                {
+                    "kind": "reduction_followup_job_spec_v1",
+                    "schema_version": 1,
+                    "operation": "resolve_reduction_job_v1",
+                    "request": request,
+                    "lease_duration_ns": checked_origin.document["lease_duration_ns"],
+                }
+            )
+        )
+    except (ValueError, TypeError, KeyError, AttributeError) as error:
+        raise JobValidationError("Cannot build followup job spec: " + str(error)) from error
+
+
 def load_job_spec(raw: bytes) -> JobSpec:
     try:
         _spec_document(raw)
         return JobSpec(digest(raw), raw)
     except (ValueError, TypeError, KeyError, AttributeError) as error:
         raise JobValidationError("Cannot load job spec: " + str(error)) from error
+
+
+def execution_origin_spec(spec: JobSpec) -> JobSpec:
+    """Return the one original native descriptor; locators/pins cannot drift along a chain."""
+    checked = load_job_spec(spec.canonical_bytes)
+    operation = checked.document["operation"]
+    if operation == "execute_reduction_input_v1":
+        return checked
+    _require(operation == "resolve_reduction_job_v1", "Operation has no native execution origin")
+    request = cast("Row", checked.document["request"])
+    return load_job_spec(canonical(cast("Row", request["origin_spec"])))
+
+
+def validate_followup_context(spec: JobSpec, lookup: Callable[[str], Row]) -> tuple[Row, ...]:
+    """Check a bounded same-Catalog ancestry, without changing state or trusting a receipt.
+
+    Lookup IO failures retain their own classification. Sibling admission and
+    the shared original-ledger journal/lock are separate transactional checks.
+    """
+    checked = load_job_spec(spec.canonical_bytes)
+    _require(
+        checked.document["operation"] == "resolve_reduction_job_v1",
+        "Ancestry validation requires an explicit followup Job",
+    )
+    origin = execution_origin_spec(checked)
+    request = cast("Row", checked.document["request"])
+    current = identity(request["parent_job_id"])
+    visited = {checked.spec_id}
+    reverse: list[Row] = []
+    while True:
+        _require(current not in visited, "Followup ancestry is cyclic or aliases the child")
+        _require(len(reverse) < MAX_FOLLOWUP_ANCESTRY, "Followup ancestry exceeds its bound")
+        visited.add(current)
+        row = load_job_snapshot(canonical(lookup(current)))
+        _require(row["job_id"] == current, "Followup lookup returned another parent Job")
+        _require(
+            row["state"] in {"FAILED", "LOST", "SUCCEEDED"},
+            "Followup parents must be durably terminal; reconcile orphan ownership explicitly",
+        )
+        parent = load_job_spec(canonical(cast("Row", row["spec"])))
+        reverse.append(row)
+        if current == origin.spec_id:
+            _require(
+                parent.canonical_bytes == origin.canonical_bytes,
+                "Followup root differs from the exact original native descriptor",
+            )
+            break
+        _require(
+            parent.document["operation"] == "resolve_reduction_job_v1",
+            "Followup chain does not reach its exact original root",
+        )
+        parent_request = cast("Row", parent.document["request"])
+        _require(
+            parent_request["mode"] == "retry_from_origin_v1",
+            "An acknowledgment-only Job cannot become a native followup parent",
+        )
+        _require(
+            execution_origin_spec(parent).canonical_bytes == origin.canonical_bytes,
+            "Followup ancestor belongs to another frozen original descriptor",
+        )
+        current = identity(parent_request["parent_job_id"])
+    if request["mode"] == "retry_from_origin_v1":
+        _require(
+            len(reverse) < MAX_FOLLOWUP_ANCESTRY,
+            "Retry would exceed the bounded original dispatch chain",
+        )
+    return tuple(reversed(reverse))
 
 
 def execution_dispatch_nonce(job_id: str) -> str:
@@ -231,11 +381,105 @@ def execution_dispatch_nonce(job_id: str) -> str:
 def job_dispatch_nonce(spec: JobSpec) -> str:
     """Return a native Job's immutable association, never replay authorization."""
     checked = load_job_spec(spec.canonical_bytes)
+    operation = checked.document["operation"]
     _require(
-        checked.document["operation"] == "execute_reduction_input_v1",
+        operation == "execute_reduction_input_v1"
+        or (
+            operation == "resolve_reduction_job_v1"
+            and cast("Row", checked.document["request"])["mode"] == "retry_from_origin_v1"
+        ),
         "Only native execution Jobs have an original research dispatch nonce",
     )
     return execution_dispatch_nonce(checked.spec_id)
+
+
+def _checked_dispatch_outcome(origin: JobSpec, dispatch_job_id: str, raw: bytes) -> Row:
+    document = parse(raw, limit=MAX_REDUCTION_RECORD_BYTES)
+    if document.get("kind") == "reduction_run_receipt_v1":
+        document = load_reduction_run_receipt(raw).document
+    else:
+        document = load_reduction_failure(raw)
+    request = cast("Row", origin.document["request"])
+    intent = cast("Row", document["intent"])
+    bindings = cast("Row", intent["bindings"])
+    _require(
+        bindings["source_bundle_id"] == request["expected_bundle_id"]
+        and bindings["source_report_id"] == request["expected_report_id"]
+        and bindings["preparation_id"] == request["expected_preparation_id"],
+        "Followup outcome does not bind its exact frozen origin pins",
+    )
+    _require(
+        cast("Row", document["attempt"])["nonce"] == execution_dispatch_nonce(dispatch_job_id),
+        "Followup outcome belongs to another actual original dispatch nonce",
+    )
+    return document
+
+
+def _check_followup_result(spec: JobSpec, raw: bytes) -> str:
+    document = _exact(
+        parse(raw, limit=MAX_FOLLOWUP_RESULT_BYTES), _FOLLOWUP_RESULT_FIELDS, "Followup result"
+    )
+    _markers(document, "reduction_job_resolution_v1")
+    request = cast("Row", spec.document["request"])
+    origin = execution_origin_spec(spec)
+    _require(
+        document["job_id"] == spec.spec_id
+        and document["origin_job_id"] == origin.spec_id
+        and document["parent_job_id"] == request["parent_job_id"],
+        "Followup result does not bind its Job, original root and parent",
+    )
+    dispatch_job_id = identity(document["dispatch_job_id"])
+    action = document["action"]
+    _require(
+        isinstance(action, str) and action in {"replayed_from_origin", "acknowledged_committed"},
+        "Unsupported actual followup action",
+    )
+    _require(isinstance(document["outcome"], dict), "Followup requires the exact original outcome")
+    outcome = _checked_dispatch_outcome(
+        origin, dispatch_job_id, canonical(cast("Row", document["outcome"]))
+    )
+    if action == "replayed_from_origin":
+        _require(
+            request["mode"] == "retry_from_origin_v1"
+            and dispatch_job_id == spec.spec_id
+            and outcome["kind"] == "reduction_run_receipt_v1",
+            "Replayed followup requires a current retry dispatch and audited result receipt",
+        )
+    return digest(raw)
+
+
+def build_followup_result(
+    spec: JobSpec, dispatch_spec: JobSpec, outcome_raw: bytes, action: str
+) -> bytes:
+    """Bind a checked original outcome to the actual resolution action, without executing."""
+    checked = load_job_spec(spec.canonical_bytes)
+    _require(
+        checked.document["operation"] == "resolve_reduction_job_v1",
+        "Resolution result requires a followup descriptor",
+    )
+    origin = execution_origin_spec(checked)
+    dispatch = load_job_spec(dispatch_spec.canonical_bytes)
+    _require(
+        execution_origin_spec(dispatch).canonical_bytes == origin.canonical_bytes,
+        "Resolution dispatch belongs to another frozen original descriptor",
+    )
+    job_dispatch_nonce(dispatch)
+    outcome = _checked_dispatch_outcome(origin, dispatch.spec_id, outcome_raw)
+    request = cast("Row", checked.document["request"])
+    raw = canonical(
+        {
+            "kind": "reduction_job_resolution_v1",
+            "schema_version": 1,
+            "job_id": checked.spec_id,
+            "origin_job_id": origin.spec_id,
+            "parent_job_id": request["parent_job_id"],
+            "action": action,
+            "dispatch_job_id": dispatch.spec_id,
+            "outcome": outcome,
+        }
+    )
+    _check_followup_result(checked, raw)
+    return raw
 
 
 def check_job_result(spec: JobSpec, raw: bytes) -> str:
@@ -252,6 +496,8 @@ def check_job_result(spec: JobSpec, raw: bytes) -> str:
             and reduced["run_id"] == request["run_id"],
             "Job result does not bind its original request pins",
         )
+    elif checked.document["operation"] == "resolve_reduction_job_v1":
+        return _check_followup_result(checked, raw)
     else:
         receipt = load_reduction_run_receipt(raw)
         document = receipt.document

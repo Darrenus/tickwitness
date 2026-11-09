@@ -220,7 +220,16 @@ def _workspace(records: Path, report: Path):
                 )
 
 
-def _bootstrap(run, helper, examples: Path, root: Path, inputs: Path) -> dict:
+def _bootstrap(
+    run,
+    helper,
+    examples: Path,
+    root: Path,
+    inputs: Path,
+    *,
+    original_attempts: int = 8,
+    qualification_title: str = "Synthetic eight-slot managed native Job qualification",
+) -> dict:
     for name in (
         "replay-partials.jsonl",
         "replay-confirmation.jsonl",
@@ -230,8 +239,8 @@ def _bootstrap(run, helper, examples: Path, root: Path, inputs: Path) -> dict:
     ):
         shutil.copyfile(examples / name, inputs / name)
     request = json.loads((examples / "stress-experiment-request.json").read_bytes())
-    request["claim"]["title"] = "Synthetic eight-slot managed native Job qualification"
-    request["budget"]["max_attempts"] = 8
+    request["claim"]["title"] = qualification_title
+    request["budget"]["max_attempts"] = original_attempts
     (inputs / "experiment.json").write_bytes(_canonical(request))
     (inputs / "campaign-budget.json").write_bytes(
         _canonical(
@@ -266,7 +275,7 @@ def _bootstrap(run, helper, examples: Path, root: Path, inputs: Path) -> dict:
         str(registry),
     )
     assert frozen["document"]["budget"] == {
-        "max_attempts": 8,
+        "max_attempts": original_attempts,
         "max_events": 1000,
         "max_wall_seconds": 60,
     }

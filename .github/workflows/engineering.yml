@@ -34,6 +34,26 @@ jobs:
         run: make type
       - if: always()
         run: make docs
+      - name: Fast installed followup qualification on manual dispatch
+        if: github.event_name == 'workflow_dispatch' && success()
+        run: |
+          uv sync --locked --extra nautilus
+          uv build --no-build-isolation
+          uv pip install --python .venv/bin/python --no-index --no-deps --reinstall dist/*.whl
+          uv venv /tmp/tickwitness-followup-preflight-core --python 3.12
+          uv pip install --python /tmp/tickwitness-followup-preflight-core/bin/python --no-index --no-deps dist/*.whl
+          python3 scripts/smoke_job_followups.py --python .venv/bin/python --verifier-python /tmp/tickwitness-followup-preflight-core/bin/python --report /tmp/followup-preflight.json --records-dir /tmp/followup-preflight-records
+      - name: Preserve manually dispatched followup preflight evidence
+        if: github.event_name == 'workflow_dispatch' && always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: followup-preflight-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            /tmp/followup-preflight.json
+            /tmp/followup-preflight-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Prepare formatting corrections after a quality failure
         if: failure()
         run: |
@@ -56,8 +76,8 @@ jobs:
         os: [ubuntu-24.04, macos-15]
         python: ["3.12", "3.13", "3.14"]
     runs-on: ${{ matrix.os }}
-    # Includes persisted-fault and OS-alarm regressions on every supported runtime.
-    timeout-minutes: 15
+    # Family fsync, persisted faults and OS-alarm regressions on every runtime.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -100,6 +120,7 @@ jobs:
           python3 scripts/smoke_reduction.py --python /tmp/tickwitness-wheel/bin/python --corpus-root examples/alpha --report /tmp/reduction-input-core.json --records-dir /tmp/reduction-input-core-records
           python3 scripts/smoke_reduction_execution.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/reduction-execution-core.json --records-dir /tmp/reduction-execution-core-records
           python3 scripts/smoke_native_jobs.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/native-jobs-core.json --records-dir /tmp/native-jobs-core-records
+          python3 scripts/smoke_job_followups.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/job-followups-core.json --records-dir /tmp/job-followups-core-records
           python3 scripts/smoke_reduction_search.py --python /tmp/tickwitness-wheel/bin/python --verifier-python /tmp/tickwitness-wheel/bin/python --core-only --report /tmp/reduction-search-core.json --records-dir /tmp/reduction-search-core-records
           python3 scripts/smoke_reduction_comparison.py --python /tmp/tickwitness-wheel/bin/python --source-report /tmp/reduction-search-core.json --source-records /tmp/reduction-search-core-records --core-only --report /tmp/reduction-comparison-core.json --records-dir /tmp/reduction-comparison-core-records
           python3 scripts/smoke_jobs.py --python /tmp/tickwitness-wheel/bin/python --source-report /tmp/reduction-comparison-core.json --source-records /tmp/reduction-comparison-core-records --core-only --report /tmp/jobs-core.json --records-dir /tmp/jobs-core-records
@@ -131,6 +152,17 @@ jobs:
           path: |
             /tmp/native-jobs-core.json
             /tmp/native-jobs-core-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve installed-core explicit retry and ACK refusals
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: job-followups-core-${{ github.sha }}
+          path: |
+            /tmp/job-followups-core.json
+            /tmp/job-followups-core-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30
@@ -304,9 +336,10 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-26]
     runs-on: ${{ matrix.os }}
-    # Includes the full suite, installed workflows and artifact/post-job cleanup.
+    # Includes the expanded full suite, installed fault profiles and uploads.
+    # The former 30-minute allowance expired during a successful final upload.
     # Research attempt and campaign deadlines remain independently enforced.
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -397,6 +430,9 @@ jobs:
       - name: Execute managed native Jobs with original reservations and publication fencing
         run: |
           python3 scripts/smoke_native_jobs.py --python .venv/bin/python --verifier-python /tmp/tickwitness-tagged-verifier/bin/python --report /tmp/native-jobs.json --records-dir /tmp/native-jobs-records
+      - name: Qualify explicit native retry and committed-result ACK recovery
+        run: |
+          python3 scripts/smoke_job_followups.py --python .venv/bin/python --verifier-python /tmp/tickwitness-tagged-verifier/bin/python --report /tmp/job-followups.json --records-dir /tmp/job-followups-records
       - name: Qualify bounded local reduction with real numeric witness preservation
         run: |
           python3 scripts/smoke_reduction_search.py --python .venv/bin/python --verifier-python /tmp/tickwitness-tagged-verifier/bin/python --report /tmp/reduction-search.json --records-dir /tmp/reduction-search-records
@@ -423,6 +459,17 @@ jobs:
           path: |
             /tmp/native-jobs.json
             /tmp/native-jobs-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve installed explicit retry, family fencing and ACK recovery
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: job-followups-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            /tmp/job-followups.json
+            /tmp/job-followups-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30
@@ -655,6 +702,7 @@ jobs:
           python3 "$TW_SOURCE/scripts/smoke_queue_execution.py" --python /tmp/tickwitness-preview-native/bin/python --native --report /tmp/queue-source-wheel-execution.json
           python3 "$TW_SOURCE/scripts/smoke_reduction_execution.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/reduction-execution-source-wheel.json --records-dir /tmp/reduction-execution-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_native_jobs.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/native-jobs-source-wheel.json --records-dir /tmp/native-jobs-source-wheel-records
+          python3 "$TW_SOURCE/scripts/smoke_job_followups.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/job-followups-source-wheel.json --records-dir /tmp/job-followups-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_reduction_search.py" --python /tmp/tickwitness-preview-native/bin/python --verifier-python /tmp/tickwitness-preview-core/bin/python --report /tmp/reduction-search-source-wheel.json --records-dir /tmp/reduction-search-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_reduction_comparison.py" --python /tmp/tickwitness-preview-core/bin/python --source-report /tmp/reduction-search-source-wheel.json --source-records /tmp/reduction-search-source-wheel-records --report /tmp/reduction-comparison-source-wheel.json --records-dir /tmp/reduction-comparison-source-wheel-records
           python3 "$TW_SOURCE/scripts/smoke_jobs.py" --python /tmp/tickwitness-preview-core/bin/python --source-report /tmp/reduction-comparison-source-wheel.json --source-records /tmp/reduction-comparison-source-wheel-records --report /tmp/jobs-source-wheel.json --records-dir /tmp/jobs-source-wheel-records
@@ -697,6 +745,17 @@ jobs:
           path: |
             /tmp/native-jobs-source-wheel.json
             /tmp/native-jobs-source-wheel-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve actual-source explicit retry and core-only ACK recovery
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: job-followups-source-wheel-${{ github.sha }}
+          path: |
+            /tmp/job-followups-source-wheel.json
+            /tmp/job-followups-source-wheel-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30

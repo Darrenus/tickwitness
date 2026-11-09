@@ -1,6 +1,8 @@
 """Generic managed job state; research verdicts and budgets remain separate."""
 
 from tickwitness.domain.jobs.contracts import (
+    MAX_FOLLOWUP_ANCESTRY,
+    MAX_FOLLOWUP_RESULT_BYTES,
     MAX_JOB_INTEGER,
     MAX_JOB_LEASE_NS,
     MAX_JOB_SNAPSHOT_BYTES,
@@ -10,11 +12,14 @@ from tickwitness.domain.jobs.contracts import (
     JobValidationError,
     assert_active_job,
     build_execution_job_spec,
+    build_followup_job_spec,
+    build_followup_result,
     build_job_spec,
     check_job_result,
     claim_job,
     effective_state,
     execution_dispatch_nonce,
+    execution_origin_spec,
     finish_job,
     heartbeat_job,
     job_dispatch_nonce,
@@ -22,9 +27,12 @@ from tickwitness.domain.jobs.contracts import (
     load_job_spec,
     lose_job,
     queued_job,
+    validate_followup_context,
 )
 
 __all__ = [
+    "MAX_FOLLOWUP_ANCESTRY",
+    "MAX_FOLLOWUP_RESULT_BYTES",
     "MAX_JOB_INTEGER",
     "MAX_JOB_LEASE_NS",
     "MAX_JOB_SNAPSHOT_BYTES",
@@ -34,11 +42,14 @@ __all__ = [
     "JobValidationError",
     "assert_active_job",
     "build_execution_job_spec",
+    "build_followup_job_spec",
+    "build_followup_result",
     "build_job_spec",
     "check_job_result",
     "claim_job",
     "effective_state",
     "execution_dispatch_nonce",
+    "execution_origin_spec",
     "finish_job",
     "heartbeat_job",
     "job_dispatch_nonce",
@@ -46,4 +57,5 @@ __all__ = [
     "load_job_spec",
     "lose_job",
     "queued_job",
+    "validate_followup_context",
 ]
