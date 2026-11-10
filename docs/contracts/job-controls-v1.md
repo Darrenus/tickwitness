@@ -16,6 +16,22 @@ The deadline fences new execution/publication admission. Synchronous verificatio
 
 A stdlib-only child bootstrap applies supported OS CPU, single-file and descriptor limits before project/native imports, without parent `preexec_fn`. Unsupported requested enforcement is refused before claim/research reservation. These controls do not certify RSS, aggregate scratch bytes, per-UID process quota or global storage limits. Existing IPC bounds and original research attempt/event/native-wall limits remain independent and cannot be enlarged or refunded by controls.
 
+Limit enforcement and cause attribution are separate. Known resource signals or structured file/descriptor errors can identify a resource stop; a bare SIGKILL remains an observed worker failure without claiming whether a hard CPU limit or another actor caused it. Actual exit codes and policy remain visible. Resource semantics follow the platform's [Python resource interface](https://docs.python.org/3/library/resource.html).
+
+## Explicit local workflow
+
+```sh
+tickwitness configure-job-control JOB_ID --jobs /owner/jobs --wall-seconds 120 \
+  --worker-cpu-seconds 60 --max-file-bytes 8388608 --max-open-files 128
+tickwitness run-job JOB_ID --jobs /owner/jobs
+# In another terminal while the controlled Job is running:
+tickwitness cancel-job JOB_ID --jobs /owner/jobs --cancel-key operator-stop-1
+tickwitness inspect-job-control JOB_ID --jobs /owner/jobs
+tickwitness reclaim-job-workspaces JOB_ID --jobs /owner/jobs
+```
+
+Only configure freezes a policy, and only before the first claim. Current `run-job` enforces any configured policy automatically. Cancel records one explicit intent; an available coordinator can settle a cancelled queue item without launching its worker. A busy unrelated coordinator leaves intent visibly pending. Inspect creates no control records, reconciles nothing and distinguishes accepted intent, publication admission, actual stop/cleanup and the real Catalog state. Reclaim selects one Job, takes current Catalog ownership and explicitly reconciles before checking its lifetime lock; it does not scan or delete unrelated workspaces.
+
 ## Cancellation versus irreversible publication
 
 A separate per-Job gate serializes accepted requests against short reservation/start admission and the first irreversible success admission. The controller reads Catalog before this gate and never waits for Catalog ownership or the research family lock while holding it. Coordinator order is Catalog ownership, original family, control gate.
@@ -25,6 +41,8 @@ An immutable cancel request binds policy, Job, explicit key and UTC request time
 ## Owned processes and temporary products
 
 The controlled supervisor retains its current unreaped child identity until group signaling, then reaps and checks group disappearance. It never signals a recovered PID alone. Permission errors, remaining groups or ambiguous identity retain diagnostics and unconfirmed stop status.
+
+A trusted stdlib session anchor holds the pipes while its one compute child runs in the same process group. It waits for actual child exit, then exits directly or propagates the observed signal. This avoids interpreting Python's early stream closure as completed process exit, while preserving the unreaped group leader until signaling. The anchor and compute child both retain the lifetime descriptor and arm the remaining total deadline. There is one compute worker, not a second research execution; normal leader exit propagates its child's status, and forced group stop still requires observed group disappearance.
 
 Only the same-user no-follow `.job-controls/JOB/workspaces/ATTEMPT/scratch` namespace is reclaimable. Immutable workspace seals and inherited lifetime-lock descriptors bind ownership. Closing a coordinator's descriptor does not unlock an orphan's inherited lifetime. Normal deletion follows confirmed stop and lock absence; uncertainty retains scratch rather than deleting it unconditionally.
 

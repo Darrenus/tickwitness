@@ -12,4 +12,6 @@ Use a fixed live monotonic admission deadline across preparation, execution and 
 
 Temporary ownership uses no-follow seals and inherited lifetime locks. Signal only a current unreaped owned child group, then reap and verify group absence. Retain ambiguous or busy scratch. Explicit reclamation verifies the current Catalog and exact workspace identity without signalling old PIDs or traversing research/input roots.
 
+Keep a stdlib session anchor holding pipes and waiting for one same-group compute child. The child inherits the applied limits and re-arms its live deadline after fork; the anchor propagates actual exit/signal through direct termination. This preserves portable unreaped leader identity without misclassifying interpreter teardown after stream closure. Both retain lifetime ownership; neither creates a new research attempt beyond the one already admitted.
+
 The [Job controls contract](../contracts/job-controls-v1.md) defines these semantics. Installed qualification must observe both race orders, actual native stop/deadline/resource cases, measured cancellation latency, unchanged original slots and real scratch cleanup in core/Ubuntu/macOS/actual-source-wheel profiles. CI and AI are not external-human acceptance; external humans remain0/PENDING.

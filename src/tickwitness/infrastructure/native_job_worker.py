@@ -1,5 +1,6 @@
 """One trusted native process, path-free input and no research write authority."""
 
+import errno
 import signal
 import sys
 import time
@@ -37,13 +38,19 @@ def arm_native_deadline(deadline_ns: int) -> None:
     remaining = deadline_ns - time.monotonic_ns()
     if remaining <= 0:
         raise EvidenceValidationError("Original native deadline expired during alarm setup")
-    signal.setitimer(signal.ITIMER_REAL, remaining / 1_000_000_000)
+    # A configured Job's stdlib bootstrap may already have a shorter fixed
+    # total alarm. Native startup must never extend that original timer.
+    inherited, _interval = signal.getitimer(signal.ITIMER_REAL)
+    seconds = remaining / 1_000_000_000
+    signal.setitimer(signal.ITIMER_REAL, min(seconds, inherited) if inherited > 0 else seconds)
     if time.monotonic_ns() >= deadline_ns:
         raise EvidenceValidationError("Original native deadline expired before alarm admission")
 
 
 def _failure(error: Exception) -> Row:
-    if isinstance(error, ReplayDependencyError):
+    if isinstance(error, OSError) and error.errno in {errno.EFBIG, errno.EMFILE}:
+        code, exit_code = "job_resource_limit", 8
+    elif isinstance(error, ReplayDependencyError):
         code, exit_code = "engine_unavailable", 6
     elif isinstance(error, (ReplayValidationError, EvidenceValidationError)):
         code, exit_code = "invalid_research_evidence", 2

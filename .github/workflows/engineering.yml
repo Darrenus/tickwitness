@@ -644,6 +644,99 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+  job-controls:
+    needs: [quality]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: core
+            os: ubuntu-24.04
+            native: false
+            source: false
+          - profile: ubuntu-24.04
+            os: ubuntu-24.04
+            native: true
+            source: false
+          - profile: macos-26
+            os: macos-26
+            native: true
+            source: false
+          - profile: source-wheel
+            os: ubuntu-24.04
+            native: true
+            source: true
+    runs-on: ${{ matrix.os }}
+    # Dedicated process/fault qualification does not extend any research limit.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+          enable-cache: true
+      - run: make build
+      - name: Bind actual candidate archives to this checkout
+        run: python3 scripts/prepare_preview.py
+      - name: Install independent core and producer wheels
+        env:
+          TW_CONTROLS_NATIVE: ${{ matrix.native }}
+        run: |
+          uv venv /tmp/tickwitness-controls-core --python 3.12
+          uv pip install --python /tmp/tickwitness-controls-core/bin/python --no-index --no-deps dist/*.whl
+          if [ "$TW_CONTROLS_NATIVE" = true ]; then
+            uv venv /tmp/tickwitness-controls-native --python 3.12
+            uv pip install --python /tmp/tickwitness-controls-native/bin/python --no-index --no-deps dist/*.whl
+            uv export --locked --extra nautilus --no-dev --no-emit-project --format requirements-txt --output-file /tmp/tickwitness-controls-native-requirements.txt
+            uv pip install --python /tmp/tickwitness-controls-native/bin/python --only-binary nautilus-trader --require-hashes -r /tmp/tickwitness-controls-native-requirements.txt
+          fi
+      - name: Qualify fixed controls, real termination and original-slot conservation
+        env:
+          TW_CONTROLS_NATIVE: ${{ matrix.native }}
+          TW_CONTROLS_SOURCE: ${{ matrix.source }}
+        run: |
+          TW_CONTROLS_SCRIPT=scripts/smoke_job_controls.py
+          if [ "$TW_CONTROLS_SOURCE" = true ]; then
+            mkdir /tmp/tickwitness-controls-source
+            tar -xzf dist/tickwitness-*.tar.gz -C /tmp/tickwitness-controls-source
+            TW_CONTROLS_ROOT=$(find /tmp/tickwitness-controls-source -mindepth 1 -maxdepth 1 -type d)
+            TW_CONTROLS_SCRIPT="$TW_CONTROLS_ROOT/scripts/smoke_job_controls.py"
+            test -f "$TW_CONTROLS_SCRIPT"
+          fi
+          if [ "$TW_CONTROLS_NATIVE" = true ]; then
+            python3 "$TW_CONTROLS_SCRIPT" --python /tmp/tickwitness-controls-native/bin/python --verifier-python /tmp/tickwitness-controls-core/bin/python --report /tmp/job-controls.json --records-dir /tmp/job-controls-records
+          else
+            python3 "$TW_CONTROLS_SCRIPT" --python /tmp/tickwitness-controls-core/bin/python --verifier-python /tmp/tickwitness-controls-core/bin/python --core-only --report /tmp/job-controls.json --records-dir /tmp/job-controls-records
+          fi
+          cd dist
+          shasum -a 256 -c SHA256SUMS
+      - name: Preserve actual Job control and original-budget evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: job-controls-${{ matrix.profile }}-${{ github.sha }}
+          path: |
+            /tmp/job-controls.json
+            /tmp/job-controls-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Preserve exact wheels and source archives for control qualification
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: job-controls-packages-${{ matrix.profile }}-${{ github.sha }}
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/SHA256SUMS
+            dist/preview-manifest.json
+          if-no-files-found: ignore
+          retention-days: 30
+
   preview-artifacts:
     needs: [quality, tests, distribution, native-replay]
     runs-on: ubuntu-24.04
@@ -955,7 +1048,7 @@ jobs:
 
   engineering:
     if: always()
-    needs: [quality, tests, distribution, native-replay, preview-artifacts]
+    needs: [quality, tests, distribution, native-replay, job-controls, preview-artifacts]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every engineering job to pass
@@ -964,10 +1057,12 @@ jobs:
           TESTS: ${{ needs.tests.result }}
           DISTRIBUTION: ${{ needs.distribution.result }}
           NATIVE_REPLAY: ${{ needs.native-replay.result }}
+          JOB_CONTROLS: ${{ needs.job-controls.result }}
           PREVIEW_ARTIFACTS: ${{ needs.preview-artifacts.result }}
         run: |
           test "$QUALITY" = success
           test "$TESTS" = success
           test "$DISTRIBUTION" = success
           test "$NATIVE_REPLAY" = success
+          test "$JOB_CONTROLS" = success
           test "$PREVIEW_ARTIFACTS" = success

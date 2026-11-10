@@ -185,6 +185,11 @@ def _check_result(snapshot: Row, raw: bytes) -> str:
 class SqliteJobStore:
     """Only an exclusive coordinator may mutate this local schema-v1 catalog."""
 
+    @property
+    def root(self) -> Path:
+        """Locate optional controls without changing the Catalog's schema or identity."""
+        return self._root
+
     def __init__(self, root: Path, *, create: bool = False) -> None:
         if type(create) is not bool or not hasattr(os, "O_NOFOLLOW"):
             raise JobStoreError("Job catalog requires a boolean create flag and POSIX no-follow IO")
