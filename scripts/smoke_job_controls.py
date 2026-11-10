@@ -383,7 +383,8 @@ def main():
         def guarded(code, jobs):
             suffix = _GUARD_SUFFIX.replace(
                 "writers={",
-                "writers={'configure-job-control','cancel-job','reclaim-job-workspaces',",
+                "writers={'submit-comparison-job','configure-job-control',"
+                "'cancel-job','reclaim-job-workspaces',",
             )
             return ["-c", _GUARD_PREFIX + _GUARD + suffix + code], ("readonly", str(jobs))
 
