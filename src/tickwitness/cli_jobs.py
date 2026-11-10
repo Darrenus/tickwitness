@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import time
+from contextlib import suppress
 from pathlib import Path
 from typing import cast
 
@@ -19,7 +20,10 @@ from tickwitness.domain.jobs.contracts import (
     load_job_spec,
 )
 from tickwitness.domain.jobs.control import build_job_control_policy, control_key
-from tickwitness.infrastructure.job_control_runtime import reclaim_workspaces, validate_worker_limits
+from tickwitness.infrastructure.job_control_runtime import (
+    reclaim_workspaces,
+    validate_worker_limits,
+)
 from tickwitness.infrastructure.job_controls import JobControlStore
 from tickwitness.infrastructure.job_followups import find_committed_dispatch
 from tickwitness.infrastructure.job_lineage import JobFamily
@@ -300,40 +304,36 @@ def _control_command(arguments: argparse.Namespace) -> Row:
     store = SqliteJobStore(arguments.jobs, create=False)
     control = JobControlStore(store.root, job_id)
     if arguments.command == "configure-job-control":
-        policy = build_job_control_policy(
+        configured_policy = build_job_control_policy(
             job_id,
             max_wall_ns=arguments.wall_seconds * 1_000_000_000,
             worker_cpu_seconds=arguments.worker_cpu_seconds,
             max_file_bytes=arguments.max_file_bytes,
             max_open_files=arguments.max_open_files,
         )
-        validate_worker_limits(policy)
+        validate_worker_limits(configured_policy)
         with store.coordinator():
             row = store.get(job_id)
             existing = control.policy()
             if existing is None and row["state"] != "QUEUED":
                 raise JobConflictError("Control policy must be frozen before the first claim")
-            control.configure(policy)
+            control.configure(configured_policy)
         return {
             "kind": "job_control_configuration_v1",
             "schema_version": 1,
             "job_id": job_id,
-            "policy_id": policy.policy_id,
-            "policy": policy.document,
+            "policy_id": configured_policy.policy_id,
+            "policy": configured_policy.document,
         }
     row = store.get(job_id)
     if arguments.command == "cancel-job":
         # request_cancel can read an already committed immutable admission
         # marker while the publisher still owns the gate. Do not precede that
         # positive fast path with a shared-gate policy read.
-        observed = control.request_cancel(
-            arguments.cancel_key, now_ns=time.time_ns(), snapshot=row
-        )
+        observed = control.request_cancel(arguments.cancel_key, now_ns=time.time_ns(), snapshot=row)
         if observed["status"] in {"accepted", "already_requested"} and row["state"] == "QUEUED":
-            try:
+            with suppress(JobConflictError):
                 run_job(store, job_id)
-            except JobConflictError:
-                pass
         return observed
     policy = control.policy()
     if arguments.command == "inspect-job-control":

@@ -740,9 +740,7 @@ def run_job(
         controls = JobControlStore(root, job_id) if isinstance(root, Path) else None
         policy = controls.policy() if controls is not None else None
         if policy is None or controls is None:
-            return _run_queued_job(
-                store, row, coordinator_id, _worker_command=_worker_command
-            )
+            return _run_queued_job(store, row, coordinator_id, _worker_command=_worker_command)
         validate_worker_limits(policy)
         control = JobExecutionControl(controls)
         with control.activate():
@@ -789,9 +787,7 @@ def _run_queued_job(
     if control is not None:
         control.bind(row)
     check_control()
-    window = _LeaseWindow(
-        claim_clock + cast("int", cast("Row", row["spec"])["lease_duration_ns"])
-    )
+    window = _LeaseWindow(claim_clock + cast("int", cast("Row", row["spec"])["lease_duration_ns"]))
     if cast("Row", row["spec"])["operation"] in {
         "execute_reduction_input_v1",
         "resolve_reduction_job_v1",
@@ -804,9 +800,7 @@ def _run_queued_job(
             "schema_version": 1,
             "spec": row["spec"],
             "job_id": job_id,
-            **{
-                key: attempt[key] for key in ("coordinator_id", "job_attempt_id", "lease_token")
-            },
+            **{key: attempt[key] for key in ("coordinator_id", "job_attempt_id", "lease_token")},
         }
     )
     if len(raw) > MAX_JOB_REQUEST_BYTES:
@@ -866,9 +860,7 @@ def _run_queued_job(
         or (terminal["kind"] == "job_result_v1" and exit_code != 0)
     ):
         message = (
-            str(fault)
-            if fault is not None
-            else "Worker exited without a valid successful result"
+            str(fault) if fault is not None else "Worker exited without a valid successful result"
         )
         if errors:
             message += ": " + errors.decode("utf-8", errors="replace")

@@ -38,8 +38,12 @@ def configured(tmp_path, **limits):
     with store.coordinator() as owner:
         control.configure(policy)
         row = store.claim(
-            queued["job_id"], expected_version=1, coordinator_id=owner,
-            attempt_nonce="a" * 64, lease_token="b" * 64, now_ns=time.time_ns(),
+            queued["job_id"],
+            expected_version=1,
+            coordinator_id=owner,
+            attempt_nonce="a" * 64,
+            lease_token="b" * 64,
+            now_ns=time.time_ns(),
         )
     return store, control, row
 
@@ -99,8 +103,9 @@ def test_accepted_request_prevents_publication_without_creating_scratch(tmp_path
     assert stopped.value.code == "job_cancelled"
     assert control.publication_admission() is None
     assert not (control.directory / "workspaces").exists()
-    assert control.request_cancel("cancel-a", now_ns=time.time_ns(), snapshot=row)["request"] == (
-        accepted["request"]
+    assert (
+        control.request_cancel("cancel-a", now_ns=time.time_ns(), snapshot=row)["request"]
+        == (accepted["request"])
     )
     result = guard.finish(row, cause="job_cancelled")
     assert result["stop_confirmed"] is True and result["publication_admitted"] is False
@@ -117,9 +122,9 @@ def test_publication_admission_is_reentrant_and_late_cancel_is_not_accepted(tmp_
         check_control()  # An admitted commit is not retroactively undone.
         with control_publication(), control_admission():
             check_control()
-        assert control.request_cancel("too-late", now_ns=time.time_ns(), snapshot=row)["status"] == (
-            "too_late"
-        )
+        assert control.request_cancel("too-late", now_ns=time.time_ns(), snapshot=row)[
+            "status"
+        ] == ("too_late")
     assert control.cancel_request() is None
     result = guard.finish(row)
     assert result["publication_admitted"] is True and result["stop_confirmed"] is False
@@ -142,7 +147,9 @@ def test_busy_cancel_publication_is_waited_before_any_execution_admission(tmp_pa
 
     def cancel():
         try:
-            outcomes.append(peer.request_cancel("racing-cancel", now_ns=time.time_ns(), snapshot=row))
+            outcomes.append(
+                peer.request_cancel("racing-cancel", now_ns=time.time_ns(), snapshot=row)
+            )
         except BaseException as error:
             outcomes.append(error)
 
@@ -183,13 +190,19 @@ def test_requested_unsupported_hard_ceiling_refuses_without_changing_parent(tmp_
 
 def test_actual_bootstrap_caps_file_and_preserves_owned_lifetime_until_exit(tmp_path):
     _, control, row = configured(
-        tmp_path, max_wall_ns=5_000_000_000, worker_cpu_seconds=2,
-        max_file_bytes=1024, max_open_files=32,
+        tmp_path,
+        max_wall_ns=5_000_000_000,
+        worker_cpu_seconds=2,
+        max_file_bytes=1024,
+        max_open_files=32,
     )
     guard = JobExecutionControl(control)
     guard.bind(row)
     command = (
-        sys.executable, "-I", "-B", "-c",
+        sys.executable,
+        "-I",
+        "-B",
+        "-c",
         "import json,resource\nfrom pathlib import Path\n"
         "print(json.dumps({'cpu':resource.getrlimit(resource.RLIMIT_CPU),"
         "'file':resource.getrlimit(resource.RLIMIT_FSIZE),"
@@ -226,7 +239,10 @@ def test_session_anchor_holds_pipes_until_compute_exit_without_reaping_leader(tm
     guard.bind(row)
     child = None
     command = (
-        sys.executable, "-I", "-B", "-c",
+        sys.executable,
+        "-I",
+        "-B",
+        "-c",
         "import json,os,sys,time; "
         "print(json.dumps({'pid':os.getpid(),'pgid':os.getpgrp()}),flush=True); "
         "sys.stdin.buffer.readline(); "
@@ -295,8 +311,15 @@ def test_live_signal_uncertainty_retains_workspace_and_cannot_confirm_stop(tmp_p
 
     try:
         with pytest.raises(JobStoreError), guard.activate(), guard.workspace(row) as scratch:
-            child = guard.spawn((sys.executable, "-I", "-B", "-c",
-                                 "from threading import Event; print('ready',flush=True); Event().wait(30)"))
+            child = guard.spawn(
+                (
+                    sys.executable,
+                    "-I",
+                    "-B",
+                    "-c",
+                    "from threading import Event; print('ready',flush=True); Event().wait(30)",
+                )
+            )
             ready(child)
             monkeypatch.setattr(job_control_runtime.os, "killpg", denied)
             guard.stop_process(child)
@@ -327,7 +350,9 @@ def test_replaced_scratch_is_not_followed_or_reported_cleaned(tmp_path):
     assert result["workspace_removed"] is False and result["cleanup_confirmed"] is False
 
 
-def test_reclamation_refuses_live_lifetime_then_removes_only_reconciled_scratch(tmp_path, monkeypatch):
+def test_reclamation_refuses_live_lifetime_then_removes_only_reconciled_scratch(
+    tmp_path, monkeypatch
+):
     store, control, row = configured(tmp_path)
     workspace = OwnedJobWorkspace(control.directory, control.policy().policy_id, row)
     child = None
@@ -336,10 +361,19 @@ def test_reclamation_refuses_live_lifetime_then_removes_only_reconciled_scratch(
         workspace.create()
         fd = workspace.lifetime_fd
         child = subprocess.Popen(
-            (sys.executable, "-I", "-B", "-c",
-             "import os,sys; os.fstat(int(sys.argv[1])); print('ready',flush=True); sys.stdin.buffer.read()",
-             str(fd)), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            start_new_session=True, pass_fds=(fd,),
+            (
+                sys.executable,
+                "-I",
+                "-B",
+                "-c",
+                "import os,sys; os.fstat(int(sys.argv[1])); print('ready',flush=True); sys.stdin.buffer.read()",
+                str(fd),
+            ),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+            pass_fds=(fd,),
         )
         workspace.close_parent_lifetime()
         ready(child)

@@ -48,13 +48,14 @@ def test_cancelled_queue_never_prepares_reserves_or_launches_and_same_terminal_i
     assert not (tmp_path / "research-runs").exists()
     before = canonical(terminal), store.events(row["job_id"]), canonical(proof)
     assert run_job(store, row["job_id"]) == terminal
-    repeated = controls.request_cancel(
-        "cancel-once", now_ns=time.time_ns(), snapshot=terminal
-    )
+    repeated = controls.request_cancel("cancel-once", now_ns=time.time_ns(), snapshot=terminal)
     assert repeated["status"] == "already_requested"
     assert repeated["request"] == accepted["request"]
-    assert (canonical(store.get(row["job_id"])), store.events(row["job_id"]),
-            canonical(controls.result())) == before
+    assert (
+        canonical(store.get(row["job_id"])),
+        store.events(row["job_id"]),
+        canonical(controls.result()),
+    ) == before
 
 
 def test_total_deadline_stops_genuine_heartbeats_and_cleans_owned_scratch(tmp_path):
@@ -97,14 +98,18 @@ def test_durable_cancel_from_another_controller_stops_live_owned_process(tmp_pat
     def request():
         try:
             current = _wait_for(
-                lambda: (value if (value := store.get(row["job_id"]))["attempt"]
-                         and value["attempt"]["heartbeat_sequence"] >= 3 else None),
+                lambda: (
+                    value
+                    if (value := store.get(row["job_id"]))["attempt"]
+                    and value["attempt"]["heartbeat_sequence"] >= 3
+                    else None
+                ),
                 timeout=5,
             )
             peer = JobControlStore(store.root, row["job_id"])
-            observations.append(peer.request_cancel(
-                "live-controller", now_ns=time.time_ns(), snapshot=current
-            ))
+            observations.append(
+                peer.request_cancel("live-controller", now_ns=time.time_ns(), snapshot=current)
+            )
         except Exception as error:
             failures.append(error)
 
@@ -164,9 +169,11 @@ def test_publication_admission_wins_late_cancel_without_rewriting_success(
 
     def cancel_after_admission(*args, **kwargs):
         peer = JobControlStore(store.root, spec.spec_id)
-        observed.append(peer.request_cancel(
-            "after-publication", now_ns=time.time_ns(), snapshot=store.get(spec.spec_id)
-        ))
+        observed.append(
+            peer.request_cancel(
+                "after-publication", now_ns=time.time_ns(), snapshot=store.get(spec.spec_id)
+            )
+        )
         return original(*args, **kwargs)
 
     monkeypatch.setattr(job_reduction, "publish_reduction_execution", cancel_after_admission)
@@ -180,5 +187,8 @@ def test_publication_admission_wins_late_cancel_without_rewriting_success(
     assert proof["cleanup_confirmed"] and proof["cause"] == "finished"
     before = canonical(terminal), store.result(spec.spec_id), canonical(proof)
     assert run_job(store, spec.spec_id) == terminal
-    assert (canonical(store.get(spec.spec_id)), store.result(spec.spec_id),
-            canonical(controls.result())) == before
+    assert (
+        canonical(store.get(spec.spec_id)),
+        store.result(spec.spec_id),
+        canonical(controls.result()),
+    ) == before

@@ -9,9 +9,15 @@ from tickwitness import cli_jobs
 from tickwitness.cli import main
 
 
-@pytest.mark.parametrize("command", [
-    "configure-job-control", "cancel-job", "inspect-job-control", "reclaim-job-workspaces",
-])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "configure-job-control",
+        "cancel-job",
+        "inspect-job-control",
+        "reclaim-job-workspaces",
+    ],
+)
 def test_controls_confirmation_is_denied_before_identity_or_catalog(
     tmp_path, capsys, monkeypatch, command
 ):
@@ -19,8 +25,7 @@ def test_controls_confirmation_is_denied_before_identity_or_catalog(
         raise AssertionError("Confirmation must not access the Catalog")
 
     monkeypatch.setattr(cli_jobs, "SqliteJobStore", forbidden)
-    arguments = [command, "invalid", "--jobs", str(tmp_path / "missing"),
-                 "--split", "confirmation"]
+    arguments = [command, "invalid", "--jobs", str(tmp_path / "missing"), "--split", "confirmation"]
     if command == "cancel-job":
         arguments.extend(["--cancel-key", "invalid key"])
     assert main(arguments) == 5

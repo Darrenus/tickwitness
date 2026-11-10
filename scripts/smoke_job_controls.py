@@ -365,8 +365,13 @@ def main():
                 )
                 read_busy = retry_read_conflict and completed.returncode == 9
                 payload = _capture(
-                    calls, transcripts, executable, entry, command,
-                    completed, 9 if read_busy else expected,
+                    calls,
+                    transcripts,
+                    executable,
+                    entry,
+                    command,
+                    completed,
+                    9 if read_busy else expected,
                 )
                 if not read_busy:
                     return payload
@@ -408,9 +413,18 @@ def main():
 
         def configure(job_id, *, wall=120, file_bytes=8388608, jobs=catalog):
             command = (
-                "configure-job-control", job_id, "--jobs", str(jobs),
-                "--wall-seconds", str(wall), "--worker-cpu-seconds", "60",
-                "--max-file-bytes", str(file_bytes), "--max-open-files", "128",
+                "configure-job-control",
+                job_id,
+                "--jobs",
+                str(jobs),
+                "--wall-seconds",
+                str(wall),
+                "--worker-cpu-seconds",
+                "60",
+                "--max-file-bytes",
+                str(file_bytes),
+                "--max-open-files",
+                "128",
             )
             configured = run(*command, guard=True, jobs=jobs)
             before = _tree(jobs)
@@ -427,9 +441,17 @@ def main():
             assert observed["policy"]["job_id"] == job_id
             assert _sha(_canonical(observed["policy"])) == observed["policy_id"]
             run(
-                "configure-job-control", job_id, "--jobs", str(jobs),
-                "--wall-seconds", str(wall), "--max-file-bytes", str(file_bytes + 1),
-                guard=True, jobs=jobs, expected=9,
+                "configure-job-control",
+                job_id,
+                "--jobs",
+                str(jobs),
+                "--wall-seconds",
+                str(wall),
+                "--max-file-bytes",
+                str(file_bytes + 1),
+                guard=True,
+                jobs=jobs,
+                expected=9,
             )
             assert _tree(jobs) == before
             return {"configured": configured, "repeated": repeated, "stored": observed}
@@ -438,12 +460,22 @@ def main():
             selected = run_id or _sha(tag.encode())
             source = source or {"bundle_id": "1" * 64, "report_id": "2" * 64}
             queued = run(
-                "submit-comparison-job", selected,
-                "--expected-bundle-id", source["bundle_id"],
-                "--expected-report-id", source["report_id"],
-                "--input-root", str(inputs), "--source-evidence", "live-source",
-                "--runs", str(root / "live-runs"), "--jobs", str(jobs),
-                guard=True, jobs=jobs,
+                "submit-comparison-job",
+                selected,
+                "--expected-bundle-id",
+                source["bundle_id"],
+                "--expected-report-id",
+                source["report_id"],
+                "--input-root",
+                str(inputs),
+                "--source-evidence",
+                "live-source",
+                "--runs",
+                str(root / "live-runs"),
+                "--jobs",
+                str(jobs),
+                guard=True,
+                jobs=jobs,
             )
             assert queued["stored_state"] == "QUEUED"
             if jobs == catalog:
@@ -453,14 +485,23 @@ def main():
         def cancellation(job_id, key, *, jobs=catalog):
             started = time.monotonic_ns()
             response = run(
-                "cancel-job", job_id, "--cancel-key", key, "--jobs", str(jobs),
-                guard=True, jobs=jobs,
+                "cancel-job",
+                job_id,
+                "--cancel-key",
+                key,
+                "--jobs",
+                str(jobs),
+                guard=True,
+                jobs=jobs,
             )
             returned = time.monotonic_ns()
             assert response["status"] in {"accepted", "already_requested"}
             assert actual(job_id, jobs)["control"]["cancel"] is not None
-            return {"response": response, "request_started_ns": started,
-                    "request_returned_ns": returned}
+            return {
+                "response": response,
+                "request_started_ns": started,
+                "request_returned_ns": returned,
+            }
 
         def collected(process, executable, entry, command, expected=0):
             stdout, stderr = process.communicate(timeout=35)
@@ -483,8 +524,12 @@ def main():
             entry = ["-c", _COORDINATOR]
             command = (mode, str(directory), str(worker), "run-job", job_id, "--jobs", str(jobs))
             process = subprocess.Popen(
-                [executable, "-I", *entry, *command], cwd=cwd,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
+                [executable, "-I", *entry, *command],
+                cwd=cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                start_new_session=True,
             )
             return process, entry, command
 
@@ -498,9 +543,15 @@ def main():
             assert result["job_id"] == job_id and result["policy_id"] == control["policy_id"]
             assert result["catalog_state"] == snapshot["state"]
             assert result["catalog_snapshot_sha256"] == _sha(_canonical(snapshot))
-            assert all(result[key] is True for key in (
-                "worker_group_absent", "workspace_removed", "cleanup_confirmed", "stop_confirmed"
-            ))
+            assert all(
+                result[key] is True
+                for key in (
+                    "worker_group_absent",
+                    "workspace_removed",
+                    "cleanup_confirmed",
+                    "stop_confirmed",
+                )
+            )
             assert result["publication_admitted"] is False
             return observed
 
@@ -521,8 +572,14 @@ def main():
             ("reclaim-job-workspaces", ()),
         ):
             refusal = run(
-                command, "invalid", *extra, "--jobs", str(root / "never-jobs"),
-                "--split", "confirmation", expected=5,
+                command,
+                "invalid",
+                *extra,
+                "--jobs",
+                str(root / "never-jobs"),
+                "--split",
+                "confirmation",
+                expected=5,
             )
             assert refusal["error"]["code"] == "confirmation_access_denied"
             confirmation_refusals.append({"command": command, "refusal": refusal})
@@ -532,24 +589,47 @@ def main():
         source = None
         if not args.core_only:
             lifecycle = _bootstrap(
-                run, helper, examples, root, inputs, original_attempts=8,
+                run,
+                helper,
+                examples,
+                root,
+                inputs,
+                original_attempts=8,
                 qualification_title="Synthetic eight-slot strong Job control qualification",
             )
             source = lifecycle["source"]
             (inputs / "origin-request.json").write_bytes(_canonical(_request(5, 6)))
             prepared = run(
-                "prepare-reduction-input", "live-source", "origin-request.json",
-                "--input-root", str(inputs), "--expected-bundle-id", source["bundle_id"],
-                "--expected-report-id", source["report_id"],
-                "--output", str(preparations / "origin"),
+                "prepare-reduction-input",
+                "live-source",
+                "origin-request.json",
+                "--input-root",
+                str(inputs),
+                "--expected-bundle-id",
+                source["bundle_id"],
+                "--expected-report-id",
+                source["report_id"],
+                "--output",
+                str(preparations / "origin"),
             )
             origin = run(
-                "submit-reduction-job", str(preparations / "origin"),
-                "--expected-preparation-id", prepared["preparation_id"],
-                "--expected-bundle-id", source["bundle_id"],
-                "--expected-report-id", source["report_id"],
-                "--source-evidence", "live-source", "--input-root", str(inputs),
-                "--runs", str(root / "live-runs"), "--jobs", str(catalog), guard=True,
+                "submit-reduction-job",
+                str(preparations / "origin"),
+                "--expected-preparation-id",
+                prepared["preparation_id"],
+                "--expected-bundle-id",
+                source["bundle_id"],
+                "--expected-report-id",
+                source["report_id"],
+                "--source-evidence",
+                "live-source",
+                "--input-root",
+                str(inputs),
+                "--runs",
+                str(root / "live-runs"),
+                "--jobs",
+                str(catalog),
+                guard=True,
             )
             parent_id = origin["job_id"]
             ids.append(parent_id)
@@ -557,7 +637,9 @@ def main():
 
             def ledger():
                 return helper(
-                    _LEDGER_VIEW, str(inputs / "live-source"), str(root / "live-runs"),
+                    _LEDGER_VIEW,
+                    str(inputs / "live-source"),
+                    str(root / "live-runs"),
                     source["bundle_id"],
                 )
 
@@ -568,13 +650,19 @@ def main():
                     submission = origin
                 else:
                     submission = run(
-                        "retry-reduction-job", parent_id, "--retry-key", f"control-slot-{slot}",
-                        "--jobs", str(catalog), guard=True,
+                        "retry-reduction-job",
+                        parent_id,
+                        "--retry-key",
+                        f"control-slot-{slot}",
+                        "--jobs",
+                        str(catalog),
+                        guard=True,
                     )
                     ids.append(submission["job_id"])
                 job_id = submission["job_id"]
                 policy = configure(
-                    job_id, wall=15 if mode == "deadline" else 120,
+                    job_id,
+                    wall=15 if mode == "deadline" else 120,
                     file_bytes=65536 if mode == "resource" else 8388608,
                 )
                 directory = controls / f"native-slot-{slot}-{mode}"
@@ -600,13 +688,19 @@ def main():
                     elif mode == "publication_wins":
                         assert gate["publication_admission"] is not None
                         admitted_cancel = run(
-                            "cancel-job", job_id, "--cancel-key", "too-late-gate",
-                            "--jobs", str(catalog), guard=True,
+                            "cancel-job",
+                            job_id,
+                            "--cancel-key",
+                            "too-late-gate",
+                            "--jobs",
+                            str(catalog),
+                            guard=True,
                         )
                         assert admitted_cancel["status"] == "too_late"
                         assert admitted_cancel["request"] is None
-                        assert admitted_cancel["publication_admission"] == (
-                            gate["publication_admission"]
+                        assert (
+                            admitted_cancel["publication_admission"]
+                            == (gate["publication_admission"])
                         )
                         (directory / "release-publication").write_text("release")
                     finished = collected(process, producer_python, entry, command)
@@ -615,8 +709,10 @@ def main():
                 request = json.loads((directory / "request.jsonl").read_bytes())
                 worker_ready = json.loads((directory / "ready.json").read_bytes())
                 worker_identity = compute_identity(directory, job_id, worker_ready)
-                calls_for_worker = [json.loads(line) for line in
-                                    (directory / "native-calls.jsonl").read_bytes().splitlines()]
+                calls_for_worker = [
+                    json.loads(line)
+                    for line in (directory / "native-calls.jsonl").read_bytes().splitlines()
+                ]
                 assert len(calls_for_worker) == 1
                 assert worker_ready["pid"] == calls_for_worker[0]["pid"]
                 for name in ("parent_pid", "process_group", "session_id"):
@@ -629,14 +725,17 @@ def main():
                 assert request["job_id"] == job_id
                 assert request["payload"]["research_attempt"]["attempt_index"] == slot
                 assert (directory / "actual-native-result.json").exists()
-                frames = [json.loads(line) for line in
-                          (directory / "delivered-ipc.jsonl").read_bytes().splitlines()]
+                frames = [
+                    json.loads(line)
+                    for line in (directory / "delivered-ipc.jsonl").read_bytes().splitlines()
+                ]
                 assert len(frames) >= 1
                 assert [frame["sequence"] for frame in frames] == list(range(1, len(frames) + 1))
                 for frame in frames:
-                    assert all(frame[key] == request[key] for key in (
-                        "job_id", "coordinator_id", "job_attempt_id", "lease_token"
-                    ))
+                    assert all(
+                        frame[key] == request[key]
+                        for key in ("job_id", "coordinator_id", "job_attempt_id", "lease_token")
+                    )
                 observed = actual(job_id)
                 if mode == "publication_wins":
                     assert finished["stored_state"] == "SUCCEEDED"
@@ -649,16 +748,23 @@ def main():
                     assert observed["control"]["result"]["cause"] == "finished"
                     frozen_catalog = _tree(catalog)
                     late_cancel = run(
-                        "cancel-job", job_id, "--cancel-key", "after-actual-commit",
-                        "--jobs", str(catalog), guard=True,
+                        "cancel-job",
+                        job_id,
+                        "--cancel-key",
+                        "after-actual-commit",
+                        "--jobs",
+                        str(catalog),
+                        guard=True,
                     )
                     assert late_cancel["status"] in {"too_late", "already_terminal"}
                     assert actual(job_id)["control"]["cancel"] is None
                     assert _tree(catalog) == frozen_catalog
                 else:
                     expected = {
-                        "cancel": "job_cancelled", "deadline": "job_deadline_exceeded",
-                        "resource": "job_resource_limit", "cancel_publication": "job_cancelled",
+                        "cancel": "job_cancelled",
+                        "deadline": "job_deadline_exceeded",
+                        "resource": "job_resource_limit",
+                        "cancel_publication": "job_cancelled",
                     }[mode]
                     observed = finished_stop(job_id, expected)
                     if mode == "deadline":
@@ -682,39 +788,56 @@ def main():
                     assert cancellation_record["observed_upper_bound_ns"] > 0
                 terminal_before = actual(job_id)
                 terminal_tree = _tree(catalog)
-                repeated_terminal = run(
-                    "run-job", job_id, "--jobs", str(catalog), guard=True
-                )
+                repeated_terminal = run("run-job", job_id, "--jobs", str(catalog), guard=True)
                 assert repeated_terminal["stored_state"] == finished["stored_state"]
                 assert actual(job_id) == terminal_before and _tree(catalog) == terminal_tree
                 slots = ledger()
                 assert len(slots["slots"]) == slot
                 assert slots["slots"][-1]["outcome_id"] is None or mode == "publication_wins"
                 assert _tree(inputs / "live-source") == source_before
-                native_cases.append({
-                    "slot": slot, "mode": mode, "submission": submission, "policy": policy,
-                    "gate": gate, "before": before, "finished": finished, "observed": observed,
-                    "cancel": cancellation_record, "admitted_cancel": admitted_cancel,
-                    "late_cancel": late_cancel,
-                    "terminal_rerun": repeated_terminal,
-                    "worker_request": request, "native_calls": calls_for_worker,
-                    "actual_worker_ready": worker_ready,
-                    "worker_process_identity": worker_identity,
-                    "actual_coordinator_pid": process.pid,
-                    "delivered_ipc": frames, "original_ledger": slots,
-                })
+                native_cases.append(
+                    {
+                        "slot": slot,
+                        "mode": mode,
+                        "submission": submission,
+                        "policy": policy,
+                        "gate": gate,
+                        "before": before,
+                        "finished": finished,
+                        "observed": observed,
+                        "cancel": cancellation_record,
+                        "admitted_cancel": admitted_cancel,
+                        "late_cancel": late_cancel,
+                        "terminal_rerun": repeated_terminal,
+                        "worker_request": request,
+                        "native_calls": calls_for_worker,
+                        "actual_worker_ready": worker_ready,
+                        "worker_process_identity": worker_identity,
+                        "actual_coordinator_pid": process.pid,
+                        "delivered_ipc": frames,
+                        "original_ledger": slots,
+                    }
+                )
                 parent_id = job_id
             final_before_ack = ledger()
             assert [item["attempt_index"] for item in final_before_ack["slots"]] == list(
                 range(1, 9)
             )
-            assert [item["attempt_index"] for item in final_before_ack["slots"]
-                    if item["outcome_id"] is not None] == [1, 2, 3, 8]
+            assert [
+                item["attempt_index"]
+                for item in final_before_ack["slots"]
+                if item["outcome_id"] is not None
+            ] == [1, 2, 3, 8]
             native_before = _tree(controls)
             research_before = _tree(root / "live-runs")
             ack = run(
-                "recover-reduction-job", parent_id, "--recovery-key", "after-eight-slots",
-                "--jobs", str(catalog), guard=True,
+                "recover-reduction-job",
+                parent_id,
+                "--recovery-key",
+                "after-eight-slots",
+                "--jobs",
+                str(catalog),
+                guard=True,
             )
             ids.append(ack["job_id"])
             ack_policy = configure(ack["job_id"])
@@ -724,18 +847,29 @@ def main():
             assert ack_observed["result"]["action"] == "acknowledged_committed"
             assert _tree(root / "live-runs") == research_before
             assert _tree(controls) == native_before and ledger() == final_before_ack
-            lifecycle.update({
-                "cases": native_cases, "after": final_before_ack,
-                "acknowledgment": {"submission": ack, "policy": ack_policy,
-                                    "finished": ack_finished, "observed": ack_observed},
-                "research_after_ack_unchanged": True,
-            })
+            lifecycle.update(
+                {
+                    "cases": native_cases,
+                    "after": final_before_ack,
+                    "acknowledgment": {
+                        "submission": ack,
+                        "policy": ack_policy,
+                        "finished": ack_finished,
+                        "observed": ack_observed,
+                    },
+                    "research_after_ack_unchanged": True,
+                }
+            )
 
-        completed_run = None if args.core_only else _sha(
-            _canonical(native_cases[-1]["observed"]["result"]["outcome"])
+        completed_run = (
+            None
+            if args.core_only
+            else _sha(_canonical(native_cases[-1]["observed"]["result"]["outcome"]))
         )
         queued = submit_comparison(
-            "queued-cancellation", run_id=completed_run, source=source,
+            "queued-cancellation",
+            run_id=completed_run,
+            source=source,
         )
         queued_policy = configure(queued["job_id"])
         queued_cancel = cancellation(queued["job_id"], "queued-cancel")
@@ -750,13 +884,24 @@ def main():
         assert queued_observed["control"]["result"]["worker_started"] is False
         queued_tree = _tree(catalog)
         repeated_cancel = run(
-            "cancel-job", queued["job_id"], "--cancel-key", "queued-cancel",
-            "--jobs", str(catalog), guard=True,
+            "cancel-job",
+            queued["job_id"],
+            "--cancel-key",
+            "queued-cancel",
+            "--jobs",
+            str(catalog),
+            guard=True,
         )
         assert repeated_cancel["status"] == "already_requested" and _tree(catalog) == queued_tree
         conflicting_cancel = run(
-            "cancel-job", queued["job_id"], "--cancel-key", "other-queued-key",
-            "--jobs", str(catalog), guard=True, expected=9,
+            "cancel-job",
+            queued["job_id"],
+            "--cancel-key",
+            "other-queued-key",
+            "--jobs",
+            str(catalog),
+            guard=True,
+            expected=9,
         )
         assert _tree(catalog) == queued_tree
         transport_cases = []
@@ -765,7 +910,9 @@ def main():
             queued_transport = submit_comparison("transport-" + mode, jobs=jobs)
             job_id = queued_transport["job_id"]
             policy = configure(
-                job_id, jobs=jobs, wall=3 if mode in {"deadline", "orphan"} else 120,
+                job_id,
+                jobs=jobs,
+                wall=3 if mode in {"deadline", "orphan"} else 120,
                 file_bytes=65536 if mode == "resource" else 8388608,
             )
             directory = controls / ("transport-" + mode)
@@ -799,20 +946,33 @@ def main():
                     assert not scratch.exists()
                     observed = actual(job_id, jobs)
                     assert observed["snapshot"]["state"] == "LOST"
-                    transport_cases.append({
-                        "mode": mode, "fixture_only": True, "submission": queued_transport,
-                        "policy": policy, "gate": gate, "before_kill": before_kill,
-                        "actual_coordinator_pid": process.pid, "actual_worker_pid": gate["pid"],
-                        "worker_process_identity": worker_identity,
-                        "live_workspace": live_workspace, "unlocked_workspace": unlocked,
-                        "finished": finished, "reclaimed": reclaimed, "observed": observed,
-                    })
+                    transport_cases.append(
+                        {
+                            "mode": mode,
+                            "fixture_only": True,
+                            "submission": queued_transport,
+                            "policy": policy,
+                            "gate": gate,
+                            "before_kill": before_kill,
+                            "actual_coordinator_pid": process.pid,
+                            "actual_worker_pid": gate["pid"],
+                            "worker_process_identity": worker_identity,
+                            "live_workspace": live_workspace,
+                            "unlocked_workspace": unlocked,
+                            "finished": finished,
+                            "reclaimed": reclaimed,
+                            "observed": observed,
+                        }
+                    )
                     continue
                 finished = collected(process, verifier, entry, command)
             finally:
                 _cleanup(process)
-            cause = {"cancel": "job_cancelled", "deadline": "job_deadline_exceeded",
-                     "resource": "job_resource_limit"}[mode]
+            cause = {
+                "cancel": "job_cancelled",
+                "deadline": "job_deadline_exceeded",
+                "resource": "job_resource_limit",
+            }[mode]
             observed = finished_stop(job_id, cause, jobs)
             if mode == "deadline":
                 assert observed["control"]["result"]["timing_ns"]["elapsed"] >= 3_000_000_000
@@ -821,29 +981,49 @@ def main():
                 observed_at = time.monotonic_ns()
                 cancel["terminal_observed_ns"] = observed_at
                 cancel["observed_upper_bound_ns"] = observed_at - cancel["request_started_ns"]
-            transport_cases.append({
-                "mode": mode, "fixture_only": True, "submission": queued_transport,
-                "policy": policy, "gate": gate, "finished": finished,
-                "cancel": cancel, "observed": observed,
-                "worker_process_identity": worker_identity,
-            })
+            transport_cases.append(
+                {
+                    "mode": mode,
+                    "fixture_only": True,
+                    "submission": queued_transport,
+                    "policy": policy,
+                    "gate": gate,
+                    "finished": finished,
+                    "cancel": cancel,
+                    "observed": observed,
+                    "worker_process_identity": worker_identity,
+                }
+            )
         assert _tree(examples / "alpha") == golden_before
         report = {
-            "kind": "installed_job_controls_acceptance_v1", "accepted": True,
-            "core_only_profile": args.core_only, "interpreter_identities": identities,
+            "kind": "installed_job_controls_acceptance_v1",
+            "accepted": True,
+            "core_only_profile": args.core_only,
+            "interpreter_identities": identities,
             "confirmation_refusals": confirmation_refusals,
             "native_lifecycle": lifecycle,
-            "queued_cancellation": {"submission": queued, "policy": queued_policy,
-                                    "cancel": queued_cancel, "observed": queued_observed,
-                                    "repeated": repeated_cancel,
-                                    "conflicting_key": conflicting_cancel},
-            "transport_fixtures": transport_cases, "catalog": view(ids),
-            "scope": {"actual_native_controls": not args.core_only,
-                      "queued_cancellation": True, "real_transport_fixture_controls": True,
-                      "explicit_orphan_scratch_reclamation": True,
-                      "research_budget_reset": False, "global_lineage_cancellation": False,
-                      "hostile_code_containment": False, "checkpoint_resume": False,
-                      "external_human_attempts": 0, "external_human_gate": "PENDING"},
+            "queued_cancellation": {
+                "submission": queued,
+                "policy": queued_policy,
+                "cancel": queued_cancel,
+                "observed": queued_observed,
+                "repeated": repeated_cancel,
+                "conflicting_key": conflicting_cancel,
+            },
+            "transport_fixtures": transport_cases,
+            "catalog": view(ids),
+            "scope": {
+                "actual_native_controls": not args.core_only,
+                "queued_cancellation": True,
+                "real_transport_fixture_controls": True,
+                "explicit_orphan_scratch_reclamation": True,
+                "research_budget_reset": False,
+                "global_lineage_cancellation": False,
+                "hostile_code_containment": False,
+                "checkpoint_resume": False,
+                "external_human_attempts": 0,
+                "external_human_gate": "PENDING",
+            },
         }
         inner = root / "job-controls-smoke" / "report.json"
         inner.parent.mkdir()

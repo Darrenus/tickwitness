@@ -30,12 +30,17 @@ def checked_limits(document: object) -> dict[str, int]:
         raise ValueError("Job resource enforcement requires an owned fork/session anchor")
     if set(document) != {"kind", "schema_version", "job_id", "limits"}:
         raise ValueError("Unsupported Job control policy fields")
-    if (document["kind"] != "job_control_policy_v1"
-            or type(document["schema_version"]) is not int or document["schema_version"] != 1):
+    if (
+        document["kind"] != "job_control_policy_v1"
+        or type(document["schema_version"]) is not int
+        or document["schema_version"] != 1
+    ):
         raise ValueError("Unsupported Job control policy")
     job_id = document["job_id"]
-    if not isinstance(job_id, str) or len(job_id) != 64 or any(
-        item not in "0123456789abcdef" for item in job_id
+    if (
+        not isinstance(job_id, str)
+        or len(job_id) != 64
+        or any(item not in "0123456789abcdef" for item in job_id)
     ):
         raise ValueError("Job bootstrap identity differs")
     values = document["limits"]

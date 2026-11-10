@@ -77,7 +77,9 @@ class OwnedJobWorkspace:
             os.mkdir(name, mode=0o700, dir_fd=parent)
         except FileExistsError:
             if not existing:
-                raise JobConflictError("Owned workspace exists; inspect or explicitly reclaim it")
+                raise JobConflictError(
+                    "Owned workspace exists; inspect or explicitly reclaim it"
+                ) from None
         else:
             os.fsync(parent)
 
@@ -86,9 +88,7 @@ class OwnedJobWorkspace:
         _owned(os.fstat(self.root_fd), directory=True)
         self.workspaces_fd = os.open("workspaces", _DIRECTORY_FLAGS, dir_fd=self.root_fd)
         _owned(os.fstat(self.workspaces_fd), directory=True)
-        self.attempt_fd = os.open(
-            self.attempt_id, _DIRECTORY_FLAGS, dir_fd=self.workspaces_fd
-        )
+        self.attempt_fd = os.open(self.attempt_id, _DIRECTORY_FLAGS, dir_fd=self.workspaces_fd)
         _owned(os.fstat(self.attempt_fd), directory=True)
 
     def create(self) -> None:
@@ -135,8 +135,10 @@ class OwnedJobWorkspace:
         raw = canonical(self.seal)
         charge_managed_write(len(raw))
         seal_fd = os.open(
-            "workspace.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-            0o600, dir_fd=descriptor,
+            "workspace.json",
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=descriptor,
         )
         try:
             pending = memoryview(raw)
@@ -166,8 +168,9 @@ class OwnedJobWorkspace:
                 os.close(descriptor)
 
     def _read_seal(self) -> Row:
-        descriptor = os.open("workspace.json", os.O_RDONLY | os.O_NOFOLLOW,
-                             dir_fd=cast("int", self.attempt_fd))
+        descriptor = os.open(
+            "workspace.json", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=cast("int", self.attempt_fd)
+        )
         try:
             info = os.fstat(descriptor)
             _owned(info, directory=False)
@@ -177,26 +180,47 @@ class OwnedJobWorkspace:
             os.close(descriptor)
         row = parse(raw, limit=4096)
         _require(set(row) == _SEAL_FIELDS and canonical(row) == raw, "Workspace seal fields differ")
-        _require(row["kind"] == "job_workspace_v1" and type(row["schema_version"]) is int
-                 and row["schema_version"] == 1, "Workspace seal version differs")
-        for key, expected in (("job_id", self.job_id), ("policy_id", self.policy_id),
-                              ("job_attempt_id", self.attempt_id),
-                              ("coordinator_id", self.coordinator_id)):
+        _require(
+            row["kind"] == "job_workspace_v1"
+            and type(row["schema_version"]) is int
+            and row["schema_version"] == 1,
+            "Workspace seal version differs",
+        )
+        for key, expected in (
+            ("job_id", self.job_id),
+            ("policy_id", self.policy_id),
+            ("job_attempt_id", self.attempt_id),
+            ("coordinator_id", self.coordinator_id),
+        ):
             _require(identity(row[key]) == expected, "Workspace seal identity differs: " + key)
-        for key in _SEAL_FIELDS - {"kind", "schema_version", "job_id", "policy_id",
-                                  "job_attempt_id", "coordinator_id"}:
-            _require(type(row[key]) is int and cast("int", row[key]) >= 0,
-                     "Workspace seal inode field differs")
+        for key in _SEAL_FIELDS - {
+            "kind",
+            "schema_version",
+            "job_id",
+            "policy_id",
+            "job_attempt_id",
+            "coordinator_id",
+        }:
+            _require(
+                type(row[key]) is int and cast("int", row[key]) >= 0,
+                "Workspace seal inode field differs",
+            )
         return row
 
     def verify(self) -> None:
-        _require(self.root_fd is not None and self.workspaces_fd is not None
-                 and self.attempt_fd is not None, "Workspace descriptors are unavailable")
+        _require(
+            self.root_fd is not None
+            and self.workspaces_fd is not None
+            and self.attempt_fd is not None,
+            "Workspace descriptors are unavailable",
+        )
         current = os.open(self.directory, _DIRECTORY_FLAGS)
         try:
             _owned(os.fstat(current), directory=True)
-            _require(_same(os.fstat(current), os.fstat(cast("int", self.root_fd))),
-                     "Job control workspace root was replaced")
+            _require(
+                _same(os.fstat(current), os.fstat(cast("int", self.root_fd))),
+                "Job control workspace root was replaced",
+            )
         finally:
             os.close(current)
         for parent, name, held in (
@@ -216,12 +240,18 @@ class OwnedJobWorkspace:
             _require(row == self.seal, "Workspace seal was replaced")
         self.seal = row
         actual = os.fstat(cast("int", self.attempt_fd))
-        _require((actual.st_dev, actual.st_ino) == (row["workspace_device"], row["workspace_inode"]),
-                 "Workspace inode does not match its seal")
-        _require(set(os.listdir(cast("int", self.attempt_fd)))
-                 in ({"workspace.json", "lifetime.lock", "scratch"},
-                     {"workspace.json", "lifetime.lock"}),
-                 "Workspace journal contains an unknown entry")
+        _require(
+            (actual.st_dev, actual.st_ino) == (row["workspace_device"], row["workspace_inode"]),
+            "Workspace inode does not match its seal",
+        )
+        _require(
+            set(os.listdir(cast("int", self.attempt_fd)))
+            in (
+                {"workspace.json", "lifetime.lock", "scratch"},
+                {"workspace.json", "lifetime.lock"},
+            ),
+            "Workspace journal contains an unknown entry",
+        )
 
     def cleanup(self, *, group_absent: bool, deadline_ns: int) -> None:
         _require(group_absent, "Worker group stop is unconfirmed; scratch is retained")
@@ -233,21 +263,27 @@ class OwnedJobWorkspace:
             lock = os.fstat(lock_fd)
             _owned(lock, directory=False)
             seal = cast("Row", self.seal)
-            _require(lock.st_size == 0 and (lock.st_dev, lock.st_ino)
-                     == (seal["lifetime_device"], seal["lifetime_inode"]),
-                     "Workspace lifetime identity differs")
+            _require(
+                lock.st_size == 0
+                and (lock.st_dev, lock.st_ino) == (seal["lifetime_device"], seal["lifetime_inode"]),
+                "Workspace lifetime identity differs",
+            )
             try:
                 fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as error:
-                raise JobConflictError("Worker lifetime is still held; scratch is retained") from error
+                raise JobConflictError(
+                    "Worker lifetime is still held; scratch is retained"
+                ) from error
             try:
                 info = os.stat("scratch", dir_fd=descriptor, follow_symlinks=False)
             except FileNotFoundError:
                 self.removed = True
                 return
             _owned(info, directory=True)
-            _require((info.st_dev, info.st_ino) == (seal["scratch_device"], seal["scratch_inode"]),
-                     "Scratch directory does not match its immutable seal")
+            _require(
+                (info.st_dev, info.st_ino) == (seal["scratch_device"], seal["scratch_inode"]),
+                "Scratch directory does not match its immutable seal",
+            )
             scratch = os.open("scratch", _DIRECTORY_FLAGS, dir_fd=descriptor)
             try:
                 _require(_same(info, os.fstat(scratch)), "Scratch changed during cleanup")
@@ -257,8 +293,10 @@ class OwnedJobWorkspace:
             finally:
                 os.close(scratch)
             self.verify()
-            _require(_same(info, os.stat("scratch", dir_fd=descriptor, follow_symlinks=False)),
-                     "Scratch was replaced during cleanup")
+            _require(
+                _same(info, os.stat("scratch", dir_fd=descriptor, follow_symlinks=False)),
+                "Scratch was replaced during cleanup",
+            )
             os.rmdir("scratch", dir_fd=descriptor)
             os.fsync(descriptor)
             self.removed = True
@@ -266,8 +304,9 @@ class OwnedJobWorkspace:
             os.close(lock_fd)
 
     @classmethod
-    def _clear(cls, directory: int, remaining: list[int], depth: int,
-               deadline_ns: int, device: int) -> None:
+    def _clear(
+        cls, directory: int, remaining: list[int], depth: int, deadline_ns: int, device: int
+    ) -> None:
         _require(depth <= MAX_WORKSPACE_DEPTH, "Owned scratch depth exceeds cleanup bound")
         with os.scandir(directory) as entries:
             for entry in entries:
@@ -275,8 +314,10 @@ class OwnedJobWorkspace:
                 remaining[0] -= 1
                 _require(remaining[0] >= 0, "Owned scratch entry count exceeds cleanup bound")
                 info = os.stat(entry.name, dir_fd=directory, follow_symlinks=False)
-                _require(info.st_uid == os.geteuid() and info.st_dev == device,
-                         "Scratch entry ownership or filesystem differs")
+                _require(
+                    info.st_uid == os.geteuid() and info.st_dev == device,
+                    "Scratch entry ownership or filesystem differs",
+                )
                 if stat.S_ISDIR(info.st_mode):
                     child = os.open(entry.name, _DIRECTORY_FLAGS, dir_fd=directory)
                     try:
@@ -284,9 +325,10 @@ class OwnedJobWorkspace:
                         cls._clear(child, remaining, depth + 1, deadline_ns, device)
                     finally:
                         os.close(child)
-                    _require(_same(info, os.stat(entry.name, dir_fd=directory,
-                                                follow_symlinks=False)),
-                             "Scratch child changed during cleanup")
+                    _require(
+                        _same(info, os.stat(entry.name, dir_fd=directory, follow_symlinks=False)),
+                        "Scratch child changed during cleanup",
+                    )
                     os.rmdir(entry.name, dir_fd=directory)
                 else:
                     # Unlink the owned directory entry, including a symlink itself; never follow it.

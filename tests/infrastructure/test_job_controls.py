@@ -15,9 +15,7 @@ from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
 
 def tree(root):
     return {
-        str(path.relative_to(root)): path.read_bytes()
-        for path in root.rglob("*")
-        if path.is_file()
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
     }
 
 
@@ -250,9 +248,7 @@ def test_post_cancel_publication_error_retains_accepted_immutable_intent(control
 
 
 @pytest.mark.parametrize("name", ["policy.json", "gate.lock", "workspaces"])
-def test_symlink_control_paths_fail_without_following_or_repair(
-    control_case, tmp_path, name
-):
+def test_symlink_control_paths_fail_without_following_or_repair(control_case, tmp_path, name):
     value = control_case
     configure(value)
     directory = value.controls.directory

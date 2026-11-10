@@ -41,7 +41,9 @@ def validate_worker_limits(policy: JobControlPolicy) -> None:
     try:
         checked_limits(policy.document)
     except (OSError, ValueError) as error:
-        raise JobConflictError("Requested Job worker limits cannot be enforced: " + str(error)) from error
+        raise JobConflictError(
+            "Requested Job worker limits cannot be enforced: " + str(error)
+        ) from error
 
 
 class JobExecutionControl:
@@ -113,7 +115,9 @@ class JobExecutionControl:
         if self._publication_depth:
             return
         if time.monotonic_ns() >= self.deadline_ns:
-            raise JobControlStop("job_deadline_exceeded", "Fixed Job total admission deadline expired")
+            raise JobControlStop(
+                "job_deadline_exceeded", "Fixed Job total admission deadline expired"
+            )
         try:
             requested = self.control.cancel_request()
         except JobConflictError:
@@ -134,9 +138,10 @@ class JobExecutionControl:
             return
         # Only an unentered read/control gate is retried. No uncertain write,
         # worker computation or research admission is replayed here.
-        gate_deadline = min(self.deadline_ns, time.monotonic_ns() + min(
-            1_000_000_000, self._limits["cleanup_grace_ns"]
-        ))
+        gate_deadline = min(
+            self.deadline_ns,
+            time.monotonic_ns() + min(1_000_000_000, self._limits["cleanup_grace_ns"]),
+        )
         with ExitStack() as stack:
             for retry in range(101):
                 try:
@@ -180,9 +185,10 @@ class JobExecutionControl:
         self._current()
         if self._workspace is not None or self._row is None:
             raise JobConflictError("A controlled attempt may create exactly one owned workspace")
-        if cast("Row", row["attempt"])["job_attempt_id"] != cast("Row", self._row["attempt"])[
-            "job_attempt_id"
-        ]:
+        if (
+            cast("Row", row["attempt"])["job_attempt_id"]
+            != cast("Row", self._row["attempt"])["job_attempt_id"]
+        ):
             raise JobStoreError("Workspace attempt differs from the bound control")
         self.check()
         workspace = OwnedJobWorkspace(self.control.directory, self.policy.policy_id, row)
@@ -198,13 +204,17 @@ class JobExecutionControl:
                 if self._worker_started and not self._worker_group_absent:
                     raise JobStoreError("Worker group stop is unconfirmed; owned scratch retained")
                 if self._cleanup_deadline_ns is None:
-                    self._cleanup_deadline_ns = time.monotonic_ns() + self._limits["cleanup_grace_ns"]
+                    self._cleanup_deadline_ns = (
+                        time.monotonic_ns() + self._limits["cleanup_grace_ns"]
+                    )
                 workspace.cleanup(
                     group_absent=self._worker_group_absent, deadline_ns=self._cleanup_deadline_ns
                 )
                 self._cleanup_finished = self._elapsed()
             except OSError as error:
-                raise JobStoreError("Owned workspace cleanup is unconfirmed: " + str(error)) from error
+                raise JobStoreError(
+                    "Owned workspace cleanup is unconfirmed: " + str(error)
+                ) from error
             finally:
                 workspace.close()
 
@@ -223,19 +233,36 @@ class JobExecutionControl:
         workspace = self._workspace
         if workspace is None or workspace.lifetime_fd is None or self._worker_started:
             raise JobStoreError("Worker startup requires its one owned lifetime workspace")
-        if not start_new_session or not close_fds or (cwd is not None and Path(cwd) != workspace.scratch):
+        if (
+            not start_new_session
+            or not close_fds
+            or (cwd is not None and Path(cwd) != workspace.scratch)
+        ):
             raise JobStoreError("Controlled workers require owned scratch and a fresh session")
         with self.admission():
             workspace.verify()
             bootstrap = Path(__file__).with_name("job_control_bootstrap.py").absolute()
             wrapped = (
-                str(Path(sys.executable).absolute()), "-I", "-B", str(bootstrap),
-                self.policy.canonical_bytes.decode("utf-8"), self.policy.policy_id,
-                str(self.deadline_ns), str(workspace.lifetime_fd), "--", *command,
+                str(Path(sys.executable).absolute()),
+                "-I",
+                "-B",
+                str(bootstrap),
+                self.policy.canonical_bytes.decode("utf-8"),
+                self.policy.policy_id,
+                str(self.deadline_ns),
+                str(workspace.lifetime_fd),
+                "--",
+                *command,
             )
             process = subprocess.Popen(
-                wrapped, stdin=stdin, stdout=stdout, stderr=stderr, cwd=workspace.scratch,
-                start_new_session=True, close_fds=True, pass_fds=(workspace.lifetime_fd,),
+                wrapped,
+                stdin=stdin,
+                stdout=stdout,
+                stderr=stderr,
+                cwd=workspace.scratch,
+                start_new_session=True,
+                close_fds=True,
+                pass_fds=(workspace.lifetime_fd,),
             )
             self._owned_process = process
             self._worker_started = True
@@ -313,9 +340,10 @@ class JobExecutionControl:
             "worker_group_absent": self._worker_group_absent,
             "workspace_removed": removed,
             "cleanup_confirmed": cleanup,
-            "stop_confirmed": cause in {
-                "job_cancelled", "job_deadline_exceeded", "job_resource_limit"
-            } and cleanup and (not self._worker_started or self._worker_exit_code is not None),
+            "stop_confirmed": cause
+            in {"job_cancelled", "job_deadline_exceeded", "job_resource_limit"}
+            and cleanup
+            and (not self._worker_started or self._worker_exit_code is not None),
             "timing_ns": {
                 "elapsed": self._elapsed(),
                 "request_observed": self._request_observed,
@@ -365,7 +393,9 @@ def reclaim_workspaces(control: JobControlStore, snapshot: Row) -> Row:
         raise JobConflictError("Workspace reclamation requires this Job's configured policy")
     try:
         outcome = reclaim_workspace(
-            control.directory, policy.policy_id, snapshot,
+            control.directory,
+            policy.policy_id,
+            snapshot,
             grace_ns=cast("dict[str, int]", policy.document["limits"])["cleanup_grace_ns"],
         )
     except OSError as error:
