@@ -16,6 +16,7 @@ from test_reduction_execution import reduction_case as reduction_case
 from tickwitness.domain.evidence.run_records import canonical
 from tickwitness.domain.jobs.control import build_job_control_policy
 from tickwitness.infrastructure import job_reduction, job_supervisor
+from tickwitness.infrastructure.job_control_runtime import JobControlStop, JobExecutionControl
 from tickwitness.infrastructure.job_controls import JobControlStore
 from tickwitness.infrastructure.job_supervisor import run_job
 
@@ -56,6 +57,39 @@ def test_cancelled_queue_never_prepares_reserves_or_launches_and_same_terminal_i
         store.events(row["job_id"]),
         canonical(controls.result()),
     ) == before
+
+
+def test_stop_settlement_after_expiry_keeps_lost_without_manufacturing_a_heartbeat(
+    tmp_path, monkeypatch
+):
+    store, row = _queued(tmp_path, lease_ns=1_000_000_000)
+    controls, _policy = configure(store, row)
+    controls.request_cancel("expired-stop", now_ns=time.time_ns(), snapshot=row)
+    with store.coordinator() as owner:
+        claimed = store.claim(
+            row["job_id"],
+            expected_version=row["version"],
+            coordinator_id=owner,
+            attempt_nonce="3" * 64,
+            lease_token="4" * 64,
+            now_ns=time.time_ns(),
+        )
+        guard = JobExecutionControl(controls)
+        guard.bind(claimed)
+        expiry = claimed["attempt"]["lease_expires_at_ns"]
+        monkeypatch.setattr(job_supervisor.time, "time_ns", lambda: expiry)
+        with guard.activate():
+            terminal = job_supervisor._settle_control_stop(
+                store, claimed, guard, JobControlStop("job_cancelled")
+            )
+            proof = guard.finish(terminal, cause="job_cancelled")
+    assert terminal["state"] == "LOST" and terminal["failure"]["code"] == "lease_expired"
+    assert terminal["attempt"] == claimed["attempt"]
+    assert terminal["attempt"]["heartbeat_sequence"] == 0
+    assert terminal["version"] == 3 and len(store.events(row["job_id"])) == 3
+    assert terminal["updated_at_ns"] == expiry
+    assert proof["catalog_state"] == "LOST" and proof["stop_confirmed"]
+    assert proof["cleanup_confirmed"] and not proof["worker_started"]
 
 
 def test_total_deadline_stops_genuine_heartbeats_and_cleans_owned_scratch(tmp_path):
