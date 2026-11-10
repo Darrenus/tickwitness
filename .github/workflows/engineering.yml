@@ -35,6 +35,8 @@ jobs:
       - if: always()
         run: make docs
       - name: Run focused Job control regressions before installed qualification
+        env:
+          PYTHONPATH: tests:tests/application:tests/domain:tests/infrastructure:tests/integration
         run: >-
           uv run --locked pytest -q
           tests/domain/test_job_control_contracts.py
