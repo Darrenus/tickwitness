@@ -34,6 +34,14 @@ jobs:
         run: make type
       - if: always()
         run: make docs
+      - name: Run focused Job control regressions before installed qualification
+        run: >-
+          uv run --locked pytest -q
+          tests/domain/test_job_control_contracts.py
+          tests/infrastructure/test_job_controls.py
+          tests/infrastructure/test_job_control_runtime.py
+          tests/infrastructure/test_job_control_supervisor.py
+          tests/test_job_control_cli.py
       - name: Fast installed followup qualification on manual dispatch
         if: github.event_name == 'workflow_dispatch' && success()
         run: |

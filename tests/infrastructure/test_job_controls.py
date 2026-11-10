@@ -247,6 +247,42 @@ def test_post_cancel_publication_error_retains_accepted_immutable_intent(control
     assert tree(value.root) == frozen
 
 
+def test_control_result_port_dispatches_once_when_real_publication_loses_response(
+    control_case, monkeypatch
+):
+    value = control_case
+    configure(value)
+    document = result_for(value)
+    actual_write = value.controls.write_result
+    actual_publish = JobControlStore._publish
+    port_calls = []
+    publications = []
+
+    def observed_write(selected):
+        port_calls.append(selected)
+        return actual_write(selected)
+
+    def committed_then_lost(directory, name, raw):
+        actual_publish(directory, name, raw)
+        if name == "result.json":
+            publications.append(raw)
+            raise JobStoreError("Controlled response loss after actual control result publication")
+
+    monkeypatch.setattr(value.controls, "write_result", observed_write)
+    monkeypatch.setattr(JobControlStore, "_publish", staticmethod(committed_then_lost))
+    with pytest.raises(JobStoreError, match="after actual control result"):
+        value.controls.write_result(document)
+    assert len(port_calls) == len(publications) == 1
+    assert value.controls.result() == document
+    retained = tree(value.root)
+    monkeypatch.setattr(JobControlStore, "_publish", staticmethod(actual_publish))
+    # A separate explicit request may read the same immutable result; the first
+    # failed call never automatically redispatches or overwrites its commit.
+    assert value.controls.write_result(document) == document
+    assert len(port_calls) == 2 and len(publications) == 1
+    assert tree(value.root) == retained
+
+
 @pytest.mark.parametrize("name", ["policy.json", "gate.lock", "workspaces"])
 def test_symlink_control_paths_fail_without_following_or_repair(control_case, tmp_path, name):
     value = control_case

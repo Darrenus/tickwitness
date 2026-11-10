@@ -518,7 +518,11 @@ class JobControlStore:
         checked = build_job_control_result(document)
         if self._owner_pid is None:
             with self.gate():
-                return self.write_result(checked)
+                return self._write_result_owned(checked)
+        return self._write_result_owned(checked)
+
+    def _write_result_owned(self, checked: Row) -> Row:
+        """Perform one admitted write without redispatching the public port."""
         directory = self._owned()
         policy = self._load_policy(directory)
         self._bound(checked, policy)

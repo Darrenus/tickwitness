@@ -145,12 +145,15 @@ def test_cancel_before_irreversible_admission_keeps_consumed_native_slot_unfinal
         assert observed["status"] == "accepted"
 
     monkeypatch.setattr(job_supervisor, "_before_control_publication", cancel_before_admission)
+    before = value.ledger.list_reservations(
+        value.prepared.materialization.source.validation.protocol
+    )
     terminal = run_job(store, spec.spec_id, _worker_command=saved_worker(value, tmp_path))
     assert terminal["state"] == "FAILED" and terminal["failure"]["code"] == "job_cancelled"
     slots = value.ledger.list_reservations(
         value.prepared.materialization.source.validation.protocol
     )
-    assert len(slots) == 4
+    assert len(slots) == len(before) + 1 and slots[:-1] == before
     assert value.ledger.get_outcome(slots[-1].attempt_id) is None
     assert store.result(spec.spec_id) is None
     assert controls.publication_admission() is None
