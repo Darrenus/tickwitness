@@ -8,7 +8,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Iterator
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, suppress
 from contextvars import ContextVar
 from pathlib import Path
 from typing import cast
@@ -285,12 +285,10 @@ class JobExecutionControl:
         if process.pid <= 0 or process.pid == os.getpgrp() or process.returncode is not None:
             raise JobStoreError("Worker leader was reaped or its process-group identity is unsafe")
         try:
-            try:
+            # Natural exit can race the request. Only bounded wait plus strict
+            # group observation below can establish confirmed cleanup.
+            with suppress(ProcessLookupError, PermissionError):
                 os.kill(process.pid, signal.SIGTERM)
-            except (ProcessLookupError, PermissionError):
-                # A natural exit can race this request. Only the bounded wait
-                # and strict group observation below establish cleanup facts.
-                pass
             remaining = min(
                 0.5,
                 max(0, self._cleanup_deadline_ns - time.monotonic_ns()) / 1_000_000_000,
@@ -299,13 +297,13 @@ class JobExecutionControl:
                 self._worker_exit_code = process.wait(timeout=remaining)
             except subprocess.TimeoutExpired:
                 if process.returncode is not None:
-                    raise JobStoreError("Anchor identity was reaped during stop admission") from None
+                    raise JobStoreError(
+                        "Anchor identity was reaped during stop admission"
+                    ) from None
                 # This sole fallback precedes reaping. A timeout has not made
                 # the live owned leader PID reusable; never repeat it later.
-                try:
+                with suppress(ProcessLookupError):
                     os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
                 remaining = max(0, self._cleanup_deadline_ns - time.monotonic_ns()) / 1_000_000_000
                 self._worker_exit_code = process.wait(timeout=remaining)
             self._worker_reaped = self._elapsed()

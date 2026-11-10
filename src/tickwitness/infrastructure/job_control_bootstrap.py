@@ -11,6 +11,7 @@ import stat
 import sys
 import time
 from collections.abc import Sequence
+from contextlib import suppress
 
 JOB_DEADLINE_ENV = "TICKWITNESS_JOB_CONTROL_DEADLINE_NS"
 _LIMIT_FIELDS = {
@@ -158,10 +159,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
                     pass
                 else:
                     if waited == 0:
-                        try:
+                        with suppress(ProcessLookupError):
                             os.kill(owned, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
                         while True:
                             try:
                                 _pid, status = os.waitpid(owned, 0)
@@ -176,9 +175,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
         signal.signal(signal.SIGTERM, stop_anchor)
         signal.signal(signal.SIGALRM, stop_anchor)
         # Do not expose a child before its PID has been installed in the anchor.
-        previous_mask = signal.pthread_sigmask(
-            signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGALRM}
-        )
+        previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGALRM})
         child = os.fork()
         if child == 0:
             # POSIX interval timers are not inherited across fork. Re-arm before

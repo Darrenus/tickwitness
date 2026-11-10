@@ -332,8 +332,12 @@ def _workspace_observation(directory, catalog):
     request = json.loads((directory / "request.jsonl").read_bytes())
     scratch = Path(ready["workspace"])
     expected = (
-        catalog / ".job-controls" / request["job_id"] / "workspaces"
-        / request["job_attempt_id"] / "scratch"
+        catalog
+        / ".job-controls"
+        / request["job_id"]
+        / "workspaces"
+        / request["job_attempt_id"]
+        / "scratch"
     )
     bound = scratch.resolve() == expected.resolve()
     seal = None
