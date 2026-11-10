@@ -89,6 +89,18 @@ def _diagnostic(error: BaseException) -> None:
         pass
 
 
+def _exit_observed(exit_code: int) -> None:
+    """Propagate an actual child status without running anchor teardown hooks."""
+    if exit_code < 0:
+        number = -exit_code
+        if number not in {signal.SIGKILL, signal.SIGSTOP}:
+            signal.signal(number, signal.SIG_DFL)
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, {number})
+        os.kill(os.getpid(), number)
+        os._exit(128 + number)
+    os._exit(exit_code)
+
+
 def main(arguments: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if arguments is None else arguments)
     try:
@@ -124,16 +136,65 @@ def main(arguments: Sequence[str] | None = None) -> int:
         command = args[5:]
         if not command or not os.path.isabs(command[0]):
             raise ValueError("Worker executable must be an absolute allowlisted locator")
+        child: int | None = None
+        stopping = False
+
+        def stop_anchor(number: int, _frame: object) -> None:
+            nonlocal stopping
+            if stopping:
+                return
+            stopping = True
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            signal.signal(signal.SIGALRM, signal.SIG_IGN)
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            observed: int | None = None
+            owned = child
+            if owned is not None and owned > 0:
+                try:
+                    waited, status = os.waitpid(owned, os.WNOHANG)
+                except ChildProcessError:
+                    # Normal wait may have reaped it just before this handler.
+                    # That PID is no longer ours and must never be signalled.
+                    pass
+                else:
+                    if waited == 0:
+                        try:
+                            os.kill(owned, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        while True:
+                            try:
+                                _pid, status = os.waitpid(owned, 0)
+                                break
+                            except InterruptedError:
+                                continue
+                    observed = os.waitstatus_to_exitcode(status)
+            if number == signal.SIGALRM:
+                _exit_observed(-signal.SIGALRM)
+            _exit_observed(-signal.SIGTERM if observed is None else observed)
+
+        signal.signal(signal.SIGTERM, stop_anchor)
+        signal.signal(signal.SIGALRM, stop_anchor)
+        # Do not expose a child before its PID has been installed in the anchor.
+        previous_mask = signal.pthread_sigmask(
+            signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGALRM}
+        )
         child = os.fork()
         if child == 0:
             # POSIX interval timers are not inherited across fork. Re-arm before
             # exec/imports, retaining the SAME absolute live total deadline.
             try:
+                signal.signal(signal.SIGTERM, signal.SIG_DFL)
+                signal.signal(signal.SIGALRM, signal.SIG_DFL)
                 _arm(deadline)
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+                signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM, signal.SIGALRM})
                 os.execv(command[0], command)
             except (OSError, ValueError) as error:
                 _diagnostic(error)
                 os._exit(78)
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM, signal.SIGALRM})
         # The anchor keeps its pipe ends and lifetime descriptor until kernel
         # exit. A compute child may close streams before Python teardown ends;
         # that must not expose premature EOF to the trusted coordinator.
@@ -144,14 +205,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
             except InterruptedError:
                 continue
         exit_code = os.waitstatus_to_exitcode(status)
-        if exit_code < 0:
-            number = -exit_code
-            if number not in {signal.SIGKILL, signal.SIGSTOP}:
-                signal.signal(number, signal.SIG_DFL)
-            signal.pthread_sigmask(signal.SIG_UNBLOCK, {number})
-            os.kill(os.getpid(), number)
-            os._exit(128 + number)
-        os._exit(exit_code)
+        child = None
+        _exit_observed(exit_code)
     except (OSError, ValueError, TypeError, KeyError) as error:
         _diagnostic(error)
         return 78

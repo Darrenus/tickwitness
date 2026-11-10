@@ -99,10 +99,14 @@ def counted(self,replay_input):
     limits={'cpu':list(resource.getrlimit(resource.RLIMIT_CPU)),
             'file':list(resource.getrlimit(resource.RLIMIT_FSIZE)),
             'files':list(resource.getrlimit(resource.RLIMIT_NOFILE))}
+    workspace_info=os.stat('.')
     ready={'kind':'actual_native_completed_while_heartbeat_emitter_live_v1',
            'pid':os.getpid(),'parent_pid':os.getppid(),'process_group':os.getpgrp(),
            'session_id':os.getsid(0),'job_id':request['job_id'],
-           'workspace':str(Path.cwd()),'limits':limits,'mode':mode}
+           'workspace':str(Path.cwd()),'limits':limits,'mode':mode,
+           'workspace_at_ready':{'exists':Path.cwd().exists(),
+               'is_symlink':Path.cwd().is_symlink(),
+               'device':workspace_info.st_dev,'inode':workspace_info.st_ino}}
     (root/'ready.pending').write_bytes(document(ready))
     os.replace(root/'ready.pending',root/'ready.json')
     if mode in ('cancel','deadline'):
@@ -321,6 +325,36 @@ def _cleanup(process):
     for stream in (process.stdout, process.stderr):
         if stream is not None:
             stream.close()
+
+
+def _workspace_observation(directory, catalog):
+    ready = json.loads((directory / "ready.json").read_bytes())
+    request = json.loads((directory / "request.jsonl").read_bytes())
+    scratch = Path(ready["workspace"])
+    expected = (
+        catalog / ".job-controls" / request["job_id"] / "workspaces"
+        / request["job_attempt_id"] / "scratch"
+    )
+    bound = scratch.resolve() == expected.resolve()
+    seal = None
+    seal_sha256 = None
+    if bound:
+        raw = (scratch.parent / "workspace.json").read_bytes()
+        assert len(raw) <= 4096
+        seal = json.loads(raw)
+        seal_sha256 = _sha(raw)
+    observation = {
+        "kind": "actual_owned_workspace_observation_v1",
+        "job_id": request["job_id"],
+        "path": str(scratch),
+        "namespace_bound": bound,
+        "exists": scratch.exists(),
+        "is_symlink": scratch.is_symlink(),
+        "seal": seal,
+        "seal_sha256": seal_sha256,
+    }
+    (directory / "workspace-after.json").write_bytes(_canonical(observation))
+    return observation
 
 
 def main():
@@ -707,9 +741,23 @@ def main():
                     finished = collected(process, producer_python, entry, command)
                 finally:
                     _cleanup(process)
+                    if (directory / "ready.json").exists():
+                        with suppress(OSError, ValueError, KeyError, TypeError):
+                            _workspace_observation(directory, catalog)
                 request = json.loads((directory / "request.jsonl").read_bytes())
                 worker_ready = json.loads((directory / "ready.json").read_bytes())
                 worker_identity = compute_identity(directory, job_id, worker_ready)
+                workspace_after = json.loads((directory / "workspace-after.json").read_bytes())
+                assert workspace_after["namespace_bound"] is True
+                seal = workspace_after["seal"]
+                assert seal["job_id"] == job_id
+                assert seal["job_attempt_id"] == request["job_attempt_id"]
+                assert seal["coordinator_id"] == request["coordinator_id"]
+                assert seal["policy_id"] == policy["stored"]["policy_id"]
+                assert worker_ready["workspace_at_ready"]["exists"] is True
+                assert worker_ready["workspace_at_ready"]["is_symlink"] is False
+                assert worker_ready["workspace_at_ready"]["device"] == seal["scratch_device"]
+                assert worker_ready["workspace_at_ready"]["inode"] == seal["scratch_inode"]
                 calls_for_worker = [
                     json.loads(line)
                     for line in (directory / "native-calls.jsonl").read_bytes().splitlines()
@@ -738,6 +786,9 @@ def main():
                         for key in ("job_id", "coordinator_id", "job_attempt_id", "lease_token")
                     )
                 observed = actual(job_id)
+                if observed["control"]["result"]["cleanup_confirmed"]:
+                    assert workspace_after["exists"] is False
+                    assert workspace_after["is_symlink"] is False
                 if mode == "publication_wins":
                     assert finished["stored_state"] == "SUCCEEDED"
                     assert observed["result"]["action"] == "replayed_from_origin"
@@ -814,6 +865,7 @@ def main():
                         "native_calls": calls_for_worker,
                         "actual_worker_ready": worker_ready,
                         "worker_process_identity": worker_identity,
+                        "workspace_observation": workspace_after,
                         "actual_coordinator_pid": process.pid,
                         "delivered_ipc": frames,
                         "original_ledger": slots,

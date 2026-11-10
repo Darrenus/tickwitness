@@ -193,15 +193,21 @@ class JobExecutionControl:
         self.check()
         workspace = OwnedJobWorkspace(self.control.directory, self.policy.policy_id, row)
         self._workspace = workspace
+        body_error: BaseException | None = None
         try:
             workspace.create()
             yield workspace.scratch
+        except BaseException as error:
+            body_error = error
+            raise
         finally:
             try:
                 if self._owned_process is not None and not self._stop_attempted:
                     self.stop_process(self._owned_process)
                 workspace.close_parent_lifetime()
                 if self._worker_started and not self._worker_group_absent:
+                    if body_error is not None:
+                        raise body_error
                     raise JobStoreError("Worker group stop is unconfirmed; owned scratch retained")
                 if self._cleanup_deadline_ns is None:
                     self._cleanup_deadline_ns = (
@@ -280,23 +286,29 @@ class JobExecutionControl:
             raise JobStoreError("Worker leader was reaped or its process-group identity is unsafe")
         try:
             try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
+                os.kill(process.pid, signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                # A natural exit can race this request. Only the bounded wait
+                # and strict group observation below establish cleanup facts.
                 pass
-            except PermissionError as error:
-                remaining = min(
-                    0.5,
-                    max(0, self._cleanup_deadline_ns - time.monotonic_ns()) / 1_000_000_000,
-                )
-                try:
-                    self._worker_exit_code = process.wait(timeout=remaining)
-                    self._worker_reaped = self._elapsed()
-                except subprocess.TimeoutExpired:
-                    raise JobStoreError("Live worker signal permission is unconfirmed") from error
-            remaining = max(0, self._cleanup_deadline_ns - time.monotonic_ns()) / 1_000_000_000
-            if self._worker_reaped is None:
+            remaining = min(
+                0.5,
+                max(0, self._cleanup_deadline_ns - time.monotonic_ns()) / 1_000_000_000,
+            )
+            try:
                 self._worker_exit_code = process.wait(timeout=remaining)
-                self._worker_reaped = self._elapsed()
+            except subprocess.TimeoutExpired:
+                if process.returncode is not None:
+                    raise JobStoreError("Anchor identity was reaped during stop admission") from None
+                # This sole fallback precedes reaping. A timeout has not made
+                # the live owned leader PID reusable; never repeat it later.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                remaining = max(0, self._cleanup_deadline_ns - time.monotonic_ns()) / 1_000_000_000
+                self._worker_exit_code = process.wait(timeout=remaining)
+            self._worker_reaped = self._elapsed()
             while True:
                 try:
                     os.killpg(process.pid, 0)

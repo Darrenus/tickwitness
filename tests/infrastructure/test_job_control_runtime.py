@@ -273,7 +273,7 @@ def test_signal_permission_requires_actual_exit_and_group_absence(tmp_path, monk
     guard = JobExecutionControl(control)
     guard.bind(row)
     child = None
-    actual_kill = os.killpg
+    actual_kill, actual_group = os.kill, os.killpg
     with guard.activate(), guard.workspace(row) as scratch:
         try:
             child = guard.spawn((sys.executable, "-I", "-B", "-c", "print('ready',flush=True)"))
@@ -282,15 +282,21 @@ def test_signal_permission_requires_actual_exit_and_group_absence(tmp_path, monk
             signals = []
 
             def exited_permission(pid, number):
-                signals.append(number)
-                if number == signal.SIGKILL:
+                signals.append(("leader", number))
+                if number == signal.SIGTERM:
                     raise PermissionError(errno.EPERM, "Controlled exited-leader Darwin race")
                 return actual_kill(pid, number)
 
-            monkeypatch.setattr(job_control_runtime.os, "killpg", exited_permission)
+            def observed_group(pid, number):
+                signals.append(("group", number))
+                return actual_group(pid, number)
+
+            monkeypatch.setattr(job_control_runtime.os, "kill", exited_permission)
+            monkeypatch.setattr(job_control_runtime.os, "killpg", observed_group)
             guard.stop_process(child)
             assert guard.worker_exit_code == 0
-            assert signals.count(signal.SIGKILL) == 1 and 0 in signals
+            assert signals.count(("leader", signal.SIGTERM)) == 1
+            assert ("group", signal.SIGKILL) not in signals and ("group", 0) in signals
         finally:
             if child is not None:
                 close_pipes(child)
@@ -321,6 +327,7 @@ def test_live_signal_uncertainty_retains_workspace_and_cannot_confirm_stop(tmp_p
                 )
             )
             ready(child)
+            monkeypatch.setattr(job_control_runtime.os, "kill", denied)
             monkeypatch.setattr(job_control_runtime.os, "killpg", denied)
             guard.stop_process(child)
         assert scratch.is_dir()
@@ -333,6 +340,87 @@ def test_live_signal_uncertainty_retains_workspace_and_cannot_confirm_stop(tmp_p
                 actual_kill(child.pid, signal.SIGKILL)
             child.wait(timeout=10)
             close_pipes(child)
+
+
+def test_anchor_reaps_its_compute_child_before_cancelled_leader_exit(tmp_path, monkeypatch):
+    _, control, row = configured(tmp_path)
+    guard = JobExecutionControl(control)
+    guard.bind(row)
+    actual_kill, actual_group = os.kill, os.killpg
+    group_signals = []
+
+    def observed_group(pid, number):
+        group_signals.append(number)
+        return actual_group(pid, number)
+
+    child = None
+    with guard.activate(), guard.workspace(row) as scratch:
+        try:
+            child = guard.spawn(
+                (
+                    sys.executable,
+                    "-I",
+                    "-B",
+                    "-c",
+                    "import json,os; from threading import Event; "
+                    "print(json.dumps({'pid':os.getpid(),'pgid':os.getpgrp()}),flush=True); "
+                    "Event().wait(30)",
+                )
+            )
+            observed = json.loads(child.stdout.readline())
+            assert observed["pgid"] == child.pid and observed["pid"] != child.pid
+            control.request_cancel("stop-owned-pair", now_ns=time.time_ns(), snapshot=row)
+            monkeypatch.setattr(job_control_runtime.os, "killpg", observed_group)
+            guard.stop_process(child)
+            assert guard.worker_exit_code == -signal.SIGKILL
+            assert signal.SIGKILL not in group_signals and 0 in group_signals
+            with pytest.raises(ProcessLookupError):
+                actual_kill(observed["pid"], 0)
+            with pytest.raises(ProcessLookupError):
+                actual_group(child.pid, 0)
+        finally:
+            if child is not None:
+                close_pipes(child)
+    assert not scratch.exists()
+    assert guard.finish(row, cause="job_cancelled")["stop_confirmed"] is True
+
+
+@pytest.mark.parametrize("ignore_compute_alarm", [False, True])
+def test_anchor_own_deadline_reaps_compute_and_releases_lifetime(tmp_path, ignore_compute_alarm):
+    _, control, row = configured(tmp_path, max_wall_ns=1_000_000_000)
+    guard = JobExecutionControl(control)
+    guard.bind(row)
+    child = None
+    handler = "signal.SIG_IGN" if ignore_compute_alarm else "signal.SIG_DFL"
+    with guard.activate(), guard.workspace(row) as scratch:
+        try:
+            child = guard.spawn(
+                (
+                    sys.executable,
+                    "-I",
+                    "-B",
+                    "-c",
+                    "import json,os,signal; from threading import Event; "
+                    "assert signal.getsignal(signal.SIGTERM)==signal.SIG_DFL; "
+                    "assert signal.getsignal(signal.SIGALRM)==signal.SIG_DFL; "
+                    f"signal.signal(signal.SIGALRM,{handler}); "
+                    "print(json.dumps({'pid':os.getpid(),'pgid':os.getpgrp()}),flush=True); "
+                    "Event().wait(30)",
+                )
+            )
+            observed = json.loads(child.stdout.readline())
+            assert child.stdout.read() == b""
+            assert child.returncode is None
+            guard.stop_process(child)
+            assert guard.worker_exit_code == -signal.SIGALRM
+            with pytest.raises(ProcessLookupError):
+                os.kill(observed["pid"], 0)
+        finally:
+            if child is not None:
+                close_pipes(child)
+    assert not scratch.exists()
+    result = guard.finish(row, cause="job_deadline_exceeded")
+    assert result["stop_confirmed"] is True and result["cleanup_confirmed"] is True
 
 
 def test_replaced_scratch_is_not_followed_or_reported_cleaned(tmp_path):
