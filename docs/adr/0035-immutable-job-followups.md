@@ -1,6 +1,6 @@
 # ADR0035: Record retry and acknowledgment as immutable followup Jobs
 
-Date: 2026-11-08 (Asia/Singapore). Status: S10-02c implementation under review.
+Date: 2026-11-08 (Asia/Singapore). Status: accepted by owner merge of [PR104](https://github.com/Darrenus/tickwitness/pull/104) at `445df01f1f30c77f8161172a0c96b8827be6b4b9`; acceptance recorded 2026-11-10.
 
 ## Decision
 
