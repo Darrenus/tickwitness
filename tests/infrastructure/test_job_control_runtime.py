@@ -366,7 +366,8 @@ def test_reclamation_refuses_live_lifetime_then_removes_only_reconciled_scratch(
                 "-I",
                 "-B",
                 "-c",
-                "import os,sys; os.fstat(int(sys.argv[1])); print('ready',flush=True); sys.stdin.buffer.read()",
+                "import os,sys; os.fstat(int(sys.argv[1])); "
+                "print('ready',flush=True); sys.stdin.buffer.read()",
                 str(fd),
             ),
             stdin=subprocess.PIPE,
