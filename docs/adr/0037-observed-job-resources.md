@@ -1,6 +1,6 @@
 # ADR0037: Keep resource observations separate from research authority
 
-Date2026-11-12 Asia/Singapore. Status: frozen before implementation, owner acceptance pending.
+Date2026-11-12 Asia/Singapore. Status: frozen before implementation; accepted by owner [PR106](https://github.com/Darrenus/tickwitness/pull/106), real merge15bc36fec573297b43a1aa21cd51232b6550305b at04:52:53Z. Software qualification and owner acceptance do not replace external-human reproduction, which remains0/PENDING.
 
 S10 controls constrain execution but do not explain actual cost. A configured limit is not a measurement, and missing metrics after a crash must not become zero. Preserve original Job/control/research bytes, and publish a bounded immutable operational report in a separate namespace. Actual report snapshot bindings remain historical after reconciliation; a current read view must distinguish the two.
 
