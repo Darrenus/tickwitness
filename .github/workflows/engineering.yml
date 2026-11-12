@@ -51,6 +51,9 @@ jobs:
           tests/infrastructure/test_dataset_retention.py
           tests/test_dataset_retention_cli.py
           tests/infrastructure/test_dataset_store_faults.py
+          tests/infrastructure/test_job_journal_races.py
+          tests/infrastructure/test_sqlite_job_store.py::test_killed_owner_hot_journal_requires_explicit_rw_owner_recovery
+          tests/infrastructure/test_sqlite_job_store.py::test_catalog_lock_and_existing_journal_symlinks_are_not_followed
       - name: Fast installed followup qualification on manual dispatch
         if: github.event_name == 'workflow_dispatch' && success()
         run: |

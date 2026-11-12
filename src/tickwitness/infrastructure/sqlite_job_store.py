@@ -7,6 +7,7 @@ SQLite rollback journaling avoids creating WAL/shm files during read-only querie
 
 from __future__ import annotations
 
+import errno
 import fcntl
 import os
 import re
@@ -377,8 +378,13 @@ class SqliteJobStore:
                         "Unexpected job catalog WAL sidecar",
                     )
                 if self._exists(root_fd, _CATALOG + "-journal"):
-                    with self._regular(root_fd, _CATALOG + "-journal"):
-                        pass
+                    try:
+                        with self._regular(root_fd, _CATALOG + "-journal"):
+                            pass
+                    except FileNotFoundError as error:
+                        if not write and error.errno == errno.ENOENT:
+                            raise JobConflictError("Job catalog read is busy; retry read") from error
+                        raise
                 uri = "file:" + quote(str(self._root / _CATALOG), safe="/")
                 connection = sqlite3.connect(
                     uri + ("?mode=rw" if write else "?mode=ro"),
