@@ -70,6 +70,7 @@ class OwnedJobWorkspace:
         self.lifetime_fd: int | None = None
         self.seal: Row | None = None
         self.removed = False
+        self.cleanup_logical_bytes: int | None = None
 
     @staticmethod
     def _mkdir(parent: int, name: str, *, existing: bool) -> None:
@@ -288,7 +289,8 @@ class OwnedJobWorkspace:
             try:
                 _require(_same(info, os.fstat(scratch)), "Scratch changed during cleanup")
                 remaining = [MAX_WORKSPACE_ENTRIES]
-                self._clear(scratch, remaining, 0, deadline_ns, info.st_dev)
+                logical_bytes = [0]
+                self._clear(scratch, remaining, 0, deadline_ns, info.st_dev, logical_bytes)
                 os.fsync(scratch)
             finally:
                 os.close(scratch)
@@ -300,12 +302,20 @@ class OwnedJobWorkspace:
             os.rmdir("scratch", dir_fd=descriptor)
             os.fsync(descriptor)
             self.removed = True
+            if logical_bytes[0] <= 2**63 - 1:
+                self.cleanup_logical_bytes = logical_bytes[0]
         finally:
             os.close(lock_fd)
 
     @classmethod
     def _clear(
-        cls, directory: int, remaining: list[int], depth: int, deadline_ns: int, device: int
+        cls,
+        directory: int,
+        remaining: list[int],
+        depth: int,
+        deadline_ns: int,
+        device: int,
+        logical_bytes: list[int],
     ) -> None:
         _require(depth <= MAX_WORKSPACE_DEPTH, "Owned scratch depth exceeds cleanup bound")
         with os.scandir(directory) as entries:
@@ -322,7 +332,7 @@ class OwnedJobWorkspace:
                     child = os.open(entry.name, _DIRECTORY_FLAGS, dir_fd=directory)
                     try:
                         _require(_same(info, os.fstat(child)), "Scratch child was replaced")
-                        cls._clear(child, remaining, depth + 1, deadline_ns, device)
+                        cls._clear(child, remaining, depth + 1, deadline_ns, device, logical_bytes)
                     finally:
                         os.close(child)
                     _require(
@@ -333,6 +343,10 @@ class OwnedJobWorkspace:
                 else:
                     # Unlink the owned directory entry, including a symlink itself; never follow it.
                     os.unlink(entry.name, dir_fd=directory)
+                    if stat.S_ISREG(info.st_mode):
+                        # Logical directory-entry bytes, not physical bytes freed.
+                        # Hard links deliberately count once per removed entry.
+                        logical_bytes[0] += info.st_size
 
 
 def reclaim_workspace(directory: Path, policy_id: str, snapshot: Row, *, grace_ns: int) -> Row:

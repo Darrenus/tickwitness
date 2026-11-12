@@ -8,6 +8,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import cast
 
+from tickwitness.application.job_resources import inspect_job_resources, preview_job_resources
 from tickwitness.application.jobs import JobConflictError, job_view
 from tickwitness.application.research import ConfirmationAccessDenied
 from tickwitness.domain.evidence.run_records import canonical, identity, parse
@@ -28,6 +29,7 @@ from tickwitness.infrastructure.job_controls import JobControlStore
 from tickwitness.infrastructure.job_followups import find_committed_dispatch
 from tickwitness.infrastructure.job_lineage import JobFamily
 from tickwitness.infrastructure.job_reduction import inspect_native_job_dispatch
+from tickwitness.infrastructure.job_resources import JobResourceStore
 from tickwitness.infrastructure.job_supervisor import run_job
 from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
 
@@ -46,6 +48,8 @@ COMMANDS = frozenset(
         "cancel-job",
         "inspect-job-control",
         "reclaim-job-workspaces",
+        "inspect-job-resources",
+        "preview-job-resources",
     }
 )
 type Row = dict[str, object]
@@ -111,6 +115,8 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
         ("cancel-job", "Request cancellation before irreversible publication admission"),
         ("inspect-job-control", "Read control intent, actual stop and cleanup facts"),
         ("reclaim-job-workspaces", "Reclaim only verified inactive scratch for one Job"),
+        ("inspect-job-resources", "Read immutable operational resource observations"),
+        ("preview-job-resources", "Preview metadata and limits without executing research"),
     ):
         command = commands.add_parser(name, help=help_text)
         command.add_argument("job_id")
@@ -136,6 +142,17 @@ def _disjoint(jobs: Path, roots: tuple[Path, ...]) -> None:
 
 
 def execute(arguments: argparse.Namespace) -> Row | str:
+    if arguments.command in {"inspect-job-resources", "preview-job-resources"}:
+        if arguments.split != "development":
+            raise ConfirmationAccessDenied("Job resources permit development metadata only")
+        job_id = identity(arguments.job_id)
+        catalog = SqliteJobStore(arguments.jobs, create=False)
+        policy = JobControlStore(catalog.root, job_id).policy()
+        if arguments.command == "preview-job-resources":
+            return preview_job_resources(catalog, job_id, policy)
+        return inspect_job_resources(
+            catalog, JobResourceStore(catalog.root, job_id), job_id, policy
+        )
     if arguments.command in {
         "configure-job-control",
         "cancel-job",

@@ -12,6 +12,7 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import time
 from contextlib import contextmanager, suppress
 from pathlib import Path
@@ -258,10 +259,25 @@ finally:os.close(descriptor)
 print(json.dumps({'lifetime_busy':busy,'scratch_exists':root.is_dir(),
                   'scratch_files':sorted(item.name for item in root.iterdir())}))
 """
+_RESOURCE_GUARD = """
+from tickwitness.infrastructure import sqlite_job_store as resource_sqlite_store
+assert sys.argv[1] in ('inspect-job-resources','preview-job-resources')
+resource_connect=sqlite3.connect
+def metadata_authorizer(action,table,column,database,trigger):
+    if action==sqlite3.SQLITE_READ and table=='jobs' and column=='result':
+        return sqlite3.SQLITE_DENY
+    return sqlite3.SQLITE_OK
+def resource_connection(*args,**kwargs):
+    connection=resource_connect(*args,**kwargs)
+    connection.set_authorizer(metadata_authorizer)
+    return connection
+sqlite3.connect=resource_connection
+resource_sqlite_store._check_result=forbidden
+"""
 
 
 @contextmanager
-def _workspace(records, report):
+def _workspace(records, report, resource_report=None):
     with TemporaryDirectory(prefix="tickwitness-job-controls-") as temporary:
         root = Path(temporary)
         try:
@@ -269,6 +285,9 @@ def _workspace(records, report):
         except BaseException as error:
             with suppress(OSError):
                 report.unlink(missing_ok=True)
+            if resource_report is not None:
+                with suppress(OSError):
+                    resource_report.unlink(missing_ok=True)
             if not records.exists():
                 shutil.copytree(root, records)
                 (records / "diagnostic-capture.json").write_bytes(
@@ -361,19 +380,232 @@ def _workspace_observation(directory, catalog):
     return observation
 
 
+_RESOURCE_METRICS = {
+    "coordinator_cpu_ns": ("ns", "coordinator_process", "process_time_ns_delta"),
+    "compute_user_cpu_ns": ("ns", "terminated_compute_child_os_accounting", "anchor_wait4"),
+    "compute_system_cpu_ns": ("ns", "terminated_compute_child_os_accounting", "anchor_wait4"),
+    "compute_peak_rss_bytes": (
+        "bytes",
+        "terminated_compute_child_os_accounting",
+        "anchor_wait4",
+    ),
+    "scratch_cleanup_logical_bytes": (
+        "bytes",
+        "owned_scratch_cleanup_regular_entries",
+        "nofollow_cleanup_stat",
+    ),
+    "job_elapsed_ns": ("ns", "live_control_window", "monotonic_ns_delta"),
+    "research_slots_reserved_count": (
+        "count",
+        "this_job_confirmed_new_reservations",
+        "coordinator_reservation_confirmation",
+    ),
+    "audited_native_results_count": (
+        "count",
+        "this_job_new_native_results_audited",
+        "coordinator_native_result_audit",
+    ),
+    "processed_input_record_count": (
+        "count",
+        "this_job_audited_native_result",
+        "coordinator_native_result_audit",
+    ),
+    "predicate_evaluation_count": ("count", "frozen_research_predicate", "not_instrumented"),
+}
+
+
+def _resource_document(report, observed, *, worker_identity=None, positive=False, resource=False):
+    """Bind operational observations to the actual existing execution, not guesses."""
+    assert set(report) == {
+        "kind",
+        "schema_version",
+        "job_id",
+        "job_attempt_id",
+        "policy_id",
+        "catalog_state",
+        "catalog_snapshot_sha256",
+        "worker_started",
+        "worker_usage",
+        "collection_status",
+        "metrics",
+        "stages",
+    }
+    snapshot, control = observed["snapshot"], observed["control"]
+    assert report["kind"] == "job_resource_report_v1" and report["schema_version"] == 1
+    assert report["job_id"] == snapshot["job_id"]
+    assert report["job_attempt_id"] == snapshot["attempt"]["job_attempt_id"]
+    assert report["policy_id"] == control["policy_id"]
+    assert report["catalog_state"] == snapshot["state"]
+    assert report["catalog_snapshot_sha256"] == _sha(_canonical(snapshot))
+    assert report["worker_started"] == control["result"]["worker_started"]
+    assert report["collection_status"] in {"complete", "partial"}
+    assert set(report["metrics"]) == set(_RESOURCE_METRICS)
+    for name, metric in report["metrics"].items():
+        assert set(metric) == {"availability", "value", "unit", "scope", "source", "reason"}
+        assert (metric["unit"], metric["scope"], metric["source"]) == _RESOURCE_METRICS[name]
+        if metric["availability"] == "measured":
+            assert type(metric["value"]) is int and 0 <= metric["value"] < 2**63
+            assert metric["reason"] is None
+        else:
+            assert metric["availability"] == "unavailable" and metric["value"] is None
+            assert metric["reason"] in {
+                "not_recorded",
+                "worker_not_started",
+                "usage_unavailable",
+                "unsupported_platform",
+                "cleanup_incomplete",
+                "reservation_unconfirmed",
+                "result_not_audited",
+                "not_instrumented",
+                "phase_not_observed",
+                "clock_unavailable",
+            }
+    metrics = report["metrics"]
+    assert metrics["predicate_evaluation_count"]["availability"] == "unavailable"
+    assert metrics["predicate_evaluation_count"]["reason"] == "not_instrumented"
+    assert metrics["job_elapsed_ns"]["availability"] == "measured"
+    assert metrics["coordinator_cpu_ns"]["availability"] == "measured"
+    assert [stage["name"] for stage in report["stages"]] == [
+        "pre_worker_admission",
+        "owned_worker_lifetime",
+        "cleanup",
+        "post_cleanup",
+    ]
+    for stage in report["stages"]:
+        assert set(stage) == {
+            "name",
+            "availability",
+            "start_offset_ns",
+            "end_offset_ns",
+            "duration_ns",
+            "reason",
+        }
+        if stage["availability"] == "measured":
+            start, end, duration = (
+                stage["start_offset_ns"],
+                stage["end_offset_ns"],
+                stage["duration_ns"],
+            )
+            assert all(type(value) is int for value in (start, end, duration))
+            assert 0 <= start <= end <= metrics["job_elapsed_ns"]["value"]
+            assert duration == end - start and stage["reason"] is None
+        else:
+            assert stage["availability"] == "unavailable"
+            assert stage["reason"] == "phase_not_observed"
+            assert all(
+                stage[name] is None for name in ("start_offset_ns", "end_offset_ns", "duration_ns")
+            )
+    usage = report["worker_usage"]
+    worker_metrics = ("compute_user_cpu_ns", "compute_system_cpu_ns", "compute_peak_rss_bytes")
+    if not report["worker_started"]:
+        assert usage is None
+        for name in worker_metrics:
+            assert metrics[name]["availability"] == "unavailable"
+            assert metrics[name]["reason"] == "worker_not_started"
+        assert metrics["scratch_cleanup_logical_bytes"]["value"] == 0
+    elif usage is not None:
+        assert worker_identity is not None
+        assert set(usage) == {
+            "kind",
+            "schema_version",
+            "anchor_pid",
+            "compute_pid",
+            "platform",
+            "user_cpu_us",
+            "system_cpu_us",
+            "maxrss_raw",
+            "maxrss_unit",
+            "compute_wait_status",
+        }
+        assert usage["kind"] == "job_compute_usage_v1" and usage["schema_version"] == 1
+        assert usage["anchor_pid"] == worker_identity["parent_pid"]
+        assert usage["compute_pid"] == worker_identity["pid"]
+        assert usage["anchor_pid"] != usage["compute_pid"]
+        platform = "darwin" if sys.platform == "darwin" else "linux"
+        assert usage["platform"] == platform
+        assert usage["maxrss_unit"] == ("bytes" if platform == "darwin" else "KiB")
+        assert type(usage["compute_wait_status"]) is int
+        assert -255 <= usage["compute_wait_status"] <= 255
+        for name in ("user_cpu_us", "system_cpu_us", "maxrss_raw"):
+            assert type(usage[name]) is int and 0 <= usage[name] < 2**63
+        assert metrics["compute_user_cpu_ns"]["value"] == usage["user_cpu_us"] * 1000
+        assert metrics["compute_system_cpu_ns"]["value"] == usage["system_cpu_us"] * 1000
+        multiplier = 1 if platform == "darwin" else 1024
+        assert metrics["compute_peak_rss_bytes"]["value"] == usage["maxrss_raw"] * multiplier
+        assert all(metrics[name]["availability"] == "measured" for name in worker_metrics)
+        # The anchor's deadline and the compute child's wait status may differ.
+    else:
+        assert report["collection_status"] == "partial"
+        assert all(metrics[name]["availability"] == "unavailable" for name in worker_metrics)
+    if positive:
+        assert usage is not None
+        assert usage["user_cpu_us"] + usage["system_cpu_us"] > 0
+        assert metrics["compute_peak_rss_bytes"]["value"] > 0
+    if resource and control["result"]["cleanup_confirmed"]:
+        assert metrics["scratch_cleanup_logical_bytes"]["availability"] == "measured"
+        assert metrics["scratch_cleanup_logical_bytes"]["value"] >= 65536
+
+
+def _resource_preview(preview, observed):
+    assert set(preview) == {
+        "kind",
+        "schema_version",
+        "job_id",
+        "operation",
+        "policy_id",
+        "configured_limits",
+        "estimates",
+        "research_slot_requirement",
+        "execution_authorized",
+    }
+    snapshot, control = observed["snapshot"], observed["control"]
+    assert preview["kind"] == "job_resource_preview_v1" and preview["schema_version"] == 1
+    assert preview["job_id"] == snapshot["job_id"]
+    assert preview["operation"] == snapshot["spec"]["operation"]
+    assert preview["policy_id"] == control["policy_id"]
+    expected_limits = None if control["policy"] is None else control["policy"]["limits"]
+    assert preview["configured_limits"] == expected_limits
+    assert preview["execution_authorized"] is False
+    assert set(preview["estimates"]) == {"cpu_ns", "peak_rss_bytes", "elapsed_ns", "disk_bytes"}
+    assert all(
+        estimate == {"availability": "unavailable", "value": None, "reason": "not_calibrated"}
+        for estimate in preview["estimates"].values()
+    )
+    read_only = snapshot["spec"]["operation"] == "compare_reduction_run_v1" or (
+        snapshot["spec"]["operation"] == "resolve_reduction_job_v1"
+        and snapshot["spec"]["request"]["mode"] == "acknowledge_committed_v1"
+    )
+    assert preview["research_slot_requirement"] == (
+        {"availability": "measured", "value": 0, "reason": "structurally_read_only"}
+        if read_only
+        else {"availability": "unavailable", "value": None, "reason": "conditional_execution"}
+    )
+    assert "lease_token" not in _canonical(preview).decode()
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in ("python", "verifier-python", "report", "records-dir"):
         parser.add_argument("--" + name, required=True, type=Path)
     parser.add_argument("--core-only", action="store_true")
+    parser.add_argument("--resource-report", type=Path)
     args = parser.parse_args()
-    if args.report.exists() or args.records_dir.exists():
+    if (
+        args.report.exists()
+        or args.records_dir.exists()
+        or (args.resource_report is not None and args.resource_report.exists())
+    ):
         raise FileExistsError("Control qualification destinations must be new")
+    if args.resource_report is not None and (
+        args.resource_report.absolute() == args.report.absolute()
+        or args.resource_report.absolute().is_relative_to(args.records_dir.absolute())
+    ):
+        raise ValueError("Resource qualification report needs a separate destination")
     producer_python = str(args.python.absolute())
     verifier = str(args.verifier_python.absolute())
     examples = Path(__file__).resolve().parents[1] / "examples"
     golden_before = _tree(examples / "alpha")
-    with _workspace(args.records_dir, args.report) as root:
+    with _workspace(args.records_dir, args.report, args.resource_report) as root:
         inputs, preparations, catalog, controls, transcripts, cwd = (
             root / name
             for name in ("input-root", "preparations", "jobs", "controls", "transcripts", "cwd")
@@ -386,6 +618,8 @@ def main():
         core_worker.write_text(_CORE_WORKER)
         calls = []
         ids = []
+        resource_observations = []
+        resource_confirmation_refusals = []
 
         def invoke(executable, entry, command=(), expected=0, *, retry_read_conflict=False):
             deadline = time.monotonic() + 10
@@ -428,7 +662,10 @@ def main():
 
         def run(*command, producer=False, guard=False, jobs=catalog, expected=0):
             if guard:
-                entry, prefix = guarded("\nraise SystemExit(main(sys.argv[1:]))\n", jobs)
+                code = "\nraise SystemExit(main(sys.argv[1:]))\n"
+                if command and command[0] in {"inspect-job-resources", "preview-job-resources"}:
+                    code = _RESOURCE_GUARD + code
+                entry, prefix = guarded(code, jobs)
             else:
                 entry, prefix = ["-m", "tickwitness"], ()
             executable = producer_python if producer else verifier
@@ -449,6 +686,131 @@ def main():
         def catalog_only(job_id, jobs=catalog):
             entry, prefix = guarded(_CATALOG_ONLY, jobs)
             return invoke(verifier, entry, (*prefix, job_id), retry_read_conflict=True)
+
+        def resource_observation(
+            job_id,
+            phase,
+            *,
+            jobs=catalog,
+            recorded=False,
+            worker_identity=None,
+            positive=False,
+            resource=False,
+            reserved=0,
+            audited=0,
+        ):
+            if args.resource_report is None:
+                return None
+            observed = actual(job_id, jobs)
+
+            def trees():
+                return {
+                    "catalog": _tree(jobs),
+                    "input_root": _tree(inputs),
+                    "preparations": _tree(preparations),
+                    "controls": _tree(controls),
+                    "original_ledger": _tree(root / "live-runs"),
+                }
+
+            before = trees()
+            inspection = run(
+                "inspect-job-resources",
+                job_id,
+                "--jobs",
+                str(jobs),
+                "--split",
+                "development",
+                guard=True,
+                jobs=jobs,
+            )
+            preview = run(
+                "preview-job-resources",
+                job_id,
+                "--jobs",
+                str(jobs),
+                "--split",
+                "development",
+                guard=True,
+                jobs=jobs,
+            )
+            repeated = run(
+                "inspect-job-resources",
+                job_id,
+                "--jobs",
+                str(jobs),
+                "--split",
+                "development",
+                guard=True,
+                jobs=jobs,
+            )
+            after = trees()
+            assert before == after and inspection == repeated
+            assert set(inspection) == {
+                "kind",
+                "schema_version",
+                "job_id",
+                "policy_id",
+                "current_snapshot_sha256",
+                "report_id",
+                "report",
+                "report_matches_current_snapshot",
+                "status",
+                "execution_authorized",
+            }
+            assert inspection["kind"] == "job_resource_inspection_v1"
+            assert inspection["schema_version"] == 1 and inspection["job_id"] == job_id
+            assert inspection["policy_id"] == observed["control"]["policy_id"]
+            assert inspection["current_snapshot_sha256"] == _sha(_canonical(observed["snapshot"]))
+            assert inspection["execution_authorized"] is False
+            _resource_preview(preview, observed)
+            report_file = jobs / ".job-resources" / job_id / "report.json"
+            if recorded:
+                report = inspection["report"]
+                assert isinstance(report, dict)
+                raw = report_file.read_bytes()
+                assert raw == _canonical(report) and len(raw) <= 16384
+                assert inspection["report_id"] == _sha(raw)
+                assert inspection["report_matches_current_snapshot"] is True
+                assert inspection["status"] == (
+                    "RECORDED" if report["collection_status"] == "complete" else "PARTIAL"
+                )
+                _resource_document(
+                    report,
+                    observed,
+                    worker_identity=worker_identity,
+                    positive=positive,
+                    resource=resource,
+                )
+                if phase in {"post-exhaustion-ack", "queued-cancelled"}:
+                    assert report["worker_started"] is False
+                metrics = report["metrics"]
+                assert metrics["research_slots_reserved_count"]["value"] == reserved
+                assert metrics["audited_native_results_count"]["value"] == audited
+                processed = metrics["processed_input_record_count"]
+                if audited:
+                    assert processed["availability"] == "measured" and processed["value"] == 6
+                else:
+                    assert processed["availability"] == "unavailable"
+                    assert processed["reason"] == "result_not_audited"
+            else:
+                assert inspection["status"] == "NOT_RECORDED"
+                assert inspection["report_id"] is None and inspection["report"] is None
+                assert inspection["report_matches_current_snapshot"] is None
+                assert not report_file.exists()
+            observation = {
+                "phase": phase,
+                "job_id": job_id,
+                "catalog": jobs.name,
+                "inspection": inspection,
+                "preview": preview,
+                "before_roots": before,
+                "after_roots": after,
+                "worker_identity": worker_identity,
+                "new_research_reservations": reserved,
+                "new_native_results_audited": audited,
+            }
+            resource_observations.append(observation)
+            return observation
 
         def configure(job_id, *, wall=120, file_bytes=8388608, jobs=catalog):
             command = (
@@ -493,6 +855,7 @@ def main():
                 expected=9,
             )
             assert _tree(jobs) == before
+            resource_observation(job_id, "queued-configured", jobs=jobs)
             return {"configured": configured, "repeated": repeated, "stored": observed}
 
         def submit_comparison(tag, *, jobs=catalog, run_id=None, source=None):
@@ -623,6 +986,22 @@ def main():
             assert refusal["error"]["code"] == "confirmation_access_denied"
             confirmation_refusals.append({"command": command, "refusal": refusal})
         assert not (root / "never-jobs").exists()
+        if args.resource_report is not None:
+            for command in ("inspect-job-resources", "preview-job-resources"):
+                refusal = run(
+                    command,
+                    "invalid",
+                    "--jobs",
+                    str(root / "never-resource-jobs"),
+                    "--split",
+                    "confirmation",
+                    guard=True,
+                    jobs=root / "never-resource-jobs",
+                    expected=5,
+                )
+                assert refusal["error"]["code"] == "confirmation_access_denied"
+                resource_confirmation_refusals.append({"command": command, "refusal": refusal})
+            assert not (root / "never-resource-jobs").exists()
         lifecycle = None
         native_cases = []
         source = None
@@ -851,6 +1230,16 @@ def main():
                 assert len(slots["slots"]) == slot
                 assert slots["slots"][-1]["outcome_id"] is None or mode == "publication_wins"
                 assert _tree(inputs / "live-source") == source_before
+                resource_observation(
+                    job_id,
+                    "native-" + mode,
+                    recorded=True,
+                    worker_identity=worker_identity,
+                    positive=mode == "publication_wins",
+                    resource=mode == "resource",
+                    reserved=1,
+                    audited=1 if mode in {"cancel_publication", "publication_wins"} else 0,
+                )
                 native_cases.append(
                     {
                         "slot": slot,
@@ -904,6 +1293,7 @@ def main():
             assert ack_observed["result"]["action"] == "acknowledged_committed"
             assert _tree(root / "live-runs") == research_before
             assert _tree(controls) == native_before and ledger() == final_before_ack
+            resource_observation(ack["job_id"], "post-exhaustion-ack", recorded=True)
             lifecycle.update(
                 {
                     "cases": native_cases,
@@ -928,6 +1318,7 @@ def main():
             run_id=completed_run,
             source=source,
         )
+        resource_observation(queued["job_id"], "queued-unconfigured")
         queued_policy = configure(queued["job_id"])
         queued_cancel = cancellation(queued["job_id"], "queued-cancel")
         queued_observed = actual(queued["job_id"])
@@ -961,6 +1352,7 @@ def main():
             expected=9,
         )
         assert _tree(catalog) == queued_tree
+        resource_observation(queued["job_id"], "queued-cancelled", recorded=True)
         transport_cases = []
         for mode in ("cancel", "deadline", "resource", "orphan"):
             jobs = root / f"transport-{mode}-jobs"
@@ -1003,6 +1395,7 @@ def main():
                     assert not scratch.exists()
                     observed = actual(job_id, jobs)
                     assert observed["snapshot"]["state"] == "LOST"
+                    resource_observation(job_id, "transport-orphan", jobs=jobs)
                     transport_cases.append(
                         {
                             "mode": mode,
@@ -1038,6 +1431,14 @@ def main():
                 observed_at = time.monotonic_ns()
                 cancel["terminal_observed_ns"] = observed_at
                 cancel["observed_upper_bound_ns"] = observed_at - cancel["request_started_ns"]
+            resource_observation(
+                job_id,
+                "transport-" + mode,
+                jobs=jobs,
+                recorded=True,
+                worker_identity=worker_identity,
+                resource=mode == "resource",
+            )
             transport_cases.append(
                 {
                     "mode": mode,
@@ -1052,6 +1453,73 @@ def main():
                 }
             )
         assert _tree(examples / "alpha") == golden_before
+        resource_report = None
+        if args.resource_report is not None:
+            recorded_resources = [
+                observation
+                for observation in resource_observations
+                if observation["inspection"]["report"] is not None
+            ]
+            native_resources = [
+                observation
+                for observation in resource_observations
+                if observation["phase"].startswith("native-")
+            ]
+            assert len(native_resources) == (0 if args.core_only else 5)
+            native_calls = sum(len(case["native_calls"]) for case in native_cases)
+            assert native_calls == len(native_resources)
+            assert len(recorded_resources) == (4 if args.core_only else 10)
+            orphan_resources = [
+                observation
+                for observation in resource_observations
+                if observation["phase"] == "transport-orphan"
+            ]
+            assert len(orphan_resources) == 1
+            assert orphan_resources[0]["inspection"]["status"] == "NOT_RECORDED"
+            assert all(
+                observation["before_roots"] == observation["after_roots"]
+                for observation in resource_observations
+            )
+            resource_report = {
+                "kind": "installed_job_resources_acceptance_v1",
+                "schema_version": 1,
+                "accepted": True,
+                "core_only_profile": args.core_only,
+                "interpreter_identities": identities,
+                "confirmation_refusals": resource_confirmation_refusals,
+                "observations": resource_observations,
+                "accounting": {
+                    "original_protocol": None if lifecycle is None else lifecycle["after"],
+                    "managed_native_calls": native_calls,
+                    "recorded_reports": len(recorded_resources),
+                    "worker_usage_reports": sum(
+                        observation["inspection"]["report"]["worker_usage"] is not None
+                        for observation in recorded_resources
+                    ),
+                    "new_research_slots_from_inspection_or_preview": 0,
+                    "post_exhaustion_ack_new_slots": 0,
+                    "post_exhaustion_ack_new_workers": 0,
+                },
+                "scope": {
+                    "actual_managed_native_resources": not args.core_only,
+                    "core_transport_fixtures": True,
+                    "cpu_source": "owned_compute_child_wait4",
+                    "memory_scope": "terminated_compute_child_os_accounting",
+                    "disk_scope": "owned_scratch_cleanup_regular_entries",
+                    "measurements_are_estimates": False,
+                    "preview_calibrated": False,
+                    "predicate_evaluations_instrumented": False,
+                    "unsupported_and_tampered_live_probes": False,
+                    "hard_rss_or_aggregate_scratch_limits": False,
+                    "global_resource_accounting": False,
+                    "research_budget_reset": False,
+                    "external_human_attempts": 0,
+                    "external_human_gate": "PENDING",
+                },
+            }
+            inner_resources = root / "job-resources-smoke" / "report.json"
+            inner_resources.parent.mkdir()
+            inner_resources.write_bytes(_canonical(resource_report))
         report = {
             "kind": "installed_job_controls_acceptance_v1",
             "accepted": True,
@@ -1089,6 +1557,10 @@ def main():
         (args.records_dir / "artifact-files.json").write_bytes(_canonical(_tree(args.records_dir)))
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_bytes(_canonical(report))
+        if args.resource_report is not None:
+            args.resource_report.parent.mkdir(parents=True, exist_ok=True)
+            with args.resource_report.open("xb") as resource_stream:
+                resource_stream.write(_canonical(resource_report))
 
 
 if __name__ == "__main__":
