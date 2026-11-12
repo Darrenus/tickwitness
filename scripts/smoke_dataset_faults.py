@@ -29,6 +29,9 @@ from tickwitness.infrastructure.dataset_retention import LocalDatasetMaintenance
 from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger
 from tickwitness.infrastructure.bounded_replay import BoundedReplayAdapter
 from tickwitness.infrastructure.subprocess_replay import SubprocessReplayAdapter
+# Load CLI annotation declarations before replacing the runtime Popen entry.
+# The native import finder is already active; exercise guards follow below.
+from tickwitness.cli import main
 def forbidden(*args,**kwargs):raise AssertionError('No research or network authority')
 BoundedReplayAdapter.__init__=forbidden;SubprocessReplayAdapter.__init__=forbidden
 for name in ('reserve','reserve_with_nonce','bind_intent','publish'):
