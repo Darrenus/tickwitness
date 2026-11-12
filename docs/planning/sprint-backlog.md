@@ -363,3 +363,5 @@
 2026-11-12，owner 合并 #105 接受 S10-03，merge `8f2f27880f1753bd754ec7220fbac3045d143905`；#30完成，S10软件依赖已接受。S11-01先冻结 [Job资源报告与只读预览](../contracts/job-resources-v1.md)：实测、未知、配置上限和条件性研究槽需求分开，单个计算进程的 OS accounting 不冒充整树资源，预览不运行研究。原11h／S11总33h与持续质量容量不变；#31在owner接受前保持打开。S11-02／03仍Planned，外部真人0/PENDING。
 
 2026-11-12，owner 合并 #106 接受 S11-01，真实merge `15bc36fec573297b43a1aa21cd51232b6550305b`，#31完成。S11-02先冻结 [DatasetStore引用感知保留](../contracts/dataset-retention-v1.md)：全部有效manifest（含未索引）闭包保留，独占根中的孤立CAS才可能成为候选，混合／未知引用阻断；共同读写栅栏、只读计划、完全重验证和明确部分失败先于实现。原12h／S11总33h和持续质量容量不变；#32在owner接受前保持打开。S11-03仍Planned，外部真人0/PENDING。
+
+2026-11-12，owner 合并 #107 接受 S11-02，真实merge `fd440659790a52b153daad3237f516d90ba9dd26`，#32完成。S11-03先冻结 [有限DatasetStore故障预算](../contracts/dataset-fault-budget-v1.md)：八个有界故障、真实OS与注入来源分开、发布前拒绝短写、已知部分与同步不确定不能冒充成功、显式恢复不重置预算。原10h／S11总33h和持续质量容量不变；#33在owner接受前保持打开，外部真人0/PENDING。
