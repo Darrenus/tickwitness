@@ -426,7 +426,7 @@ def main():
             for destination in (args.report, args.records_dir)
         ):
             raise ValueError("Retention destinations must be disjoint from original records")
-    interpreter = str(args.python.absolute())
+    interpreter = str(args.python.parent.resolve() / args.python.name)
     source_before = None if args.source_records is None else tree(args.source_records)
     source_report = None
     if args.source_records is not None:
