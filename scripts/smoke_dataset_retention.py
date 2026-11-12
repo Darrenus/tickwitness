@@ -293,9 +293,15 @@ raise SystemExit(result)
 _CONFIRMATION_CLI = """
 import io,sqlite3
 from tickwitness.cli import main
+import tickwitness.cli as installed_cli
 from tickwitness.infrastructure.dataset_retention import LocalDatasetMaintenance
+installed_version=metadata.version('tickwitness')
 def forbidden(*args,**kwargs):
     raise AssertionError('Confirmation must reject before ID, plan or store IO')
+def version(name):
+    if name!='tickwitness':forbidden()
+    return installed_version
+installed_cli.version=version
 LocalDatasetMaintenance.__init__=forbidden
 os.open=forbidden;sqlite3.connect=forbidden;io.open=forbidden
 Path.open=forbidden;Path.read_bytes=forbidden;Path.stat=forbidden;Path.lstat=forbidden
