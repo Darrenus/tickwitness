@@ -270,7 +270,8 @@ def connect(database,*args,**kwargs):
         if action in writes:return sqlite3.SQLITE_DENY
         if action==sqlite3.SQLITE_PRAGMA and second is not None:
             if (first,second) not in (('trusted_schema','OFF'),('query_only','ON'),
-                                      ('trusted_schema','0'),('query_only','1')):
+                                      ('trusted_schema','0'),('query_only','1'),
+                                      ('table_info','datasets')):
                 return sqlite3.SQLITE_DENY
         return sqlite3.SQLITE_OK
     connection.set_authorizer(authorize)
