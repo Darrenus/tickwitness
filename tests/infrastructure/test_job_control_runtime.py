@@ -434,12 +434,23 @@ def test_anchor_own_deadline_reaps_compute_and_releases_lifetime(tmp_path, ignor
     assert not scratch.exists()
     result = guard.finish(row, cause="job_deadline_exceeded")
     assert result["stop_confirmed"] is True and result["cleanup_confirmed"] is True
-    usage = resources(control)["worker_usage"]
-    assert usage["anchor_pid"] == child.pid and usage["compute_pid"] == observed["pid"]
-    if ignore_compute_alarm:
-        assert usage["compute_wait_status"] == -signal.SIGKILL
+    report = resources(control)
+    usage = report["worker_usage"]
+    if usage is None:
+        # The default child alarm can win the same-deadline kernel wait before
+        # Python dispatches the anchor alarm. ECHILD must not trigger another
+        # reap or signal merely to manufacture resource observations.
+        assert ignore_compute_alarm is False and report["collection_status"] == "partial"
+        for name in ("compute_user_cpu_ns", "compute_system_cpu_ns", "compute_peak_rss_bytes"):
+            assert report["metrics"][name]["availability"] == "unavailable"
+            assert report["metrics"][name]["value"] is None
+            assert report["metrics"][name]["reason"] == "usage_unavailable"
     else:
-        assert usage["compute_wait_status"] in {-signal.SIGKILL, -signal.SIGALRM}
+        assert usage["anchor_pid"] == child.pid and usage["compute_pid"] == observed["pid"]
+        if ignore_compute_alarm:
+            assert usage["compute_wait_status"] == -signal.SIGKILL
+        else:
+            assert usage["compute_wait_status"] in {-signal.SIGKILL, -signal.SIGALRM}
     # The anchor propagates its total alarm, independent of its child's actual status.
     assert result["worker_exit_code"] == -signal.SIGALRM
 
@@ -712,7 +723,11 @@ def test_usage_pipe_setup_failure_closes_both_private_descriptors(tmp_path, monk
 
     monkeypatch.setattr(job_control_runtime.os, "pipe", recorded_pipe)
     monkeypatch.setattr(job_control_runtime.os, "set_blocking", unavailable)
-    with pytest.raises(JobStoreError, match="setup failure"), guard.activate(), guard.workspace(row):
+    with (
+        pytest.raises(JobStoreError, match="setup failure"),
+        guard.activate(),
+        guard.workspace(row),
+    ):
         guard.spawn((sys.executable, "-I", "-B", "-c", "raise SystemExit(0)"))
     assert len(descriptors) == 2 and guard._usage_read_fd is None
     for descriptor in descriptors:
