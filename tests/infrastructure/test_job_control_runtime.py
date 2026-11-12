@@ -10,6 +10,7 @@ import sys
 import time
 from contextlib import suppress
 from threading import Event, Thread, Timer
+from types import SimpleNamespace
 
 import pytest
 from test_job_supervisor import _queued
@@ -29,6 +30,7 @@ from tickwitness.infrastructure.job_control_runtime import (
 )
 from tickwitness.infrastructure.job_control_workspace import OwnedJobWorkspace
 from tickwitness.infrastructure.job_controls import JobControlStore
+from tickwitness.infrastructure.job_resources import JobResourceStore
 
 
 def configured(tmp_path, **limits):
@@ -59,6 +61,13 @@ def close_pipes(child):
     for stream in (child.stdin, child.stdout, child.stderr):
         if stream is not None:
             stream.close()
+
+
+def resources(control):
+    policy = control.policy()
+    report = JobResourceStore(control.directory.parent.parent, policy.document["job_id"]).read()
+    assert report is not None
+    return report.document
 
 
 def test_unconfigured_context_guards_are_noops():
@@ -383,6 +392,9 @@ def test_anchor_reaps_its_compute_child_before_cancelled_leader_exit(tmp_path, m
                 close_pipes(child)
     assert not scratch.exists()
     assert guard.finish(row, cause="job_cancelled")["stop_confirmed"] is True
+    usage = resources(control)["worker_usage"]
+    assert usage["anchor_pid"] == child.pid and usage["compute_pid"] == observed["pid"]
+    assert usage["compute_wait_status"] == -signal.SIGKILL
 
 
 @pytest.mark.parametrize("ignore_compute_alarm", [False, True])
@@ -421,6 +433,14 @@ def test_anchor_own_deadline_reaps_compute_and_releases_lifetime(tmp_path, ignor
     assert not scratch.exists()
     result = guard.finish(row, cause="job_deadline_exceeded")
     assert result["stop_confirmed"] is True and result["cleanup_confirmed"] is True
+    usage = resources(control)["worker_usage"]
+    assert usage["anchor_pid"] == child.pid and usage["compute_pid"] == observed["pid"]
+    if ignore_compute_alarm:
+        assert usage["compute_wait_status"] == -signal.SIGKILL
+    else:
+        assert usage["compute_wait_status"] in {-signal.SIGKILL, -signal.SIGALRM}
+    # The anchor propagates its total alarm, independent of its child's actual status.
+    assert result["worker_exit_code"] == -signal.SIGALRM
 
 
 def test_replaced_scratch_is_not_followed_or_reported_cleaned(tmp_path):
@@ -436,6 +456,10 @@ def test_replaced_scratch_is_not_followed_or_reported_cleaned(tmp_path):
     assert (outside / "keep").read_bytes() == b"foreign evidence"
     result = guard.finish(row, cause="job_control_error")
     assert result["workspace_removed"] is False and result["cleanup_confirmed"] is False
+    report = resources(control)
+    assert report["collection_status"] == "partial"
+    assert report["metrics"]["scratch_cleanup_logical_bytes"]["value"] is None
+    assert report["metrics"]["scratch_cleanup_logical_bytes"]["reason"] == "cleanup_incomplete"
 
 
 def test_reclamation_refuses_live_lifetime_then_removes_only_reconciled_scratch(
@@ -513,3 +537,198 @@ def test_control_result_after_real_commit_response_loss_is_not_auto_retried(tmp_
     with pytest.raises(JobStoreError, match="never auto-retry"):
         guard.finish(row, cause="job_control_error")
     assert len(calls) == 1
+
+
+def test_actual_compute_usage_and_cleanup_entry_bytes_preserve_distinct_scopes(tmp_path):
+    _, control, row = configured(tmp_path)
+    guard = JobExecutionControl(control)
+    guard.bind(row)
+    outside = tmp_path / "retained-input"
+    outside.write_bytes(b"external evidence" * 100)
+    child = None
+    command = (
+        sys.executable,
+        "-I",
+        "-B",
+        "-c",
+        "import json,os,stat\n"
+        "allocation=bytearray(4*1024*1024)\n"
+        "pipes=[]\n"
+        "for name in os.listdir('/dev/fd'):\n"
+        "    fd=int(name)\n"
+        "    if fd<3:continue\n"
+        "    try:\n"
+        "        if stat.S_ISFIFO(os.fstat(fd).st_mode):pipes.append(fd)\n"
+        "    except OSError:pass\n"
+        "print(json.dumps({'pid':os.getpid(),'extra_pipes':pipes}),flush=True)\n",
+    )
+    with guard.activate(), guard.workspace(row) as scratch:
+        (scratch / "payload").write_bytes(b"a" * 37)
+        os.link(scratch / "payload", scratch / "hardlink")
+        (scratch / "link").symlink_to(outside)
+        (scratch / "nested").mkdir()
+        (scratch / "nested" / "payload").write_bytes(b"b" * 11)
+        try:
+            child = guard.spawn(command)
+            observed = json.loads(child.stdout.readline())
+            assert observed["extra_pipes"] == []  # Anchor-only writer is closed before exec.
+            assert child.stdout.read() == b""
+            assert child.returncode is None
+            guard.stop_process(child)
+            assert guard.worker_exit_code == 0
+        finally:
+            if child is not None:
+                close_pipes(child)
+    assert outside.read_bytes() == b"external evidence" * 100
+    guard.finish(row)
+    report = resources(control)
+    usage, metrics = report["worker_usage"], report["metrics"]
+    assert usage["anchor_pid"] == child.pid and usage["compute_pid"] == observed["pid"]
+    assert usage["compute_wait_status"] == 0
+    assert metrics["compute_user_cpu_ns"]["value"] == usage["user_cpu_us"] * 1000
+    assert metrics["compute_system_cpu_ns"]["value"] == usage["system_cpu_us"] * 1000
+    assert usage["user_cpu_us"] + usage["system_cpu_us"] > 0
+    factor = 1024 if usage["platform"] == "linux" else 1
+    assert metrics["compute_peak_rss_bytes"]["value"] == usage["maxrss_raw"] * factor > 0
+    assert metrics["scratch_cleanup_logical_bytes"]["value"] == 37 * 2 + 11
+    assert metrics["research_slots_reserved_count"]["value"] == 0
+    assert metrics["audited_native_results_count"]["value"] == 0
+    assert metrics["processed_input_record_count"]["reason"] == "result_not_audited"
+    assert metrics["predicate_evaluation_count"]["reason"] == "not_instrumented"
+    assert all(stage["availability"] == "measured" for stage in report["stages"])
+    assert report["collection_status"] == "partial"  # Direct fixture's Catalog is still RUNNING.
+
+
+@pytest.mark.parametrize("damage", ["none", "newline", "duplicate", "oversized", "anchor"])
+def test_usage_read_is_bounded_without_waiting_for_a_live_writer(tmp_path, damage):
+    _, control, row = configured(tmp_path)
+    guard = JobExecutionControl(control)
+    guard.bind(row)
+    usage = {
+        "kind": "job_compute_usage_v1",
+        "schema_version": 1,
+        "anchor_pid": 12345,
+        "compute_pid": 12346,
+        "platform": "linux",
+        "user_cpu_us": 1,
+        "system_cpu_us": 2,
+        "maxrss_raw": 3,
+        "maxrss_unit": "KiB",
+        "compute_wait_status": 0,
+    }
+    if damage == "anchor":
+        usage["anchor_pid"] = 12344
+    raw = json.dumps(usage, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+    if damage == "newline":
+        raw = raw[:-1]
+    elif damage == "duplicate":
+        raw += raw
+    elif damage == "oversized":
+        raw = b"x" * 513
+    reader, writer = os.pipe()
+    os.set_blocking(reader, False)
+    guard._usage_read_fd = reader
+    try:
+        os.write(writer, raw)
+        # Keeping writer open is intentional: this operation must never await EOF.
+        guard._collect_worker_usage(SimpleNamespace(pid=12345, returncode=0))
+        assert guard._usage_read_fd is None
+        with pytest.raises(OSError) as closed:
+            os.fstat(reader)
+        assert closed.value.errno == errno.EBADF
+        if damage == "none":
+            assert guard._worker_usage == usage
+        else:
+            assert guard._worker_usage is None
+    finally:
+        os.close(writer)
+        with suppress(OSError):
+            os.close(reader)
+
+
+def test_unconfirmed_authorization_and_unavailable_cpu_never_manufacture_zero(
+    tmp_path, monkeypatch
+):
+    _, control, row = configured(tmp_path)
+    guard = JobExecutionControl(control)
+    guard.bind(row)
+    guard.begin_research_reservation()
+
+    def unavailable():
+        raise OSError("Controlled unavailable CPU clock")
+
+    monkeypatch.setattr(job_control_runtime.time, "process_time_ns", unavailable)
+    guard.finish(row)
+    report = resources(control)
+    metrics = report["metrics"]
+    assert report["worker_usage"] is None and report["collection_status"] == "partial"
+    assert metrics["coordinator_cpu_ns"]["value"] is None
+    assert metrics["coordinator_cpu_ns"]["reason"] == "clock_unavailable"
+    assert metrics["research_slots_reserved_count"]["value"] is None
+    assert metrics["research_slots_reserved_count"]["reason"] == "reservation_unconfirmed"
+    assert metrics["compute_peak_rss_bytes"]["reason"] == "worker_not_started"
+    assert metrics["scratch_cleanup_logical_bytes"]["value"] == 0
+
+
+def test_resource_commit_response_loss_preserves_control_and_never_auto_retries(
+    tmp_path, monkeypatch
+):
+    _, control, row = configured(tmp_path)
+    guard = JobExecutionControl(control)
+    guard.bind(row)
+    actual_seal = JobResourceStore.seal
+    calls = []
+
+    def committed_then_lost(store, report):
+        calls.append(report.report_id)
+        actual_seal(store, report)
+        raise JobStoreError("Controlled post-resource-commit response loss")
+
+    monkeypatch.setattr(JobResourceStore, "seal", committed_then_lost)
+    with pytest.raises(JobStoreError, match="response loss"):
+        guard.finish(row)
+    previous_control = control.result()
+    assert previous_control is not None and resources(control)["job_id"] == row["job_id"]
+    with pytest.raises(JobStoreError, match="Resource report.*never auto-retry"):
+        guard.finish(row)
+    assert len(calls) == 1 and control.result() == previous_control
+
+
+def test_usage_pipe_setup_failure_closes_both_private_descriptors(tmp_path, monkeypatch):
+    _, control, row = configured(tmp_path)
+    guard = JobExecutionControl(control)
+    guard.bind(row)
+    actual_pipe = os.pipe
+    descriptors = []
+
+    def recorded_pipe():
+        pair = actual_pipe()
+        descriptors.extend(pair)
+        return pair
+
+    def unavailable(*_args):
+        raise OSError("Controlled nonblocking setup failure")
+
+    monkeypatch.setattr(job_control_runtime.os, "pipe", recorded_pipe)
+    monkeypatch.setattr(job_control_runtime.os, "set_blocking", unavailable)
+    with pytest.raises(OSError, match="setup failure"), guard.activate(), guard.workspace(row):
+        guard.spawn((sys.executable, "-I", "-B", "-c", "raise SystemExit(0)"))
+    assert len(descriptors) == 2 and guard._usage_read_fd is None
+    for descriptor in descriptors:
+        with pytest.raises(OSError) as closed:
+            os.fstat(descriptor)
+        assert closed.value.errno == errno.EBADF
+    assert guard.worker_exit_code is None
+
+
+def test_missing_wait4_keeps_owned_wait_without_fabricating_accounting(monkeypatch):
+    calls = []
+
+    def waited(pid, options):
+        calls.append((pid, options))
+        return pid, 0
+
+    monkeypatch.setattr(job_control_bootstrap.os, "wait4", None)
+    monkeypatch.setattr(job_control_bootstrap.os, "waitpid", waited)
+    assert job_control_bootstrap._wait_owned(12345, 0) == (12345, 0, None)
+    assert calls == [(12345, 0)]

@@ -44,6 +44,9 @@ jobs:
           tests/infrastructure/test_job_control_runtime.py
           tests/infrastructure/test_job_control_supervisor.py
           tests/test_job_control_cli.py
+          tests/domain/test_job_resource_contracts.py
+          tests/infrastructure/test_job_resource_store.py
+          tests/test_job_resource_cli.py
       - name: Fast installed followup qualification on manual dispatch
         if: github.event_name == 'workflow_dispatch' && success()
         run: |
@@ -717,9 +720,9 @@ jobs:
             test -f "$TW_CONTROLS_SCRIPT"
           fi
           if [ "$TW_CONTROLS_NATIVE" = true ]; then
-            python3 "$TW_CONTROLS_SCRIPT" --python /tmp/tickwitness-controls-native/bin/python --verifier-python /tmp/tickwitness-controls-core/bin/python --report /tmp/job-controls.json --records-dir /tmp/job-controls-records
+            python3 "$TW_CONTROLS_SCRIPT" --python /tmp/tickwitness-controls-native/bin/python --verifier-python /tmp/tickwitness-controls-core/bin/python --report /tmp/job-controls.json --records-dir /tmp/job-controls-records --resource-report /tmp/job-resources.json
           else
-            python3 "$TW_CONTROLS_SCRIPT" --python /tmp/tickwitness-controls-core/bin/python --verifier-python /tmp/tickwitness-controls-core/bin/python --core-only --report /tmp/job-controls.json --records-dir /tmp/job-controls-records
+            python3 "$TW_CONTROLS_SCRIPT" --python /tmp/tickwitness-controls-core/bin/python --verifier-python /tmp/tickwitness-controls-core/bin/python --core-only --report /tmp/job-controls.json --records-dir /tmp/job-controls-records --resource-report /tmp/job-resources.json
           fi
           cd dist
           shasum -a 256 -c SHA256SUMS
@@ -730,6 +733,7 @@ jobs:
           name: job-controls-${{ matrix.profile }}-${{ github.sha }}
           path: |
             /tmp/job-controls.json
+            /tmp/job-resources.json
             /tmp/job-controls-records
           include-hidden-files: true
           if-no-files-found: ignore

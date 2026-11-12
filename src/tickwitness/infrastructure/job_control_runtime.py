@@ -17,9 +17,16 @@ from tickwitness.application.jobs import JobConflictError, JobStoreError
 from tickwitness.domain.evidence.run_records import canonical, digest
 from tickwitness.domain.jobs import load_job_snapshot
 from tickwitness.domain.jobs.control import JobControlPolicy, load_job_control_result
+from tickwitness.domain.jobs.resources import (
+    build_job_resource_report,
+    load_job_compute_usage,
+    resource_metric,
+    resource_stage,
+)
 from tickwitness.infrastructure.job_control_bootstrap import checked_limits
 from tickwitness.infrastructure.job_control_workspace import OwnedJobWorkspace, reclaim_workspace
 from tickwitness.infrastructure.job_controls import JobControlStore
+from tickwitness.infrastructure.job_resources import JobResourceStore
 
 type Row = dict[str, object]
 _ACTIVE_CONTROL: ContextVar[JobExecutionControl | None] = ContextVar(
@@ -56,6 +63,10 @@ class JobExecutionControl:
         self.control, self.policy = control, policy
         self._limits = cast("dict[str, int]", policy.document["limits"])
         self._started_ns = time.monotonic_ns()
+        try:
+            self._cpu_started_ns: int | None = time.process_time_ns()
+        except (OSError, ValueError):
+            self._cpu_started_ns = None
         self.deadline_ns = self._started_ns + self._limits["max_wall_ns"]
         self._pid = os.getpid()
         self._row: Row | None = None
@@ -64,6 +75,8 @@ class JobExecutionControl:
         self._publication_seen = False
         self._request_observed: int | None = None
         self._worker_reaped: int | None = None
+        self._worker_started_offset: int | None = None
+        self._cleanup_started: int | None = None
         self._cleanup_finished: int | None = None
         self._workspace: OwnedJobWorkspace | None = None
         self._owned_process: subprocess.Popen[bytes] | None = None
@@ -74,10 +87,42 @@ class JobExecutionControl:
         self._cleanup_deadline_ns: int | None = None
         self._finish_attempted = False
         self._finished: Row | None = None
+        self._resource_finished = False
+        self._usage_read_fd: int | None = None
+        self._worker_usage: Row | None = None
+        self._usage_reason = (
+            "usage_unavailable"
+            if sys.platform in {"linux", "darwin"} and callable(getattr(os, "wait4", None))
+            else "unsupported_platform"
+        )
+        self._research_slots_reserved: int | None = 0
+        self._audited_native_results = 0
+        self._processed_input_records: int | None = None
 
     @property
     def worker_exit_code(self) -> int | None:
         return self._worker_exit_code
+
+    def begin_research_reservation(self) -> None:
+        self._current()
+        if self._research_slots_reserved != 0:
+            raise JobStoreError("A Job records at most one new reservation authorization")
+        self._research_slots_reserved = None
+
+    def confirm_research_reservation(self) -> None:
+        self._current()
+        if self._research_slots_reserved is not None:
+            raise JobStoreError("A reservation observation requires its pending authorization")
+        self._research_slots_reserved = 1
+
+    def record_native_audit(self, processed_records: int) -> None:
+        self._current()
+        if type(processed_records) is not int or not 0 <= processed_records <= 2**63 - 1:
+            raise JobStoreError("Audited input count requires a bounded nonnegative integer")
+        if self._audited_native_results:
+            raise JobStoreError("A Job records at most one newly audited native result")
+        self._audited_native_results = 1
+        self._processed_input_records = processed_records
 
     def _elapsed(self) -> int:
         elapsed = time.monotonic_ns() - self._started_ns
@@ -213,6 +258,7 @@ class JobExecutionControl:
                     self._cleanup_deadline_ns = (
                         time.monotonic_ns() + self._limits["cleanup_grace_ns"]
                     )
+                self._cleanup_started = self._elapsed()
                 workspace.cleanup(
                     group_absent=self._worker_group_absent, deadline_ns=self._cleanup_deadline_ns
                 )
@@ -247,34 +293,80 @@ class JobExecutionControl:
             raise JobStoreError("Controlled workers require owned scratch and a fresh session")
         with self.admission():
             workspace.verify()
-            bootstrap = Path(__file__).with_name("job_control_bootstrap.py").absolute()
-            wrapped = (
-                str(Path(sys.executable).absolute()),
-                "-I",
-                "-B",
-                str(bootstrap),
-                self.policy.canonical_bytes.decode("utf-8"),
-                self.policy.policy_id,
-                str(self.deadline_ns),
-                str(workspace.lifetime_fd),
-                "--",
-                *command,
-            )
-            process = subprocess.Popen(
-                wrapped,
-                stdin=stdin,
-                stdout=stdout,
-                stderr=stderr,
-                cwd=workspace.scratch,
-                start_new_session=True,
-                close_fds=True,
-                pass_fds=(workspace.lifetime_fd,),
-            )
+            usage_read, usage_write = os.pipe()
+            try:
+                os.set_blocking(usage_read, False)
+                os.set_blocking(usage_write, False)
+                bootstrap = Path(__file__).with_name("job_control_bootstrap.py").absolute()
+                wrapped = (
+                    str(Path(sys.executable).absolute()),
+                    "-I",
+                    "-B",
+                    str(bootstrap),
+                    self.policy.canonical_bytes.decode("utf-8"),
+                    self.policy.policy_id,
+                    str(self.deadline_ns),
+                    str(workspace.lifetime_fd),
+                    "--usage-fd",
+                    str(usage_write),
+                    "--",
+                    *command,
+                )
+                started_offset = self._elapsed()
+                process = subprocess.Popen(
+                    wrapped,
+                    stdin=stdin,
+                    stdout=stdout,
+                    stderr=stderr,
+                    cwd=workspace.scratch,
+                    start_new_session=True,
+                    close_fds=True,
+                    pass_fds=(workspace.lifetime_fd, usage_write),
+                )
+            except BaseException:
+                with suppress(OSError):
+                    os.close(usage_read)
+                raise
+            finally:
+                with suppress(OSError):
+                    os.close(usage_write)
+            self._usage_read_fd = usage_read
             self._owned_process = process
             self._worker_started = True
+            self._worker_started_offset = started_offset
             self._worker_group_absent = False
             workspace.close_parent_lifetime()
             return process
+
+    def _collect_worker_usage(self, process: subprocess.Popen[bytes]) -> None:
+        descriptor, self._usage_read_fd = self._usage_read_fd, None
+        if descriptor is None:
+            return
+        try:
+            if process.returncode is None:
+                return
+            chunks = bytearray()
+            while len(chunks) <= 512:
+                try:
+                    chunk = os.read(descriptor, 513 - len(chunks))
+                except BlockingIOError:
+                    break
+                if not chunk:
+                    break
+                chunks.extend(chunk)
+            raw = bytes(chunks)
+            if len(raw) > 512 or not raw.endswith(b"\n") or raw.count(b"\n") != 1:
+                return
+            usage = load_job_compute_usage(raw[:-1])
+            if usage["anchor_pid"] != process.pid or usage["compute_pid"] == process.pid:
+                return
+            self._worker_usage = usage
+        except (OSError, ValueError):
+            # Telemetry does not change the actual child status or Job outcome.
+            return
+        finally:
+            with suppress(OSError):
+                os.close(descriptor)
 
     def stop_process(self, process: subprocess.Popen[bytes]) -> None:
         self._current()
@@ -283,6 +375,7 @@ class JobExecutionControl:
         self._stop_attempted = True
         self._cleanup_deadline_ns = time.monotonic_ns() + self._limits["cleanup_grace_ns"]
         if process.pid <= 0 or process.pid == os.getpgrp() or process.returncode is not None:
+            self._collect_worker_usage(process)
             raise JobStoreError("Worker leader was reaped or its process-group identity is unsafe")
         try:
             # Natural exit can race the request. Only bounded wait plus strict
@@ -318,12 +411,120 @@ class JobExecutionControl:
                 time.sleep(0.01)
         except (OSError, subprocess.TimeoutExpired) as error:
             raise JobStoreError("Owned worker termination is unconfirmed: " + str(error)) from error
+        finally:
+            self._collect_worker_usage(process)
+
+    def _seal_resources(self, snapshot: Row | None) -> None:
+        elapsed = self._elapsed()
+        cpu: int | None = None
+        if self._cpu_started_ns is not None:
+            try:
+                observed = time.process_time_ns() - self._cpu_started_ns
+                if 0 <= observed <= 2**63 - 1:
+                    cpu = observed
+            except (OSError, ValueError):
+                cpu = None
+        usage = self._worker_usage
+        usage_reason = self._usage_reason if self._worker_started else "worker_not_started"
+        scratch = 0 if self._workspace is None else self._workspace.cleanup_logical_bytes
+        metrics = {
+            "coordinator_cpu_ns": resource_metric(
+                "coordinator_cpu_ns", cpu, reason=None if cpu is not None else "clock_unavailable"
+            ),
+            "compute_user_cpu_ns": resource_metric(
+                "compute_user_cpu_ns",
+                None if usage is None else cast("int", usage["user_cpu_us"]) * 1000,
+                reason=usage_reason if usage is None else None,
+            ),
+            "compute_system_cpu_ns": resource_metric(
+                "compute_system_cpu_ns",
+                None if usage is None else cast("int", usage["system_cpu_us"]) * 1000,
+                reason=usage_reason if usage is None else None,
+            ),
+            "compute_peak_rss_bytes": resource_metric(
+                "compute_peak_rss_bytes",
+                None
+                if usage is None
+                else cast("int", usage["maxrss_raw"])
+                * (1024 if usage["platform"] == "linux" else 1),
+                reason=usage_reason if usage is None else None,
+            ),
+            "scratch_cleanup_logical_bytes": resource_metric(
+                "scratch_cleanup_logical_bytes",
+                scratch,
+                reason=None if scratch is not None else "cleanup_incomplete",
+            ),
+            "job_elapsed_ns": resource_metric("job_elapsed_ns", elapsed),
+            "research_slots_reserved_count": resource_metric(
+                "research_slots_reserved_count",
+                self._research_slots_reserved,
+                reason=None
+                if self._research_slots_reserved is not None
+                else "reservation_unconfirmed",
+            ),
+            "audited_native_results_count": resource_metric(
+                "audited_native_results_count", self._audited_native_results
+            ),
+            "processed_input_record_count": resource_metric(
+                "processed_input_record_count",
+                self._processed_input_records,
+                reason=None if self._processed_input_records is not None else "result_not_audited",
+            ),
+            "predicate_evaluation_count": resource_metric(
+                "predicate_evaluation_count", None, reason="not_instrumented"
+            ),
+        }
+        attempt = None if self._row is None else cast("Row", self._row["attempt"])
+        complete = (
+            snapshot is not None
+            and snapshot["state"] in {"SUCCEEDED", "FAILED", "LOST"}
+            and attempt is not None
+            and cpu is not None
+            and scratch is not None
+            and (not self._worker_started or usage is not None)
+            and self._worker_group_absent
+            and (self._workspace is None or self._workspace.removed)
+        )
+        report = build_job_resource_report(
+            {
+                "kind": "job_resource_report_v1",
+                "schema_version": 1,
+                "job_id": self.policy.document["job_id"],
+                "job_attempt_id": None if attempt is None else attempt["job_attempt_id"],
+                "policy_id": self.policy.policy_id,
+                "catalog_state": None if snapshot is None else snapshot["state"],
+                "catalog_snapshot_sha256": None
+                if snapshot is None
+                else digest(canonical(snapshot)),
+                "worker_started": self._worker_started,
+                "worker_usage": usage,
+                "collection_status": "complete" if complete else "partial",
+                "metrics": metrics,
+                "stages": [
+                    resource_stage("pre_worker_admission", 0, self._worker_started_offset),
+                    resource_stage(
+                        "owned_worker_lifetime", self._worker_started_offset, self._worker_reaped
+                    ),
+                    resource_stage("cleanup", self._cleanup_started, self._cleanup_finished),
+                    resource_stage(
+                        "post_cleanup",
+                        None if self._workspace is None else self._cleanup_finished,
+                        elapsed,
+                    ),
+                ],
+            }
+        )
+        JobResourceStore(
+            self.control.directory.parent.parent, cast("str", self.policy.document["job_id"])
+        ).seal(report)
 
     def finish(self, snapshot: Row | None, *, cause: str = "finished", diagnostic: str = "") -> Row:
         self._current()
         if self._finish_attempted:
             if self._finished is None:
                 raise JobStoreError("Control result publication is unconfirmed; never auto-retry")
+            if not self._resource_finished:
+                raise JobStoreError("Resource report publication is unconfirmed; never auto-retry")
             return load_job_control_result(canonical(self._finished))
         self._finish_attempted = True
         checked = None if snapshot is None else load_job_snapshot(canonical(snapshot))
@@ -363,6 +564,13 @@ class JobExecutionControl:
             "diagnostic": diagnostic[:2048],
         }
         self._finished = self.control.write_result(document)
+        try:
+            self._seal_resources(checked)
+        except Exception as error:
+            raise JobStoreError(
+                "Job resource report publication is unconfirmed: " + str(error)
+            ) from error
+        self._resource_finished = True
         return load_job_control_result(canonical(self._finished))
 
 

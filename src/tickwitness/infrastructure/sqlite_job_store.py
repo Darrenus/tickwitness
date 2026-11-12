@@ -541,6 +541,30 @@ class SqliteJobStore:
             connection.execute("BEGIN")
             return self._fetch(connection, key)[1]
 
+    def resource_snapshot(self, job_id: str, snapshot_sha256: str) -> Row | None:
+        """Resolve a report's historical binding without reconciling or new tables."""
+        key, expected = identity(job_id), identity(snapshot_sha256)
+        with self._connection() as connection:
+            connection.execute("BEGIN")
+            current, _, _ = self._fetch(connection, key)
+            if digest(canonical(current)) == expected:
+                return current
+            versions = connection.execute(
+                "SELECT version FROM job_events WHERE job_id=? AND "
+                "json_extract(CAST(event AS TEXT),'$.snapshot_sha256')=? LIMIT 2",
+                (key, expected),
+            ).fetchall()
+            if not versions:
+                return None
+            _require(len(versions) == 1, "Resource snapshot has ambiguous historical bindings")
+            event = self._stored_event(connection, key, versions[0][0])
+            snapshot = cast("Row", event["snapshot"])
+            _require(
+                digest(canonical(snapshot)) == expected,
+                "Resource historical snapshot differs from its recorded hash",
+            )
+            return snapshot
+
     def events(self, job_id: str, *, limit: int = 100) -> list[Row]:
         key = identity(job_id)
         if type(limit) is not int or not 1 <= limit <= 1000:

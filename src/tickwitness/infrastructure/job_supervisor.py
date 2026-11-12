@@ -533,7 +533,12 @@ def _execute_native_claimed(
     try:
         prepared = prepare_native_job(spec)
         with control_admission():
+            control = current_control()
+            if control is not None:
+                control.begin_research_reservation()
             reservation = authorize_native_job(prepared, fence=fence)
+            if control is not None:
+                control.confirm_research_reservation()
     except _LeaseExpired:
         return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
     except JobStoreError:
@@ -653,6 +658,11 @@ def _execute_native_claimed(
             reservation,
             canonical(cast("Row", terminal["replay_result"])),
         )
+        control = current_control()
+        if control is not None:
+            replay = load_replay_result(canonical(cast("Row", terminal["replay_result"])))
+            completeness = cast("Row", replay.document["completeness"])
+            control.record_native_audit(cast("int", completeness["processed_records"]))
     except Exception as error:
         return _finish_failure(
             store, row, _native_failure(error, worker_exit_code=exit_code), window
