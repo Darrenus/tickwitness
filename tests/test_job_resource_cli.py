@@ -20,8 +20,7 @@ from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
 
 def tree(root):
     return {
-        str(path.relative_to(root)): path.read_bytes()
-        for path in root.rglob("*") if path.is_file()
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
     }
 
 
@@ -144,8 +143,12 @@ def test_report_keeps_actual_running_snapshot_after_explicit_orphan_reconciliati
     with catalog.coordinator() as owner:
         controls.configure(build_job_control_policy(queued["job_id"]))
         running = catalog.claim(
-            queued["job_id"], expected_version=1, coordinator_id=owner,
-            attempt_nonce="a" * 64, lease_token="b" * 64, now_ns=time.time_ns(),
+            queued["job_id"],
+            expected_version=1,
+            coordinator_id=owner,
+            attempt_nonce="a" * 64,
+            lease_token="b" * 64,
+            now_ns=time.time_ns(),
         )
         guard = JobExecutionControl(controls)
         guard.bind(running)
@@ -160,3 +163,13 @@ def test_report_keeps_actual_running_snapshot_after_explicit_orphan_reconciliati
     assert observed["report"]["catalog_state"] == "RUNNING"
     assert observed["report_matches_current_snapshot"] is False
     assert tree(tmp_path) == before
+    path = catalog.root / ".job-resources" / queued["job_id"] / "report.json"
+    tampered = json.loads(path.read_bytes())
+    tampered["catalog_state"] = None
+    tampered["catalog_snapshot_sha256"] = None
+    tampered["job_attempt_id"] = "f" * 64
+    path.write_bytes(canonical(tampered))
+    assert main(["inspect-job-resources", queued["job_id"], "--jobs", str(catalog.root)]) == 3
+    output = capsys.readouterr()
+    assert not output.out
+    assert json.loads(output.err)["error"]["code"] == "job_store_integrity_or_io_failure"

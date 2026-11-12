@@ -689,7 +689,7 @@ def test_resource_commit_response_loss_preserves_control_and_never_auto_retries(
         guard.finish(row)
     previous_control = control.result()
     assert previous_control is not None and resources(control)["job_id"] == row["job_id"]
-    with pytest.raises(JobStoreError, match="Resource report.*never auto-retry"):
+    with pytest.raises(JobStoreError, match=r"Resource report.*never auto-retry"):
         guard.finish(row)
     assert len(calls) == 1 and control.result() == previous_control
 

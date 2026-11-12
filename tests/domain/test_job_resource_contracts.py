@@ -33,27 +33,45 @@ ATTEMPT = "b" * 64
 
 def declared_usage(**changes):
     return {
-        "kind": "job_compute_usage_v1", "schema_version": 1,
-        "anchor_pid": 100, "compute_pid": 101, "platform": "linux",
-        "user_cpu_us": 1040, "system_cpu_us": 37, "maxrss_raw": 4096,
-        "maxrss_unit": "KiB", "compute_wait_status": -9, **changes,
+        "kind": "job_compute_usage_v1",
+        "schema_version": 1,
+        "anchor_pid": 100,
+        "compute_pid": 101,
+        "platform": "linux",
+        "user_cpu_us": 1040,
+        "system_cpu_us": 37,
+        "maxrss_raw": 4096,
+        "maxrss_unit": "KiB",
+        "compute_wait_status": -9,
+        **changes,
     }
 
 
 def declared_report(**changes):
     """Structural fixture; actual OS provenance is qualified remotely."""
     values = {
-        "coordinator_cpu_ns": 111, "compute_user_cpu_ns": 1_040_000,
-        "compute_system_cpu_ns": 37_000, "compute_peak_rss_bytes": 4_194_304,
-        "scratch_cleanup_logical_bytes": 1024, "job_elapsed_ns": 1000,
-        "research_slots_reserved_count": 1, "audited_native_results_count": 1,
-        "processed_input_record_count": 6, "predicate_evaluation_count": None,
+        "coordinator_cpu_ns": 111,
+        "compute_user_cpu_ns": 1_040_000,
+        "compute_system_cpu_ns": 37_000,
+        "compute_peak_rss_bytes": 4_194_304,
+        "scratch_cleanup_logical_bytes": 1024,
+        "job_elapsed_ns": 1000,
+        "research_slots_reserved_count": 1,
+        "audited_native_results_count": 1,
+        "processed_input_record_count": 6,
+        "predicate_evaluation_count": None,
     }
     return {
-        "kind": "job_resource_report_v1", "schema_version": 1, "job_id": JOB,
-        "job_attempt_id": ATTEMPT, "policy_id": build_job_control_policy(JOB).policy_id,
-        "catalog_state": "FAILED", "catalog_snapshot_sha256": "c" * 64,
-        "worker_started": True, "worker_usage": declared_usage(), "collection_status": "complete",
+        "kind": "job_resource_report_v1",
+        "schema_version": 1,
+        "job_id": JOB,
+        "job_attempt_id": ATTEMPT,
+        "policy_id": build_job_control_policy(JOB).policy_id,
+        "catalog_state": "FAILED",
+        "catalog_snapshot_sha256": "c" * 64,
+        "worker_started": True,
+        "worker_usage": declared_usage(),
+        "collection_status": "complete",
         "metrics": {
             name: resource_metric(name, value, "not_instrumented" if value is None else None)
             for name, value in values.items()
@@ -164,7 +182,8 @@ def test_never_started_worker_has_no_memory_measurement_even_in_complete_collect
 
 def test_unknown_clock_or_catalog_does_not_create_complete_collection():
     document = declared_report(
-        catalog_state=None, catalog_snapshot_sha256=None,
+        catalog_state=None,
+        catalog_snapshot_sha256=None,
         collection_status="partial",
     )
     document["metrics"]["job_elapsed_ns"] = resource_metric(
@@ -181,19 +200,24 @@ def test_darwin_raw_bytes_are_not_multiplied_as_linux_kibibytes():
     document = declared_report()
     document["worker_usage"] = declared_usage(platform="darwin", maxrss_unit="bytes")
     document["metrics"]["compute_peak_rss_bytes"] = resource_metric("compute_peak_rss_bytes", 4096)
-    assert build_job_resource_report(document).document["metrics"]["compute_peak_rss_bytes"][
-        "value"
-    ] == 4096
+    assert (
+        build_job_resource_report(document).document["metrics"]["compute_peak_rss_bytes"]["value"]
+        == 4096
+    )
 
 
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("anchor_pid", 101), ("compute_pid", 0), ("user_cpu_us", True),
+        ("anchor_pid", 101),
+        ("compute_pid", 0),
+        ("user_cpu_us", True),
         ("user_cpu_us", MAX_JOB_INTEGER // 1000 + 1),
         ("maxrss_raw", MAX_JOB_INTEGER // 1024 + 1),
-        ("compute_wait_status", -256), ("platform", "unsupported"),
-        ("schema_version", True), ("maxrss_unit", "kilobytes"),
+        ("compute_wait_status", -256),
+        ("platform", "unsupported"),
+        ("schema_version", True),
+        ("maxrss_unit", "kilobytes"),
     ],
 )
 def test_private_compute_frame_rejects_identity_unit_and_conversion_overflow(field, value):
@@ -209,7 +233,8 @@ def test_private_frame_and_report_require_bounded_canonical_unique_documents():
             load_job_compute_usage(invalid)
     report = canonical(declared_report())
     for invalid in (
-        report + b"\n", report.replace(b'"schema_version":1', b'"schema_version":1.0'),
+        report + b"\n",
+        report.replace(b'"schema_version":1', b'"schema_version":1.0'),
         b" " * (MAX_JOB_RESOURCE_BYTES + 1),
     ):
         with pytest.raises(JobValidationError):
@@ -227,9 +252,13 @@ def test_private_frame_and_report_require_bounded_canonical_unique_documents():
 def preview_spec():
     return build_job_spec(
         {
-            "run_id": "1" * 64, "expected_bundle_id": "2" * 64,
-            "expected_report_id": "3" * 64, "input_root": "/unopened/inputs",
-            "runs": "/unopened/runs", "source_evidence": "source", "split": "development",
+            "run_id": "1" * 64,
+            "expected_bundle_id": "2" * 64,
+            "expected_report_id": "3" * 64,
+            "input_root": "/unopened/inputs",
+            "runs": "/unopened/runs",
+            "source_evidence": "source",
+            "split": "development",
         }
     )
 
@@ -237,10 +266,14 @@ def preview_spec():
 def native_spec():
     return build_execution_job_spec(
         {
-            "preparation": "/unopened/preparation", "expected_preparation_id": "4" * 64,
-            "expected_bundle_id": "2" * 64, "expected_report_id": "3" * 64,
-            "input_root": "/unopened/inputs", "source_evidence": "source",
-            "runs": "/unopened/runs", "split": "development",
+            "preparation": "/unopened/preparation",
+            "expected_preparation_id": "4" * 64,
+            "expected_bundle_id": "2" * 64,
+            "expected_report_id": "3" * 64,
+            "input_root": "/unopened/inputs",
+            "source_evidence": "source",
+            "runs": "/unopened/runs",
+            "split": "development",
             "engine_runtime": "coordinator_interpreter_v1",
             "restart_mode": "frozen_origin_new_attempt_only_v1",
         }
@@ -262,7 +295,9 @@ def test_preview_uses_only_supplied_metadata_and_never_claims_calibrated_cost(mo
     assert preview["execution_authorized"] is False
     assert preview["configured_limits"] == policy.document["limits"]
     assert preview["research_slot_requirement"] == {
-        "availability": "measured", "value": 0, "reason": "structurally_read_only"
+        "availability": "measured",
+        "value": 0,
+        "reason": "structurally_read_only",
     }
     assert set(preview["estimates"]) == {"cpu_ns", "peak_rss_bytes", "elapsed_ns", "disk_bytes"}
     assert all(
@@ -283,19 +318,29 @@ def test_preview_distinguishes_structural_ack_from_conditional_execution(mode):
     requirement = preview["research_slot_requirement"]
     if mode == "acknowledge_committed_v1":
         assert requirement == {
-            "availability": "measured", "value": 0, "reason": "structurally_read_only"
+            "availability": "measured",
+            "value": 0,
+            "reason": "structurally_read_only",
         }
     else:
         assert requirement == {
-            "availability": "unavailable", "value": None, "reason": "conditional_execution"
+            "availability": "unavailable",
+            "value": None,
+            "reason": "conditional_execution",
         }
     assert preview["execution_authorized"] is False
 
 
 def test_resource_metric_set_is_frozen_and_does_not_include_host_or_research_verdict():
     assert set(RESOURCE_METRICS) == {
-        "coordinator_cpu_ns", "compute_user_cpu_ns", "compute_system_cpu_ns",
-        "compute_peak_rss_bytes", "scratch_cleanup_logical_bytes", "job_elapsed_ns",
-        "research_slots_reserved_count", "audited_native_results_count",
-        "processed_input_record_count", "predicate_evaluation_count",
+        "coordinator_cpu_ns",
+        "compute_user_cpu_ns",
+        "compute_system_cpu_ns",
+        "compute_peak_rss_bytes",
+        "scratch_cleanup_logical_bytes",
+        "job_elapsed_ns",
+        "research_slots_reserved_count",
+        "audited_native_results_count",
+        "processed_input_record_count",
+        "predicate_evaluation_count",
     }

@@ -33,16 +33,24 @@ def resource_case(tmp_path):
     catalog = SqliteJobStore(root, create=True)
     spec = build_job_spec(
         {
-            "run_id": "a" * 64, "expected_bundle_id": "b" * 64,
-            "expected_report_id": "c" * 64, "input_root": str(tmp_path / "inputs"),
-            "runs": str(tmp_path / "runs"), "source_evidence": "source", "split": "development",
+            "run_id": "a" * 64,
+            "expected_bundle_id": "b" * 64,
+            "expected_report_id": "c" * 64,
+            "input_root": str(tmp_path / "inputs"),
+            "runs": str(tmp_path / "runs"),
+            "source_evidence": "source",
+            "split": "development",
         }
     )
     with catalog.coordinator():
         snapshot = catalog.submit(spec, now_ns=100)
     return SimpleNamespace(
-        root=root, catalog=catalog, spec=spec, snapshot=snapshot,
-        policy=build_job_control_policy(spec.spec_id), controls=JobControlStore(root, spec.spec_id),
+        root=root,
+        catalog=catalog,
+        spec=spec,
+        snapshot=snapshot,
+        policy=build_job_control_policy(spec.spec_id),
+        controls=JobControlStore(root, spec.spec_id),
         resources=JobResourceStore(root, spec.spec_id),
         directory=root / ".job-resources" / spec.spec_id,
     )
@@ -77,11 +85,16 @@ def report_for(value, **changes):
     }
     return build_job_resource_report(
         {
-            "kind": "job_resource_report_v1", "schema_version": 1,
-            "job_id": value.spec.spec_id, "job_attempt_id": None,
-            "policy_id": value.policy.policy_id, "catalog_state": "QUEUED",
+            "kind": "job_resource_report_v1",
+            "schema_version": 1,
+            "job_id": value.spec.spec_id,
+            "job_attempt_id": None,
+            "policy_id": value.policy.policy_id,
+            "catalog_state": "QUEUED",
             "catalog_snapshot_sha256": digest(canonical(value.snapshot)),
-            "worker_started": False, "worker_usage": None, "collection_status": "partial",
+            "worker_started": False,
+            "worker_usage": None,
+            "collection_status": "partial",
             "metrics": measurements,
             "stages": [resource_stage(name, None, None) for name in RESOURCE_STAGES],
             **changes,
@@ -168,9 +181,9 @@ def test_unknown_or_empty_old_directory_is_not_repaired_or_treated_as_missing(re
     if entry is not None:
         (value.directory / entry).write_bytes(b"uncertain publication")
     before = tree(value.root)
-    with pytest.raises(JobStoreError, match="incomplete|unknown"):
+    with pytest.raises(JobStoreError, match=r"incomplete|unknown"):
         value.resources.read()
-    with pytest.raises(JobStoreError, match="incomplete|unknown"):
+    with pytest.raises(JobStoreError, match=r"incomplete|unknown"):
         value.resources.seal(report_for(value))
     assert tree(value.root) == before
 
@@ -236,9 +249,8 @@ def test_report_policy_binding_is_checked_on_every_read(resource_case):
 def test_busy_original_control_gate_prevents_resource_publication(resource_case):
     value = resource_case
     configure(value)
-    with value.controls.gate():
-        with pytest.raises(JobConflictError, match="busy|owns"):
-            value.resources.seal(report_for(value))
+    with value.controls.gate(), pytest.raises(JobConflictError, match=r"busy|owns"):
+        value.resources.seal(report_for(value))
     assert not value.directory.parent.exists()
 
 
@@ -296,11 +308,17 @@ def test_later_catalog_state_does_not_rewrite_the_sealed_historical_observation(
     raw = (value.directory / "report.json").read_bytes()
     with value.catalog.coordinator() as coordinator:
         running = value.catalog.claim(
-            value.spec.spec_id, expected_version=1, coordinator_id=coordinator,
-            attempt_nonce="d" * 64, lease_token="e" * 64, now_ns=200,
+            value.spec.spec_id,
+            expected_version=1,
+            coordinator_id=coordinator,
+            attempt_nonce="d" * 64,
+            lease_token="e" * 64,
+            now_ns=200,
         )
         value.catalog.mark_lost(
-            value.spec.spec_id, expected_version=running["version"], reason="lease_expired",
+            value.spec.spec_id,
+            expected_version=running["version"],
+            reason="lease_expired",
             now_ns=running["attempt"]["lease_expires_at_ns"],
         )
     assert value.catalog.get(value.spec.spec_id)["state"] == "LOST"

@@ -15,46 +15,70 @@ MAX_JOB_RESOURCE_BYTES = 16 * 1024
 MAX_COMPUTE_USAGE_BYTES = 511
 RESOURCE_METRICS = {
     "coordinator_cpu_ns": ("ns", "coordinator_process", "process_time_ns_delta"),
-    "compute_user_cpu_ns": (
-        "ns", "terminated_compute_child_os_accounting", "anchor_wait4"
-    ),
-    "compute_system_cpu_ns": (
-        "ns", "terminated_compute_child_os_accounting", "anchor_wait4"
-    ),
-    "compute_peak_rss_bytes": (
-        "bytes", "terminated_compute_child_os_accounting", "anchor_wait4"
-    ),
+    "compute_user_cpu_ns": ("ns", "terminated_compute_child_os_accounting", "anchor_wait4"),
+    "compute_system_cpu_ns": ("ns", "terminated_compute_child_os_accounting", "anchor_wait4"),
+    "compute_peak_rss_bytes": ("bytes", "terminated_compute_child_os_accounting", "anchor_wait4"),
     "scratch_cleanup_logical_bytes": (
-        "bytes", "owned_scratch_cleanup_regular_entries", "nofollow_cleanup_stat"
+        "bytes",
+        "owned_scratch_cleanup_regular_entries",
+        "nofollow_cleanup_stat",
     ),
     "job_elapsed_ns": ("ns", "live_control_window", "monotonic_ns_delta"),
     "research_slots_reserved_count": (
-        "count", "this_job_confirmed_new_reservations", "coordinator_reservation_confirmation"
+        "count",
+        "this_job_confirmed_new_reservations",
+        "coordinator_reservation_confirmation",
     ),
     "audited_native_results_count": (
-        "count", "this_job_new_native_results_audited", "coordinator_native_result_audit"
+        "count",
+        "this_job_new_native_results_audited",
+        "coordinator_native_result_audit",
     ),
     "processed_input_record_count": (
-        "count", "this_job_audited_native_result", "coordinator_native_result_audit"
+        "count",
+        "this_job_audited_native_result",
+        "coordinator_native_result_audit",
     ),
     "predicate_evaluation_count": ("count", "frozen_research_predicate", "not_instrumented"),
 }
-RESOURCE_STAGES = (
-    "pre_worker_admission", "owned_worker_lifetime", "cleanup", "post_cleanup"
-)
+RESOURCE_STAGES = ("pre_worker_admission", "owned_worker_lifetime", "cleanup", "post_cleanup")
 _REASONS = {
-    "not_recorded", "worker_not_started", "usage_unavailable", "unsupported_platform",
-    "cleanup_incomplete", "reservation_unconfirmed", "result_not_audited", "not_instrumented",
-    "phase_not_observed", "clock_unavailable",
+    "not_recorded",
+    "worker_not_started",
+    "usage_unavailable",
+    "unsupported_platform",
+    "cleanup_incomplete",
+    "reservation_unconfirmed",
+    "result_not_audited",
+    "not_instrumented",
+    "phase_not_observed",
+    "clock_unavailable",
 }
 _FIELDS = {
-    "kind", "schema_version", "job_id", "job_attempt_id", "policy_id", "catalog_state",
-    "catalog_snapshot_sha256", "worker_started", "worker_usage", "collection_status",
-    "metrics", "stages",
+    "kind",
+    "schema_version",
+    "job_id",
+    "job_attempt_id",
+    "policy_id",
+    "catalog_state",
+    "catalog_snapshot_sha256",
+    "worker_started",
+    "worker_usage",
+    "collection_status",
+    "metrics",
+    "stages",
 }
 _USAGE_FIELDS = {
-    "kind", "schema_version", "anchor_pid", "compute_pid", "platform", "user_cpu_us",
-    "system_cpu_us", "maxrss_raw", "maxrss_unit", "compute_wait_status",
+    "kind",
+    "schema_version",
+    "anchor_pid",
+    "compute_pid",
+    "platform",
+    "user_cpu_us",
+    "system_cpu_us",
+    "maxrss_raw",
+    "maxrss_unit",
+    "compute_wait_status",
 }
 _WORKER_METRICS = ("compute_user_cpu_ns", "compute_system_cpu_ns", "compute_peak_rss_bytes")
 _STATES = {"QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "LOST"}
@@ -108,7 +132,11 @@ def resource_metric(name: str, value: int | None, reason: str | None = None) -> 
         )
     return {
         "availability": "unavailable" if value is None else "measured",
-        "value": value, "unit": unit, "scope": scope, "source": source, "reason": reason,
+        "value": value,
+        "unit": unit,
+        "scope": scope,
+        "source": source,
+        "reason": reason,
     }
 
 
@@ -124,13 +152,21 @@ def resource_stage(
     if start is None or end is None:
         _require(reason == "phase_not_observed", "Unobserved phase reason differs")
         return {
-            "name": name, "availability": "unavailable", "start_offset_ns": None,
-            "end_offset_ns": None, "duration_ns": None, "reason": reason,
+            "name": name,
+            "availability": "unavailable",
+            "start_offset_ns": None,
+            "end_offset_ns": None,
+            "duration_ns": None,
+            "reason": reason,
         }
     _require(start <= end, "Resource stage clock regressed")
     return {
-        "name": name, "availability": "measured", "start_offset_ns": start,
-        "end_offset_ns": end, "duration_ns": end - start, "reason": None,
+        "name": name,
+        "availability": "measured",
+        "start_offset_ns": start,
+        "end_offset_ns": end,
+        "duration_ns": end - start,
+        "reason": None,
     }
 
 
@@ -139,7 +175,8 @@ def load_job_compute_usage(raw: bytes) -> Row:
     row = _exact(_parse(raw, limit=MAX_COMPUTE_USAGE_BYTES), _USAGE_FIELDS, "Compute usage")
     _require(
         row["kind"] == "job_compute_usage_v1"
-        and type(row["schema_version"]) is int and row["schema_version"] == 1,
+        and type(row["schema_version"]) is int
+        and row["schema_version"] == 1,
         "Unsupported compute usage document",
     )
     anchor = _integer(row["anchor_pid"], "Anchor PID", 1)
@@ -161,7 +198,8 @@ def _checked_report(raw: bytes) -> Row:
     row = _exact(_parse(raw, limit=MAX_JOB_RESOURCE_BYTES), _FIELDS, "Resource report")
     _require(
         row["kind"] == "job_resource_report_v1"
-        and type(row["schema_version"]) is int and row["schema_version"] == 1,
+        and type(row["schema_version"]) is int
+        and row["schema_version"] == 1,
         "Unsupported resource report document",
     )
     _identity(row["job_id"])
@@ -227,11 +265,13 @@ def _checked_report(raw: bytes) -> Row:
             metric = cast("Row", metrics[name])
             reasons = (
                 {"usage_unavailable", "unsupported_platform", "not_recorded"}
-                if row["worker_started"] else {"worker_not_started"}
+                if row["worker_started"]
+                else {"worker_not_started"}
             )
             _require(
                 metric["availability"] == "unavailable"
-                and isinstance(metric["reason"], str) and metric["reason"] in reasons,
+                and isinstance(metric["reason"], str)
+                and metric["reason"] in reasons,
                 "Absent compute usage cannot certify worker measurements",
             )
     stages = row["stages"]
@@ -258,9 +298,15 @@ def _checked_report(raw: bytes) -> Row:
             "Complete collection requires a terminal observed attempt",
         )
         _require(
-            all(values[name] is not None for name in (
-                "coordinator_cpu_ns", "job_elapsed_ns", "scratch_cleanup_logical_bytes"
-            )) and (row["worker_started"] is False or usage is not None),
+            all(
+                values[name] is not None
+                for name in (
+                    "coordinator_cpu_ns",
+                    "job_elapsed_ns",
+                    "scratch_cleanup_logical_bytes",
+                )
+            )
+            and (row["worker_started"] is False or usage is not None),
             "Complete collection lacks applicable worker, clock or cleanup observations",
         )
     return row
@@ -312,8 +358,12 @@ def build_job_resource_preview(snapshot: Row, policy: JobControlPolicy | None) -
         operation == "resolve_reduction_job_v1" and request["mode"] == "acknowledge_committed_v1"
     )
     return {
-        "kind": "job_resource_preview_v1", "schema_version": 1, "job_id": job_id,
-        "operation": operation, "policy_id": policy_id, "configured_limits": limits,
+        "kind": "job_resource_preview_v1",
+        "schema_version": 1,
+        "job_id": job_id,
+        "operation": operation,
+        "policy_id": policy_id,
+        "configured_limits": limits,
         "estimates": {
             name: {"availability": "unavailable", "value": None, "reason": "not_calibrated"}
             for name in ("cpu_ns", "peak_rss_bytes", "elapsed_ns", "disk_bytes")
