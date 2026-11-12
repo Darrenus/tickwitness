@@ -54,6 +54,9 @@ from tickwitness.cli_reduction_search import execute as execute_reduction_search
 from tickwitness.cli_reductions import COMMANDS as REDUCTION_COMMANDS
 from tickwitness.cli_reductions import add_commands as add_reduction_commands
 from tickwitness.cli_reductions import execute as execute_reduction_command
+from tickwitness.cli_retention import COMMANDS as RETENTION_COMMANDS
+from tickwitness.cli_retention import add_commands as add_retention_commands
+from tickwitness.cli_retention import execute as execute_retention_command
 from tickwitness.cli_scenarios import COMMANDS as SCENARIO_COMMANDS
 from tickwitness.cli_scenarios import add_commands as add_scenario_commands
 from tickwitness.cli_scenarios import execute as execute_scenario_command
@@ -271,13 +274,16 @@ def main(argv: list[str] | None = None) -> int:
     add_reduction_search_commands(commands)
     add_reduction_comparison_commands(commands)
     add_job_commands(commands)
+    add_retention_commands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
 
     try:
-        if arguments.command in JOB_COMMANDS:
+        if arguments.command in RETENTION_COMMANDS:
+            output, identity = execute_retention_command(arguments), ""
+        elif arguments.command in JOB_COMMANDS:
             job_output = execute_job_command(arguments)
             if isinstance(job_output, str):
                 sys.stdout.write(job_output)
@@ -591,4 +597,6 @@ def main(argv: list[str] | None = None) -> int:
         return 7
     if arguments.command in ("run-search-plan", "run-bounded-search-plan", "run-reduction-search"):
         return cast("int", output["exit_code"])
+    if arguments.command == "apply-dataset-retention":
+        return 0 if output["status"] == "APPLIED" else 9
     return 0

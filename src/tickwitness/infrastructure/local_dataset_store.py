@@ -8,6 +8,7 @@ Only application-side processes should receive access to the catalog.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import math
@@ -145,6 +146,7 @@ class LocalDatasetStore:
                         raise DatasetNotFoundError("Dataset store does not exist") from exc
                     raise
                 stack.callback(os.close, root_fd)
+                stack.enter_context(self._shared_root(root_fd))
                 if not create:
                     try:
                         info = os.stat(_CATALOG, dir_fd=root_fd, follow_symlinks=False)
@@ -436,6 +438,7 @@ class LocalDatasetStore:
         with ExitStack() as stack:
             root = os.open(self._root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
             stack.callback(os.close, root)
+            stack.enter_context(self._shared_root(root))
             objects_parent = self._open_directory(root, "objects", create=create)
             stack.callback(os.close, objects_parent)
             objects = self._open_directory(objects_parent, "sha256", create=create)
@@ -443,6 +446,19 @@ class LocalDatasetStore:
             manifests = self._open_directory(root, "manifests", create=create)
             stack.callback(os.close, manifests)
             yield _Directories(root, objects, manifests)
+
+    @staticmethod
+    @contextmanager
+    def _shared_root(descriptor: int) -> Iterator[None]:
+        """Keep maintenance out of a complete DatasetStore read or publication."""
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise DatasetStoreError("Dataset store maintenance gate is busy") from error
+        try:
+            yield
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
 
     @staticmethod
     def _open_directory(parent: int, name: str, *, create: bool) -> int:
