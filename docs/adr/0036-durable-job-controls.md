@@ -1,6 +1,6 @@
 # ADR0036: Separate durable control intent from Job and research outcomes
 
-Date: 2026-11-10 (Asia/Singapore). Status: frozen before S10-03 implementation; owner acceptance pending.
+Date: 2026-11-10 (Asia/Singapore). Status: accepted by owner PR105 merge on2026-11-12; originally frozen before implementation.
 
 An interrupted local Job needs explicit cancellation, a nonrenewable admission deadline, worker resource ceilings and reclaimable scratch. Existing schema1 has immutable one-attempt terminal rules and research slots that cannot be refunded. Adding cancellation to a heartbeat or overwriting a committed result would confuse intent, execution and research evidence.
 
