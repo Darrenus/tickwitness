@@ -4,6 +4,7 @@ This is trusted same-user code, not an isolation boundary for hostile plugins.
 The coordinator, rather than this process, records all durable job transitions.
 """
 
+import errno
 import os
 import sys
 from threading import Event, Lock, Thread
@@ -67,7 +68,9 @@ def _failure(error: Exception) -> Row:
     from tickwitness.domain.evidence.run_records import EvidenceValidationError
     from tickwitness.domain.jobs.contracts import JobValidationError
 
-    if isinstance(error, ConfirmationAccessDenied):
+    if isinstance(error, OSError) and error.errno in {errno.EFBIG, errno.EMFILE}:
+        code, exit_code = "job_resource_limit", 8
+    elif isinstance(error, ConfirmationAccessDenied):
         code, exit_code = "confirmation_access_denied", 5
     elif isinstance(error, (AttemptNotFoundError, BundleNotFoundError)):
         code, exit_code = "research_evidence_not_found", 4

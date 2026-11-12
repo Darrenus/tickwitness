@@ -7,7 +7,8 @@ import signal
 import subprocess
 import sys
 import time
-from contextlib import suppress
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -28,6 +29,16 @@ from tickwitness.domain.replay.contracts import load_replay_result
 from tickwitness.infrastructure import job_reduction
 from tickwitness.infrastructure.attempt_ledger import AttemptBudgetExceededError
 from tickwitness.infrastructure.job_comparison import execute_comparison
+from tickwitness.infrastructure.job_control_runtime import (
+    JobControlStop,
+    JobExecutionControl,
+    check_control,
+    control_admission,
+    control_publication,
+    current_control,
+    validate_worker_limits,
+)
+from tickwitness.infrastructure.job_controls import JobControlStore
 from tickwitness.infrastructure.job_followups import find_committed_dispatch
 from tickwitness.infrastructure.job_lineage import JobFamily
 from tickwitness.infrastructure.job_reduction import (
@@ -74,6 +85,50 @@ class _LeaseWindow:
     native_deadline_ns: int | None = None
 
 
+@contextmanager
+def _workspace(row: Row, *, prefix: str) -> Iterator[Path]:
+    control = current_control()
+    if control is not None:
+        with control.workspace(row) as path:
+            yield path
+    else:
+        with TemporaryDirectory(prefix=prefix) as directory:
+            yield Path(directory)
+
+
+def _start_worker(command: tuple[str, ...], cwd: Path) -> subprocess.Popen[bytes]:
+    with control_admission():
+        control = current_control()
+        if control is not None:
+            return control.spawn(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=cwd,
+                start_new_session=True,
+                close_fds=True,
+            )
+        return subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=cwd,
+            start_new_session=True,
+            close_fds=True,
+        )
+
+
+def _before_control_publication(row: Row) -> None:
+    """Private installed-qualification gate; production has no alternate publisher."""
+
+
+def _resource_stop(exit_code: int | None) -> None:
+    if current_control() is not None and exit_code in {-signal.SIGXCPU, -signal.SIGXFSZ}:
+        raise JobControlStop("job_resource_limit", "Worker reached its enforced OS limit")
+
+
 def _signal_group(process: subprocess.Popen[bytes]) -> None:
     # start_new_session establishes pgid == pid. An exited child can race the
     # group signal on Darwin; only a confirmed child exit can excuse EPERM.
@@ -92,6 +147,10 @@ def _signal_group(process: subprocess.Popen[bytes]) -> None:
 
 
 def _terminate(process: subprocess.Popen[bytes]) -> None:
+    control = current_control()
+    if control is not None:
+        control.stop_process(process)
+        return
     _signal_group(process)
     process.wait(timeout=5)
 
@@ -174,7 +233,9 @@ def _exchange(
         ):
             os.set_blocking(stream.fileno(), False)
             selector.register(stream, events, name)
-        while selector.get_map() or process.poll() is None:
+        controlled = current_control() is not None
+        while selector.get_map() or (not controlled and process.poll() is None):
+            check_control()
             if (
                 window.native_deadline_ns is not None
                 and time.monotonic_ns() >= window.native_deadline_ns
@@ -182,7 +243,7 @@ def _exchange(
                 raise _NativeDeadlineExpired
             if time.monotonic_ns() >= window.deadline_ns:
                 raise _LeaseExpired
-            if not exit_seen and process.poll() is not None:
+            if not controlled and not exit_seen and process.poll() is not None:
                 exit_seen = True
                 # An orphan descendant must not keep either pipe alive forever.
                 _signal_group(process)
@@ -232,6 +293,7 @@ def _exchange(
                         raise _NativeDeadlineExpired
                     if pulse_clock >= window.deadline_ns:
                         raise _LeaseExpired
+                    check_control()
                     attempt = cast("Row", row["attempt"])
                     row = store.heartbeat(
                         job_id,
@@ -269,6 +331,9 @@ def _lost_lease(store: JobRepository, row: Row, *, now_ns: int) -> Row:
 
 
 def _finish_failure(store: JobRepository, row: Row, failure: Row, window: _LeaseWindow) -> Row:
+    check_control()
+    if current_control() is not None and failure["code"] == "job_resource_limit":
+        raise JobControlStop("job_resource_limit", cast("str", failure["message"]))
     now = time.time_ns()
     attempt = cast("Row", row["attempt"])
     if time.monotonic_ns() >= window.deadline_ns or now >= cast(
@@ -302,6 +367,7 @@ def _native_failure(error: Exception, *, worker_exit_code: int | None = None) ->
 
 
 def _assert_publication_authority(store: JobRepository, row: Row, window: _LeaseWindow) -> None:
+    check_control()
     attempt = cast("Row", row["attempt"])
     now = time.time_ns()
     if time.monotonic_ns() >= window.deadline_ns or now >= cast(
@@ -319,10 +385,24 @@ def _assert_publication_authority(store: JobRepository, row: Row, window: _Lease
     checked_at = time.time_ns()
     if checked_at < now:
         raise JobConflictError("Coordinator UTC moved backwards during admission")
+    check_control()
     if time.monotonic_ns() >= window.deadline_ns or checked_at >= cast(
         "int", attempt["lease_expires_at_ns"]
     ):
         raise _LeaseExpired
+
+
+@contextmanager
+def _success_admission(store: JobRepository, row: Row, window: _LeaseWindow) -> Iterator[None]:
+    if current_control() is None:
+        yield
+        return
+    # Both Catalog authority and the fixed total deadline must be fresh under
+    # the same gate BEFORE the irreversible admission marker is committed.
+    with control_admission():
+        _assert_publication_authority(store, row, window)
+        with control_publication():
+            yield
 
 
 def _complete_followup(
@@ -336,17 +416,18 @@ def _complete_followup(
 ) -> Row:
     """Publish a separate acknowledgment; an uncertain commit is never retried here."""
     raw = build_followup_result(spec, dispatch, outcome, action)
-    _assert_publication_authority(store, row, window)
-    attempt = cast("Row", row["attempt"])
-    return store.complete(
-        spec.spec_id,
-        raw,
-        expected_version=cast("int", row["version"]),
-        coordinator_id=cast("str", attempt["coordinator_id"]),
-        job_attempt_id=cast("str", attempt["job_attempt_id"]),
-        lease_token=cast("str", attempt["lease_token"]),
-        now_ns=time.time_ns(),
-    )
+    with _success_admission(store, row, window):
+        _assert_publication_authority(store, row, window)
+        attempt = cast("Row", row["attempt"])
+        return store.complete(
+            spec.spec_id,
+            raw,
+            expected_version=cast("int", row["version"]),
+            coordinator_id=cast("str", attempt["coordinator_id"]),
+            job_attempt_id=cast("str", attempt["job_attempt_id"]),
+            lease_token=cast("str", attempt["lease_token"]),
+            now_ns=time.time_ns(),
+        )
 
 
 def _run_native_claimed(
@@ -451,7 +532,8 @@ def _execute_native_claimed(
 
     try:
         prepared = prepare_native_job(spec)
-        reservation = authorize_native_job(prepared, fence=fence)
+        with control_admission():
+            reservation = authorize_native_job(prepared, fence=fence)
     except _LeaseExpired:
         return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
     except JobStoreError:
@@ -497,17 +579,9 @@ def _execute_native_claimed(
     errors = b""
     fault: Exception | None = None
     expired, wall_expired = False, False
-    with TemporaryDirectory(prefix="tickwitness-native-job-") as cwd:
+    with _workspace(row, prefix="tickwitness-native-job-") as cwd:
         try:
-            process = subprocess.Popen(
-                command,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                cwd=cwd,
-                start_new_session=True,
-                close_fds=True,
-            )
+            process = _start_worker(command, cwd)
             row, terminal, errors = _exchange(process, raw, store, row, window)
         except _NativeDeadlineExpired:
             wall_expired = True
@@ -526,7 +600,9 @@ def _execute_native_claimed(
                         if stream is not None:
                             with suppress(OSError):
                                 stream.close()
+    check_control()
     row = store.get(job_id)
+    _resource_stop(process.returncode if process is not None else None)
     if expired or time.monotonic_ns() >= window.deadline_ns:
         return _lost_lease(store, row, now_ns=time.time_ns())
     exit_code = process.returncode if process is not None else None
@@ -581,44 +657,76 @@ def _execute_native_claimed(
         return _finish_failure(
             store, row, _native_failure(error, worker_exit_code=exit_code), window
         )
-    # Never turn publication/confirmation uncertainty into another research
-    # outcome or a new execution. The receipt may already be committed.
     try:
-        output = publish_native_job(reopened, reservation, audited, fence=fence)
-    except _LeaseExpired:
-        return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
-    try:
-        fence()
-    except _LeaseExpired:
-        return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
-    if spec.document["operation"] == "resolve_reduction_job_v1":
-        try:
-            return _complete_followup(
-                store, row, spec, spec, output, "replayed_from_origin", window
+        check_control()
+        _before_control_publication(row)
+        with _success_admission(store, row, window):
+            # Never turn publication/confirmation uncertainty into another research
+            # outcome or a new execution. The receipt may already be committed.
+            try:
+                output = publish_native_job(reopened, reservation, audited, fence=fence)
+            except _LeaseExpired:
+                return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
+            try:
+                fence()
+            except _LeaseExpired:
+                return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
+            if spec.document["operation"] == "resolve_reduction_job_v1":
+                try:
+                    return _complete_followup(
+                        store, row, spec, spec, output, "replayed_from_origin", window
+                    )
+                except _LeaseExpired:
+                    return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
+            attempt = cast("Row", row["attempt"])
+            return store.complete(
+                job_id,
+                output,
+                expected_version=cast("int", row["version"]),
+                coordinator_id=cast("str", attempt["coordinator_id"]),
+                job_attempt_id=cast("str", attempt["job_attempt_id"]),
+                lease_token=cast("str", attempt["lease_token"]),
+                now_ns=time.time_ns(),
             )
-        except _LeaseExpired:
-            return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
+
+    except _LeaseExpired:
+        return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())
+
+
+def _settle_control_stop(
+    store: JobRepository, row: Row, control: JobExecutionControl, stopped: JobControlStop
+) -> Row:
+    """Record non-success without renewing or weakening an expired worker lease."""
+    if row["state"] != "RUNNING":
+        return row
+    now = time.time_ns()
     attempt = cast("Row", row["attempt"])
-    return store.complete(
-        job_id,
-        output,
+    if now >= cast("int", attempt["lease_expires_at_ns"]):
+        return store.mark_lost(
+            cast("str", row["job_id"]),
+            expected_version=cast("int", row["version"]),
+            reason="lease_expired",
+            now_ns=now,
+        )
+    return store.fail(
+        cast("str", row["job_id"]),
+        {
+            "code": stopped.code,
+            "message": str(stopped)[:2048],
+            "worker_exit_code": control.worker_exit_code,
+        },
         expected_version=cast("int", row["version"]),
         coordinator_id=cast("str", attempt["coordinator_id"]),
         job_attempt_id=cast("str", attempt["job_attempt_id"]),
         lease_token=cast("str", attempt["lease_token"]),
-        now_ns=time.time_ns(),
+        now_ns=now,
     )
 
 
 def run_job(
     store: JobRepository, job_id: str, *, _worker_command: tuple[str, ...] | None = None
 ) -> Row:
-    """Execute one allowlisted job; private command override is a trusted test hook.
-
-    Terminal jobs return their existing record. There is no automatic retry,
-    restoration of an interrupted execution. Native Jobs use the original
-    protocol's independent research reservation, never the Job attempt itself.
-    """
+    """Run one allowlisted Job, enforcing its separately frozen policy when present."""
     if os.name != "posix":
         raise JobConflictError("Managed Job supervision requires POSIX")
     with store.coordinator() as coordinator_id:
@@ -628,152 +736,188 @@ def run_job(
             return row
         if row["state"] != "QUEUED":
             raise JobConflictError("Only a queued Job may start a worker")
-        claim_clock = time.monotonic_ns()
-        row = store.claim(
-            job_id,
-            expected_version=cast("int", row["version"]),
-            coordinator_id=coordinator_id,
-            attempt_nonce=secrets.token_hex(32),
-            lease_token=secrets.token_hex(32),
-            now_ns=time.time_ns(),
-        )
-        window = _LeaseWindow(
-            claim_clock + cast("int", cast("Row", row["spec"])["lease_duration_ns"])
-        )
-        if cast("Row", row["spec"])["operation"] in {
-            "execute_reduction_input_v1",
-            "resolve_reduction_job_v1",
-        }:
-            return _run_native_claimed(store, row, window, _worker_command=_worker_command)
-        attempt = cast("Row", row["attempt"])
-        raw = canonical(
-            {
-                "kind": "job_worker_request_v1",
-                "schema_version": 1,
-                "spec": row["spec"],
-                "job_id": job_id,
-                **{
-                    key: attempt[key] for key in ("coordinator_id", "job_attempt_id", "lease_token")
-                },
-            }
-        )
-        if len(raw) > MAX_JOB_REQUEST_BYTES:
-            return _finish_failure(
-                store,
-                row,
-                {
-                    "code": "job_request_too_large",
-                    "message": "Job IPC request exceeds 64 KiB",
-                    "worker_exit_code": None,
-                },
-                window,
-            )
-        command = _worker_command or (
-            str(Path(sys.executable).absolute()),
-            "-I",
-            "-B",
-            "-m",
-            "tickwitness.infrastructure.job_worker",
-        )
-        process: subprocess.Popen[bytes] | None = None
-        terminal: Row | None = None
-        errors = b""
-        fault: Exception | None = None
-        expired = False
-        with TemporaryDirectory(prefix="tickwitness-job-") as cwd:
+        root = getattr(store, "root", None)
+        controls = JobControlStore(root, job_id) if isinstance(root, Path) else None
+        policy = controls.policy() if controls is not None else None
+        if policy is None or controls is None:
+            return _run_queued_job(store, row, coordinator_id, _worker_command=_worker_command)
+        validate_worker_limits(policy)
+        control = JobExecutionControl(controls)
+        with control.activate():
             try:
-                process = subprocess.Popen(
-                    command,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    cwd=cwd,
-                    start_new_session=True,
-                    close_fds=True,
+                result = _run_queued_job(
+                    store, row, coordinator_id, _worker_command=_worker_command
                 )
-                row, terminal, errors = _exchange(process, raw, store, row, window)
-            except _LeaseExpired:
-                expired = True
-            except (OSError, _WorkerFault, ValueError) as error:
-                # Store/conflict errors must not be rewritten as worker failures.
-                if isinstance(error, JobStoreError):
-                    raise
-                fault = error
-            finally:
-                if process is not None:
-                    try:
-                        _terminate(process)
-                    finally:
-                        for stream in (process.stdin, process.stdout, process.stderr):
-                            if stream is not None:
-                                with suppress(OSError):
-                                    stream.close()
-        # Heartbeats may have committed before an interrupted exchange. Never
-        # finish against an old version or turn an uncertain DB write into FAILED.
-        row = store.get(job_id)
-        if expired or time.monotonic_ns() >= window.deadline_ns:
-            return _lost_lease(store, row, now_ns=time.time_ns())
-        exit_code = process.returncode if process is not None else None
-        if (
-            fault is not None
-            or terminal is None
-            or (terminal["kind"] == "job_result_v1" and exit_code != 0)
-        ):
-            message = (
-                str(fault)
-                if fault is not None
-                else "Worker exited without a valid successful result"
-            )
-            if errors:
-                message += ": " + errors.decode("utf-8", errors="replace")
-            return _finish_failure(
-                store,
-                row,
-                {
-                    "code": "job_worker_failed",
-                    "message": message[:2048],
-                    "worker_exit_code": exit_code,
-                },
-                window,
-            )
-        if terminal["kind"] == "job_failure_v1":
-            diagnostic = cast("Row", terminal["failure"])
-            if diagnostic["worker_exit_code"] != exit_code:
-                diagnostic = {
-                    "code": "job_worker_protocol_error",
-                    "message": "Failure frame and actual process exit differ",
-                    "worker_exit_code": exit_code,
-                }
-            return _finish_failure(store, row, diagnostic, window)
-        output = canonical(cast("Row", terminal["export"]))
-        spec = load_job_spec(canonical(cast("Row", row["spec"])))
-        attempt = cast("Row", row["attempt"])
-        validation_started = time.time_ns()
-        if validation_started < cast("int", row["updated_at_ns"]):
-            raise JobConflictError("Coordinator UTC moved backwards; lease validity is uncertain")
-        try:
-            independently_verified = execute_comparison(spec, saved=output)
-            if independently_verified != output:
-                raise _WorkerFault("Coordinator re-audit differs from worker output")
-        except Exception as error:
-            diagnostic = _failure(error)
-            diagnostic["message"] = ("Coordinator re-audit rejected result: " + str(error))[:2048]
-            diagnostic["worker_exit_code"] = exit_code
-            return _finish_failure(store, row, diagnostic, window)
-        attempt = cast("Row", row["attempt"])
-        now = time.time_ns()
-        if time.monotonic_ns() >= window.deadline_ns or now >= cast(
-            "int", attempt["lease_expires_at_ns"]
-        ):
-            return _lost_lease(store, row, now_ns=now)
-        # Deliberately outside error->failure handling: a commit failure may have
-        # published SUCCEEDED. Only later independent inspection may resolve it.
-        return store.complete(
-            job_id,
-            output,
-            expected_version=cast("int", row["version"]),
-            coordinator_id=cast("str", attempt["coordinator_id"]),
-            job_attempt_id=cast("str", attempt["job_attempt_id"]),
-            lease_token=cast("str", attempt["lease_token"]),
-            now_ns=now,
+            except JobControlStop as stopped:
+                result = _settle_control_stop(store, store.get(job_id), control, stopped)
+                control.finish(result, cause=stopped.code, diagnostic=str(stopped))
+                return result
+            except BaseException as error:
+                control.finish(
+                    store.get(job_id),
+                    cause="coordinator_interrupted"
+                    if isinstance(error, (KeyboardInterrupt, SystemExit))
+                    else "job_control_error",
+                    diagnostic=str(error)[:2048],
+                )
+                raise
+            else:
+                control.finish(result)
+                return result
+
+
+def _run_queued_job(
+    store: JobRepository,
+    row: Row,
+    coordinator_id: str,
+    *,
+    _worker_command: tuple[str, ...] | None,
+) -> Row:
+    job_id = cast("str", row["job_id"])
+    claim_clock = time.monotonic_ns()
+    row = store.claim(
+        job_id,
+        expected_version=cast("int", row["version"]),
+        coordinator_id=coordinator_id,
+        attempt_nonce=secrets.token_hex(32),
+        lease_token=secrets.token_hex(32),
+        now_ns=time.time_ns(),
+    )
+    control = current_control()
+    if control is not None:
+        control.bind(row)
+    check_control()
+    window = _LeaseWindow(claim_clock + cast("int", cast("Row", row["spec"])["lease_duration_ns"]))
+    if cast("Row", row["spec"])["operation"] in {
+        "execute_reduction_input_v1",
+        "resolve_reduction_job_v1",
+    }:
+        return _run_native_claimed(store, row, window, _worker_command=_worker_command)
+    attempt = cast("Row", row["attempt"])
+    raw = canonical(
+        {
+            "kind": "job_worker_request_v1",
+            "schema_version": 1,
+            "spec": row["spec"],
+            "job_id": job_id,
+            **{key: attempt[key] for key in ("coordinator_id", "job_attempt_id", "lease_token")},
+        }
+    )
+    if len(raw) > MAX_JOB_REQUEST_BYTES:
+        return _finish_failure(
+            store,
+            row,
+            {
+                "code": "job_request_too_large",
+                "message": "Job IPC request exceeds 64 KiB",
+                "worker_exit_code": None,
+            },
+            window,
         )
+    command = _worker_command or (
+        str(Path(sys.executable).absolute()),
+        "-I",
+        "-B",
+        "-m",
+        "tickwitness.infrastructure.job_worker",
+    )
+    process: subprocess.Popen[bytes] | None = None
+    terminal: Row | None = None
+    errors = b""
+    fault: Exception | None = None
+    expired = False
+    with _workspace(row, prefix="tickwitness-job-") as cwd:
+        try:
+            process = _start_worker(command, cwd)
+            row, terminal, errors = _exchange(process, raw, store, row, window)
+        except _LeaseExpired:
+            expired = True
+        except (OSError, _WorkerFault, ValueError) as error:
+            # Store/conflict errors must not be rewritten as worker failures.
+            if isinstance(error, JobStoreError):
+                raise
+            fault = error
+        finally:
+            if process is not None:
+                try:
+                    _terminate(process)
+                finally:
+                    for stream in (process.stdin, process.stdout, process.stderr):
+                        if stream is not None:
+                            with suppress(OSError):
+                                stream.close()
+    # Heartbeats may have committed before an interrupted exchange. Never
+    # finish against an old version or turn an uncertain DB write into FAILED.
+    check_control()
+    row = store.get(job_id)
+    _resource_stop(process.returncode if process is not None else None)
+    if expired or time.monotonic_ns() >= window.deadline_ns:
+        return _lost_lease(store, row, now_ns=time.time_ns())
+    exit_code = process.returncode if process is not None else None
+    if (
+        fault is not None
+        or terminal is None
+        or (terminal["kind"] == "job_result_v1" and exit_code != 0)
+    ):
+        message = (
+            str(fault) if fault is not None else "Worker exited without a valid successful result"
+        )
+        if errors:
+            message += ": " + errors.decode("utf-8", errors="replace")
+        return _finish_failure(
+            store,
+            row,
+            {
+                "code": "job_worker_failed",
+                "message": message[:2048],
+                "worker_exit_code": exit_code,
+            },
+            window,
+        )
+    if terminal["kind"] == "job_failure_v1":
+        diagnostic = cast("Row", terminal["failure"])
+        if diagnostic["worker_exit_code"] != exit_code:
+            diagnostic = {
+                "code": "job_worker_protocol_error",
+                "message": "Failure frame and actual process exit differ",
+                "worker_exit_code": exit_code,
+            }
+        return _finish_failure(store, row, diagnostic, window)
+    output = canonical(cast("Row", terminal["export"]))
+    spec = load_job_spec(canonical(cast("Row", row["spec"])))
+    attempt = cast("Row", row["attempt"])
+    validation_started = time.time_ns()
+    if validation_started < cast("int", row["updated_at_ns"]):
+        raise JobConflictError("Coordinator UTC moved backwards; lease validity is uncertain")
+    try:
+        independently_verified = execute_comparison(spec, saved=output)
+        if independently_verified != output:
+            raise _WorkerFault("Coordinator re-audit differs from worker output")
+    except Exception as error:
+        diagnostic = _failure(error)
+        diagnostic["message"] = ("Coordinator re-audit rejected result: " + str(error))[:2048]
+        diagnostic["worker_exit_code"] = exit_code
+        return _finish_failure(store, row, diagnostic, window)
+    try:
+        check_control()
+        with _success_admission(store, row, window):
+            attempt = cast("Row", row["attempt"])
+            now = time.time_ns()
+            if time.monotonic_ns() >= window.deadline_ns or now >= cast(
+                "int", attempt["lease_expires_at_ns"]
+            ):
+                return _lost_lease(store, row, now_ns=now)
+            # Deliberately outside error->failure handling: a commit failure may have
+            # published SUCCEEDED. Only later independent inspection may resolve it.
+            return store.complete(
+                job_id,
+                output,
+                expected_version=cast("int", row["version"]),
+                coordinator_id=cast("str", attempt["coordinator_id"]),
+                job_attempt_id=cast("str", attempt["job_attempt_id"]),
+                lease_token=cast("str", attempt["lease_token"]),
+                now_ns=now,
+            )
+
+    except _LeaseExpired:
+        return _lost_lease(store, store.get(job_id), now_ns=time.time_ns())

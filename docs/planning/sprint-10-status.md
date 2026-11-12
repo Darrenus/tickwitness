@@ -1,14 +1,14 @@
 # Sprint 10 作业恢复与取消状态
 
-更新：2026-11-08（Asia/Singapore）。Owner 已合并 [PR #103](https://github.com/Darrenus/tickwitness/pull/103)，接受 S10-02b，merge `a521abba087d747b306ed1271188a3a5a4da58e4`；S09-01／02／03、S10-01、S10-02a／b 软件均已接受。S10-02c 实现审阅中，#29 仍未整项完成。外部真人复验仍 **0 / PENDING**，[#24](https://github.com/Darrenus/tickwitness/issues/24) 保持打开。原 PR94 转交包与 golden 不变，无新 release。
+更新：2026-11-10（Asia/Singapore）。Owner 已合并 [PR #104](https://github.com/Darrenus/tickwitness/pull/104)，接受 S10-02c，merge `445df01f1f30c77f8161172a0c96b8827be6b4b9`；S10-01／02 软件均已接受，#29 完成。S10-03 先冻结控制合同，再推进实现。外部真人复验仍 **0 / PENDING**，[#24](https://github.com/Darrenus/tickwitness/issues/24) 保持打开。原 PR94 转交包与 golden 不变，无新 release。
 
 | 故事 | 当前范围 | 验收状态 |
 | --- | --- | --- |
 | S10-01 / #28 | 持久 Job 状态机、独立 attempt、心跳、单 coordinator、真实只读 comparison worker、失败／失联诊断 | Owner 合并 #101 接受；#28 关闭 |
-| S10-02a / #29 | 按原研究 attempt 只读复验恢复事实与既有最终 manifest，区分未绑定／未完成／失败／已提交结果 | Owner 合并 #102 接受；#29 保持打开 |
-| S10-02b / #29 | 确定性持久 dispatch／原槽绑定、受管原生执行、coordinator 研究发布 fencing、原 receipt 作为 Job 结果 | Owner 合并 #103 接受；#29 保持打开 |
-| S10-02c / #29 | 显式幂等 retry、研究提交后独立 Job acknowledgment；无完整 checkpoint 时从冻结原点占新槽重跑 | 实现审阅中；远端本轮证据在实现 PR，待 owner 接受 |
-| S10-03 / #30 | 强取消、总 deadline／资源上限、临时目录回收 | Planned，单独验收 |
+| S10-02a / #29 | 按原研究 attempt 只读复验恢复事实与既有最终 manifest，区分未绑定／未完成／失败／已提交结果 | Owner 合并 #102 接受；历史切片 |
+| S10-02b / #29 | 确定性持久 dispatch／原槽绑定、受管原生执行、coordinator 研究发布 fencing、原 receipt 作为 Job 结果 | Owner 合并 #103 接受；历史切片 |
+| S10-02c / #29 | 显式幂等 retry、研究提交后独立 Job acknowledgment；无完整 checkpoint 时从冻结原点占新槽重跑 | Owner 合并 #104 接受；#29 完成 |
+| S10-03 / #30 | 取消与发布竞争、固定总准入截止时间、OS worker 上限、受管临时目录回收 | 合同已先冻结，开始实现；本轮远端资格未预先计通过 |
 
 原专项估算 **12h／14h／8h** 与每 Sprint 持续质量容量不变，不补造实际工时，也不扩大本故事到分布式队列。
 
@@ -44,6 +44,14 @@ Worker 只接收有界 JSONL 请求与心跳／结果 IPC，不获得 Catalog �
 
 新原生资格在首次 baseline 前冻结独立合成五槽（明确新名称）：source1–3、worker 故障4、显式 retry5 与真实研究提交后 ACK 异常；耗尽后 core-only 确认及其真实故障不产生第6槽。旧五槽／八槽／十一槽、golden 和 PR94 不扩额。完整本轮 CI／四档制品审计通过状态只在实现 PR 回填，不复用旧绿勾。
 
+## S10-03 控制边界
+
+[Job controls v1](../contracts/job-controls-v1.md) 与 [ADR0036](../adr/0036-durable-job-controls.md) 在实现前冻结：可选不可变策略绑定单个 Catalog／Job，接受取消与不可逆发布准入由同一 gate 排序；已有发布标记只能报告过晚／结果待确认，不能伪造取消成功。旧 schema1、descriptor 与终态不改。实际停止及安全清理有独立凭证，过期租约仍按 LOST 结算，不补造心跳。
+
+总准入 deadline 从 claim／preparation 前开始，不随心跳延长；worker OS alarm 取剩余总时间和原 native deadline 的较早者。CPU、单文件大小、FD 为明确支持的 OS 上限，不把 RSS／目录抽样当成硬配额。同步验证／内核提交不宣称物理实时完成期限。所有权不明、进程未确认退出或 lifetime lock 仍占用时保留临时产物，仅显式回收被验证的本 Catalog 工作空间，不按旧 PID 杀进程。
+
+新增独立、明确命名的原八槽资格在 baseline 前冻结：source1–3，取消4、总截止5、资源失败6、取消先赢7、发布先赢8；通过 retry 后继链共用原账本，耗尽后确认不加槽9。旧五／八／十一槽、golden、PR94 保持不变。具体通过状态和测量在本轮实现 PR 回填；原8h／Sprint34h与持续质量容量不变。
+
 ## 验证与交付记录
 
 全部项目代码、测试、格式、类型、构建、安装与运行仅在远端 CPU。实际 CI 检查状态和 `jobs-core`、`jobs-ubuntu-24.04`、`jobs-macos-26`、`jobs-source-wheel` 产物链接在实现 PR 回填；未完成的检查不计通过。制品保存实际命令、独立结果复验、Catalog／events／hash 闭包，以及真实 worker／coordinator 死亡诊断。只读 core refusal 不能冒充正例原生见证。
@@ -53,3 +61,5 @@ S10-01 的 [Engineering 42077246248](https://github.com/Darrenus/tickwitness/act
 S10-02a 的 [Engineering 42233843538](https://github.com/Darrenus/tickwitness/actions/runs/42233843538)／[Documentation 42233843587](https://github.com/Darrenus/tickwitness/actions/runs/42233843587) 13/13 通过，六 core 各3744／112skip、两 native 各3853／3skip；四份本轮制品完整静态审计通过。原生正例仅资格化 committed_result 与真实提交后的受控 ACK 异常；其余恢复状态是单元 fixture，未冒充受管重试或 Job acknowledgment 恢复。S10-02b 的新资格独立执行，不复用历史绿勾充当当前实现通过。
 
 S10-02b 的 [Engineering 42372257409](https://github.com/Darrenus/tickwitness/actions/runs/42372257409)／[Documentation 42372257522](https://github.com/Darrenus/tickwitness/actions/runs/42372257522) 13/13 通过，六 core 各3936／112skip、两 native 各4045／3skip；四份 fresh native-jobs 制品完整静态审计通过。原八槽资格证明受管执行和发布前检查，不替代 S10-02c 的新原生重试／确认故障资格。Owner #103 合并接受此历史范围；#29 原14h／Sprint34h与持续质量容量不变。
+
+S10-02c 的 [Engineering 42467347230](https://github.com/Darrenus/tickwitness/actions/runs/42467347230)／[Documentation 42467347301](https://github.com/Darrenus/tickwitness/actions/runs/42467347301) 13/13 通过，六 core 各4031／112skip、两 native 各4140／3skip；四份 fresh job-followups 制品完整审计通过。实际原生 retry5 提交 receipt 后注入 ACK 丢失，Job 为 LOST；每档三个实际 wrapper 均为 acknowledged_committed，正常 replayed_from_origin wrapper 与 committed failure 正例保留 fixture 标签。Owner #104 合并接受该范围，#29 完成；这份历史资格不充当 S10-03 通过证明。

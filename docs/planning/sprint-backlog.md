@@ -164,6 +164,8 @@
 
 2026-11-08，owner 合并 #103 接受 S10-02b。S10-02c 的 [显式后继合同](../contracts/job-followups-v1.md) 实现独立幂等 retry／确认 Job；共享原账本 family 锁与不可变后继记录约束跨 Catalog 分叉，已提交 outcome 仅复验确认，真实重跑使用原协议新槽。旧终态／schema1 不变。新独立合成五槽资格先冻结预算，不扩充旧五槽／八槽／十一槽；本轮通过证据只在实现 PR 回填。#29 保持 OPEN 待 owner 接受，14h／Sprint34h与持续质量容量不变，外部真人0/PENDING，S10-03 另行验收。
 
+2026-11-10，owner 合并 #104 接受 S10-02c，#29 完成；S10-03 先冻结 [Job controls v1](../contracts/job-controls-v1.md) 的取消／发布顺序、固定总准入 deadline、明确 OS worker 上限与安全工作空间回收，再推进实现。策略与控制凭证独立保存，旧 schema1／Job 终态和原协议预算不改；取消意图不冒充已确认停止，已准入提交不撤销。新独立八槽资格先冻结、后 baseline，旧五／八／十一槽、golden、PR94不扩额。8h／Sprint34h与持续质量容量不变，外部真人0/PENDING。
+
 **目标：** 长任务在中断和重试后不损坏研究记录。依赖：S7–S9。计划专项容量 34 小时。
 
 | Story | 用户故事与任务 | 估计 | 可执行验收 |

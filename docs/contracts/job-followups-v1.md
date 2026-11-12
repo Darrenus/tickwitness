@@ -1,6 +1,6 @@
 # Explicit native Job retry and acknowledgment v1
 
-S10-02c implementation under review, 2026-11-08 (Asia/Singapore). Owner merged [PR103](https://github.com/Darrenus/tickwitness/pull/103), accepting S10-02b at `a521abba087d747b306ed1271188a3a5a4da58e4`. [Story29](https://github.com/Darrenus/tickwitness/issues/29) remains open pending this slice's owner acceptance. External humans **0 / PENDING**.
+S10-02c accepted by owner merge of [PR104](https://github.com/Darrenus/tickwitness/pull/104) at `445df01f1f30c77f8161172a0c96b8827be6b4b9`, acceptance recorded 2026-11-10 (Asia/Singapore). [Story29](https://github.com/Darrenus/tickwitness/issues/29) is complete. The separate [Job controls contract](job-controls-v1.md) freezes S10-03 before implementation. External humans **0 / PENDING**.
 
 ## Identity and immutable history
 
