@@ -383,7 +383,9 @@ class SqliteJobStore:
                             pass
                     except FileNotFoundError as error:
                         if not write and error.errno == errno.ENOENT:
-                            raise JobConflictError("Job catalog read is busy; retry read") from error
+                            raise JobConflictError(
+                                "Job catalog read is busy; retry read"
+                            ) from error
                         raise
                 uri = "file:" + quote(str(self._root / _CATALOG), safe="/")
                 connection = sqlite3.connect(
