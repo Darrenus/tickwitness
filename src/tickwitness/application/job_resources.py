@@ -47,9 +47,11 @@ def inspect_job_resources(
             raise JobStoreError("Resource report differs from this Job's frozen policy")
         current_attempt = snapshot["attempt"]
         if (
-            current_attempt is not None
-            and document["job_attempt_id"] is not None
-            and document["job_attempt_id"] != cast("Row", current_attempt)["job_attempt_id"]
+            document["job_attempt_id"] is not None
+            and (
+                current_attempt is None
+                or document["job_attempt_id"] != cast("Row", current_attempt)["job_attempt_id"]
+            )
         ):
             raise JobStoreError("Resource report differs from this Job's actual attempt")
         captured_sha = document["catalog_snapshot_sha256"]

@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import pytest
 from test_job_supervisor import _queued
 
+from tickwitness.application.job_resources import inspect_job_resources
 from tickwitness.application.jobs import JobConflictError, JobStoreError
 from tickwitness.domain.jobs.control import build_job_control_policy
 from tickwitness.infrastructure import job_control_bootstrap, job_control_runtime
@@ -711,7 +712,7 @@ def test_usage_pipe_setup_failure_closes_both_private_descriptors(tmp_path, monk
 
     monkeypatch.setattr(job_control_runtime.os, "pipe", recorded_pipe)
     monkeypatch.setattr(job_control_runtime.os, "set_blocking", unavailable)
-    with pytest.raises(OSError, match="setup failure"), guard.activate(), guard.workspace(row):
+    with pytest.raises(JobStoreError, match="setup failure"), guard.activate(), guard.workspace(row):
         guard.spawn((sys.executable, "-I", "-B", "-c", "raise SystemExit(0)"))
     assert len(descriptors) == 2 and guard._usage_read_fd is None
     for descriptor in descriptors:
@@ -732,3 +733,24 @@ def test_missing_wait4_keeps_owned_wait_without_fabricating_accounting(monkeypat
     monkeypatch.setattr(job_control_bootstrap.os, "waitpid", waited)
     assert job_control_bootstrap._wait_owned(12345, 0) == (12345, 0, None)
     assert calls == [(12345, 0)]
+
+
+def test_committed_claim_without_bind_preserves_observed_attempt_in_resource_report(tmp_path):
+    store, control, row = configured(tmp_path)
+    guard = JobExecutionControl(control)
+    # The real claim is committed, but its caller has not returned to control.bind.
+    # Exception settlement independently reads the actual stored RUNNING snapshot.
+    actual = store.get(row["job_id"])
+    previous_control = guard.finish(actual, cause="job_control_error")
+    assert previous_control["job_attempt_id"] is None  # Existing control schema behavior.
+    report = resources(control)
+    assert report["job_attempt_id"] == actual["attempt"]["job_attempt_id"]
+    assert report["catalog_state"] == "RUNNING" and report["collection_status"] == "partial"
+    observed = inspect_job_resources(
+        store,
+        JobResourceStore(control.directory.parent.parent, row["job_id"]),
+        row["job_id"],
+        control.policy(),
+    )
+    assert observed["status"] == "PARTIAL" and observed["report_matches_current_snapshot"] is True
+    assert store.get(row["job_id"]) == actual and control.result() == previous_control

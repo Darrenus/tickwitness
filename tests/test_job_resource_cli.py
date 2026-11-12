@@ -12,9 +12,16 @@ from tickwitness.cli import main
 from tickwitness.domain.evidence.run_records import canonical
 from tickwitness.domain.jobs import build_execution_job_spec, build_followup_job_spec, queued_job
 from tickwitness.domain.jobs.control import build_job_control_policy
-from tickwitness.domain.jobs.resources import build_job_resource_preview
+from tickwitness.domain.jobs.resources import (
+    RESOURCE_STAGES,
+    build_job_resource_preview,
+    build_job_resource_report,
+    resource_metric,
+    resource_stage,
+)
 from tickwitness.infrastructure.job_control_runtime import JobExecutionControl
 from tickwitness.infrastructure.job_controls import JobControlStore
+from tickwitness.infrastructure.job_resources import JobResourceStore
 from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
 
 
@@ -83,6 +90,8 @@ def test_native_retry_and_ack_preview_are_conditional_metadata_only(tmp_path, ca
         "expected_bundle_id": "b" * 64,
         "expected_report_id": "c" * 64,
         "split": "development",
+        "engine_runtime": "coordinator_interpreter_v1",
+        "restart_mode": "frozen_origin_new_attempt_only_v1",
     }
     origin = build_execution_job_spec(request)
     catalog = SqliteJobStore(tmp_path / "jobs", create=True)
@@ -169,6 +178,49 @@ def test_report_keeps_actual_running_snapshot_after_explicit_orphan_reconciliati
     tampered["catalog_snapshot_sha256"] = None
     tampered["job_attempt_id"] = "f" * 64
     path.write_bytes(canonical(tampered))
+    assert main(["inspect-job-resources", queued["job_id"], "--jobs", str(catalog.root)]) == 3
+    output = capsys.readouterr()
+    assert not output.out
+    assert json.loads(output.err)["error"]["code"] == "job_store_integrity_or_io_failure"
+
+
+def test_unobserved_snapshot_cannot_claim_an_attempt_in_an_unclaimed_job(tmp_path, capsys):
+    catalog, queued = _queued(tmp_path)
+    policy = build_job_control_policy(queued["job_id"])
+    with catalog.coordinator():
+        JobControlStore(catalog.root, queued["job_id"]).configure(policy)
+    reasons = {
+        "coordinator_cpu_ns": "clock_unavailable",
+        "compute_user_cpu_ns": "worker_not_started",
+        "compute_system_cpu_ns": "worker_not_started",
+        "compute_peak_rss_bytes": "worker_not_started",
+        "scratch_cleanup_logical_bytes": "cleanup_incomplete",
+        "job_elapsed_ns": "clock_unavailable",
+        "research_slots_reserved_count": "reservation_unconfirmed",
+        "audited_native_results_count": "not_recorded",
+        "processed_input_record_count": "result_not_audited",
+        "predicate_evaluation_count": "not_instrumented",
+    }
+    # Structurally valid partial storage fixture; no real attempt was claimed.
+    report = build_job_resource_report(
+        {
+            "kind": "job_resource_report_v1",
+            "schema_version": 1,
+            "job_id": queued["job_id"],
+            "job_attempt_id": "f" * 64,
+            "policy_id": policy.policy_id,
+            "catalog_state": None,
+            "catalog_snapshot_sha256": None,
+            "worker_started": False,
+            "worker_usage": None,
+            "collection_status": "partial",
+            "metrics": {
+                name: resource_metric(name, None, reason) for name, reason in reasons.items()
+            },
+            "stages": [resource_stage(name, None, None) for name in RESOURCE_STAGES],
+        }
+    )
+    JobResourceStore(catalog.root, queued["job_id"]).seal(report)
     assert main(["inspect-job-resources", queued["job_id"], "--jobs", str(catalog.root)]) == 3
     output = capsys.readouterr()
     assert not output.out

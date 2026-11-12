@@ -474,7 +474,17 @@ class JobExecutionControl:
                 "predicate_evaluation_count", None, reason="not_instrumented"
             ),
         }
-        attempt = None if self._row is None else cast("Row", self._row["attempt"])
+        bound_attempt = None if self._row is None else cast("Row", self._row["attempt"])
+        attempt = bound_attempt
+        if snapshot is not None:
+            observed_attempt = snapshot["attempt"]
+            if bound_attempt is not None and (
+                observed_attempt is None
+                or cast("Row", observed_attempt)["job_attempt_id"]
+                != bound_attempt["job_attempt_id"]
+            ):
+                raise JobStoreError("Resource observation differs from its bound Job attempt")
+            attempt = None if observed_attempt is None else cast("Row", observed_attempt)
         complete = (
             snapshot is not None
             and snapshot["state"] in {"SUCCEEDED", "FAILED", "LOST"}
