@@ -82,9 +82,10 @@ def test_filesystem_entry_age_uses_both_timestamps_and_keeps_references():
     document = plan_document()
     orphan = next(row for row in document["files"] if row["sha256"] == digest(b"orphan"))
     orphan["ctime_ns"] = 201
-    assert select_candidates(
-        document["files"], document["protected_objects"], 200, document["policy"]
-    ) == []
+    assert (
+        select_candidates(document["files"], document["protected_objects"], 200, document["policy"])
+        == []
+    )
     document["candidates"] = []
     build_dataset_retention_plan(document)
 
@@ -183,7 +184,9 @@ def test_preview_accepts_only_the_single_stdout_newline():
         with pytest.raises(EvidenceValidationError):
             load_retention_preview(raw)
     for field, value in (
-        ("plan_id", "f" * 64), ("execution_authorized", True), ("schema_version", True)
+        ("plan_id", "f" * 64),
+        ("execution_authorized", True),
+        ("schema_version", True),
     ):
         changed = deepcopy(preview)
         changed[field] = value
@@ -244,8 +247,13 @@ def test_result_cannot_invent_success_or_unlink_credit(change):
 def test_blocked_snapshot_has_no_partial_deletion_authority():
     document = plan_document()
     document.update(
-        status="BLOCKED", store=None, reference_sha256=None, files=[],
-        protected_objects=[], candidates=[], diagnostics=["sidecar_present"],
+        status="BLOCKED",
+        store=None,
+        reference_sha256=None,
+        files=[],
+        protected_objects=[],
+        candidates=[],
+        diagnostics=["sidecar_present"],
     )
     blocked = build_dataset_retention_plan(document)
     assert blocked.document["candidates"] == []

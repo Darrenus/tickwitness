@@ -194,7 +194,8 @@ for directory in (target,target/'objects',objects,target/'manifests'):
 events={'orphan_opens':[],'unlinked':[],'sqlite_uris':[],'sql':[],'fsync_directories':[],
         'retained_payload_reads':0,'metadata_write_attempts':0}
 def forbidden(*args,**kwargs):
-    raise AssertionError('Retention cannot execute research, write metadata or read retained payloads')
+    raise AssertionError(
+        'Retention cannot execute research, write metadata or read retained payloads')
 LocalDatasetStore.__init__=forbidden
 LocalDatasetStore.publish=forbidden
 BoundedReplayAdapter.__init__=forbidden
@@ -335,7 +336,8 @@ def workspace(records):
                     canonical({"accepted": False, "message": str(error)[:4096]})
                 )
                 inventory = {
-                    name: value for name, value in tree(records).items()
+                    name: value
+                    for name, value in tree(records).items()
                     if name != "artifact-files.json"
                 }
                 (records / "artifact-files.json").write_bytes(canonical(inventory))
@@ -348,8 +350,17 @@ def check_preview(value):
     assert value["execution_authorized"] is False
     plan = value["plan"]
     assert set(plan) == {
-        "kind", "schema_version", "status", "policy", "observed_at_ns", "store",
-        "reference_sha256", "files", "protected_objects", "candidates", "diagnostics",
+        "kind",
+        "schema_version",
+        "status",
+        "policy",
+        "observed_at_ns",
+        "store",
+        "reference_sha256",
+        "files",
+        "protected_objects",
+        "candidates",
+        "diagnostics",
     }
     assert plan["kind"] == "dataset_retention_plan_v1" and plan["schema_version"] == 1
     assert sha(canonical(plan)) == value["plan_id"]
@@ -362,8 +373,15 @@ def check_preview(value):
 
 def check_result(value, preview, *, status):
     assert set(value) == {
-        "kind", "schema_version", "plan_id", "status", "intended", "unlinked",
-        "already_absent", "removed_logical_bytes", "diagnostic",
+        "kind",
+        "schema_version",
+        "plan_id",
+        "status",
+        "intended",
+        "unlinked",
+        "already_absent",
+        "removed_logical_bytes",
+        "diagnostic",
     }
     assert value["kind"] == "dataset_retention_result_v1" and value["schema_version"] == 1
     assert value["plan_id"] == preview["plan_id"] and value["status"] == status
@@ -383,8 +401,10 @@ def main():
     parser.add_argument("--source-records", type=Path)
     args = parser.parse_args()
     if (
-        args.report.exists() or args.report.is_symlink()
-        or args.records_dir.exists() or args.records_dir.is_symlink()
+        args.report.exists()
+        or args.report.is_symlink()
+        or args.records_dir.exists()
+        or args.records_dir.is_symlink()
     ):
         raise FileExistsError("Retention qualification destinations must be new")
     if args.report.absolute().is_relative_to(args.records_dir.absolute()):
@@ -406,9 +426,9 @@ def main():
         )
         assert source_report["kind"] == "installed_job_controls_acceptance_v1"
         assert source_report["accepted"] is True
-    project = tomllib.loads(
-        (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
-    )["project"]
+    project = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())[
+        "project"
+    ]
     with workspace(args.records_dir) as root:
         cwd, transcripts, guards, plans, snapshots = (
             root / name for name in ("unrelated-cwd", "transcripts", "guards", "plans", "snapshots")
@@ -420,12 +440,19 @@ def main():
         def invoke(code, command=(), *, expected=0, stdout=True):
             completed = subprocess.run(
                 [interpreter, "-I", "-B", "-c", _NO_NATIVE + code, *command],
-                cwd=cwd, capture_output=True, text=True, check=False, timeout=45,
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=45,
             )
             record = {
-                "executable": interpreter, "entry": ["-c", _NO_NATIVE + code],
-                "command": list(command), "exit_code": completed.returncode,
-                "expected_exit_code": expected, "stdout": completed.stdout,
+                "executable": interpreter,
+                "entry": ["-c", _NO_NATIVE + code],
+                "command": list(command),
+                "exit_code": completed.returncode,
+                "expected_exit_code": expected,
+                "stdout": completed.stdout,
                 "stderr": completed.stderr,
             }
             calls.append(record)
@@ -457,7 +484,8 @@ def main():
             log = guards / (number + ".json")
             rules = {
                 "protected": protected if target == store else fixture["mixed_protected"],
-                "orphans": orphans if target == store else [], "intended": list(intended),
+                "orphans": orphans if target == store else [],
+                "intended": list(intended),
             }
             before = tree(target)
             payload, actual_number = invoke(
@@ -465,8 +493,11 @@ def main():
             )
             assert actual_number == number
             observation = {
-                "transcript": number, "before": before, "after": tree(target),
-                "response": payload, "guard": json.loads(log.read_bytes()),
+                "transcript": number,
+                "before": before,
+                "after": tree(target),
+                "response": payload,
+                "guard": json.loads(log.read_bytes()),
             }
             observations.append(observation)
             assert observation["guard"]["retained_payload_reads"] == 0
@@ -501,8 +532,13 @@ def main():
         plan_file = plans / "original.json"
         plan_file.write_text(calls[-1]["stdout"])
         command = (
-            "apply-dataset-retention", "--store", str(store), "--plan", str(plan_file),
-            "--expected-plan-id", preview["plan_id"],
+            "apply-dataset-retention",
+            "--store",
+            str(store),
+            "--plan",
+            str(plan_file),
+            "--expected-plan-id",
+            preview["plan_id"],
         )
         applied, applied_observation = gc(command, intended=plan["candidates"])
         check_result(applied, preview, status="APPLIED")
@@ -510,14 +546,15 @@ def main():
         assert sorted(applied_observation["guard"]["unlinked"]) == plan["candidates"]
         assert any(item["objects"] for item in applied_observation["guard"]["fsync_directories"])
         removed_paths = {"objects/sha256/" + key for key in plan["candidates"]}
-        assert set(applied_observation["before"]) - set(applied_observation["after"]) == removed_paths
+        assert (
+            set(applied_observation["before"]) - set(applied_observation["after"]) == removed_paths
+        )
         assert {
-            key: value for key, value in applied_observation["before"].items()
+            key: value
+            for key, value in applied_observation["before"].items()
             if key not in removed_paths
         } == applied_observation["after"]
-        expected_bytes = sum(
-            (snapshots / "before" / name).stat().st_size for name in removed_paths
-        )
+        expected_bytes = sum((snapshots / "before" / name).stat().st_size for name in removed_paths)
         assert applied["removed_logical_bytes"] == expected_bytes
         repeated, repeat_observation = gc(command, intended=plan["candidates"])
         check_result(repeated, preview, status="APPLIED")
@@ -541,8 +578,17 @@ def main():
         mixed_file = plans / "mixed.json"
         mixed_file.write_text(calls[-1]["stdout"])
         refused, refused_observation = gc(
-            ("apply-dataset-retention", "--store", str(mixed), "--plan", str(mixed_file),
-             "--expected-plan-id", mixed_preview["plan_id"]), target=mixed, expected=9,
+            (
+                "apply-dataset-retention",
+                "--store",
+                str(mixed),
+                "--plan",
+                str(mixed_file),
+                "--expected-plan-id",
+                mixed_preview["plan_id"],
+            ),
+            target=mixed,
+            expected=9,
         )
         check_result(refused, mixed_preview, status="REFUSED")
         assert refused["diagnostic"] == "blocked_plan"
@@ -557,9 +603,11 @@ def main():
         assert drift_observation["before"] == drift_observation["after"]
         writer_controls = root / "writer-controls"
         writer = subprocess.Popen(
-            [interpreter, "-I", "-B", "-c", _NO_NATIVE + _WRITER,
-             str(store), str(writer_controls)],
-            cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            [interpreter, "-I", "-B", "-c", _NO_NATIVE + _WRITER, str(store), str(writer_controls)],
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
         try:
             deadline = time.monotonic() + 20
@@ -587,8 +635,20 @@ def main():
                 writer.kill()
                 writer.communicate(timeout=5)
                 raise
+        writer_transcript = {
+            "executable": interpreter,
+            "entry": ["-c", _NO_NATIVE + _WRITER],
+            "command": [str(store), str(writer_controls)],
+            "pid": writer.pid,
+            "exit_code": writer.returncode,
+            "expected_exit_code": 0,
+            "stdout": writer_out,
+            "stderr": writer_err,
+        }
+        (root / "writer-transcript.json").write_bytes(canonical(writer_transcript))
         assert writer.returncode == 0 and not writer_err
         published = json.loads(writer_out)
+        assert published["pid"] == ready["pid"] == writer.pid
         (writer_controls / "finished.json").write_bytes(canonical(published))
         refusals = []
         missing = root / "never-created-store"
@@ -603,26 +663,47 @@ def main():
         source_after = None if args.source_records is None else tree(args.source_records)
         assert source_after == source_before
         report = {
-            "kind": "installed_dataset_retention_acceptance_v1", "schema_version": 1,
-            "accepted": True, "interpreter_identity": identity,
-            "source_driver_sha256": sha(Path(__file__).read_bytes()), "fixture": fixture,
-            "before_retained_read": before_read, "after_retained_read": after_read,
+            "kind": "installed_dataset_retention_acceptance_v1",
+            "schema_version": 1,
+            "accepted": True,
+            "interpreter_identity": identity,
+            "source_driver_sha256": sha(Path(__file__).read_bytes()),
+            "fixture": fixture,
+            "before_retained_read": before_read,
+            "after_retained_read": after_read,
             "declared_fixture_sqlite_quiescence": quiescences,
-            "preview": preview, "applied": applied, "repeated": repeated,
-            "mixed_refusal": refused, "inventory_drift_refusal": drifted,
-            "active_publisher": {"ready": ready, "blocked": busy, "finished": published},
-            "confirmation_refusals": refusals, "observations": observations,
-            "source_controls_core_only": None if source_report is None
+            "preview": preview,
+            "applied": applied,
+            "repeated": repeated,
+            "mixed_refusal": refused,
+            "inventory_drift_refusal": drifted,
+            "active_publisher": {
+                "ready": ready,
+                "blocked": busy,
+                "finished": published,
+                "transcript": "writer-transcript.json",
+            },
+            "confirmation_refusals": refusals,
+            "observations": observations,
+            "source_controls_core_only": None
+            if source_report is None
             else source_report["core_only_profile"],
-            "protected_source_before": source_before, "protected_source_after": source_after,
+            "protected_source_before": source_before,
+            "protected_source_after": source_after,
             "scope": {
-                "dataset_store_orphans_only": True, "all_physical_manifests_retained": True,
-                "retained_payload_reads_by_gc": False, "metadata_created_by_gc": False,
-                "actual_publisher_gate_probe": True, "actual_reader_gate_probe": False,
+                "dataset_store_orphans_only": True,
+                "all_physical_manifests_retained": True,
+                "retained_payload_reads_by_gc": False,
+                "metadata_created_by_gc": False,
+                "actual_publisher_gate_probe": True,
+                "actual_reader_gate_probe": False,
                 "partial_unlink_and_fsync_live_probes": False,
-                "new_native_calls": 0, "new_research_slots": 0,
-                "historical_missing_entry_credit": False, "physical_freed_bytes_measured": False,
-                "external_human_attempts": 0, "external_human_gate": "PENDING",
+                "new_native_calls": 0,
+                "new_research_slots": 0,
+                "historical_missing_entry_credit": False,
+                "physical_freed_bytes_measured": False,
+                "external_human_attempts": 0,
+                "external_human_gate": "PENDING",
             },
         }
         inner = root / "dataset-retention-smoke" / "report.json"

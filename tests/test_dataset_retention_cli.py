@@ -14,8 +14,7 @@ from tickwitness.infrastructure.local_dataset_store import LocalDatasetStore
 
 def tree(root):
     return {
-        str(path.relative_to(root)): path.read_bytes()
-        for path in root.rglob("*") if path.is_file()
+        str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()
     }
 
 
@@ -78,8 +77,13 @@ def test_preview_is_read_only_then_apply_exactly_unlinks_and_repeat_has_no_credi
     assert envelope["plan"]["candidates"] == [orphan]
     assert not envelope["execution_authorized"]
     command = [
-        "apply-dataset-retention", "--store", str(store._root), "--plan", str(path),
-        "--expected-plan-id", envelope["plan_id"],
+        "apply-dataset-retention",
+        "--store",
+        str(store._root),
+        "--plan",
+        str(path),
+        "--expected-plan-id",
+        envelope["plan_id"],
     ]
     assert main(command) == 0
     first = json.loads(capsys.readouterr().out)
@@ -113,10 +117,20 @@ def test_retained_payloads_are_not_opened_by_planning_or_apply(tmp_path, capsys,
     with monkeypatch.context() as context:
         context.setattr(os, "open", guarded_open)
         path, envelope = preview_file(tmp_path, capsys, store._root)
-        assert main([
-            "apply-dataset-retention", "--store", str(store._root), "--plan", str(path),
-            "--expected-plan-id", envelope["plan_id"],
-        ]) == 0
+        assert (
+            main(
+                [
+                    "apply-dataset-retention",
+                    "--store",
+                    str(store._root),
+                    "--plan",
+                    str(path),
+                    "--expected-plan-id",
+                    envelope["plan_id"],
+                ]
+            )
+            == 0
+        )
         assert json.loads(capsys.readouterr().out)["unlinked"] == [orphan]
     assert touched == []
     assert store.get(published.dataset_id).report == {"valid": True}
@@ -140,10 +154,20 @@ def test_expected_identity_mismatch_and_blocked_plans_never_construct_apply_repo
     monkeypatch.setattr(cli_retention, "LocalDatasetMaintenance", forbidden)
     saved = tmp_path / "blocked.json"
     saved.write_bytes(canonical(blocked) + b"\n")
-    assert main([
-        "apply-dataset-retention", "--store", str(tmp_path / "missing"), "--plan", str(saved),
-        "--expected-plan-id", blocked["plan_id"],
-    ]) == 9
+    assert (
+        main(
+            [
+                "apply-dataset-retention",
+                "--store",
+                str(tmp_path / "missing"),
+                "--plan",
+                str(saved),
+                "--expected-plan-id",
+                blocked["plan_id"],
+            ]
+        )
+        == 9
+    )
     output = capsys.readouterr()
     assert not output.err and json.loads(output.out)["status"] == "REFUSED"
 
@@ -167,10 +191,20 @@ def test_malformed_preview_is_rejected_before_store_access(tmp_path, capsys, mon
 
     monkeypatch.setattr(cli_retention, "LocalDatasetMaintenance", forbidden)
     before = tree(store._root)
-    assert main([
-        "apply-dataset-retention", "--store", str(store._root), "--plan", str(saved),
-        "--expected-plan-id", envelope["plan_id"],
-    ]) == 2
+    assert (
+        main(
+            [
+                "apply-dataset-retention",
+                "--store",
+                str(store._root),
+                "--plan",
+                str(saved),
+                "--expected-plan-id",
+                envelope["plan_id"],
+            ]
+        )
+        == 2
+    )
     output = capsys.readouterr()
     assert not output.out and json.loads(output.err)["error"]["code"] == "invalid_research_evidence"
     assert tree(store._root) == before
@@ -182,10 +216,20 @@ def test_drift_is_visible_non_success_and_deletes_nothing(tmp_path, capsys):
     new_contents = b"appeared after the frozen preview"
     (store._root / "objects" / "sha256" / digest(new_contents)).write_bytes(new_contents)
     before = tree(store._root)
-    assert main([
-        "apply-dataset-retention", "--store", str(store._root), "--plan", str(saved),
-        "--expected-plan-id", envelope["plan_id"],
-    ]) == 9
+    assert (
+        main(
+            [
+                "apply-dataset-retention",
+                "--store",
+                str(store._root),
+                "--plan",
+                str(saved),
+                "--expected-plan-id",
+                envelope["plan_id"],
+            ]
+        )
+        == 9
+    )
     output = capsys.readouterr()
     assert not output.err
     result = json.loads(output.out)

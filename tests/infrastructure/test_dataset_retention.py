@@ -62,7 +62,8 @@ def test_shared_objects_are_retained_for_every_published_dataset(tmp_path):
     assert plan.document["candidates"] == [candidate]
     assert LocalDatasetMaintenance(root).apply(plan)["status"] == "APPLIED"
     assert {record.dataset_id for record in store.list_datasets()} == {
-        first.dataset_id, second.dataset_id
+        first.dataset_id,
+        second.dataset_id,
     }
 
 

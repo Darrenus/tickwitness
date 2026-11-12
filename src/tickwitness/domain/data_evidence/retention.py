@@ -192,7 +192,8 @@ def _plan(document: Row) -> Row:
     row = _row(document, _PLAN_FIELDS, "Retention plan")
     _require(
         row["kind"] == "dataset_retention_plan_v1"
-        and type(row["schema_version"]) is int and row["schema_version"] == 1,
+        and type(row["schema_version"]) is int
+        and row["schema_version"] == 1,
         "Unsupported retention plan",
     )
     _require(
