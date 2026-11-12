@@ -12,7 +12,7 @@ type Row = dict[str, object]
 
 
 class ResourceCatalog(Protocol):
-    def get(self, job_id: str) -> Row: ...
+    def resource_descriptor(self, job_id: str) -> Row: ...
 
     def resource_snapshot(self, job_id: str, snapshot_sha256: str) -> Row | None: ...
 
@@ -25,7 +25,7 @@ def preview_job_resources(
     catalog: ResourceCatalog, job_id: str, policy: JobControlPolicy | None
 ) -> Row:
     """Only a frozen descriptor and optional configured ceilings are consumed."""
-    snapshot = load_job_snapshot(canonical(catalog.get(identity(job_id))))
+    snapshot = load_job_snapshot(canonical(catalog.resource_descriptor(identity(job_id))))
     return build_job_resource_preview(snapshot, policy)
 
 
@@ -36,7 +36,7 @@ def inspect_job_resources(
     policy: JobControlPolicy | None,
 ) -> Row:
     key = identity(job_id)
-    snapshot = load_job_snapshot(canonical(catalog.get(key)))
+    snapshot = load_job_snapshot(canonical(catalog.resource_descriptor(key)))
     current_sha = digest(canonical(snapshot))
     record = resources.read()
     document = None if record is None else record.document

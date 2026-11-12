@@ -1,13 +1,16 @@
 """Resource reads preserve metadata-only admission and historical observations."""
 
 import json
+import sqlite3
 import time
 
 import pytest
 from test_job_supervisor import _queued
 from test_jobs_cli import _submit
+from test_sqlite_job_store import job_case as job_case
 
 from tickwitness import cli_jobs
+from tickwitness.application.jobs import JobStoreError
 from tickwitness.cli import main
 from tickwitness.domain.evidence.run_records import canonical
 from tickwitness.domain.jobs import build_execution_job_spec, build_followup_job_spec, queued_job
@@ -19,6 +22,7 @@ from tickwitness.domain.jobs.resources import (
     resource_metric,
     resource_stage,
 )
+from tickwitness.infrastructure import sqlite_job_store
 from tickwitness.infrastructure.job_control_runtime import JobExecutionControl
 from tickwitness.infrastructure.job_controls import JobControlStore
 from tickwitness.infrastructure.job_resources import JobResourceStore
@@ -78,6 +82,109 @@ def test_legacy_and_configured_previews_never_open_missing_research_or_write(tmp
     assert all(item["value"] is None for item in preview["estimates"].values())
     assert tree(tmp_path) == before
     assert not (tmp_path / "inputs").exists() and not (tmp_path / "runs").exists()
+
+
+@pytest.mark.parametrize("command", ["inspect-job-resources", "preview-job-resources"])
+def test_resource_reads_never_select_or_parse_result_blobs(
+    job_case, tmp_path, capsys, monkeypatch, command
+):
+    queued_catalog, queued = _queued(tmp_path / "queued")
+
+    # Persist the existing offline comparison fixture, without another engine
+    # execution or research authorization, so the terminal Job has a real BLOB.
+    successful_catalog = job_case.store
+    successful_controls = JobControlStore(successful_catalog.root, job_case.spec.spec_id)
+    submitted_at = time.time_ns()
+    with successful_catalog.coordinator() as owner:
+        successful_controls.configure(build_job_control_policy(job_case.spec.spec_id))
+        successful_catalog.submit(job_case.spec, now_ns=submitted_at)
+        running = successful_catalog.claim(
+            job_case.spec.spec_id,
+            expected_version=1,
+            coordinator_id=owner,
+            attempt_nonce="a" * 64,
+            lease_token="b" * 64,
+            now_ns=submitted_at + 1,
+        )
+        successful_guard = JobExecutionControl(successful_controls)
+        successful_guard.bind(running)
+        attempt = running["attempt"]
+        succeeded = successful_catalog.complete(
+            job_case.spec.spec_id,
+            job_case.comparison.export_bytes,
+            expected_version=running["version"],
+            coordinator_id=owner,
+            job_attempt_id=attempt["job_attempt_id"],
+            lease_token=attempt["lease_token"],
+            now_ns=submitted_at + 2,
+        )
+        successful_guard.finish(succeeded)
+    assert successful_catalog.result(succeeded["job_id"]) == job_case.comparison.export_bytes
+
+    historical_catalog, historical_queued = _queued(tmp_path / "historical")
+    historical_controls = JobControlStore(historical_catalog.root, historical_queued["job_id"])
+    with historical_catalog.coordinator() as owner:
+        historical_controls.configure(build_job_control_policy(historical_queued["job_id"]))
+        observed_running = historical_catalog.claim(
+            historical_queued["job_id"],
+            expected_version=1,
+            coordinator_id=owner,
+            attempt_nonce="a" * 64,
+            lease_token="b" * 64,
+            now_ns=time.time_ns(),
+        )
+        historical_guard = JobExecutionControl(historical_controls)
+        historical_guard.bind(observed_running)
+        historical_guard.finish(observed_running, cause="coordinator_interrupted")
+    with historical_catalog.coordinator():
+        historical_catalog.reconcile_orphans(now_ns=time.time_ns())
+
+    connect = sqlite_job_store.sqlite3.connect
+    denied = []
+
+    def authorize(action, table, column, _database, _trigger):
+        if action == sqlite3.SQLITE_READ and table == "jobs" and column == "result":
+            denied.append((table, column))
+            return sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK
+
+    def guarded_connect(*args, **kwargs):
+        connection = connect(*args, **kwargs)
+        connection.set_authorizer(authorize)
+        return connection
+
+    def forbidden_result_parse(*args, **kwargs):
+        raise AssertionError("Resource metadata must not parse comparison or native results")
+
+    monkeypatch.setattr(sqlite_job_store.sqlite3, "connect", guarded_connect)
+    monkeypatch.setattr(sqlite_job_store, "_check_result", forbidden_result_parse)
+    for catalog, job_id, expected_status in (
+        (queued_catalog, queued["job_id"], "NOT_RECORDED"),
+        (successful_catalog, succeeded["job_id"], "RECORDED"),
+        (historical_catalog, historical_queued["job_id"], "PARTIAL"),
+    ):
+        before = tree(catalog.root)
+        # This assertion proves the authorizer rejects the old read path even
+        # for a NULL result; success below must use the narrower projection.
+        with pytest.raises(JobStoreError):
+            catalog.get(job_id)
+        assert denied == [("jobs", "result")]
+        denied.clear()
+        assert main([command, job_id, "--jobs", str(catalog.root)]) == 0
+        output = capsys.readouterr()
+        assert not output.err
+        document = json.loads(output.out)
+        assert not document["execution_authorized"]
+        if command == "inspect-job-resources":
+            assert document["status"] == expected_status
+            if expected_status == "RECORDED":
+                assert document["report"]["catalog_state"] == "SUCCEEDED"
+                assert document["report_matches_current_snapshot"] is True
+            elif expected_status == "PARTIAL":
+                assert document["report"]["catalog_state"] == "RUNNING"
+                assert document["report_matches_current_snapshot"] is False
+        assert denied == []
+        assert tree(catalog.root) == before
 
 
 def test_native_retry_and_ack_preview_are_conditional_metadata_only(tmp_path, capsys):

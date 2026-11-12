@@ -541,12 +541,56 @@ class SqliteJobStore:
             connection.execute("BEGIN")
             return self._fetch(connection, key)[1]
 
+    def _resource_metadata(self, connection: sqlite3.Connection, job_id: str) -> Row:
+        record = connection.execute(
+            "SELECT state, version, snapshot_sha256, snapshot FROM jobs WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        if record is None:
+            raise JobNotFoundError("Managed job does not exist: " + job_id)
+        raw = _bytes(record[3], "Snapshot")
+        snapshot = _snapshot(raw)
+        _require(
+            snapshot["job_id"] == job_id
+            and snapshot["state"] == record[0]
+            and snapshot["version"] == record[1]
+            and digest(raw) == record[2],
+            "Job index differs from its exact snapshot",
+        )
+        version = cast("int", snapshot["version"])
+        _require(
+            connection.execute(
+                "SELECT max(version) FROM job_events WHERE job_id=?", (job_id,)
+            ).fetchone()[0]
+            == version,
+            "Job event index has an unexpected later version",
+        )
+        event = self._stored_event(connection, job_id, version)
+        _require(
+            canonical(cast("Row", event["snapshot"])) == raw,
+            "Latest event differs from the current snapshot",
+        )
+        previous_id = (
+            job_id
+            if version == 1
+            else self._stored_event(connection, job_id, version - 1)["event_id"]
+        )
+        _require(event["causation_id"] == previous_id, "Latest event causation differs")
+        return snapshot
+
+    def resource_descriptor(self, job_id: str) -> Row:
+        """Read checked Job metadata without selecting or parsing its result BLOB."""
+        key = identity(job_id)
+        with self._connection() as connection:
+            connection.execute("BEGIN")
+            return self._resource_metadata(connection, key)
+
     def resource_snapshot(self, job_id: str, snapshot_sha256: str) -> Row | None:
         """Resolve a report's historical binding without reconciling or new tables."""
         key, expected = identity(job_id), identity(snapshot_sha256)
         with self._connection() as connection:
             connection.execute("BEGIN")
-            current, _, _ = self._fetch(connection, key)
+            current = self._resource_metadata(connection, key)
             if digest(canonical(current)) == expected:
                 return current
             versions = connection.execute(

@@ -259,6 +259,21 @@ finally:os.close(descriptor)
 print(json.dumps({'lifetime_busy':busy,'scratch_exists':root.is_dir(),
                   'scratch_files':sorted(item.name for item in root.iterdir())}))
 """
+_RESOURCE_GUARD = """
+from tickwitness.infrastructure import sqlite_job_store as resource_sqlite_store
+assert sys.argv[1] in ('inspect-job-resources','preview-job-resources')
+resource_connect=sqlite3.connect
+def metadata_authorizer(action,table,column,database,trigger):
+    if action==sqlite3.SQLITE_READ and table=='jobs' and column=='result':
+        return sqlite3.SQLITE_DENY
+    return sqlite3.SQLITE_OK
+def resource_connection(*args,**kwargs):
+    connection=resource_connect(*args,**kwargs)
+    connection.set_authorizer(metadata_authorizer)
+    return connection
+sqlite3.connect=resource_connection
+resource_sqlite_store._check_result=forbidden
+"""
 
 
 @contextmanager
@@ -647,7 +662,10 @@ def main():
 
         def run(*command, producer=False, guard=False, jobs=catalog, expected=0):
             if guard:
-                entry, prefix = guarded("\nraise SystemExit(main(sys.argv[1:]))\n", jobs)
+                code = "\nraise SystemExit(main(sys.argv[1:]))\n"
+                if command and command[0] in {"inspect-job-resources", "preview-job-resources"}:
+                    code = _RESOURCE_GUARD + code
+                entry, prefix = guarded(code, jobs)
             else:
                 entry, prefix = ["-m", "tickwitness"], ()
             executable = producer_python if producer else verifier
@@ -977,6 +995,8 @@ def main():
                     str(root / "never-resource-jobs"),
                     "--split",
                     "confirmation",
+                    guard=True,
+                    jobs=root / "never-resource-jobs",
                     expected=5,
                 )
                 assert refusal["error"]["code"] == "confirmation_access_denied"
