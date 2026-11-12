@@ -277,6 +277,8 @@ def connect(database,*args,**kwargs):
     connection.set_trace_callback(events['sql'].append)
     return connection
 os.open=opened;io.open=io_open;builtins.open=builtin_open
+if actual_open in os.supports_dir_fd:
+    os.supports_dir_fd=os.supports_dir_fd|{opened}
 os.unlink=unlink;os.remove=unlink;os.fsync=fsync;sqlite3.connect=connect
 for name in ('mkdir','makedirs','rmdir','rename','replace','link','symlink','truncate',
              'chmod','fchmod','chown','fchown','utime'):

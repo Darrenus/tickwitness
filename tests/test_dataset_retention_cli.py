@@ -116,6 +116,8 @@ def test_retained_payloads_are_not_opened_by_planning_or_apply(tmp_path, capsys,
 
     with monkeypatch.context() as context:
         context.setattr(os, "open", guarded_open)
+        if actual_open in os.supports_dir_fd:
+            context.setattr(os, "supports_dir_fd", os.supports_dir_fd | {guarded_open})
         path, envelope = preview_file(tmp_path, capsys, store._root)
         assert (
             main(
