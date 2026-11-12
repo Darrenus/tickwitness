@@ -13,7 +13,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 _CASES = ("P01", "P02", "P03", "R01", "R02", "L01", "M01", "M02")
-_BASE = r'''
+_BASE = r"""
 import errno,fcntl,hashlib,importlib.abc,io,json,os,shutil,socket,sqlite3,stat,sys,time
 from importlib import metadata
 from pathlib import Path
@@ -98,13 +98,13 @@ def baseline(case_root,case):
     root=case_root/'store';owner=LocalDatasetStore(root)
     record=publish(owner,case,'healthy')
     return root,owner,record.dataset_id
-'''
-_IDENTITY = r'''
+"""
+_IDENTITY = r"""
 emit({'executable':sys.executable,'prefix':sys.prefix,'base_prefix':sys.base_prefix,
       'effective_uid':os.geteuid(),'project_version':metadata.version('tickwitness'),
       'native_distribution':None})
-'''
-_SDK = r'''
+"""
+_SDK = r"""
 case,phase,location=sys.argv[1:4];case_root=Path(location)
 if phase=='publish':
     root,owner,healthy=baseline(case_root,case)
@@ -235,12 +235,12 @@ elif phase=='verify':
     emit({'case_id':case,'baseline_read':read,'ordinary_preparation':preparation,
           'recovered':image(case_root,'recovered',root)})
 else:raise AssertionError('Unknown finite fixture phase')
-'''
-_INSPECT = r'''
+"""
+_INSPECT = r"""
 from tickwitness.cli import main
 raise SystemExit(main(sys.argv[1:]))
-'''
-_HOLDER = r'''
+"""
+_HOLDER = r"""
 case_root=Path(sys.argv[1]);controls=case_root/'controls';controls.mkdir()
 root,owner,healthy=baseline(case_root,'L01');before=image(case_root,'before',root)
 descriptor=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
@@ -259,8 +259,8 @@ read=readback(owner,healthy);preparation=quiesce(root,'L01')
 emit({'case_id':'L01','ready':ready,'released':True,'pid':os.getpid(),
       'recovery':{'plan':plan.document,'plan_id':plan.plan_id,'baseline_read':read},
       'ordinary_preparation':preparation,'recovered':image(case_root,'recovered',root)})
-'''
-_GC_CLI = r'''
+"""
+_GC_CLI = r"""
 import builtins
 from urllib.parse import parse_qs,unquote,urlsplit
 from tickwitness.cli import main
@@ -359,7 +359,7 @@ try:result=main(sys.argv[1:])
 finally:
     with actual_io(log,'wb') as stream:stream.write(document(events))
 raise SystemExit(result)
-'''
+"""
 
 
 def canonical(value):
@@ -485,14 +485,12 @@ def main():
             raise FileExistsError("Fault qualification destinations must be new")
         resolved = destination.resolve()
         if any(
-            resolved.is_relative_to(source) or source.is_relative_to(resolved)
-            for source in sources
+            resolved.is_relative_to(source) or source.is_relative_to(resolved) for source in sources
         ):
             raise ValueError("Fault output and prior evidence must be disjoint")
-    if (
-        args.report.resolve().is_relative_to(args.records_dir.resolve())
-        or args.records_dir.resolve().is_relative_to(args.report.resolve())
-    ):
+    if args.report.resolve().is_relative_to(
+        args.records_dir.resolve()
+    ) or args.records_dir.resolve().is_relative_to(args.report.resolve()):
         raise ValueError("Outer fault report must be outside its records")
     interpreter = str(args.python.parent.resolve() / args.python.name)
     with TemporaryDirectory(prefix="tickwitness-faults-") as temporary:
@@ -504,7 +502,8 @@ def main():
             for role, source in zip(("controls", "retention"), sources, strict=True):
                 listed = json.loads((source / "artifact-files.json").read_bytes())
                 actual = {
-                    name: value for name, value in before[role].items()
+                    name: value
+                    for name, value in before[role].items()
                     if name != "artifact-files.json"
                 }
                 assert listed == actual
@@ -540,23 +539,43 @@ def main():
                 number = f"{supervisor.calls + 1:04d}"
                 guard_file = guards / (number + ".json")
                 intended = [] if plan is None else plan["plan"]["candidates"]
-                rules = {"protected": fixture["protected"], "orphans": fixture.get("orphans", []),
-                         "intended": intended}
+                rules = {
+                    "protected": fixture["protected"],
+                    "orphans": fixture.get("orphans", []),
+                    "intended": intended,
+                }
                 command = [
-                    "plan-dataset-retention", "--store", str(store), "--min-age-seconds", "0"
+                    "plan-dataset-retention",
+                    "--store",
+                    str(store),
+                    "--min-age-seconds",
+                    "0",
                 ]
                 if plan is not None:
-                    command = ["apply-dataset-retention", "--store", str(store), "--plan",
-                               str(plans / (case + ".json")), "--expected-plan-id", plan["plan_id"]]
+                    command = [
+                        "apply-dataset-retention",
+                        "--store",
+                        str(store),
+                        "--plan",
+                        str(plans / (case + ".json")),
+                        "--expected-plan-id",
+                        plan["plan_id"],
+                    ]
                 before_tree = tree(store)
                 payload, transcript = supervisor.invoke(
-                    _GC_CLI, (str(store), json.dumps(rules), str(guard_file), fault, *command),
-                    expected=expected
+                    _GC_CLI,
+                    (str(store), json.dumps(rules), str(guard_file), fault, *command),
+                    expected=expected,
                 )
                 guard = json.loads(guard_file.read_bytes())
                 assert guard["retained_payload_reads"] == guard["metadata_write_attempts"] == 0
-                return {"response": payload, "transcript": transcript, "guard": guard,
-                        "before": before_tree, "after": tree(store)}
+                return {
+                    "response": payload,
+                    "transcript": transcript,
+                    "guard": guard,
+                    "before": before_tree,
+                    "after": tree(store),
+                }
 
             for case in _CASES[:3]:
                 payload, transcript = sdk(case, "publish")
@@ -566,8 +585,10 @@ def main():
                 fixture, setup_call = sdk(case, "damage")
                 store = cases_root / case / "store"
                 error, inspect_call = supervisor.invoke(
-                    _INSPECT, ("inspect-dataset", fixture["target"], "--store", str(store)),
-                    expected=3, error_stream=True
+                    _INSPECT,
+                    ("inspect-dataset", fixture["target"], "--store", str(store)),
+                    expected=3,
+                    error_stream=True,
                 )
                 assert error["error"]["code"] == "store_integrity_or_publication_failure"
                 preparation, prepare_call = sdk(case, "prepare")
@@ -578,17 +599,27 @@ def main():
                 if case == "R01":
                     assert plan["status"] == "READY"
                     assert fixture["damaged_object"] in plan["protected_objects"]
-                    assert all(row["content_verified"] is False for row in plan["files"]
-                               if row["path"].endswith(fixture["damaged_object"]))
+                    assert all(
+                        row["content_verified"] is False
+                        for row in plan["files"]
+                        if row["path"].endswith(fixture["damaged_object"])
+                    )
                 else:
                     assert plan["status"] == "BLOCKED" and plan["candidates"] == []
                     assert plan["diagnostics"] == ["missing_reference"]
                 recovered, recover_call = sdk(case, "replace")
                 assert recovered["recovery"]["dataset_id"] == fixture["target"]
                 assert recovered["original_preserved"]["files"] == planned["after"]
-                observations.append({**fixture, "inspect_failure": {"response": error,
-                    "transcript": inspect_call}, "pre_gc": preparation, "maintenance": planned,
-                    "recovery": recovered, "invocations": [setup_call, prepare_call, recover_call]})
+                observations.append(
+                    {
+                        **fixture,
+                        "inspect_failure": {"response": error, "transcript": inspect_call},
+                        "pre_gc": preparation,
+                        "maintenance": planned,
+                        "recovery": recovered,
+                        "invocations": [setup_call, prepare_call, recover_call],
+                    }
+                )
             holder_root = cases_root / "L01"
             holder_root.mkdir()
             pending = supervisor.start(_HOLDER, (str(holder_root),))
@@ -613,8 +644,15 @@ def main():
                 (controls / "release").touch()
                 holder, holder_call = supervisor.finish(pending)
             assert holder["pid"] == ready["pid"] and holder["released"] is True
-            observations.append({"case_id": "L01", "fault_origin": "actual_process_lock",
-                                 "blocked": blocked, "holder": holder, "transcript": holder_call})
+            observations.append(
+                {
+                    "case_id": "L01",
+                    "fault_origin": "actual_process_lock",
+                    "blocked": blocked,
+                    "holder": holder,
+                    "transcript": holder_call,
+                }
+            )
             for case in ("M01", "M02"):
                 fixture, setup_call = sdk(case, "orphans")
                 planned = gc(case, fixture)
@@ -625,14 +663,22 @@ def main():
                 plan_path = plans / (case + ".json")
                 transcript = root / "transcripts" / (planned["transcript"] + ".json")
                 plan_path.write_text(json.loads(transcript.read_bytes())["stdout"])
-                failed = gc(case, fixture, plan=preview,
-                            fault="partial" if case == "M01" else "fsync", expected=9)
+                failed = gc(
+                    case,
+                    fixture,
+                    plan=preview,
+                    fault="partial" if case == "M01" else "fsync",
+                    expected=9,
+                )
                 response = failed["response"]
                 store = cases_root / case / "store"
                 shutil.copytree(store, cases_root / case / "images" / "failed")
                 intended = fixture["orphans"]
-                sizes = {row["sha256"]: row["size_bytes"] for row in preview["plan"]["files"]
-                         if row["path"].startswith("objects/sha256/")}
+                sizes = {
+                    row["sha256"]: row["size_bytes"]
+                    for row in preview["plan"]["files"]
+                    if row["path"].startswith("objects/sha256/")
+                }
                 assert len(failed["guard"]["injection_hits"]) == 1
                 assert response["intended"] == intended and response["already_absent"] == []
                 assert failed["guard"]["unlinked"] == response["unlinked"]
@@ -672,36 +718,62 @@ def main():
                     assert final_repeat["response"]["removed_logical_bytes"] == 0
                     assert final_repeat["guard"]["unlinked"] == []
                 verified, verify_call = sdk(case, "verify")
-                retained = {name: value for name, value in fixture["before"]["files"].items()
-                            if name not in {"objects/sha256/" + key for key in intended}}
+                retained = {
+                    name: value
+                    for name, value in fixture["before"]["files"].items()
+                    if name not in {"objects/sha256/" + key for key in intended}
+                }
                 assert verified["recovered"]["files"] == retained
-                observations.append({"case_id": case, "fault_origin": "injected_boundary",
-                    "fixture": fixture, "planned": planned, "failed": failed, "repeated": repeated,
-                    "final_repeat": final_repeat, "verified": verified,
-                    "invocations": [setup_call, verify_call]})
+                observations.append(
+                    {
+                        "case_id": case,
+                        "fault_origin": "injected_boundary",
+                        "fixture": fixture,
+                        "planned": planned,
+                        "failed": failed,
+                        "repeated": repeated,
+                        "final_repeat": final_repeat,
+                        "verified": verified,
+                        "invocations": [setup_call, verify_call],
+                    }
+                )
             assert tuple(item["case_id"] for item in observations) == _CASES
             after = {"controls": tree(sources[0]), "retention": tree(sources[1])}
             assert before == after
             elapsed = time.monotonic() - supervisor.started
             assert elapsed <= 180 and supervisor.calls <= 32
             report = {
-                "kind": "installed_dataset_fault_budget_acceptance_v1", "schema_version": 1,
-                "accepted": True, "interpreter_identity": identity,
-                "budget": {"cases": 8, "max_child_invocations": 32, "max_child_seconds": 30,
-                           "max_supervisor_seconds": 180, "child_invocations": supervisor.calls,
-                           "elapsed_seconds": elapsed,
-                           "cleanup_latency_included_in_hard_limit": False},
-                "observations": observations, "protected_sources_before": before,
+                "kind": "installed_dataset_fault_budget_acceptance_v1",
+                "schema_version": 1,
+                "accepted": True,
+                "interpreter_identity": identity,
+                "budget": {
+                    "cases": 8,
+                    "max_child_invocations": 32,
+                    "max_child_seconds": 30,
+                    "max_supervisor_seconds": 180,
+                    "child_invocations": supervisor.calls,
+                    "elapsed_seconds": elapsed,
+                    "cleanup_latency_included_in_hard_limit": False,
+                },
+                "observations": observations,
+                "protected_sources_before": before,
                 "protected_sources_after": after,
-                "scope": {"fixture_only": True, "new_native_calls": 0, "new_research_slots": 0,
-                          "actual_disk_saturation": False, "actual_nonroot_eacces": True,
-                          "actual_exclusive_gate_holder": True,
-                          "known_source_new_store_recovery": True,
-                          "in_place_corruption_repair": False,
-                          "physical_freed_bytes_measured": False,
-                          "source_controls_core_only": source_controls["core_only_profile"],
-                          "power_loss_certified": False, "external_human_attempts": 0,
-                          "external_human_gate": "PENDING"},
+                "scope": {
+                    "fixture_only": True,
+                    "new_native_calls": 0,
+                    "new_research_slots": 0,
+                    "actual_disk_saturation": False,
+                    "actual_nonroot_eacces": True,
+                    "actual_exclusive_gate_holder": True,
+                    "known_source_new_store_recovery": True,
+                    "in_place_corruption_repair": False,
+                    "physical_freed_bytes_measured": False,
+                    "source_controls_core_only": source_controls["core_only_profile"],
+                    "power_loss_certified": False,
+                    "external_human_attempts": 0,
+                    "external_human_gate": "PENDING",
+                },
                 "source_driver_sha256": digest(Path(__file__).read_bytes()),
             }
             inner = root / "dataset-faults-smoke" / "report.json"
@@ -716,14 +788,22 @@ def main():
             with suppress(OSError, ValueError):
                 if not args.records_dir.exists():
                     shutil.copytree(root, args.records_dir)
-                (args.records_dir / "qualification-failure.json").write_bytes(canonical({
-                    "accepted": False, "message": str(error)[:4096],
-                    "completed_cases": [item["case_id"] for item in observations],
-                    "child_invocations": supervisor.calls,
-                    "elapsed_seconds": time.monotonic() - supervisor.started,
-                }))
-                inventory = {name: value for name, value in tree(args.records_dir).items()
-                             if name != "artifact-files.json"}
+                (args.records_dir / "qualification-failure.json").write_bytes(
+                    canonical(
+                        {
+                            "accepted": False,
+                            "message": str(error)[:4096],
+                            "completed_cases": [item["case_id"] for item in observations],
+                            "child_invocations": supervisor.calls,
+                            "elapsed_seconds": time.monotonic() - supervisor.started,
+                        }
+                    )
+                )
+                inventory = {
+                    name: value
+                    for name, value in tree(args.records_dir).items()
+                    if name != "artifact-files.json"
+                }
                 (args.records_dir / "artifact-files.json").write_bytes(canonical(inventory))
             raise
 
