@@ -22,6 +22,7 @@ The initial product is a local-first research verification toolkit for quantitat
 | Document | Purpose |
 | --- | --- |
 | [Quickstart](docs/quickstart.md) | Clean installation, synthetic replay and portable offline verification |
+| [Python SDK](docs/python-sdk.md) | Versioned data/declaration/development-read subset and an independent installed consumer |
 | [Preview support](docs/support.md) | Tested environments, trust boundaries, compatibility and maintenance scope |
 | [0.1.0a1 preview notes](docs/releases/0.1.0a1.md) | Candidate artifacts, release gates and known limitations |
 | [Scenario workflow](docs/scenarios.md) | Validate declarations, execute budgeted stress, re-audit baseline/scenario pairs and locate trace changes |
