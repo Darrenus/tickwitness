@@ -8,6 +8,7 @@ Only application-side processes should receive access to the catalog.
 
 from __future__ import annotations
 
+import errno
 import fcntl
 import hashlib
 import json
@@ -525,7 +526,9 @@ class LocalDatasetStore:
         )
         try:
             with os.fdopen(descriptor, "wb") as stream:
-                stream.write(data)
+                written = stream.write(data)
+                if type(written) is not int or written != len(data):
+                    raise OSError(errno.EIO, "Incomplete evidence write before CAS publication")
                 stream.flush()
                 os.fsync(stream.fileno())
             try:

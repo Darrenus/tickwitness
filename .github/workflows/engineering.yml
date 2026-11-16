@@ -50,6 +50,10 @@ jobs:
           tests/domain/test_dataset_retention_contracts.py
           tests/infrastructure/test_dataset_retention.py
           tests/test_dataset_retention_cli.py
+          tests/infrastructure/test_dataset_store_faults.py
+          tests/infrastructure/test_job_journal_races.py
+          tests/infrastructure/test_sqlite_job_store.py::test_killed_owner_hot_journal_requires_explicit_rw_owner_recovery
+          tests/infrastructure/test_sqlite_job_store.py::test_catalog_lock_and_existing_journal_symlinks_are_not_followed
       - name: Fast installed followup qualification on manual dispatch
         if: github.event_name == 'workflow_dispatch' && success()
         run: |
@@ -750,6 +754,30 @@ jobs:
           path: |
             /tmp/dataset-retention.json
             /tmp/dataset-retention-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Qualify bounded DatasetStore faults and explicit recovery using the installed core wheel
+        env:
+          TW_CONTROLS_SOURCE: ${{ matrix.source }}
+        run: |
+          TW_FAULTS_SCRIPT=scripts/smoke_dataset_faults.py
+          if [ "$TW_CONTROLS_SOURCE" = true ]; then
+            TW_CONTROLS_ROOT=$(find /tmp/tickwitness-controls-source -mindepth 1 -maxdepth 1 -type d)
+            TW_FAULTS_SCRIPT="$TW_CONTROLS_ROOT/scripts/smoke_dataset_faults.py"
+            test -f "$TW_FAULTS_SCRIPT"
+          fi
+          python3 "$TW_FAULTS_SCRIPT" --python /tmp/tickwitness-controls-core/bin/python --report /tmp/dataset-faults.json --records-dir /tmp/dataset-faults-records --source-records /tmp/job-controls-records --retention-records /tmp/dataset-retention-records
+          cd dist
+          shasum -a 256 -c SHA256SUMS
+      - name: Preserve separate fault observations, explicit recoveries and original evidence guards
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dataset-faults-${{ matrix.profile }}-${{ github.sha }}
+          path: |
+            /tmp/dataset-faults.json
+            /tmp/dataset-faults-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30

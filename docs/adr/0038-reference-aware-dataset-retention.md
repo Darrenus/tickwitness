@@ -1,6 +1,6 @@
 # ADR0038: Reclaim only proven DatasetStore CAS orphans
 
-Date2026-11-12 Asia/Singapore. Status: frozen before S11-02 implementation; owner106 accepted S11-01, owner acceptance of this slice pending.
+Date2026-11-12 Asia/Singapore. Status: frozen before S11-02 implementation; owner107 accepted this slice at06:27:24Z, true mergefd440659790a52b153daad3237f516d90ba9dd26. The earlier preacceptance qualification archive remains unchanged.
 
 Dataset publication installs CAS and manifest before Catalog commit. Dataset and research-ledger roots also use the same CAS path shape. A Catalog-only scan or an age-based recursive delete can destroy in-flight or unrelated evidence. Restrict v1 to an exclusive DatasetStore root, retain all valid physical manifests including unindexed ones, and refuse unknown/mixed namespaces.
 
