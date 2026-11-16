@@ -1,0 +1,9 @@
+# ADR0041: Freeze a small Python SDK over existing application services
+
+Date2026-11-16 Asia/Singapore. Status: frozen before S12-01 implementation. Owner accepted PR108, true merge667ca69733e95b133b29c1dc479cef585742cc6e at05:26:05Z. Preserve its old preacceptance archive and capture acceptance separately.
+
+Choose the [SDK v1 contract](../contracts/python-sdk-v1.md): five stable methods for Dataset import/inspect, declaration-v1 freeze/inspect and bounded development observations. The two existing application modules already serve CLI; SDK is another driving adapter/composition root, not a second implementation. Public typed aliases preserve detached shallow-frozen receipts; explicit errors/identity framing and safe file paths retain existing semantics. Constructor performs no IO, and confirmation refusal precedes all identity/storage access. No run/Job/maintenance/engine extension is implicitly public.
+
+This bounded surface supports a real separate installed-wheel consumer and deterministic downstream analysis while preserving original research authority. Execute positive and refusal workflows against actual CLI on equivalent fresh roots, independently verify persisted bytes, downstream strict typing and actual package/source identity. New qualification adds0 native calls/0 research slots and preserves old controls/retention/fault records. SDK stability is a versioned interface promise for this subset, not platform GA or external-user adoption.
+
+Keep original S12-01 12h/S12total34h plus ongoing quality capacity,17 checks and job timeouts. External real humans0/0/PENDING; automatic tests and AI review do not become activation/30-day reuse. All project execution remote GHA CPU; GPU/HTTP/release remain deferred to their separate gates. Implementation and actual qualification follow this committed contract.

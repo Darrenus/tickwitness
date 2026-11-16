@@ -52,6 +52,7 @@ jobs:
           tests/test_dataset_retention_cli.py
           tests/infrastructure/test_dataset_store_faults.py
           tests/infrastructure/test_job_journal_races.py
+          tests/test_sdk.py
           tests/infrastructure/test_sqlite_job_store.py::test_killed_owner_hot_journal_requires_explicit_rw_owner_recovery
           tests/infrastructure/test_sqlite_job_store.py::test_catalog_lock_and_existing_journal_symlinks_are_not_followed
       - name: Fast installed followup qualification on manual dispatch
@@ -778,6 +779,31 @@ jobs:
           path: |
             /tmp/dataset-faults.json
             /tmp/dataset-faults-records
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Qualify the public SDK through a real independent installed consumer
+        env:
+          TW_CONTROLS_SOURCE: ${{ matrix.source }}
+        run: |
+          TW_SDK_ROOT="$PWD"
+          if [ "$TW_CONTROLS_SOURCE" = true ]; then
+            TW_SDK_ROOT=$(find /tmp/tickwitness-controls-source -mindepth 1 -maxdepth 1 -type d)
+          fi
+          python3 "$TW_SDK_ROOT/scripts/smoke_sdk.py" --python /tmp/tickwitness-controls-core/bin/python --report /tmp/sdk-consumer.json --records-dir /tmp/sdk-consumer-records --source-records /tmp/job-controls-records --retention-records /tmp/dataset-retention-records --fault-records /tmp/dataset-faults-records
+          python3 "$TW_SDK_ROOT/scripts/check_sdk_typing.py" --python /tmp/tickwitness-controls-core/bin/python --type-python "$PWD/.venv/bin/python" --consumer-dir "$TW_SDK_ROOT/examples/sdk" --prior-report /tmp/sdk-consumer.json --report /tmp/sdk-types.json --records-dir /tmp/sdk-type-records
+          cd dist
+          shasum -a 256 -c SHA256SUMS
+      - name: Preserve separate installed SDK consumer and downstream type evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sdk-consumer-${{ matrix.profile }}-${{ github.sha }}
+          path: |
+            /tmp/sdk-consumer.json
+            /tmp/sdk-consumer-records
+            /tmp/sdk-types.json
+            /tmp/sdk-type-records
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 30
