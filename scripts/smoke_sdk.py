@@ -313,7 +313,12 @@ class Supervisor:
 def main():
     parser = argparse.ArgumentParser()
     for name in (
-        "python", "report", "records-dir", "source-records", "retention-records", "fault-records"
+        "python",
+        "report",
+        "records-dir",
+        "source-records",
+        "retention-records",
+        "fault-records",
     ):
         parser.add_argument("--" + name, required=True, type=Path)
     args = parser.parse_args()
@@ -381,30 +386,47 @@ def main():
             sdk, consumer_call = supervisor.invoke(
                 _CONSUMER,
                 (
-                    str(consumer), "--input-root", str(inputs), "--store", str(root / "sdk-store"),
-                    "--registry", str(root / "sdk-registry"),
+                    str(consumer),
+                    "--input-root",
+                    str(inputs),
+                    "--store",
+                    str(root / "sdk-store"),
+                    "--registry",
+                    str(root / "sdk-registry"),
                 ),
             )
             (root / "sdk-output.json").write_bytes(canonical(sdk))
             observations["identity"] = {"runtime": identity, "transcript": identity_call}
             observations["consumer"] = {
-                "source": consumer.read_text(), "sha256": digest(consumer.read_bytes()),
-                "transcript": consumer_call, "output": sdk,
+                "source": consumer.read_text(),
+                "sha256": digest(consumer.read_bytes()),
+                "transcript": consumer_call,
+                "output": sdk,
             }
             cli_store, cli_registry = root / "cli-store", root / "cli-registry"
             calls = {}
 
             def cli(name, *command, expected=0, parse_json=True):
                 payload, call = supervisor.invoke(
-                    _CLI, command, expected=expected, error_stream=expected != 0,
+                    _CLI,
+                    command,
+                    expected=expected,
+                    error_stream=expected != 0,
                     parse_json=parse_json,
                 )
                 calls[name] = {"transcript": call, "response": payload, "exit_code": expected}
                 return payload
 
             def imported(name, filename="development.jsonl", store=cli_store):
-                return cli(name, "import-events", filename, "--input-root", str(inputs),
-                           "--store", str(store))
+                return cli(
+                    name,
+                    "import-events",
+                    filename,
+                    "--input-root",
+                    str(inputs),
+                    "--store",
+                    str(store),
+                )
 
             healthy = {}
             healthy["dataset_first"] = imported("dataset_first")
@@ -416,21 +438,40 @@ def main():
                 "dataset_inspected", "inspect-dataset", dataset_id, "--store", str(cli_store)
             )
             freeze = (
-                "freeze-protocol", "request.json", "--input-root", str(inputs),
-                "--strategy-source", "strategy.py", "--development-dataset", dataset_id,
-                "--confirmation-dataset", confirmation_id, "--store", str(cli_store),
-                "--registry", str(cli_registry),
+                "freeze-protocol",
+                "request.json",
+                "--input-root",
+                str(inputs),
+                "--strategy-source",
+                "strategy.py",
+                "--development-dataset",
+                dataset_id,
+                "--confirmation-dataset",
+                confirmation_id,
+                "--store",
+                str(cli_store),
+                "--registry",
+                str(cli_registry),
             )
             healthy["protocol_first"] = cli("protocol_first", *freeze)
             healthy["protocol_repeated"] = cli("protocol_repeated", *freeze)
             protocol_id = healthy["protocol_first"]["protocol_id"]
             healthy["protocol_inspected"] = cli(
-                "protocol_inspected", "inspect-protocol", protocol_id, "--store", str(cli_store),
-                "--registry", str(cli_registry),
+                "protocol_inspected",
+                "inspect-protocol",
+                protocol_id,
+                "--store",
+                str(cli_store),
+                "--registry",
+                str(cli_registry),
             )
             read = (
-                "read-protocol-data", protocol_id, "--store", str(cli_store),
-                "--registry", str(cli_registry),
+                "read-protocol-data",
+                protocol_id,
+                "--store",
+                str(cli_store),
+                "--registry",
+                str(cli_registry),
             )
             healthy["development"] = cli("development", *read, "--limit", "1")
             healthy["quiescence"] = imported("quiescence")
@@ -446,9 +487,14 @@ def main():
             assert healthy["protocol_inspected"]["document"]["claim"]["threshold"] == "0"
             assert healthy["protocol_inspected"]["document"]["execution_ready"] is False
             assert sdk["summary"] == {
-                "kind": "development_capture_summary_v1", "protocol_id": protocol_id,
-                "dataset_id": dataset_id, "observed_records": 1, "total_records": 2,
-                "truncated": True, "capture_sequences": [1], "unknown_receive_times": 1,
+                "kind": "development_capture_summary_v1",
+                "protocol_id": protocol_id,
+                "dataset_id": dataset_id,
+                "observed_records": 1,
+                "total_records": 2,
+                "truncated": True,
+                "capture_sequences": [1],
+                "unknown_receive_times": 1,
                 "research_claim_evaluated": False,
             }
             assert healthy["development"]["observations"][0]["receive_time_ns"] is None
@@ -460,47 +506,99 @@ def main():
             invalid_store = negatives / "cli-invalid-store"
             errors = {}
             errors["invalid_data"] = cli(
-                "invalid_data", "import-events", "invalid.jsonl", "--input-root", str(inputs),
-                "--store", str(invalid_store), expected=2,
+                "invalid_data",
+                "import-events",
+                "invalid.jsonl",
+                "--input-root",
+                str(inputs),
+                "--store",
+                str(invalid_store),
+                expected=2,
             )
             errors["invalid_strategy"] = cli(
-                "invalid_strategy", "freeze-protocol", "request.json", "--input-root", str(inputs),
-                "--strategy-source", "invalid_strategy.py", "--development-dataset", dataset_id,
-                "--confirmation-dataset", confirmation_id, "--store", str(cli_store),
-                "--registry", str(negatives / "cli-invalid-registry"), expected=2,
+                "invalid_strategy",
+                "freeze-protocol",
+                "request.json",
+                "--input-root",
+                str(inputs),
+                "--strategy-source",
+                "invalid_strategy.py",
+                "--development-dataset",
+                dataset_id,
+                "--confirmation-dataset",
+                confirmation_id,
+                "--store",
+                str(cli_store),
+                "--registry",
+                str(negatives / "cli-invalid-registry"),
+                expected=2,
             )
             absent = root / "must-remain-absent-cli"
             errors["confirmation"] = cli(
-                "confirmation", "read-protocol-data", protocol_id, "--split", "confirmation",
-                "--limit", "1", "--store", str(absent / "store"),
-                "--registry", str(absent / "registry"), expected=5,
+                "confirmation",
+                "read-protocol-data",
+                protocol_id,
+                "--split",
+                "confirmation",
+                "--limit",
+                "1",
+                "--store",
+                str(absent / "store"),
+                "--registry",
+                str(absent / "registry"),
+                expected=5,
             )
             errors["frozen_limit"] = cli("frozen_limit", *read, "--limit", "3", expected=2)
             errors["missing_dataset"] = cli(
-                "missing_dataset", "inspect-dataset", "0" * 64,
-                "--store", str(cli_store), expected=4,
+                "missing_dataset",
+                "inspect-dataset",
+                "0" * 64,
+                "--store",
+                str(cli_store),
+                expected=4,
             )
             errors["missing_protocol"] = cli(
-                "missing_protocol", "inspect-protocol", "0" * 64, "--store", str(cli_store),
-                "--registry", str(cli_registry), expected=4,
+                "missing_protocol",
+                "inspect-protocol",
+                "0" * 64,
+                "--store",
+                str(cli_store),
+                "--registry",
+                str(cli_registry),
+                expected=4,
             )
             unsafe_inputs = (("symlink", "linked.jsonl"), ("traversal", "../development.jsonl"))
             for name, filename in unsafe_inputs:
                 errors[name] = cli(
-                    name, "import-events", filename, "--input-root", str(inputs),
-                    "--store", str(invalid_store), expected=2,
+                    name,
+                    "import-events",
+                    filename,
+                    "--input-root",
+                    str(inputs),
+                    "--store",
+                    str(invalid_store),
+                    expected=2,
                 )
             corrupt_store = Path(negative["corrupt_store"])
             errors["corrupt_object"] = cli(
-                "corrupt_object", "inspect-dataset", dataset_id, "--store", str(corrupt_store),
+                "corrupt_object",
+                "inspect-dataset",
+                dataset_id,
+                "--store",
+                str(corrupt_store),
                 expected=3,
             )
             for name, envelope in errors.items():
                 assert envelope == negative["outcomes"][name]["response"], name
                 assert calls[name]["exit_code"] == negative["outcomes"][name]["exit_code"]
             malformed = cli(
-                "malformed_identity", "inspect-dataset", "not-an-identity",
-                "--store", str(cli_store), expected=2, parse_json=False,
+                "malformed_identity",
+                "inspect-dataset",
+                "not-an-identity",
+                "--store",
+                str(cli_store),
+                expected=2,
+                parse_json=False,
             )
             assert "dataset_id must be a lowercase SHA-256 digest" in malformed
             assert "usage:" in malformed
@@ -511,17 +609,17 @@ def main():
             assert prepared == negative["corrupt_quiescence"]
             for store in (root / "sdk-store", cli_store, corrupt_store):
                 sidecar_names = (
-                    "catalog.sqlite3-wal", "catalog.sqlite3-shm", "catalog.sqlite3-journal"
+                    "catalog.sqlite3-wal",
+                    "catalog.sqlite3-shm",
+                    "catalog.sqlite3-journal",
                 )
-                assert not any(
-                    (store / name).exists()
-                    for name in sidecar_names
-                )
+                assert not any((store / name).exists() for name in sidecar_names)
             shutil.copytree(cli_store, root / "images" / "cli-final")
             shutil.copytree(cli_registry, root / "images" / "cli-registry-final")
             shutil.copytree(corrupt_store, root / "images" / "corrupt-final")
-            assert digest((corrupt_store / negative["corruption"]["path"]).read_bytes()) == (
-                negative["corruption"]["after_sha256"]
+            assert (
+                digest((corrupt_store / negative["corruption"]["path"]).read_bytes())
+                == (negative["corruption"]["after_sha256"])
             )
             link = inputs / "linked.jsonl"
             assert link.is_symlink() and os.readlink(link) == negative["owned_symlink"]["target"]
@@ -535,24 +633,42 @@ def main():
             elapsed = time.monotonic() - supervisor.started
             assert supervisor.calls <= 28 and elapsed <= 180
             report = {
-                "kind": "installed_python_sdk_consumer_acceptance_v1", "schema_version": 1,
-                "accepted": True, "interpreter_identity": identity,
-                "budget": {"max_child_invocations": 32, "max_child_seconds": 30,
-                    "max_supervisor_seconds": 180, "child_invocations": supervisor.calls,
-                    "actual_children": supervisor.calls, "functional_max_child_invocations": 28,
+                "kind": "installed_python_sdk_consumer_acceptance_v1",
+                "schema_version": 1,
+                "accepted": True,
+                "interpreter_identity": identity,
+                "budget": {
+                    "max_child_invocations": 32,
+                    "max_child_seconds": 30,
+                    "max_supervisor_seconds": 180,
+                    "child_invocations": supervisor.calls,
+                    "actual_children": supervisor.calls,
+                    "functional_max_child_invocations": 28,
                     "reserved_typing_child_invocations": 4,
                     "started_monotonic_seconds": supervisor.started,
                     "deadline_monotonic_seconds": supervisor.started + 180,
-                    "elapsed_seconds": elapsed, "cleanup_latency_included_in_hard_limit": False},
-                "observations": observations, "protected_sources_before": before,
-                "protected_sources_after": after, "example_files": tree(copied),
+                    "elapsed_seconds": elapsed,
+                    "cleanup_latency_included_in_hard_limit": False,
+                },
+                "observations": observations,
+                "protected_sources_before": before,
+                "protected_sources_after": after,
+                "example_files": tree(copied),
                 "source_driver_sha256": digest(Path(__file__).read_bytes()),
-                "scope": {"fixture_only": True, "new_native_calls": 0, "new_research_slots": 0,
-                    "sdk_execution_supported": False, "sdk_confirmation_exposure_supported": False,
-                    "original_protocol_budgets_unchanged": True, "budget_reset_or_refund": False,
+                "scope": {
+                    "fixture_only": True,
+                    "new_native_calls": 0,
+                    "new_research_slots": 0,
+                    "sdk_execution_supported": False,
+                    "sdk_confirmation_exposure_supported": False,
+                    "original_protocol_budgets_unchanged": True,
+                    "budget_reset_or_refund": False,
                     "source_controls_core_only": core_only_profile,
-                    "external_human_attempts": 0, "external_human_successes": 0,
-                    "external_human_gate": "PENDING", "research_claim_evaluated": False},
+                    "external_human_attempts": 0,
+                    "external_human_successes": 0,
+                    "external_human_gate": "PENDING",
+                    "research_claim_evaluated": False,
+                },
             }
             inner = root / "sdk-consumer-smoke" / "report.json"
             inner.parent.mkdir()
@@ -566,25 +682,38 @@ def main():
             with suppress(OSError, ValueError):
                 link = root / "inputs" / "linked.jsonl"
                 if link.is_symlink():
-                    facts = {"path": str(link), "target": os.readlink(link),
-                             "only_owned_link_removed_after_failure": True}
+                    facts = {
+                        "path": str(link),
+                        "target": os.readlink(link),
+                        "only_owned_link_removed_after_failure": True,
+                    }
                     (root / "failure-owned-link.json").write_bytes(canonical(facts))
                     link.unlink()
-                failure = {"kind": "installed_python_sdk_consumer_acceptance_v1",
-                    "schema_version": 1, "accepted": False, "message": str(error)[:4096],
+                failure = {
+                    "kind": "installed_python_sdk_consumer_acceptance_v1",
+                    "schema_version": 1,
+                    "accepted": False,
+                    "message": str(error)[:4096],
                     "completed_observations": list(observations),
                     "child_invocations": supervisor.calls,
-                    "budget": {"actual_children": supervisor.calls,
+                    "budget": {
+                        "actual_children": supervisor.calls,
                         "started_monotonic_seconds": supervisor.started,
                         "deadline_monotonic_seconds": supervisor.started + 180,
-                        "max_child_invocations": 32, "functional_max_child_invocations": 28,
-                        "reserved_typing_child_invocations": 4},
-                    "elapsed_seconds": time.monotonic() - supervisor.started}
+                        "max_child_invocations": 32,
+                        "functional_max_child_invocations": 28,
+                        "reserved_typing_child_invocations": 4,
+                    },
+                    "elapsed_seconds": time.monotonic() - supervisor.started,
+                }
                 if not args.records_dir.exists():
                     shutil.copytree(root, args.records_dir)
                 (args.records_dir / "qualification-failure.json").write_bytes(canonical(failure))
-                inventory = {name: value for name, value in tree(args.records_dir).items()
-                             if name != "artifact-files.json"}
+                inventory = {
+                    name: value
+                    for name, value in tree(args.records_dir).items()
+                    if name != "artifact-files.json"
+                }
                 (args.records_dir / "artifact-files.json").write_bytes(canonical(inventory))
                 args.report.parent.mkdir(parents=True, exist_ok=True)
                 args.report.write_bytes(canonical(failure))

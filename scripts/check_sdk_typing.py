@@ -284,7 +284,7 @@ def main() -> int:
                 str(work / ".mypy_cache"),
             ]
             positive = run(
-                "positive-consumer", command + ["development_consumer.py", "typing_valid.py"], work
+                "positive-consumer", [*command, "development_consumer.py", "typing_valid.py"], work
             )
             if positive.returncode != 0:
                 raise RuntimeError("Actual consumer or positive SDK typing failed")
@@ -300,7 +300,7 @@ def main() -> int:
                     "Negative fixture must name exactly the three frozen diagnostics"
                 )
             report["expected_negative_diagnostics"] = expected
-            negative = run("negative-fixture", command + ["typing_invalid.py"], work)
+            negative = run("negative-fixture", [*command, "typing_invalid.py"], work)
             actual = []
             for line in negative.stdout.splitlines():
                 if ": error:" not in line:

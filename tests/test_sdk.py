@@ -113,12 +113,13 @@ def test_real_import_freeze_bounded_read_repeat_and_detached_values(tmp_path: Pa
     restored = client.inspect_dataset(imported.dataset_id)
     assert restored.report["quality_status"] == "accepted"
     assert restored.manifest["format_id"] == "tickwitness.normalized-events.v1"
-    assert client.inspect_protocol(protocol.protocol_id).document["budget"] != protocol.document[
-        "budget"
-    ]
-    assert client.read_protocol_data(protocol.protocol_id, limit=1).observations[0][
-        "capture_seq"
-    ] == 1
+    assert (
+        client.inspect_protocol(protocol.protocol_id).document["budget"]
+        != protocol.document["budget"]
+    )
+    assert (
+        client.read_protocol_data(protocol.protocol_id, limit=1).observations[0]["capture_seq"] == 1
+    )
     assert "observations" not in asdict(client.inspect_protocol(protocol.protocol_id))
 
 
