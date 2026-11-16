@@ -365,3 +365,5 @@
 2026-11-12，owner 合并 #106 接受 S11-01，真实merge `15bc36fec573297b43a1aa21cd51232b6550305b`，#31完成。S11-02先冻结 [DatasetStore引用感知保留](../contracts/dataset-retention-v1.md)：全部有效manifest（含未索引）闭包保留，独占根中的孤立CAS才可能成为候选，混合／未知引用阻断；共同读写栅栏、只读计划、完全重验证和明确部分失败先于实现。原12h／S11总33h和持续质量容量不变；#32在owner接受前保持打开。S11-03仍Planned，外部真人0/PENDING。
 
 2026-11-12，owner 合并 #107 接受 S11-02，真实merge `fd440659790a52b153daad3237f516d90ba9dd26`，#32完成。S11-03先冻结 [有限DatasetStore故障预算](../contracts/dataset-fault-budget-v1.md)：八个有界故障、真实OS与注入来源分开、发布前拒绝短写、已知部分与同步不确定不能冒充成功、显式恢复不重置预算。原10h／S11总33h和持续质量容量不变；#33在owner接受前保持打开，外部真人0/PENDING。
+
+2026-11-16，owner合并#108接受S11-03及伴随#109 journal竞态修正，真实merge `667ca69733e95b133b29c1dc479cef585742cc6e`，#33完成，S11软件依赖已接受。S12-01先冻结 [稳定Python SDK子集](../contracts/python-sdk-v1.md)：五个方法复用现有应用服务，构造无IO、confirmation先拒绝、原冻结读取预算不增加；独立安装消费者与CLI比较完整持久语义。原12h／S12总34h及持续质量容量不变；#34在owner接受前保持打开，外部真人0/0/PENDING，HTTP仍条件性S14或以后。
