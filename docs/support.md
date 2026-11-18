@@ -1,67 +1,93 @@
-# 0.1 技术预览支持范围
+# 分版本支持范围与恢复政策
 
-适用版本：已发行的`0.1.0a1`技术预览，固定源提交、CI与原制品见[发布记录](releases/0.1.0a1.md)。没有PyPI发布。`0.2.0.dev0`是后续开发分支，其新增场景校验及耦合回放时钟压力执行不属于0.1发行物；开发检查以对应PR实际结果为准。场景回执仅支持ledger持久化及独立复核；旧八角色bundle导出只支持baseline。
+更新：2026-11-18，Asia/Singapore。先根据安装包的版本、来源和接口合同选择入口；相同包版本号不代表相同构建字节。SDK v1 已随 [PR110](https://github.com/Darrenus/tickwitness/pull/110) 接受，S12-03 的文档执行与兼容回归遵循 [独立合同](contracts/sdk-compatibility-v1.md)，只有本候选实际远端结果才能记为本轮通过。这里没有新的发行或平台认证。
 
-未发行开发分支的[完整搜索证据](contracts/search-evidence-v1.md)、[一次确认窗口](contracts/confirmation-access-v1.md)、[技术alpha复验包](contracts/alpha-scorecard-v1.md)与[合法缩减输入准备](contracts/reduction-input-v1.md)分别遵循各自版本合同及实际PR验收，不追记到0.1发行认证。缩减准备只生成完整必要前缀输入；不执行引擎、不生成运行态、不验证反例保持，当前没有checkpoint恢复能力。[Sprint 9状态](planning/sprint-09-status.md)区分输入准备与后续实际执行；真实外部复验仍为0／PENDING。
+| 版本/接口 | 取得方式与状态 | 正确入口 |
+| --- | --- | --- |
+| `0.1.0a1` 已发行技术预览 | 固定 tag `v0.1.0a1` 和提交 `a84edddef00db8af69c7e6e67be31f0763310dca`；GitHub prerelease，无 PyPI 发布 | [0.1 快速开始](quickstart.md)、[原发行制品与验收](releases/0.1.0a1.md) |
+| `0.2.0.dev0` / SDK contract v1 | 开发技术预览的固定候选 wheel 与匹配 sdist，按实际 hash/commit/CI 取得；不表示已发布 0.2 Release | [SDK 指南](python-sdk.md)、[真实消费者](../examples/sdk/README.md)、[自有案例与已验收制品](user-onboarding.md) |
+| `0.2.0.dev0` / 既有 CLI profile | 每项格式、模型和操作遵循自己的版本合同；SDK v1 不自动开放这些命令 | 下文能力索引及各 Sprint 的实际接受记录 |
 
-开发分支的[前缀执行合同](contracts/reduction-execution-v1.md)另行消费原协议共同attempt预算，从首snapshot实际回放并审计terminal账户／订单／显式pending投影。它要求原有live ledger与source快照相符，不能由portable包初始化一个空预算。INCOMPLETE保留；不提供focus初态、checkpoint／隐藏队列状态或S10续跑。实际支持组合以对应PR的远端证据为准，不把core fake port案例或只读inspect计作native执行。
-
-开发中的[局部缩减合同](contracts/reduction-search-v1.md)固定延迟减半与末尾截短邻域，使用同一原协议账本，独立复算原冻结数值判据。PRESERVED只表示实际简化输入上的false数值见证保持，NOT_PRESERVED与NOT_EVALUABLE单列，不改原finding量词域或颁发baseline翻转／最小性证书。取消与elapsed限制只控制候选间派发；当前attempt仍按原timeout完成，不是总时间／总存储硬限额或S10进程级kill／恢复。候选的实际远端验收待完成，旧记录格式与外部0／PENDING边界保持。
+0.1 的固定发行物没有稳定公共 SDK、搜索 finding、一次确认窗口或后续 Job/维护能力。0.2 的新增能力不追记到 0.1 认证；也不把 SDK contract v1 等同整个包 GA 或广泛稳定的内部 Python 接口。
 
 ## 按任务划分的环境矩阵
 
-以下是现有 [Engineering CI](../.github/workflows/engineering.yml) 配置对应的验收组合。只有候选 commit 的实际 job 成功后，才能在发布记录中记为该组合通过；历史 PR 成功或配置存在不能替代本候选的结果。
+下表区分当前 0.2 包声明、源码回归与独立安装资格，入口对应现有 [Engineering CI](../.github/workflows/engineering.yml)。SDK 声明的 Python 范围是 3.12–3.14；源码测试通过不等于同一解释器已完成独立安装消费者资格。只有候选 commit 的实际 job 成功后，才能记录本轮通过；历史 PR 成功或配置存在不能替代它。0.1 的历史矩阵固定在其发行记录中。
 
 | 任务 | CI 环境 | Python | 依赖与验收范围 |
 | --- | --- | --- | --- |
-| 核心工程回归 | `ubuntu-24.04`、`macos-15` | 3.12 / 3.13 / 3.14 | 不安装可选引擎；数据、声明、证据、CLI 与文件系统回归；native case 的 skip 不算原生通过 |
-| 核心发行物安装 | `ubuntu-24.04` | 3.12 | 干净环境/不同工作目录安装 wheel，执行核心安装 smoke 与离线核验 |
-| 原生回放及安装后完整链路 | `ubuntu-24.04`、`macos-26` | 3.12 | 精确 `nautilus-trader==1.231.0`；原生测试及 wheel 安装后的受监督 CLI 回放、导出、迁移核验 |
+| 核心源码回归 | `ubuntu-24.04`、`macos-15`，六组合 | 3.12 / 3.13 / 3.14 | 包含 SDK 入口回归；不安装可选引擎，native case 的 skip 不算原生通过 |
+| 核心 CLI 分发安装 | `ubuntu-24.04` | 3.12 | 独立环境/不同工作目录安装 wheel，执行已有安装 smoke 与离线核验；不冒充 3.13/3.14 安装消费者 |
+| SDK 独立安装、文档消费者与 strict typing | controls 的 `core`、`ubuntu-24.04`、`macos-26`、`source-wheel` 四 profile | **全部 3.12** | 每档 SDK 均使用独立安装的 **core wheel**，不加载 native；三个 profile 在 Ubuntu 24.04，一个在 macOS 26；SOURCE 使用实际 sdist 中的 driver、文档和消费者 |
+| 原生回归及安装链路 | `ubuntu-24.04`、`macos-26` | 3.12 | 单独的原生资格，精确 `nautilus-trader==1.231.0`；不因 SDK 在 core wheel 下成功就成立 |
 
-runner 标签不是所有 CPU 架构、发行版或文件系统的认证。实际架构、解释器、依赖与 job 链接须保留在发布证据中；未在候选记录中验证的组合属于未验证。核心包的 `py3-none-any` wheel 标签同样不表示所有操作系统均支持安全文件 IO。
+四个 controls profile 不是四种不同平台；原生 host profile 中运行 SDK 也不让 SDK 获得引擎或研究执行权限。文档具名示例的实际执行、README 模板绑定、类型和拒绝回归均须保存本候选自己的记录。矩阵未承诺每段历史 Markdown shell 都由当前 CI 逐字运行，具体覆盖见 [SDK 验收范围](python-sdk.md#验收范围)。
 
-文件存储依赖 POSIX directory fd、no-follow、regular-file 检查、hard link 与 fsync。原子目录发布只实现 Linux/macOS 的 no-replace 接口，缺少能力就明确失败。Windows、其他 OS、网络文件系统、云盘挂载、不同原生 Python 组合及上游源码编译不在本预览认证范围。macOS 原生 wheel 还须满足上游平台标签，不能把 macOS 15 的核心回归当作原生支持。细节见[开发入口](development.md)。
+runner 标签不是所有 CPU 架构、发行版或文件系统的认证。实际架构、解释器、依赖与 job 链接须保留在验收证据中；未在候选记录中验证的组合属于未验证。`py3-none-any` wheel 标签同样不表示所有操作系统均支持安全文件 IO。
 
-当前原子发布实现还依赖进程libc／运行时导出对应入口：Linux使用`renameat2`，macOS使用`renameatx_np`；内核与目标文件系统也须支持无覆盖发布及目录同步。缺少入口会明确失败，不采用覆盖式fallback。自动化补充复验中的一份Alpine配置在这一能力检查处失败；该记录不代表全部musl配置均已验证，也不为所有Linux发行版或某个glibc版本下限提供保证。[复验手册](alpha-reproduction.md)分别提供Linux与macOS的系统checksum命令，支持矩阵以实际CI记录为准。
+文件存储依赖 POSIX directory fd、no-follow、regular-file 检查、hard link 与 fsync。原子目录发布只实现 Linux/macOS 的 no-replace 接口，缺少能力就明确失败。Windows、未验证的发行版/运行时、网络文件系统、云盘挂载、不同原生 Python 组合及上游源码编译不在上述资格范围。macOS 原生 wheel 还须满足其平台标签，不能把 macOS 15 的核心回归当作原生支持。
 
-建议在符合矩阵的远端 CPU 主机或 GitHub Actions 上验收；当前受限工作流不要求 GPU，也没有 GPU 加速承诺。Colab 可作为临时手动验收环境，其运行时与本地磁盘可能回收；它不是 24×7 托管、数据持久性或本项目额外支持矩阵的保证。需要保留的原始数据、CAS、attempt ledger 和导出包应按 owner 的备份流程保存。
+原子发布还依赖进程 libc/运行时导出对应入口：Linux 使用 `renameat2`，macOS 使用 `renameatx_np`；内核与文件系统也须支持无覆盖发布和目录同步。缺少入口会明确失败，不使用覆盖式 fallback。既有自动化补充复验中的一份 Alpine 配置在此检查失败；这不代表全部 musl 配置均已验证，也不提供所有 Linux 发行版或 glibc 版本下限保证。原记录及系统 checksum 说明见 [复验手册](alpha-reproduction.md)。
+
+本轮维护者的项目执行、测试、构建、安装和类型检查全部在远端 GitHub Actions CPU 进行；真实参与者案例可按既有合同留在其受支持远端环境。当前不要求 GPU，也没有 GPU 加速承诺。Colab 的运行时和磁盘可能回收，不构成额外受支持组合、长期托管或持久性保证。原始数据、CAS、attempt ledger 和导出包按 owner 的备份流程保存。
 
 ## 功能与模型边界
 
-| 能力 | 本候选范围 |
+| 能力 | 既有范围及版本归属 |
 | --- | --- |
 | 数据导入 | 规范化 JSONL 的 snapshot/delta/trade；不是交易所原始 WebSocket 采集器。导入 accepted 不是回放许可或真实来源认证 |
 | 声明 | v1 不可执行声明继续保持 `execution_ready=false`；v2 单独绑定受支持内置策略、数据、模型、估值与预算 |
-| 回放 | 单流 EUR-USD、一次初始 snapshot、受支持的完整序列与 receive-order 时钟；内置 post-only 限价买单、MARGIN/NETTING；无用户 Python 策略执行 |
-| 估值 | 最后观测 bid 的 USD marked PnL；不是平仓收益，没有模拟退出深度、冲击或退出费用 |
-| 费用 | 对列明 native 费用数值模型独立复算；模式存在歧义时估值/claim 保持未知，不能凭一分钱容差放行 |
-| 尝试预算 | 每个 protocol ID 的不可返还 attempt；失败与中断消费预算，不是跨协议的完整 trial family/exposure 账本 |
-| 证据 | 固定目录包、完整性/绑定/账务复算；离线 verifier 不运行 native 撮合，不认证作者、真实市场成交、确认集或全部历史尝试 |
-| 接口 | 文档列出的 CLI。Python 领域/应用接口仍在迭代，不提供广泛稳定公共 SDK 兼容保证 |
+| 回放 | 单流 EUR-USD、一次初始 snapshot、受支持完整序列与 receive-order 时钟；内置 post-only 限价买单、MARGIN/NETTING，无用户 Python 策略执行 |
+| 估值与费用 | 最后观测 bid 的 USD marked PnL，不是平仓收益；没有退出深度、冲击或退出费用。列明费用模型独立复算，歧义时估值/claim 未知，不以一分钱容差放行 |
+| 尝试预算 | 每个 protocol ID 的不可退款 attempt；失败与中断消费预算，不是跨协议的完整 trial family/exposure 账本 |
+| 证据 | 按各自格式复算完整性/绑定/账务；离线 verifier 不重新执行 native 撮合，不自动认证作者、真实市场成交、确认集或全部历史尝试 |
+| 公共 SDK | 仅 0.2 的 [SDK v1](contracts/python-sdk-v1.md)：五方法、七个公开名称，共用原应用服务；数据导入/检查、不可执行声明冻结/检查、受限 development 读取 |
+| CLI 与内部接口 | 0.1 CLI 按原发行；0.2 CLI 按各自合同。内部 domain/application import 不进入 SDK 兼容保证；SDK 不提供 run、Job、maintenance 或确认暴露 |
 
-当前不提供反例搜索 finding、观测相容队列证书、确认集解封、实时交易、任意代码沙箱、checkpoint 恢复、HTTP/MCP/UI 或生产性能承诺。未来规划见[路线图](planning/roadmap.md)，不能将规划当作本版本能力。
+0.2 的既有 CLI 能力索引如下，各项权限不互换：
 
-回放硬上限仍为 8 MiB / 10,000 events；协议预算为最多 100 attempts、单次 native worker 最多 60 秒，具体协议可以更严格。wall budget 覆盖 worker 阶段，不覆盖导入、导出和全部验证总时长。导入与 bundle 的独立配额见[数据导入](data-import.md)和[bundle 契约](contracts/evidence-bundle-v1.md)。
+- [场景执行](contracts/scenario-execution-v1.md)、[有限搜索计划](contracts/search-plan-v1.md)、[campaign 预算](contracts/campaign-budgets-v1.md)、[有范围 finding](contracts/search-findings-v1.md) 和 [可迁移搜索证据](contracts/search-evidence-v1.md)；条件压力 finding 不自动成为原 baseline 命题翻转。
+- [一次确认访问](contracts/confirmation-access-v1.md) 使用独立 authority，不授权确认 evaluator，也不成为 SDK development-read 的 override。
+- [缩减输入](contracts/reduction-input-v1.md)、[从首 snapshot 执行](contracts/reduction-execution-v1.md)、[局部缩减](contracts/reduction-search-v1.md)；保持/不保持/不可评价分开，不提供引擎 checkpoint、隐藏队列初态或全局最小性保证。
+- [Job 重试与确认恢复](contracts/job-followups-v1.md)、[强取消与资源控制](contracts/job-controls-v1.md)、[资源报告](contracts/job-resources-v1.md)、[引用感知保留](contracts/dataset-retention-v1.md) 和 [有限故障恢复资格](contracts/dataset-fault-budget-v1.md)；依各自 CLI 执行，不是 SDK 方法。
+
+这些 profile 均不承诺通用加密货币或任意 Python 策略执行、实时交易、任意恶意代码沙箱、完整引擎 checkpoint、HTTP/MCP/UI、生产性能或真实市场收益。EUR-USD 内置模型不会因通用 JSONL 导入或 wheel 标签而扩为任意资产执行。实际接受和剩余限制见 [Sprint12 状态](planning/sprint-12-status.md) 及所链接合同，不以未来规划提前背书。
+
+回放硬上限仍为 8 MiB / 10,000 events；可执行协议最多 100 attempts，单次 native worker 最多 60 秒，具体原协议可更严格。worker wall budget 不覆盖导入、导出和全部验证总时长。campaign/Job 另有各自范围的控制，不放宽原协议预算；导入与 bundle 配额按各自合同。
 
 ## 信任与运行状态
 
-本预览采用可信本地 owner 模式：owner 信任输入根和存储根的祖先配置，并使用自己有权处理的数据。平台应用入口拒绝确认集读取，但不能对宿主 owner 隐藏其文件。子进程提供崩溃/超时边界，不是恶意代码、凭据、网络或宿主文件系统的安全沙箱。
+这些工作流采用可信 owner 模式：owner 信任输入根和存储根的祖先配置，并使用自己有权处理的数据。普通 development/SDK 入口拒绝 confirmation，独立确认访问遵循自己的合同；这些策略不能对宿主 owner 隐藏其文件。子进程提供限定的崩溃/超时边界，不是恶意代码、凭据、网络或宿主文件系统的安全沙箱。
 
 `completed`、`claim_observation.eligible` 和 `satisfied` 分别描述执行结束、是否可评价及是否满足冻结阈值。incomplete、费用歧义、错误或预算终止不能变成研究通过。`reserved_unfinalized` 表示终态未知，不能解释为失败已确认或预算可退款。
 
 ## 兼容、升级与回退
 
-预览阶段 CLI/schema 仍可能变化；所有已声明的格式与领域语义分别版本化。兼容范围以该发行的记录和 fixture 回归为准，不以包版本号推断新 loader 可以理解所有旧对象，也不承诺自动迁移。
+SDK contract v1 的五方法、七名称、类型和错误按 [SDK 合同](contracts/python-sdk-v1.md) 与 [兼容合同](contracts/sdk-compatibility-v1.md) 维护；这不稳定所有内部 Python API。CLI、持久格式与领域语义分别版本化，兼容范围以对应发行/候选的实际回归为准；不以包版本号推断 loader 理解所有旧对象，也不承诺通用自动迁移。
+
+输入中的封闭 schema 拒绝未知字段/版本，不静默删除字段以通过校验；声明的 bounded scalar `parameters` 是允许保留自定义键的开放位置。SDK 没有 receipt JSON ingest 或“忽略未来字段”选项。未知 receive 时间保留 `None`，不能补成事件时间或 0。存储 inspect 与研究绑定的区别见 [SDK 未知字段说明](python-sdk.md#未知字段参数与存储检查)。
 
 1. 升级前停止对相关目录的写入，备份完整 catalog、CAS、registry、attempt ledger 与已导出 bundle，保留旧解释器环境和安装制品。
 2. 将新版本装入独立环境；用原始导出包和新的独立工作目录验收。不要删除或重写旧 CAS 对象、旧协议、slot、outcome 或 bundle manifest。
-3. 不支持旧格式时应明确拒绝并保留原件。未来转换应生成新对象和新的来源记录，不能原地重解释旧证据。
-4. 回退使用保留的旧安装环境与匹配的完整备份；不要把新旧版本的可变 catalog 或 ledger 混合。新版本产生的未知格式不能假设旧版可读。
+3. 不支持旧格式时明确拒绝并保留原件。未来转换须有自己的合同，生成新对象和来源记录，不能原地重解释旧证据。
+4. 回退使用保留的旧安装环境与匹配的完整备份；不混合新旧可变 catalog/ledger，也不假设旧版理解新格式。
 
-本预览没有自动备份、通用迁移、跨版本恢复或真实断电认证。导出目标已存在时不覆盖；发布后若返回持久性未确认，先验证已存在目标并保留诊断，再决定恢复路径。
+本预览没有自动备份、通用迁移、任意跨版本恢复或真实断电认证。0.2 的显式 Job ACK/重试和特定 DatasetStore 恢复有各自范围，不构成通用续跑。导出目标已存在时不覆盖；发布后持久性未确认时先核验已有目标并保留诊断，再决定其合同允许的恢复路径。失败、中断和未知 reservation 不退款；真实重跑使用同一原协议的新槽，已提交结果不重复执行，原 5/8/11 槽、golden 和 PR94 不变。
+
+## SDK 自助诊断与恢复
+
+先保留包版本/来源、SDK contract、OS/Python、真实调用和完整原始错误，再按 [SDK 错误表](python-sdk.md#错误与明确恢复) 处理。不删除或重建根目录、不手工删 WAL/SHM、不修改协议预算来“修复”错误。损坏/缺件时先保存原件；已知合法来源到新 store 的特定恢复遵循 [故障合同](contracts/dataset-fault-budget-v1.md)，不复制或重置研究 ledger。
+
+维护 BLOCKED、Job read conflict、研究 `reserved_unfinalized` 和普通 SDK 存储错误不是同一种状态。只读检查不会替你发起研究重试；维护 apply 的 PARTIAL/IO_UNCONFIRMED 不能报告 APPLIED。相关操作按各自 CLI 合同处理，不能从一个错误码推断另一个子系统的恢复权限。
+
+## HTTP/MCP 入口需求与当前决定
+
+项目路线图中已有 HTTP/MCP 的规划兴趣；它与可核验的“现有 CLI/SDK 阻塞了某个真实任务”是两类证据。截至本页更新，未提供这样的已核验案例记录，阻塞任务、替代成本和参与者确认仍为 **UNKNOWN / 证据不足**，不是已证明没有需求。当前决定是 **DEFER**，保留 S14 或以后条件性入口，本轮不实现。
+
+真实请求到来时，分别记录匿名请求者/角色、日期、具体任务及合法案例、当前工作流、CLI/SDK 替代及其实际阻碍、所需最小入口、原始来源/证据、参与和公开记录同意、投入/限制、评审决定及理由。无记录时不填虚构请求或成功数；规划偏好和维护者推测不改写成外部用户需求。普通文档更新也不授权自动向他人联系。
 
 ## 获取帮助
 
-普通缺陷通过 [GitHub Issues](https://github.com/Darrenus/tickwitness/issues) 提交：版本/commit、OS/Python、相关 schema/engine ID、命令、退出码，以及可公开的最小合成复现。不要上传私有行情、策略、凭据或未经许可的完整证据包。安全问题按 [SECURITY](../SECURITY.md) 私密报告。
+普通缺陷通过 [GitHub Issues](https://github.com/Darrenus/tickwitness/issues) 提交：版本/commit、OS/Python、相关 schema/engine ID、命令、退出码和可公开的最小合成复现。不要上传私有行情、策略、凭据或未经许可的完整证据包；安全问题按 [SECURITY](../SECURITY.md) 私密报告。
 
-维护者按可用时间处理预览问题，不提供 24×7、付费 SLA、长期维护期限或修复日期保证。尚无独立人类领域复核和真实采用证明时必须保留相应缺口，不能把 AI 审阅或自动测试称作外部认证。
+维护者按可用时间处理预览问题，不提供 24×7、付费 SLA、长期维护期限或修复日期保证。外部真人复验仍为 0 attempts / 0 successes / PENDING，#24 保持 OPEN，实际自有案例登记为空；[接入指南](user-onboarding.md) 将技术成功、真人参与、激活和 30 天复用分别评审。CI、AI 审阅和 owner 合并都不计作外部认证。

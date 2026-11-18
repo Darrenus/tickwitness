@@ -3,20 +3,27 @@
 import errno
 import hashlib
 import json
-from dataclasses import FrozenInstanceError, asdict
+from dataclasses import MISSING, FrozenInstanceError, asdict, fields
+from inspect import Parameter, signature
 from pathlib import Path
 
 import pytest
 
 import tickwitness.sdk as sdk
 from tickwitness.application import datasets, research
-from tickwitness.domain.data_evidence.events import DataValidationError
-from tickwitness.domain.research_contracts.protocols import ProtocolValidationError
+from tickwitness.cli import main as cli_main
+from tickwitness.domain.data_evidence.events import DataValidationError, normalize_events
+from tickwitness.domain.research_contracts.protocols import (
+    ProtocolValidationError,
+    build_frozen_protocol,
+)
 from tickwitness.infrastructure.local_dataset_store import (
     DatasetNotFoundError,
     DatasetStoreError,
+    LocalDatasetStore,
 )
 from tickwitness.infrastructure.local_protocol_registry import (
+    LocalProtocolRegistry,
     ProtocolNotFoundError,
     ProtocolRegistryError,
 )
@@ -55,6 +62,32 @@ def files(root: Path) -> dict[str, str]:
     }
 
 
+def cli_freeze_args(
+    root: Path,
+    *,
+    store: Path,
+    registry: Path,
+    development_dataset_id: str,
+    confirmation_dataset_id: str,
+) -> list[str]:
+    return [
+        "freeze-protocol",
+        "request.json",
+        "--input-root",
+        str(root),
+        "--strategy-source",
+        "strategy.py",
+        "--development-dataset",
+        development_dataset_id,
+        "--confirmation-dataset",
+        confirmation_dataset_id,
+        "--store",
+        str(store),
+        "--registry",
+        str(registry),
+    ]
+
+
 def test_public_values_are_the_existing_application_types() -> None:
     assert sdk.SDK_CONTRACT_VERSION == 1
     assert set(sdk.__all__) == {
@@ -70,6 +103,95 @@ def test_public_values_are_the_existing_application_types() -> None:
     assert sdk.ProtocolReceipt is research.ProtocolReceipt
     assert sdk.DevelopmentRead is research.DevelopmentRead
     assert sdk.ValidationLimits is datasets.ValidationLimits
+    for value, names in (
+        (sdk.ImportReceipt, ("dataset_id", "created", "manifest", "report")),
+        (sdk.ProtocolReceipt, ("protocol_id", "claim_revision_id", "created", "document")),
+        (
+            sdk.DevelopmentRead,
+            ("protocol_id", "dataset_id", "observations", "total_records", "truncated"),
+        ),
+    ):
+        public_fields = fields(value)
+        assert tuple(field.name for field in public_fields) == names
+        for field in public_fields:
+            assert field.default is MISSING
+            assert field.default_factory is MISSING
+    assert tuple(field.name for field in fields(sdk.ValidationLimits)) == (
+        "max_bytes",
+        "max_records",
+        "max_line_bytes",
+        "max_levels_per_side",
+    )
+    assert asdict(sdk.ValidationLimits()) == {
+        "max_bytes": 8 * 1024 * 1024,
+        "max_records": 100_000,
+        "max_line_bytes": 65_536,
+        "max_levels_per_side": 1_000,
+    }
+
+
+@pytest.mark.parametrize(
+    ("public_callable", "expected"),
+    [
+        (
+            sdk.Client,
+            (
+                ("store", Parameter.KEYWORD_ONLY, Parameter.empty),
+                ("registry", Parameter.KEYWORD_ONLY, Parameter.empty),
+            ),
+        ),
+        (
+            sdk.Client.import_events,
+            (
+                ("self", Parameter.POSITIONAL_OR_KEYWORD, Parameter.empty),
+                ("input", Parameter.POSITIONAL_OR_KEYWORD, Parameter.empty),
+                ("input_root", Parameter.KEYWORD_ONLY, Parameter.empty),
+                ("limits", Parameter.KEYWORD_ONLY, None),
+            ),
+        ),
+        (
+            sdk.Client.inspect_dataset,
+            (
+                ("self", Parameter.POSITIONAL_OR_KEYWORD, Parameter.empty),
+                ("dataset_id", Parameter.POSITIONAL_OR_KEYWORD, Parameter.empty),
+            ),
+        ),
+        (
+            sdk.Client.freeze_protocol,
+            (
+                ("self", Parameter.POSITIONAL_OR_KEYWORD, Parameter.empty),
+                ("input", Parameter.POSITIONAL_OR_KEYWORD, Parameter.empty),
+                ("input_root", Parameter.KEYWORD_ONLY, Parameter.empty),
+                ("strategy_source", Parameter.KEYWORD_ONLY, Parameter.empty),
+                ("development_dataset_id", Parameter.KEYWORD_ONLY, Parameter.empty),
+                ("confirmation_dataset_id", Parameter.KEYWORD_ONLY, Parameter.empty),
+            ),
+        ),
+        (
+            sdk.Client.inspect_protocol,
+            (
+                ("self", Parameter.POSITIONAL_OR_KEYWORD, Parameter.empty),
+                ("protocol_id", Parameter.POSITIONAL_OR_KEYWORD, Parameter.empty),
+            ),
+        ),
+        (
+            sdk.Client.read_protocol_data,
+            (
+                ("self", Parameter.POSITIONAL_OR_KEYWORD, Parameter.empty),
+                ("protocol_id", Parameter.POSITIONAL_OR_KEYWORD, Parameter.empty),
+                ("split", Parameter.KEYWORD_ONLY, "development"),
+                ("limit", Parameter.KEYWORD_ONLY, 100),
+            ),
+        ),
+    ],
+)
+def test_public_signatures_preserve_names_keyword_boundaries_and_defaults(
+    public_callable, expected
+) -> None:
+    assert tuple(
+        (parameter.name, parameter.kind, parameter.default)
+        for parameter in signature(public_callable).parameters.values()
+    ) == expected
 
 
 def test_client_is_frozen_handle_free_configuration(tmp_path: Path, monkeypatch) -> None:
@@ -353,3 +475,240 @@ def test_limits_value_validation_and_wrong_python_arguments_remain_programming_e
     with pytest.raises(TypeError):
         client.read_protocol_data("a" * 64, unrelated=True)
     assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("future_policy", True),
+        ("schema_version", 2),
+    ],
+)
+def test_event_schema_refusals_match_cli_before_creating_destinations(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], field: str, value: object
+) -> None:
+    fixture_inputs(tmp_path)
+    path = tmp_path / "development.jsonl"
+    records = [json.loads(line) for line in path.read_bytes().splitlines()]
+    records[0][field] = value
+    path.write_text("".join(json.dumps(record) + "\n" for record in records))
+    invalid = path.read_bytes()
+    client = sdk.Client(store=tmp_path / "sdk-store", registry=tmp_path / "sdk-registry")
+
+    with pytest.raises(sdk.SDKError) as caught:
+        client.import_events(path.name, input_root=tmp_path)
+
+    assert (caught.value.code, caught.value.exit_code) == ("invalid_data", 2)
+    assert isinstance(caught.value.__cause__, DataValidationError)
+    cli_store = tmp_path / "cli-store"
+    assert (
+        cli_main(
+            [
+                "import-events",
+                path.name,
+                "--input-root",
+                str(tmp_path),
+                "--store",
+                str(cli_store),
+            ]
+        )
+        == 2
+    )
+    output = capsys.readouterr()
+    assert output.out == "" and json.loads(output.err) == caught.value.as_dict()
+    assert path.read_bytes() == invalid
+    assert not client.store.exists() and not client.registry.exists()
+    assert not cli_store.exists()
+
+
+@pytest.mark.parametrize(
+    ("section", "extra_value"),
+    [
+        (None, True),
+        ("claim", True),
+        ("configuration", True),
+        ("budget", True),
+        ("parameters", {"nested": 1}),
+        ("parameters", [1]),
+    ],
+)
+def test_request_schema_refusals_match_cli_without_publishing_or_rewriting_data(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    section: str | None,
+    extra_value: object,
+) -> None:
+    fixture_inputs(tmp_path)
+    client = sdk.Client(store=tmp_path / "store", registry=tmp_path / "sdk-registry")
+    development = client.import_events("development.jsonl", input_root=tmp_path)
+    confirmation = client.import_events("confirmation.jsonl", input_root=tmp_path)
+    previous = (
+        asdict(client.inspect_dataset(development.dataset_id)),
+        asdict(client.inspect_dataset(confirmation.dataset_id)),
+    )
+    evidence = files(client.store / "objects"), files(client.store / "manifests")
+    request_path = tmp_path / "request.json"
+    request = json.loads(request_path.read_bytes())
+    target = request if section is None else request[section]
+    target["execution_ready"] = extra_value
+    request_path.write_text(json.dumps(request))
+    inputs = {
+        name: (tmp_path / name).read_bytes()
+        for name in (
+            "development.jsonl",
+            "confirmation.jsonl",
+            "request.json",
+            "strategy.py",
+        )
+    }
+
+    with pytest.raises(sdk.SDKError) as caught:
+        client.freeze_protocol(
+            request_path.name,
+            input_root=tmp_path,
+            strategy_source="strategy.py",
+            development_dataset_id=development.dataset_id,
+            confirmation_dataset_id=confirmation.dataset_id,
+        )
+
+    assert (caught.value.code, caught.value.exit_code) == ("invalid_protocol", 2)
+    assert isinstance(caught.value.__cause__, ProtocolValidationError)
+    cli_registry = tmp_path / "cli-registry"
+    assert (
+        cli_main(
+            cli_freeze_args(
+                tmp_path,
+                store=client.store,
+                registry=cli_registry,
+                development_dataset_id=development.dataset_id,
+                confirmation_dataset_id=confirmation.dataset_id,
+            )
+        )
+        == 2
+    )
+    output = capsys.readouterr()
+    assert output.out == "" and json.loads(output.err) == caught.value.as_dict()
+    assert not client.registry.exists() and not cli_registry.exists()
+    assert (files(client.store / "objects"), files(client.store / "manifests")) == evidence
+    assert (
+        asdict(client.inspect_dataset(development.dataset_id)),
+        asdict(client.inspect_dataset(confirmation.dataset_id)),
+    ) == previous
+    assert {name: (tmp_path / name).read_bytes() for name in inputs} == inputs
+
+
+def test_open_scalar_parameters_are_preserved_by_sdk_and_cli_without_new_authority(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture_inputs(tmp_path)
+    client = sdk.Client(store=tmp_path / "store", registry=tmp_path / "sdk-registry")
+    original = freeze(client, tmp_path)
+    request_path = tmp_path / "request.json"
+    request = json.loads(request_path.read_bytes())
+    request["parameters"].update(
+        execution_ready=True,
+        custom_label="  declared scalar  ",
+        custom_optional=None,
+        custom_negative=-1,
+    )
+    request_path.write_text(json.dumps(request))
+
+    revised = freeze(client, tmp_path)
+
+    assert revised.created is True and revised.protocol_id != original.protocol_id
+    assert revised.claim_revision_id == original.claim_revision_id
+    assert revised.document["parameters"] == request["parameters"]
+    assert revised.document["execution_ready"] is False
+    assert revised.document["read_policy"] == original.document["read_policy"]
+    assert revised.document["budget"] == original.document["budget"]
+    assert revised.document["datasets"] == original.document["datasets"]
+    assert client.inspect_protocol(revised.protocol_id).document == revised.document
+    read = client.read_protocol_data(revised.protocol_id, limit=1)
+    assert read.observations[0]["receive_time_ns"] is None
+    cli_registry = tmp_path / "cli-registry"
+    assert (
+        cli_main(
+            cli_freeze_args(
+                tmp_path,
+                store=client.store,
+                registry=cli_registry,
+                development_dataset_id=revised.document["datasets"]["development"],
+                confirmation_dataset_id=revised.document["datasets"]["confirmation"],
+            )
+        )
+        == 0
+    )
+    output = capsys.readouterr()
+    assert output.err == "" and json.loads(output.out) == asdict(revised)
+
+
+def test_inspection_preserves_report_extensions_but_research_binding_refuses_them(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture_inputs(tmp_path)
+    client = sdk.Client(store=tmp_path / "store", registry=tmp_path / "sdk-registry")
+    confirmation = client.import_events("confirmation.jsonl", input_root=tmp_path)
+    raw = (tmp_path / "development.jsonl").read_bytes()
+    normalized = normalize_events(raw)
+    report = dict(normalized.report, extension_note={"producer": "fixture", "enabled": True})
+    stored = LocalDatasetStore(client.store, create=False).publish(
+        raw, normalized.normalized_bytes, report
+    )
+    evidence = files(client.store / "objects"), files(client.store / "manifests")
+
+    inspected = client.inspect_dataset(stored.dataset_id)
+
+    assert inspected.created is False and inspected.report == report
+    assert inspected.report["extension_note"] == {"producer": "fixture", "enabled": True}
+    assert inspected.report["replay_certified"] is False
+    with pytest.raises(sdk.SDKError) as rejected_freeze:
+        client.freeze_protocol(
+            "request.json",
+            input_root=tmp_path,
+            strategy_source="strategy.py",
+            development_dataset_id=stored.dataset_id,
+            confirmation_dataset_id=confirmation.dataset_id,
+        )
+    assert (rejected_freeze.value.code, rejected_freeze.value.exit_code) == (
+        "invalid_protocol",
+        2,
+    )
+    assert isinstance(rejected_freeze.value.__cause__, ProtocolValidationError)
+    assert not client.registry.exists()
+
+    # A valid declaration fixture isolates the read path from the freeze refusal.
+    # It is sealed by existing domain/storage APIs, not admitted as research data.
+    source = (tmp_path / "strategy.py").read_bytes()
+    declaration = build_frozen_protocol(
+        (tmp_path / "request.json").read_bytes(),
+        development_dataset_id=stored.dataset_id,
+        confirmation_dataset_id=confirmation.dataset_id,
+        strategy_sha256=hashlib.sha256(source).hexdigest(),
+    )
+    LocalProtocolRegistry(client.registry).seal(declaration.canonical_bytes, source)
+    registry_before = files(client.registry)
+    assert client.inspect_protocol(declaration.protocol_id).document == declaration.document
+    with pytest.raises(sdk.SDKError) as rejected_read:
+        client.read_protocol_data(declaration.protocol_id, limit=1)
+    assert (rejected_read.value.code, rejected_read.value.exit_code) == ("invalid_protocol", 2)
+    assert isinstance(rejected_read.value.__cause__, ProtocolValidationError)
+    assert (
+        cli_main(
+            [
+                "read-protocol-data",
+                declaration.protocol_id,
+                "--store",
+                str(client.store),
+                "--registry",
+                str(client.registry),
+                "--limit",
+                "1",
+            ]
+        )
+        == 2
+    )
+    output = capsys.readouterr()
+    assert output.out == "" and json.loads(output.err) == rejected_read.value.as_dict()
+    assert client.inspect_dataset(stored.dataset_id).report == report
+    assert (files(client.store / "objects"), files(client.store / "manifests")) == evidence
+    assert files(client.registry) == registry_before

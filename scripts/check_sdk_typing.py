@@ -107,6 +107,7 @@ def main() -> int:
     prior_children = 0
     child_limit = 4
     commands: list[dict[str, object]] = []
+    documentation_recipe: bytes | None = None
     budget: dict[str, object] = {
         "max_children": 4,
         "stage_max_children": 4,
@@ -125,7 +126,11 @@ def main() -> int:
         "consumer_source_directory": str(arguments.consumer_dir.absolute()),
         "commands": commands,
         "budget": budget,
-        "scope": {"negative_fixture_executed": False, "research_execution": False},
+        "scope": {
+            "negative_fixture_executed": False,
+            "research_execution": False,
+            "documentation_recipe_typechecked": False,
+        },
     }
     write_json(report_path, report)
     environment = os.environ.copy()
@@ -234,6 +239,29 @@ def main() -> int:
             report["prior_budget"] = previous
             if deadline <= started:
                 raise RuntimeError("Original SDK admission/wait budget exhausted before typing")
+            observations = prior.get("observations")
+            documentation = (
+                observations.get("documentation_example")
+                if isinstance(observations, dict)
+                else None
+            )
+            if (
+                not isinstance(documentation, dict)
+                or documentation.get("marker") != "sdk-example:import-and-inspect:v1"
+                or not isinstance(documentation.get("source"), str)
+            ):
+                raise RuntimeError(
+                    "Prior SDK qualification lacks its executed documentation recipe"
+                )
+            documentation_recipe = documentation["source"].encode("utf-8")
+            if digest(documentation_recipe) != documentation.get("source_sha256"):
+                raise RuntimeError("Prior executed documentation source and digest disagree")
+            report["documentation_recipe_from_prior"] = {
+                "marker": documentation["marker"],
+                "sha256": digest(documentation_recipe),
+                "functional_transcript": documentation.get("transcript"),
+                "typecheck_copy": "sources/documentation_example.py",
+            }
         with tempfile.TemporaryDirectory(prefix="tickwitness-sdk-types-") as temporary:
             work = Path(temporary)
             source_records = records / "sources"
@@ -245,6 +273,13 @@ def main() -> int:
                 (work / name).write_bytes(data)
                 (source_records / name).write_bytes(data)
                 sources[name] = digest(data)
+            positive_files = ["development_consumer.py", "typing_valid.py"]
+            if documentation_recipe is not None:
+                recipe_name = "documentation_example.py"
+                (work / recipe_name).write_bytes(documentation_recipe)
+                (source_records / recipe_name).write_bytes(documentation_recipe)
+                sources[recipe_name] = digest(documentation_recipe)
+                positive_files.append(recipe_name)
             report["sources"] = sources
             report["independent_cwd"] = str(work)
             core = run(
@@ -283,11 +318,10 @@ def main() -> int:
                 "--cache-dir",
                 str(work / ".mypy_cache"),
             ]
-            positive = run(
-                "positive-consumer", [*command, "development_consumer.py", "typing_valid.py"], work
-            )
+            positive = run("positive-consumer", [*command, *positive_files], work)
             if positive.returncode != 0:
                 raise RuntimeError("Actual consumer or positive SDK typing failed")
+            report["scope"]["documentation_recipe_typechecked"] = documentation_recipe is not None
             expected = []
             for number, line in enumerate((work / "typing_invalid.py").read_text().splitlines(), 1):
                 marker = MARKER.search(line)
