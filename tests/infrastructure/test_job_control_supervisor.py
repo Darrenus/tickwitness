@@ -5,14 +5,16 @@ remote installed controls lifecycle separately supplies that evidence.
 """
 
 import time
-from threading import Thread
+from threading import Thread, current_thread
 
+import pytest
 from test_job_supervisor import _command, _queued, _wait_for
 from test_native_job_supervisor import native_job_root as native_job_root
 from test_native_job_supervisor import queued, saved_worker
 from test_reduction_execution import forbidden
 from test_reduction_execution import reduction_case as reduction_case
 
+from tickwitness.application.jobs import JobConflictError
 from tickwitness.domain.evidence.run_records import canonical
 from tickwitness.domain.jobs.control import build_job_control_policy
 from tickwitness.infrastructure import job_reduction, job_supervisor
@@ -118,7 +120,10 @@ def test_total_deadline_stops_genuine_heartbeats_and_cleans_owned_scratch(tmp_pa
     assert controls.publication_admission() is None
 
 
-def test_durable_cancel_from_another_controller_stops_live_owned_process(tmp_path):
+@pytest.mark.parametrize("inject_read_conflict", [False, True])
+def test_durable_cancel_from_another_controller_stops_live_owned_process(
+    tmp_path, monkeypatch, inject_read_conflict
+):
     store, row = _queued(tmp_path)
     controls, _policy = configure(store, row, max_wall_ns=10_000_000_000)
     command = _command(
@@ -128,18 +133,25 @@ def test_durable_cancel_from_another_controller_stops_live_owned_process(tmp_pat
         "    time.sleep(0.05)\n",
     )
     observations, failures = [], []
+    injected_conflicts = []
+    original_get = store.get
+
+    def observed_get(job_id):
+        if inject_read_conflict and current_thread() is controller and not injected_conflicts:
+            injected_conflicts.append(job_id)
+            raise JobConflictError("Job catalog read is busy; retry read")
+        return original_get(job_id)
+
+    def ready():
+        try:
+            value = store.get(row["job_id"])
+        except JobConflictError:
+            return None  # A busy read has not observed the heartbeat yet.
+        return value if value["attempt"] and value["attempt"]["heartbeat_sequence"] >= 3 else None
 
     def request():
         try:
-            current = _wait_for(
-                lambda: (
-                    value
-                    if (value := store.get(row["job_id"]))["attempt"]
-                    and value["attempt"]["heartbeat_sequence"] >= 3
-                    else None
-                ),
-                timeout=5,
-            )
+            current = _wait_for(ready, timeout=5)
             peer = JobControlStore(store.root, row["job_id"])
             observations.append(
                 peer.request_cancel("live-controller", now_ns=time.time_ns(), snapshot=current)
@@ -148,12 +160,14 @@ def test_durable_cancel_from_another_controller_stops_live_owned_process(tmp_pat
             failures.append(error)
 
     controller = Thread(target=request)
+    monkeypatch.setattr(store, "get", observed_get)
     controller.start()
     try:
         terminal = run_job(store, row["job_id"], _worker_command=command)
     finally:
         controller.join(timeout=6)
     assert not controller.is_alive() and not failures
+    assert injected_conflicts == ([row["job_id"]] if inject_read_conflict else [])
     assert observations[0]["status"] == "accepted"
     assert terminal["state"] == "FAILED" and terminal["failure"]["code"] == "job_cancelled"
     proof = controls.result()

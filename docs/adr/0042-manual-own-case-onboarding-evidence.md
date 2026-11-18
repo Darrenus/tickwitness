@@ -1,0 +1,9 @@
+# ADR0042: Prepare auditable own-case onboarding and record the recruitment gap
+
+Date: 2026-11-18 Asia/Singapore. Status: frozen before S12-02 operating materials. Owner accepted PR110, true merge `94fc08a98d3237077cfa79065d18c0daf91bcd88` at 2026-11-16T10:38:23Z. SDK v1's five-method typed subset and its software qualification are accepted; external-human evidence is still absent/PENDING.
+
+Use the [manual onboarding evidence contract](../contracts/onboarding-evidence-v1.md) and existing adoption definitions. First provide supported-route guidance, blank records, explicit positive/negative/unknown review examples and a dated honest recruitment-gap snapshot. Do not build a CRM aggregate, telemetry, new SDK execution API or automatic identity/activation verifier. Current SDK data/declaration/read success does not satisfy own-research activation; the original complete baseline/constraints/result and separate value/reuse definitions remain binding.
+
+The original Issue35 accepts a real first activation OR a recorded gap. Prepare useful materials without inventing participants, outreach or demand; confirmed human-case evidence is an external dependency. Preserve PR94 reproduction pins and 0/0/PENDING gate separately from S12 activation. Case retries keep their original protocol budgets; no reset/refund or SDK bridge from declaration-v1 to executable-v2.
+
+Original S12-02 14h / S12 total 34h and ongoing quality remain unchanged, with no actual-hours claim. S12-03's original 8h support/contract-regression scope remains separate. Documentation changes use appropriate existing remote checks, without new placeholder tests or rebranding old payload evidence as new activation. Project execution stays on remote GHA CPU; GPU/HTTP/release deferred. Owner acceptance and external-human adoption remain separate gates.

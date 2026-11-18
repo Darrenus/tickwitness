@@ -46,4 +46,4 @@ SDK不自动重试。IO或完整性拒绝后先检查原始错误和持久状态
 
 CI在四个既有controls环境中通过独立安装core wheel运行消费者，SOURCE环境使用实际sdist内的脚本和示例。新SDK制品与旧controls/retention/fault分开，三个旧记录树只做前后哈希比较。下游strict mypy读取实际安装包与py.typed，正例通过，负例需要匹配特定行/错误码，负例文件不执行。原checks数量和超时保留。新的资格以本候选实际CI和完整制品审计为准，不继承旧候选绿色状态。
 
-本例是自动化集成资格，不是外部真人使用。外部真人仍0attempts/0successes/PENDING；真实激活与30天复用在S12-02独立记录。更完整的支持矩阵、自助文档与契约回归继续按原S12-03计划推进。HTTP仍条件性S14或以后；没有新release、GPU、采用或收益声明。
+本例是自动化集成资格，不是外部真人使用。外部真人仍0attempts/0successes/PENDING；S12-02的[自有案例接入流程](user-onboarding.md)将SDK技术接入、CLI完整研究、激活及30天复用分别记录，[当前实际案例登记](planning/s12-02-recruitment-gap.md)为空。更完整的支持矩阵、自助文档与契约回归继续按原S12-03计划推进。HTTP仍条件性S14或以后；没有新release、GPU、采用或收益声明。
