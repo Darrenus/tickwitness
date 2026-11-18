@@ -8,7 +8,6 @@ import time
 from threading import Thread, current_thread
 
 import pytest
-
 from test_job_supervisor import _command, _queued, _wait_for
 from test_native_job_supervisor import native_job_root as native_job_root
 from test_native_job_supervisor import queued, saved_worker
@@ -148,11 +147,7 @@ def test_durable_cancel_from_another_controller_stops_live_owned_process(
             value = store.get(row["job_id"])
         except JobConflictError:
             return None  # A busy read has not observed the heartbeat yet.
-        return (
-            value
-            if value["attempt"] and value["attempt"]["heartbeat_sequence"] >= 3
-            else None
-        )
+        return value if value["attempt"] and value["attempt"]["heartbeat_sequence"] >= 3 else None
 
     def request():
         try:
