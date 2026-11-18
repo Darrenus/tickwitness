@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 import os
+import shlex
 import shutil
 import stat
 import subprocess
@@ -94,6 +95,32 @@ sys.argv=[str(entry),*sys.argv[1:]]
 runpy.run_path(str(entry),run_name='__main__')
 """
 
+_DOCUMENTATION = r"""
+entry,inputs,store,registry=map(Path,sys.argv[1:])
+assert not store.exists() and not registry.exists()
+namespace=runpy.run_path(str(entry),run_name='sdk_documentation_example')
+recipe=namespace['import_and_inspect']
+first=recipe('development.jsonl',input_root=inputs,store=store,registry=registry)
+repeated=recipe('development.jsonl',input_root=inputs,store=store,registry=registry)
+assert isinstance(first,sdk.ImportReceipt) and isinstance(repeated,sdk.ImportReceipt)
+assert first.created is False and repeated.created is False
+assert asdict(first)==asdict(repeated)
+client=Client(store=store,registry=registry)
+persisted=client.inspect_dataset(first.dataset_id)
+assert asdict(persisted)==asdict(first)
+# Explicit ordinary duplicate import closes this example's owned SQLite sidecars.
+quiescence=client.import_events('development.jsonl',input_root=inputs)
+assert quiescence.created is False and not registry.exists()
+assert not any((store/name).exists() for name in (
+    'catalog.sqlite3-wal','catalog.sqlite3-shm','catalog.sqlite3-journal'))
+print(document({'receipt':asdict(first),'repeated_receipt':asdict(repeated),
+    'persisted_receipt':asdict(persisted),'explicit_quiescence':asdict(quiescence),
+    'input':'development.jsonl','input_root':str(inputs),'store':str(store),
+    'registry':str(registry),'registry_created':False,'sidecars_after':[],
+    'source_sha256':digest(entry.read_bytes()),
+    'input_sha256':digest((inputs/'development.jsonl').read_bytes())}).decode())
+"""
+
 _CLI = "raise SystemExit(cli_main(sys.argv[1:]))\n"
 
 _NEGATIVES = r"""
@@ -139,6 +166,99 @@ refuse('invalid_strategy',lambda:Client(store=root/'sdk-store',registry=invalid_
     development_dataset_id=dataset_id,confirmation_dataset_id=confirmation_id),
     'invalid_protocol',2)
 assert not invalid_registry.exists()
+schema_cases={}
+event_rows=[json.loads(line) for line in (inputs/'development.jsonl').read_bytes().splitlines()]
+event_rows[0]['execution_ready']=True
+event_input=inputs/'unknown-event.jsonl'
+event_input.write_bytes(b''.join(document(row)+bytes([10]) for row in event_rows))
+with patch.object(sdk,'_LocalDatasetStore',blocked('unknown_event.target_store_constructor')):
+    refuse('unknown_event',lambda:invalid.import_events('unknown-event.jsonl',input_root=inputs),
+           'invalid_data',2)
+assert not invalid_store.exists()
+schema_cases['unknown_event']={'input':str(event_input),
+    'input_sha256':digest(event_input.read_bytes()),'destination':str(invalid_store),
+    'destination_created':False,'refusal_before_target_store_factory':True}
+def freeze_request(filename,registry):
+    return Client(store=root/'sdk-store',registry=registry).freeze_protocol(filename,
+        input_root=inputs,strategy_source='strategy.py',development_dataset_id=dataset_id,
+        confirmation_dataset_id=confirmation_id)
+request=json.loads((inputs/'request.json').read_bytes())
+for location in ('request','claim','configuration','budget'):
+    changed=json.loads(document(request))
+    target=changed if location=='request' else changed[location]
+    target['execution_ready']=True
+    name='unknown_'+location
+    filename='unknown-'+location+'.json'
+    (inputs/filename).write_bytes(document(changed))
+    rejected_registry=negatives/('sdk-'+name+'-registry')
+    refuse(name,lambda filename=filename,registry=rejected_registry:
+        freeze_request(filename,registry),'invalid_protocol',2)
+    assert not rejected_registry.exists()
+    schema_cases[name]={'input':str(inputs/filename),
+        'input_sha256':digest((inputs/filename).read_bytes()),
+        'destination':str(rejected_registry),'destination_created':False,
+        'all_protected_io_avoided':False}
+for shape,value in (('object',{'nested':1}),('list',[1])):
+    changed=json.loads(document(request))
+    changed['parameters']['unsupported_nested']=value
+    name='nested_parameter_'+shape
+    filename='nested-parameter-'+shape+'.json'
+    (inputs/filename).write_bytes(document(changed))
+    rejected_registry=negatives/('sdk-'+name+'-registry')
+    refuse(name,lambda filename=filename,registry=rejected_registry:
+        freeze_request(filename,registry),'invalid_protocol',2)
+    assert not rejected_registry.exists()
+    schema_cases[name]={'input':str(inputs/filename),
+        'input_sha256':digest((inputs/filename).read_bytes()),
+        'destination':str(rejected_registry),'destination_created':False}
+open_source_quiescence=client.import_events('development.jsonl',input_root=inputs)
+assert open_source_quiescence.created is False and sidecars(root/'sdk-store')==[]
+assert json_value(open_source_quiescence)==healthy['quiescence']
+open_root=root/'open-parameters';open_root.mkdir()
+shutil.copytree(root/'sdk-store',open_root/'store')
+open_client=Client(store=open_root/'store',registry=open_root/'registry')
+def open_freeze(filename):
+    return open_client.freeze_protocol(filename,input_root=inputs,strategy_source='strategy.py',
+        development_dataset_id=dataset_id,confirmation_dataset_id=confirmation_id)
+open_baseline=open_freeze('request.json')
+assert open_baseline.protocol_id==protocol_id
+custom=json.loads(document(request))
+custom['parameters'].update({'execution_ready':True,'custom_scalar_count':7,
+    'custom_scalar_label':'first','custom_scalar_optional':None})
+(inputs/'open-parameters.json').write_bytes(document(custom))
+open_custom=open_freeze('open-parameters.json')
+changed=json.loads(document(custom));changed['parameters']['custom_scalar_label']='second'
+(inputs/'changed-parameters.json').write_bytes(document(changed))
+open_changed=open_freeze('changed-parameters.json')
+assert len({open_baseline.protocol_id,open_custom.protocol_id,open_changed.protocol_id})==3
+for receipt,expected in ((open_baseline,request),(open_custom,custom),(open_changed,changed)):
+    assert receipt.created is True
+    assert receipt.document['parameters']==expected['parameters']
+    assert receipt.claim_revision_id==healthy['protocol_inspected']['claim_revision_id']
+    assert receipt.document['execution_ready'] is False
+    for field in ('budget','datasets','strategy','configuration','read_policy'):
+        assert receipt.document[field]==healthy['protocol_inspected']['document'][field]
+open_inspected=open_client.inspect_protocol(open_custom.protocol_id)
+assert open_inspected.created is False and open_inspected.document==open_custom.document
+open_read=open_client.read_protocol_data(open_custom.protocol_id,limit=1)
+assert open_read.protocol_id==open_custom.protocol_id and open_read.dataset_id==dataset_id
+assert open_read.observations[0]['receive_time_ns'] is None
+refuse('open_parameter_frozen_limit',lambda:open_client.read_protocol_data(
+    open_custom.protocol_id,limit=3),'invalid_protocol',2)
+open_quiescence=open_client.import_events('development.jsonl',input_root=inputs)
+assert open_quiescence.created is False and sidecars(open_root/'store')==[]
+open_parameters={'root':str(open_root),'store':str(open_root/'store'),
+    'registry':str(open_root/'registry'),'baseline_first':json_value(open_baseline),
+    'custom_first':json_value(open_custom),'changed_first':json_value(open_changed),
+    'custom_inspected':json_value(open_inspected),'development':json_value(open_read),
+    'source_explicit_quiescence':json_value(open_source_quiescence),
+    'explicit_quiescence':json_value(open_quiescence),
+    'custom_input':str(inputs/'open-parameters.json'),
+    'custom_input_sha256':digest((inputs/'open-parameters.json').read_bytes()),
+    'changed_input':str(inputs/'changed-parameters.json'),
+    'changed_input_sha256':digest((inputs/'changed-parameters.json').read_bytes()),
+    'parameters_identity_bound':True,'claim_identity_unchanged':True,
+    'executable_authority_added':False,'frozen_budget_unchanged':True,'sidecars_after':[]}
 absent=root/'must-remain-absent'
 denied=Client(store=absent/'store',registry=absent/'registry')
 with patch.object(LocalDatasetStore,'__init__',blocked('confirmation.dataset_constructor')), \
@@ -193,6 +313,7 @@ assert target.read_bytes()==damaged
 shutil.copytree(corrupt,images/'corrupt-sdk-failed')
 print(document({'outcomes':outcomes,'confirmation_precedes_constructors_identity_limit':True,
     'invalid_destinations_remain_absent':True,'nested_mutations_do_not_persist':True,
+    'schema_cases':schema_cases,'open_parameters':open_parameters,
     'explicit_quiescence':json_value(quiescence),
     'corrupt_quiescence':json_value(prepared),'sidecars_after':[],
     'corrupt_store':str(corrupt),'corruption':{'path':relative,'same_size':True,
@@ -222,6 +343,52 @@ def tree(root):
         raw = path.read_bytes()
         result[str(path.relative_to(root))] = {"sha256": digest(raw), "size_bytes": len(raw)}
     return result
+
+
+def named_block(raw, marker, language):
+    """Extract one explicitly allowlisted trusted-repository fenced recipe."""
+    opening = ("<!-- " + marker + " -->").encode()
+    closing = ("<!-- /" + marker + " -->").encode()
+    if raw.count(opening) != 1 or raw.count(closing) != 1:
+        raise ValueError("Documentation recipe requires exactly one pair of named markers")
+    start, end = raw.index(opening) + len(opening), raw.index(closing)
+    if start >= end:
+        raise ValueError("Documentation recipe markers are out of order")
+    section = raw[start:end].strip(b" \t\r\n")
+    prefix = ("```" + language + "\n").encode()
+    if not section.startswith(prefix) or not section.endswith(b"```"):
+        raise ValueError("Documentation recipe must contain exactly its declared language fence")
+    source = section[len(prefix) : -3]
+    if not source.strip() or not source.endswith(b"\n") or b"```" in source:
+        raise ValueError("Documentation recipe must be one nonempty complete fenced block")
+    source.decode("utf-8", errors="strict")
+    return source
+
+
+def consumer_arguments(template, *, interpreter, consumer, inputs, store, registry):
+    """Bind only the frozen README placeholders; never evaluate shell text."""
+    expected = [
+        "/path/to/venv/bin/python",
+        "-I",
+        "/absolute/path/development_consumer.py",
+        "--input-root",
+        "/absolute/path/to/copied-sdk-example",
+        "--store",
+        "/absolute/path/to/new-owned-store",
+        "--registry",
+        "/absolute/path/to/new-owned-registry",
+    ]
+    parsed = shlex.split(template.decode("utf-8").replace("\\\n", ""))
+    if parsed != expected:
+        raise ValueError("README consumer invocation has unsupported placeholders or flags")
+    replacements = {
+        expected[0]: interpreter,
+        expected[2]: str(consumer),
+        expected[4]: str(inputs),
+        expected[6]: str(store),
+        expected[8]: str(registry),
+    }
+    return parsed, [replacements.get(token, token) for token in parsed]
 
 
 class Supervisor:
@@ -383,17 +550,19 @@ def main():
             for name in ("development.jsonl", "confirmation.jsonl", "request.json", "strategy.py"):
                 shutil.copyfile(copied / name, inputs / name)
             consumer = copied / "development_consumer.py"
+            readme = (copied / "README.md").read_bytes()
+            invocation = named_block(readme, "sdk-consumer-invocation:v1", "sh")
+            parsed, logical_argv = consumer_arguments(
+                invocation,
+                interpreter=interpreter,
+                consumer=consumer,
+                inputs=inputs,
+                store=root / "sdk-store",
+                registry=root / "sdk-registry",
+            )
             sdk, consumer_call = supervisor.invoke(
                 _CONSUMER,
-                (
-                    str(consumer),
-                    "--input-root",
-                    str(inputs),
-                    "--store",
-                    str(root / "sdk-store"),
-                    "--registry",
-                    str(root / "sdk-registry"),
-                ),
+                tuple(logical_argv[2:]),
             )
             (root / "sdk-output.json").write_bytes(canonical(sdk))
             observations["identity"] = {"runtime": identity, "transcript": identity_call}
@@ -402,6 +571,61 @@ def main():
                 "sha256": digest(consumer.read_bytes()),
                 "transcript": consumer_call,
                 "output": sdk,
+            }
+            consumer_transcript = json.loads(
+                (supervisor.transcripts / (consumer_call + ".json")).read_bytes()
+            )
+            observations["consumer_invocation"] = {
+                "readme_source": readme.decode("utf-8"),
+                "readme_sha256": digest(readme),
+                "marker": "sdk-consumer-invocation:v1",
+                "template_source": invocation.decode("utf-8"),
+                "template_sha256": digest(invocation),
+                "parsed_template_argv": parsed,
+                "bound_logical_argv": logical_argv,
+                "actual_guarded_argv": consumer_transcript["argv"],
+                "actual_transcript": consumer_call,
+                "verbatim_shell_executed": False,
+            }
+            guide = (project_root / "docs" / "python-sdk.md").read_bytes()
+            recipe = named_block(guide, "sdk-example:import-and-inspect:v1", "python")
+            documentation = root / "documentation"
+            documentation.mkdir()
+            (documentation / "python-sdk.md").write_bytes(guide)
+            recipe_entry = documentation / "import_and_inspect.py"
+            recipe_entry.write_bytes(recipe)
+            documentation_store = documentation / "store"
+            documentation_registry = documentation / "registry"
+            documentation_inputs_before = tree(inputs)
+            documented, documentation_call = supervisor.invoke(
+                _DOCUMENTATION,
+                (
+                    str(recipe_entry),
+                    str(inputs),
+                    str(documentation_store),
+                    str(documentation_registry),
+                ),
+            )
+            assert documented["receipt"] == sdk["dataset_inspected"]
+            assert documented["repeated_receipt"] == documented["persisted_receipt"]
+            assert documented["source_sha256"] == digest(recipe)
+            assert documented["input_sha256"] == digest((inputs / "development.jsonl").read_bytes())
+            assert documented["registry_created"] is False and not documentation_registry.exists()
+            assert tree(inputs) == documentation_inputs_before
+            observations["documentation_example"] = {
+                "guide_path": "docs/python-sdk.md",
+                "guide_source": guide.decode("utf-8"),
+                "guide_sha256": digest(guide),
+                "guide_copy": str(documentation / "python-sdk.md"),
+                "marker": "sdk-example:import-and-inspect:v1",
+                "source": recipe.decode("utf-8"),
+                "source_sha256": digest(recipe),
+                "source_file": str(recipe_entry),
+                "transcript": documentation_call,
+                "result": documented,
+                "persistent_files": tree(documentation_store),
+                "input_files_before": documentation_inputs_before,
+                "input_files_after": tree(inputs),
             }
             cli_store, cli_registry = root / "cli-store", root / "cli-registry"
             calls = {}
@@ -502,6 +726,17 @@ def main():
                 _NEGATIVES, (str(root), str(inputs), str(root / "sdk-output.json"))
             )
             observations["sdk_negatives"] = {"result": negative, "transcript": negative_call}
+            open_parameters = negative["open_parameters"]
+            observations["compatibility"] = {
+                "contract": "sdk-compatibility-v1",
+                "sdk_schema_cases": negative["schema_cases"],
+                "open_parameters": open_parameters,
+                "open_parameter_store_files": tree(Path(open_parameters["store"])),
+                "open_parameter_registry_files": tree(Path(open_parameters["registry"])),
+                "unknown_receive_time_preserved": (
+                    open_parameters["development"]["observations"][0]["receive_time_ns"] is None
+                ),
+            }
             negatives = root / "negatives"
             invalid_store = negatives / "cli-invalid-store"
             errors = {}
@@ -588,6 +823,45 @@ def main():
                 str(corrupt_store),
                 expected=3,
             )
+            errors["unknown_event"] = cli(
+                "unknown_event",
+                "import-events",
+                "unknown-event.jsonl",
+                "--input-root",
+                str(inputs),
+                "--store",
+                str(invalid_store),
+                expected=2,
+            )
+            unknown_budget_registry = negatives / "cli-unknown-budget-registry"
+            errors["unknown_budget"] = cli(
+                "unknown_budget",
+                "freeze-protocol",
+                "unknown-budget.json",
+                "--input-root",
+                str(inputs),
+                "--strategy-source",
+                "strategy.py",
+                "--development-dataset",
+                dataset_id,
+                "--confirmation-dataset",
+                confirmation_id,
+                "--store",
+                str(cli_store),
+                "--registry",
+                str(unknown_budget_registry),
+                expected=2,
+            )
+            assert not unknown_budget_registry.exists()
+            observations["compatibility"]["additional_cli_refusals"] = {
+                name: calls[name] for name in ("unknown_event", "unknown_budget")
+            }
+            observations["compatibility"]["cli_unknown_destinations"] = {
+                "store": str(invalid_store),
+                "registry": str(unknown_budget_registry),
+                "store_created": invalid_store.exists(),
+                "registry_created": unknown_budget_registry.exists(),
+            }
             for name, envelope in errors.items():
                 assert envelope == negative["outcomes"][name]["response"], name
                 assert calls[name]["exit_code"] == negative["outcomes"][name]["exit_code"]
@@ -631,7 +905,7 @@ def main():
             after = dict(zip(roles, (tree(source) for source in sources), strict=True))
             assert before == after
             elapsed = time.monotonic() - supervisor.started
-            assert supervisor.calls <= 28 and elapsed <= 180
+            assert supervisor.calls == 27 and supervisor.calls <= 28 and elapsed <= 180
             report = {
                 "kind": "installed_python_sdk_consumer_acceptance_v1",
                 "schema_version": 1,
@@ -645,6 +919,9 @@ def main():
                     "actual_children": supervisor.calls,
                     "functional_max_child_invocations": 28,
                     "reserved_typing_child_invocations": 4,
+                    "planned_functional_child_invocations": 27,
+                    "remaining_functional_child_admissions": 28 - supervisor.calls,
+                    "remaining_total_child_admissions": 32 - supervisor.calls,
                     "started_monotonic_seconds": supervisor.started,
                     "deadline_monotonic_seconds": supervisor.started + 180,
                     "elapsed_seconds": elapsed,

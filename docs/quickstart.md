@@ -2,6 +2,8 @@
 
 `v0.1.0a1`技术预览已在[GitHub Releases](https://github.com/Darrenus/tickwitness/releases/tag/v0.1.0a1)发布，没有上传PyPI。先查看[发布记录](releases/0.1.0a1.md)和[支持范围](support.md)。以下命令固定发行tag，在**远端受支持主机**运行，首选原生矩阵中的Ubuntu 24.04 / Python 3.12；不要求GPU。Colab仅适合临时验收，不承担长期任务和持久存储。当前开发分支的新增场景检查另见[场景指南](scenarios.md)。
 
+如果要使用当前 `0.2.0.dev0` 的稳定 **SDK contract v1 子集**，请进入 [SDK 指南](python-sdk.md)、[真实消费者](../examples/sdk/README.md) 与 [自有案例接入](user-onboarding.md)，按 [分版本支持矩阵](support.md#按任务划分的环境矩阵) 选择环境。本页保留 0.1 的 tag、提交、命令和预期输出，不用 0.2 wheel 或移动的 main 混跑。当前 SDK 具名文档示例的执行资格不等于本页历史 shell 块已由新候选 CI 逐字重跑；0.1 的实际验收仍以原发行记录为准。
+
 ## 选择固定发行代码
 
 安装uv 0.12.13和Git。发行tag指向已接受且通过远端检查的`a84edddef00db8af69c7e6e67be31f0763310dca`，不要用移动中的main替代：
