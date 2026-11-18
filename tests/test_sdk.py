@@ -188,10 +188,13 @@ def test_public_values_are_the_existing_application_types() -> None:
 def test_public_signatures_preserve_names_keyword_boundaries_and_defaults(
     public_callable, expected
 ) -> None:
-    assert tuple(
-        (parameter.name, parameter.kind, parameter.default)
-        for parameter in signature(public_callable).parameters.values()
-    ) == expected
+    assert (
+        tuple(
+            (parameter.name, parameter.kind, parameter.default)
+            for parameter in signature(public_callable).parameters.values()
+        )
+        == expected
+    )
 
 
 def test_client_is_frozen_handle_free_configuration(tmp_path: Path, monkeypatch) -> None:
