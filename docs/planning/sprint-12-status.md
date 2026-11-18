@@ -10,4 +10,6 @@
 
 原S12专项34h与持续质量容量不变，不补造实际工时。SDK首版聚焦data/declaration/bounded-development-read，不宣称所有CLI命令均为稳定SDK。构造无IO、文件入口复用安全读取、错误与CLI相容、原冻结max_events限制不可绕过；SDK消费者资格不执行研究、不增加native或槽、不重置/退款原5/8/11协议预算。SDK摘要不是命题评价或自有研究激活；declaration-v1与CLI executable-v2不可互换。
 
+S12-02伴随质量缺陷 [#112](https://github.com/Darrenus/tickwitness/issues/112)：首候选 `374e75a` 的macOS native完整测试在取消控制线程读到已有合同允许的瞬时Catalog冲突时真失败，原日志保留。仅修正该既有测试的有界心跳轮询，并参数化无注入/控制线程首次冲突注入；原时限、三次真实心跳及取消/回收断言不放宽，生产代码与协议预算不改。修正资格以新候选的实际远端检查为准，不预记通过；维护缺陷不改变原故事容量或补造实际工时。
+
 全部项目测试、构建、安装、格式、类型、原生执行仅远端GitHub Actions CPU。外部真人0 attempts/0 successes/PENDING（#24 OPEN）；自动消费者、CI、AI和owner不计外部激活或30天复用。尚未收到可核验真人参与及自有案例记录，联系数量和回复情况为UNKNOWN，不推断无人联系或没有需求。HTTP保留到S14条件性入口或以后，GPU延后，没有release、采用或收益声明。#35在owner实际接受本轮缺口路径交付前保持OPEN；S12-03仍为独立8h范围。
