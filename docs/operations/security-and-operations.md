@@ -1,27 +1,30 @@
 # TickWitness 安全、发布与长期运维
 
-状态：Proposed，2026-10-25。Sprint1基础已合并，S2数据证据分支已加入有界导入/inspection，实际验证见[开发入口](../development.md)与[S2状态](../planning/sprint-02-status.md)；下文产品级隔离、SLO、发行及恢复能力仍需逐步实现和演练。
+更新：2026-11-19，Asia/Singapore。当前支持的信任边界按 S13-01 冻结的 [Execution trust v1](../contracts/execution-trust-v1.md) 与 [ADR0044](../adr/0044-explicit-execution-trust-boundaries.md) 说明；已接受的 CLI、SDK、Job 与资源能力见[分版本支持](../support.md)和[Sprint12状态](../planning/sprint-12-status.md)。下文的产品级隔离、服务 SLO、发行与通用恢复流程仍是目标要求，不因已有部分组件而成为已实现或已验收保证。
 
 ## 信任边界与威胁模型
 
-用户导入的策略代码、行情文件、证据包、引擎插件及 Agent 输出全部视为不可信输入。策略可能读本地 secrets、访问网络、fork bomb、耗尽磁盘、修改 test 数据或伪造输出。恶意证据包还可能利用路径穿越、符号链接、反序列化或解压炸弹。
+行情文件、证据包、登记的策略源码与 Agent 输出需要按其入口合同验证，内容通过解析或哈希检查不等于来源可信。当前 `.py` 源码冻结只读取有界字节、检查语法并绑定哈希，不执行该源码；native 路径只运行已资格的内置策略。owner、输入/存储根及祖先、解释器、依赖和 coordinator 属于当前信任基础。若运行恶意代码或受损依赖，它可能读取 secrets、联网、fork、耗尽资源或伪造输出；现有输入校验和子进程不能提供这种代码的安全隔离。
 
-| 运行模式 | 承诺范围 | 上线门槛 |
+| 运行模式 | 当前状态与范围 | 限制及后续门槛 |
 | --- | --- | --- |
-| 本地可信代码 | 用户自己授权的策略与插件，进程隔离主要处理故障 | 明示可访问本机权限，默认不启动远程 listener |
-| 单机不可信任务 | Linux 受限执行环境，策略与评价器分离 | 无网络/非root/只读输入/资源限制/无宿主socket与敏感挂载，实际逃逸与越权检查 |
-| 自托管协作 | 身份、权限、配额、任务归属和管理员配置 | 安全边界、审计及恢复验收；只对声明的部署配置支持 |
-| 公共托管多租户 | 独立租户边界及更强隔离 | v1 后单独 RFC、人员预算、威胁模型和外部安全复核；普通容器不能自动视为足够边界 |
+| M0 可信本地 | 当前支持的信任边界，仅限现有已资格内置 profile；单 owner 远端机器也可采用此模型 | 同 UID 的宿主文件权限和继承环境仍可信；没有默认拒绝网络、独立身份或 mount/chroot 边界。未提供 HTTP/MCP listener，不支持任意 Python 策略 |
+| M1 受限单机隔离 | 仅要求集合；未实现、未资格、关闭，没有可启用的 mode 参数 | 先选择具体环境/机制/数字限额，再验证只读输入与 TCB、隔离身份/环境/FD、私有 scratch、OS 网络拒绝、整棵任务树及总存储限额、终止与回收。缺控制或证据就保持不可用 |
+| M2 不支持托管 | 不支持不可信任务托管、需要独立用户身份/权限的协作服务及公共多租户 | 租户身份、归属、权限、秘密和资源隔离、服务安全与运维需另行验收；普通容器、自托管或单项 M1 成功不会自动开放此模式 |
 
-Python 子进程、提示词或文件哈希都不是阻止恶意代码的安全沙箱。host owner 拥有全部文件时，不能宣称系统能对该 owner 隐藏测试集或防止其篡改全部证据；可提供可检测完整性及外部签名等更有限保证。
+这些是文档标签，不是已有 CLI/SDK 选项。Python 子进程、`-I`、提示词、测试 monkeypatch 或文件哈希都不是恶意代码沙箱。安全文件入口的 dirfd/no-follow、常规文件与字节/变化检查只作用于可信根下的入口，不提供硬链接、恶意祖先、同 UID 进程或 host owner 的秘密隔离。哈希闭包可以检查相对已提供锚点的一致性，不能认证作者、真实行情来源或防止 owner 同时替换全部锚点；外部签名/信任锚也需要另立合同与验收，当前没有该保证。
 
-引擎执行策略不得拥有修改 frozen inputs、判定配置和最终证据索引的权限。verifier 在新环境重算，禁止 pickle 等可执行反序列化；导入包限制总大小、文件数量、压缩比、路径和 symlink。机密策略和行情默认保留本地，遥测默认关闭且不上传公式、订单或数据片段。
+当前窄 IPC 不传递 native worker 的 Catalog/ledger 路径，coordinator 保留逻辑上的校验与最终发布权；路径未传递不等于 same-UID worker 无法接触宿主文件。配置了 Job controls 的任务有其冻结 CPU、单文件、FD、deadline 和 owned scratch 回收控制；并非所有历史命令均有这些默认值，也没有整树 RAM/PID/CPU、总磁盘/inode、环境清洗、网络拒绝或恶意逃逸进程的保障。资源观测不是限额；停止不确定、仍有 lifetime 或 scratch 已替换时保留诊断，不制造安全停止或物理回收成功。
+
+只读输入/TCB、仅私有受配额 scratch 可写及执行侧不得修改判定/最终索引，是 M1 尚未实现的要求。现有离线 verifier、封闭格式、禁止可执行反序列化及各类包的大小/数量/路径检查按各自合同成立，不把未来通用上传/解压安全要求当作已提供接口。机密数据的公开许可、日志脱敏和无默认内容上传同样需遵守；不能用本地证据完整性替代宿主保密。
+
+后续 M1 攻击验收和独立安全复核必须记录真实环境、控制、输入/输出与未满足项，不能从文档或旧 CI 推断通过；原协议预算、已提交结果和未知 reservation 的语义不因模式改变而重置。外部真人复验仍为 0/0/PENDING，独立安全复核尚未进行，两者分开记录。
 
 ## MCP 与 HTTP
 
-CLI、SDK、HTTP、MCP 调用同一应用服务和权限校验。工具参数采用严格 schema，用户不可绕过协议冻结直接调用原始数据库。Agent 不能选择自己的权限、伪造 available-at 或写判定；模型输出是提案，工具执行结果是记录。
+当前只有已限定的 CLI 与 SDK 入口，SDK v1 不开放执行、Job 或维护方法。HTTP/MCP 尚未实现、没有 listener，需求决定为条件性 DEFER，见[需求与当前决定](../support.md#httpmcp-入口需求与当前决定)。未来入口必须复用应用服务和既有权限/协议校验，采用严格 schema；Agent 输出是提案，不能自行增权、伪造 available-at、修改判定或绕过原预算。窄 API 本身不代替 M1/M2 的宿主/服务权限边界。
 
-初期 MCP 使用本地 stdio，HTTP 绑定 loopback。远程服务开启前必须实现身份/资源归属、最小权限 scopes、速率及预算限制、审计、令牌撤销与 TLS 部署说明。禁止 token passthrough、用户可控任意 URL 抓取和从工具返回内容执行指令。安全规范版本随实现固定，不跟随 `latest` 静默改变。参考 [MCP security best practices](https://modelcontextprotocol.io/docs/2026-07-28/tutorials/security/security_best_practices)。
+本地 stdio MCP 与 loopback HTTP 是未来 transport 设想，不是本轮交付或已测安全 profile。是否暴露 listener 需另外授权与验收；远程服务开启前必须实现身份/资源归属、最小权限 scopes、速率及预算限制、审计、令牌撤销与 TLS 部署说明。禁止 token passthrough、用户可控任意 URL 抓取和从工具返回内容执行指令。安全规范版本随实现固定，不跟随 `latest` 静默改变。参考 [MCP security best practices](https://modelcontextprotocol.io/docs/2026-07-28/tutorials/security/security_best_practices)。
 
 ## 数据与权限
 

@@ -1,6 +1,6 @@
 # 分版本支持范围与恢复政策
 
-更新：2026-11-18，Asia/Singapore。先根据安装包的版本、来源和接口合同选择入口；相同包版本号不代表相同构建字节。SDK v1 已随 [PR110](https://github.com/Darrenus/tickwitness/pull/110) 接受，S12-03 的文档执行与兼容回归遵循 [独立合同](contracts/sdk-compatibility-v1.md)，只有本候选实际远端结果才能记为本轮通过。这里没有新的发行或平台认证。
+更新：2026-11-19，Asia/Singapore。先根据安装包的版本、来源和接口合同选择入口；相同包版本号不代表相同构建字节。SDK v1 已随 [PR110](https://github.com/Darrenus/tickwitness/pull/110) 接受；S12-03 的文档执行与兼容回归按 [独立合同](contracts/sdk-compatibility-v1.md) 完成，并由 owner 合并 [PR113](https://github.com/Darrenus/tickwitness/pull/113) 接受，真实 merge 为 `df10923663a3d3c09b5b917995fbb554da60ea40`。S13-01 先冻结 [执行信任与威胁模型](contracts/execution-trust-v1.md)，本候选的远端检查和 owner 接受仍须按实际结果记录；历史绿色不代替本轮验收。这里没有新的发行、平台认证或已实现隔离的声明。
 
 | 版本/接口 | 取得方式与状态 | 正确入口 |
 | --- | --- | --- |
@@ -51,13 +51,25 @@ runner 标签不是所有 CPU 架构、发行版或文件系统的认证。实�
 - [缩减输入](contracts/reduction-input-v1.md)、[从首 snapshot 执行](contracts/reduction-execution-v1.md)、[局部缩减](contracts/reduction-search-v1.md)；保持/不保持/不可评价分开，不提供引擎 checkpoint、隐藏队列初态或全局最小性保证。
 - [Job 重试与确认恢复](contracts/job-followups-v1.md)、[强取消与资源控制](contracts/job-controls-v1.md)、[资源报告](contracts/job-resources-v1.md)、[引用感知保留](contracts/dataset-retention-v1.md) 和 [有限故障恢复资格](contracts/dataset-fault-budget-v1.md)；依各自 CLI 执行，不是 SDK 方法。
 
-这些 profile 均不承诺通用加密货币或任意 Python 策略执行、实时交易、任意恶意代码沙箱、完整引擎 checkpoint、HTTP/MCP/UI、生产性能或真实市场收益。EUR-USD 内置模型不会因通用 JSONL 导入或 wheel 标签而扩为任意资产执行。实际接受和剩余限制见 [Sprint12 状态](planning/sprint-12-status.md) 及所链接合同，不以未来规划提前背书。
+这些 profile 均不承诺通用加密货币或任意 Python 策略执行、实时交易、任意恶意代码沙箱、完整引擎 checkpoint、HTTP/MCP/UI、生产性能或真实市场收益。EUR-USD 内置模型不会因通用 JSONL 导入或 wheel 标签而扩为任意资产执行。已接受的 SDK／接入工作见 [Sprint12 状态](planning/sprint-12-status.md)，执行信任和未启用能力见下文及 [冻结合同](contracts/execution-trust-v1.md)，不以未来规划提前背书。
 
 回放硬上限仍为 8 MiB / 10,000 events；可执行协议最多 100 attempts，单次 native worker 最多 60 秒，具体原协议可更严格。worker wall budget 不覆盖导入、导出和全部验证总时长。campaign/Job 另有各自范围的控制，不放宽原协议预算；导入与 bundle 配额按各自合同。
 
 ## 信任与运行状态
 
-这些工作流采用可信 owner 模式：owner 信任输入根和存储根的祖先配置，并使用自己有权处理的数据。普通 development/SDK 入口拒绝 confirmation，独立确认访问遵循自己的合同；这些策略不能对宿主 owner 隐藏其文件。子进程提供限定的崩溃/超时边界，不是恶意代码、凭据、网络或宿主文件系统的安全沙箱。
+下表是 [Execution trust v1](contracts/execution-trust-v1.md) 的支持状态摘要；M0/M1/M2 是文档标签，没有对应的 CLI/SDK mode selector，也不扩大上文 OS/Python/文件系统矩阵。
+
+| 模式 | 当前状态 | 使用或启用边界 |
+| --- | --- | --- |
+| M0 TRUSTED_LOCAL／可信本地 | 当前支持边界，仅既有已资格内置 profile | owner、输入/存储根及祖先、解释器、依赖和宿主可信；只处理合法授权数据。同一可信 owner 在受支持远端主机通过 SSH 操作仍是 M0 |
+| M1 RESTRICTED_SINGLE_HOST／受限单机隔离 | 规范要求，**未实现／未资格／关闭** | 后续先选定具体环境、机制和数字限额，再证明受限文件/身份/环境、无网络、资源和停止/回收边界；缺证据保持不可用，不自动退回 M0 执行不可信代码 |
+| M2 HOSTED_UNSUPPORTED／不支持托管 | 不支持不可信托管任务、需要独立用户/租户权限边界的协作和多租户服务 | 尚无独立用户/租户身份、资源归属与权限、跨用户数据/秘密隔离、租户配额和服务运维资格；自托管、容器或单项 M1 负例通过不自动提供这些边界 |
+
+当前 0.2 的可选 [Job controls](contracts/job-controls-v1.md) 在支持的平台上设置 worker CPU、单文件与 FD 限额，并以固定 monotonic deadline 控制入场和发布；未配置的历史 worker 不自动获得这些控制。owned scratch、进程组终止和 no-follow 回收处理的是其已声明生命周期，不是 hostile/escaped 进程 containment。同步校验、kernel IO、fsync 可能延迟物理停止或确认；未知停止、live lifetime 或路径替换时按原合同保留 scratch 和诊断。
+
+这些控制未提供整树内存/PID、总磁盘/inode 或生产网络默认拒绝，也未清洗 worker 继承的宿主环境。RSS 与 cleanup 逻辑字节是有口径的 [观测](contracts/job-resources-v1.md)，不等于内存/存储配额；campaign 的 managed-payload 硬门也不是宿主磁盘配额。SDK 的原32次/180秒资格预算限制直接受监督的调用，不是 OS 进程树/网络隔离；Python 子进程、`-I`、测试 guard 或文件哈希都不能据此称为安全沙箱。
+
+普通 development/SDK 入口拒绝 confirmation，独立确认访问遵循自己的合同；这些策略不能对宿主 owner 隐藏其文件。mode 标签、环境替换、取消或安全测试不更换原协议/Job/family 身份、不授予新预算；失败/中断/未知 reservation 不退款，真实重跑仍使用同一原协议新槽，已提交结果仅复核/ACK，不重复执行。缺少 OS/control/profile 或实际负例证据时保持 UNKNOWN／NOT_QUALIFIED，不把跳过、缺失观测或 AI 审阅记为安全通过。
 
 `completed`、`claim_observation.eligible` 和 `satisfied` 分别描述执行结束、是否可评价及是否满足冻结阈值。incomplete、费用歧义、错误或预算终止不能变成研究通过。`reserved_unfinalized` 表示终态未知，不能解释为失败已确认或预算可退款。
 
