@@ -5,7 +5,7 @@
 | 故事 | 原容量 | 当前状态 |
 | --- | ---: | --- |
 | S12-01 / #34 | 12h | PR110已接受；[稳定SDK子集](../contracts/python-sdk-v1.md)／[ADR0041](../adr/0041-stable-python-sdk-subset.md)的五个共用应用服务方法、独立安装消费者和类型验收完成 |
-| S12-02 / #35 | 14h | 先冻结 [手工接入证据规则](../contracts/onboarding-evidence-v1.md)／[ADR0042](../adr/0042-manual-own-case-onboarding-evidence.md)；按原验收的招募缺口路径准备指南和空白记录，真人接入仍为外部依赖 |
+| S12-02 / #35 | 14h | 先冻结 [手工接入证据规则](../contracts/onboarding-evidence-v1.md)／[ADR0042](../adr/0042-manual-own-case-onboarding-evidence.md)，再提供[接入指南](../user-onboarding.md)、[空白记录](../templates/onboarding-case-v1.md)、[判定示例](../templates/onboarding-review-examples.md)和[真实缺口](s12-02-recruitment-gap.md)；材料待owner接受，远端检查以关联PR实际结果为准，真人接入仍PENDING |
 | S12-03 / #36 | 8h | Planned；支持与自助文档按原计划推进 |
 
 原S12专项34h与持续质量容量不变，不补造实际工时。SDK首版聚焦data/declaration/bounded-development-read，不宣称所有CLI命令均为稳定SDK。构造无IO、文件入口复用安全读取、错误与CLI相容、原冻结max_events限制不可绕过；SDK消费者资格不执行研究、不增加native或槽、不重置/退款原5/8/11协议预算。SDK摘要不是命题评价或自有研究激活；declaration-v1与CLI executable-v2不可互换。
