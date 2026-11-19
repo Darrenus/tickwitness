@@ -315,8 +315,15 @@ def _heartbeat(path: Path) -> Row:
         raw = os.read(descriptor, 1025)
         after = os.fstat(descriptor)
         stable = (
-            "st_dev", "st_ino", "st_mode", "st_uid", "st_gid", "st_nlink", "st_size",
-            "st_mtime_ns", "st_ctime_ns",
+            "st_dev",
+            "st_ino",
+            "st_mode",
+            "st_uid",
+            "st_gid",
+            "st_nlink",
+            "st_size",
+            "st_mtime_ns",
+            "st_ctime_ns",
         )
         if (
             any(getattr(before, key) != getattr(after, key) for key in stable)
@@ -525,7 +532,7 @@ class ReferenceRunner:
         release = Path("/etc/os-release").read_text() if sys.platform == "linux" else ""
         if sys.platform != "linux" or platform.machine() != "x86_64":
             reasons.append("unsupported_os_or_architecture")
-        if 'ID=ubuntu' not in release or 'VERSION_ID="24.04"' not in release:
+        if "ID=ubuntu" not in release or 'VERSION_ID="24.04"' not in release:
             reasons.append("unsupported_ubuntu_release")
         if os.geteuid() != 0:
             reasons.append("root_controller_required")
@@ -608,8 +615,8 @@ class ReferenceRunner:
             "architecture": platform.machine(),
             "python_version": sys.version,
             "libc_version": list(platform.libc_ver()),
-            "runner_image_os": os.environ.get("ImageOS"),
-            "runner_image_version": os.environ.get("ImageVersion"),
+            "runner_image_os": os.environ.get("ImageOS"),  # noqa: SIM112 - provider-defined spelling
+            "runner_image_version": os.environ.get("ImageVersion"),  # noqa: SIM112 - provider-defined spelling
             "source_revision": os.environ.get("GITHUB_SHA"),
             "controller_uid": os.geteuid(),
             "controller_gid": os.getegid(),
@@ -658,9 +665,10 @@ class ReferenceRunner:
         binaries = cast("Row", self.manifest["binaries"])
         for value in binaries.values():
             record = cast("Row", value)
-            if record.get("sha256") is None or _sha(
-                Path(cast("str", record["path"])).read_bytes()
-            ) != record["sha256"]:
+            if (
+                record.get("sha256") is None
+                or _sha(Path(cast("str", record["path"])).read_bytes()) != record["sha256"]
+            ):
                 raise ValueError("Frozen reference binary/payload tuple changed")
 
     def _frozen_bytes(self, name: str) -> bytes:
@@ -731,9 +739,7 @@ class ReferenceRunner:
         for pid in pids:
             try:
                 root = Path(f"/proc/{pid}")
-                status = {
-                    key: value.strip() for key, value in _status(root / "status").items()
-                }
+                status = {key: value.strip() for key, value in _status(root / "status").items()}
                 members.append(
                     {
                         "pid": pid,
@@ -969,8 +975,10 @@ class ReferenceRunner:
         return True
 
     def run_probe(self, name: str, arguments: tuple[str, ...] = ()) -> Row:
-        if name not in PROBE_NAMES or len(arguments) != 1 or not re.fullmatch(
-            "[0-9a-f]{32}", arguments[0]
+        if (
+            name not in PROBE_NAMES
+            or len(arguments) != 1
+            or not re.fullmatch("[0-9a-f]{32}", arguments[0])
         ):
             raise ValueError("Only a fixed probe and one32-hex nonce may be admitted")
         if self._admissions >= 24 or time.monotonic_ns() >= self._started_ns + WINDOW_NS:
@@ -1053,8 +1061,8 @@ class ReferenceRunner:
             argv = _guest_argv(setup, bpf, name, nonce)
             _write(setup / "launch.json", _canonical({"cgroup": str(cgroup), "argv": argv}))
             _write(setup / "bootstrap.py", self._frozen_bytes("bootstrap"))
-            cast("Row", facts["canaries_before"])["protected_tcb_sha256"] = (
-                self._protected_hashes(setup)
+            cast("Row", facts["canaries_before"])["protected_tcb_sha256"] = self._protected_hashes(
+                setup
             )
             env = {"PATH": "/usr/bin:/bin", "TICKWITNESS_REFERENCE_SECRET": nonce}
             facts["launcher_secret_present"] = "TICKWITNESS_REFERENCE_SECRET" in env
@@ -1116,9 +1124,10 @@ class ReferenceRunner:
                 receipt.extend(chunk)
             if not receipt.endswith(b"\n"):
                 raise TimeoutError("Bootstrap admission did not finish within original deadline")
-            observed = {key: value.strip() for key, value in _status(
-                Path(f"/proc/{process.pid}/status")
-            ).items()}
+            observed = {
+                key: value.strip()
+                for key, value in _status(Path(f"/proc/{process.pid}/status")).items()
+            }
             if (
                 observed.get("Uid", "").split() != ["61184"] * 4
                 or observed.get("Gid", "").split() != ["61184"] * 4
@@ -1146,8 +1155,8 @@ class ReferenceRunner:
             result["failure"] = "deadline_exceeded"
             facts["diagnostic"] = str(error)[:2048]
         except (OSError, ValueError, subprocess.SubprocessError) as error:
-            result["failure"] = "setup_refused" if not result["payload_started"] else (
-                "host_observation_failed"
+            result["failure"] = (
+                "setup_refused" if not result["payload_started"] else ("host_observation_failed")
             )
             facts["diagnostic"] = (type(error).__name__ + ": " + str(error))[:2048]
         finally:
@@ -1158,11 +1167,14 @@ class ReferenceRunner:
             facts["stop_confirmation_deadline_ns"] = stop_deadline
             if cgroup is not None:
                 try:
-                    if process is not None and not facts.get("child_attached"):
-                        # Only our still-unreleased trusted bootstrap may be
-                        # outside the leaf. Never signal an escaped guest PID.
-                        if process.poll() is None:
-                            process.kill()
+                    # Only our still-unreleased trusted bootstrap may be
+                    # outside the leaf. Never signal an escaped guest PID.
+                    if (
+                        process is not None
+                        and not facts.get("child_attached")
+                        and process.poll() is None
+                    ):
+                        process.kill()
                     result["stop_confirmed"] = self._attempt_owned_stop(
                         cgroup, process, facts, result, stop_deadline
                     )

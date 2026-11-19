@@ -119,9 +119,8 @@ def read_context(name: str, nonce: str) -> dict[str, object]:
         raise ValueError("Probe context identity differs")
     if document["immutable_path"] != "/input/immutable.txt":
         raise ValueError("Probe immutable locator differs")
-    if (
-        not isinstance(document["outside_path"], str)
-        or not document["outside_path"].startswith("/")
+    if not isinstance(document["outside_path"], str) or not document["outside_path"].startswith(
+        "/"
     ):
         raise ValueError("Probe outside canary locator differs")
     if document["fd_socket"] != 200 or document["fd_file"] != 201:
@@ -156,9 +155,7 @@ def filesystem(context: dict[str, object]) -> dict[str, object]:
                 "outside_read:" + path, lambda path=path: open_and_close(path, os.O_RDONLY)
             )
         )
-    attempts.append(
-        denied_operation("outside_write", lambda: open_and_close(outside, os.O_WRONLY))
-    )
+    attempts.append(denied_operation("outside_write", lambda: open_and_close(outside, os.O_WRONLY)))
     link = "/scratch/outside-link"
     os.symlink(outside, link)
     attempts.append(denied_operation("symlink_read", lambda: open_and_close(link, os.O_RDONLY)))
@@ -218,15 +215,19 @@ def network(name: str) -> dict[str, object]:
     }
     attempts = []
     for family, kind, label in configurations[name]:
+
         def create(family: int = family, kind: int = kind) -> None:
             value = socket.socket(family, kind)
             value.close()
+
         attempts.append(denied_operation(label, create))
     if name == "network_loopback":
+
         def create_pair() -> None:
             left, right = socket.socketpair()
             left.close()
             right.close()
+
         attempts.append(denied_operation("unix_socketpair", create_pair))
     return {
         "attempts": attempts,
@@ -294,6 +295,7 @@ def pids() -> dict[str, object]:
         "children_created": len(children),
         "fork_errno": failure,
     }
+
 
 def exhaust_files(*, inodes: bool) -> dict[str, object]:
     created = 0
@@ -404,14 +406,17 @@ def detached(context: dict[str, object]) -> dict[str, object]:
     if not raw or len(raw) > 1024:
         raise ValueError("Detached child did not deliver its bounded readiness")
     evidence = json.loads(raw)
-    emit({
-        "kind": RESULT_KIND,
-        "name": context["name"],
-        "nonce": context["nonce"],
-        "facts": evidence,
-    })
+    emit(
+        {
+            "kind": RESULT_KIND,
+            "name": context["name"],
+            "nonce": context["nonce"],
+            "facts": evidence,
+        }
+    )
     time.sleep(20)
     return {"unexpected_completed": True}
+
 
 def syscall(number: int, *arguments: object) -> dict[str, object]:
     library = ctypes.CDLL(None, use_errno=True)
@@ -470,8 +475,14 @@ def run_probe(
         return readonly(context)
     if name == "environment":
         allowed = {
-            "PATH", "LANG", "LC_ALL", "HOME", "TMPDIR", "PYTHONDONTWRITEBYTECODE",
-            "TICKWITNESS_REFERENCE", "PWD",
+            "PATH",
+            "LANG",
+            "LC_ALL",
+            "HOME",
+            "TMPDIR",
+            "PYTHONDONTWRITEBYTECODE",
+            "TICKWITNESS_REFERENCE",
+            "PWD",
         }
         return {
             "environment_keys": sorted(os.environ),

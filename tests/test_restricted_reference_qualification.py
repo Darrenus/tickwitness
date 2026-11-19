@@ -168,8 +168,11 @@ def test_sigkill_or_exit137_alone_is_not_oom_evidence() -> None:
 
 def test_pid_negative_requires_both_thread_and_process_exhaustion() -> None:
     facts = {
-        "threads_created": 20, "thread_limit_observed": True, "thread_release_confirmed": True,
-        "children_created": 20, "fork_errno": errno.EAGAIN,
+        "threads_created": 20,
+        "thread_limit_observed": True,
+        "thread_release_confirmed": True,
+        "children_created": 20,
+        "fork_errno": errno.EAGAIN,
     }
     value = record("pids", facts)
     value["host_facts"]["cgroup_after"]["pids.events"]["max"] = 1
@@ -181,7 +184,8 @@ def test_pid_negative_requires_both_thread_and_process_exhaustion() -> None:
 def test_cross_mount_rename_denial_is_scoped_to_its_operation() -> None:
     attempts = [
         {
-            "operation": name, "result": -1,
+            "operation": name,
+            "result": -1,
             "errno": errno.EXDEV if name == "input_replace" else errno.EROFS,
         }
         for name in ("input_write", "input_replace", "runtime_write", "root_create")
@@ -202,7 +206,8 @@ def test_cross_mount_rename_denial_is_scoped_to_its_operation() -> None:
 def test_clone3_uses_selected_enosys_while_other_namespace_denials_require_eperm() -> None:
     attempts = [
         {
-            "syscall_number": number, "result": -1,
+            "syscall_number": number,
+            "result": -1,
             "errno": errno.ENOSYS if number == 435 else errno.EPERM,
         }
         for number in (272, 308, 165, 435)
@@ -223,29 +228,48 @@ def test_cpu_throttle_without_original_deadline_stop_is_insufficient() -> None:
 
 def test_detached_stop_pairs_guest_ids_with_kernel_session_and_stopped_heartbeat() -> None:
     facts = {
-        "descendant_pid": 7, "descendant_sid": 6, "sigterm_ignored": True,
-        "double_fork": True, "heartbeat_nonce": NONCE,
+        "descendant_pid": 7,
+        "descendant_sid": 6,
+        "sigterm_ignored": True,
+        "double_fork": True,
+        "heartbeat_nonce": NONCE,
     }
     value = record("detached", facts)
     value["failure"] = "deadline_exceeded"
     value["host_facts"]["cgroup_after"]["pids.peak"] = 100
     assert assess(value)["status"] == "UNKNOWN"
     member = {
-        "pid": 207, "sid_host": 206, "namespace_pids": "207 7",
-        "namespace_session_ids": "206 6", "signal_ignored": "0000000000004000",
-        "ignores_sigterm": True, "uid": "61184 61184 61184 61184", "state": "S (sleeping)",
+        "pid": 207,
+        "sid_host": 206,
+        "namespace_pids": "207 7",
+        "namespace_session_ids": "206 6",
+        "signal_ignored": "0000000000004000",
+        "ignores_sigterm": True,
+        "uid": "61184 61184 61184 61184",
+        "state": "S (sleeping)",
     }
     value["host_facts"]["active_member_observations"] = [
         {"phase": "before_kill", "members": [member]}
     ]
-    heartbeat = json.dumps({
-        "nonce": NONCE, "guest_pid": 7, "guest_sid": 6,
-        "sigign": "0000000000004000", "ticks": "00000000000000000020",
-    })
-    value["host_facts"]["scratch_after"] = {"named_files": {"heartbeat": {
-        "text": heartbeat, "size": len(heartbeat.encode()),
-        "sha256": qualification._sha(heartbeat.encode()), "is_regular": True,
-    }}}
+    heartbeat = json.dumps(
+        {
+            "nonce": NONCE,
+            "guest_pid": 7,
+            "guest_sid": 6,
+            "sigign": "0000000000004000",
+            "ticks": "00000000000000000020",
+        }
+    )
+    value["host_facts"]["scratch_after"] = {
+        "named_files": {
+            "heartbeat": {
+                "text": heartbeat,
+                "size": len(heartbeat.encode()),
+                "sha256": qualification._sha(heartbeat.encode()),
+                "is_regular": True,
+            }
+        }
+    }
     assert assess(value)["status"] == "PASS"
     member["namespace_session_ids"] = "206 207"
     assert assess(value)["status"] == "FAIL"
@@ -279,9 +303,13 @@ def test_x32_kernel_enosys_is_not_seccomp_denial_proof() -> None:
     value = record(
         "abi_denial",
         {
-            "attempts": [{
-                "syscall_number": 0x40000000 | 39, "result": -1, "errno": errno.ENOSYS,
-            }],
+            "attempts": [
+                {
+                    "syscall_number": 0x40000000 | 39,
+                    "result": -1,
+                    "errno": errno.ENOSYS,
+                }
+            ],
             "tested_abi_route": "x32_getpid",
         },
     )
@@ -302,16 +330,25 @@ def test_boolean_errno_is_not_an_observed_integer_denial() -> None:
 
 
 def test_inherited_fd_absence_requires_real_offered_socket_canary() -> None:
-    facts = {"attempts": [
-        {"operation": name, "result": -1, "errno": errno.EBADF}
-        for name in ("socket_stat", "socket_write", "file_stat", "file_write")
-    ]}
+    facts = {
+        "attempts": [
+            {"operation": name, "result": -1, "errno": errno.EBADF}
+            for name in ("socket_stat", "socket_write", "file_stat", "file_write")
+        ]
+    }
     value = record("inherited_fds", facts)
     value["host_facts"]["fd_canary_observation"] = {
-        "socket_fd": 200, "file_fd": 201, "preconnected_inheritable": False,
-        "unexpected_socket_bytes": 0, "socket_received_bytes": 0,
-        "socket_preconnected": True, "socket_inheritable": True, "file_inheritable": True,
-        "socket_is_socket": True, "file_is_regular": True, "file_unchanged": True,
+        "socket_fd": 200,
+        "file_fd": 201,
+        "preconnected_inheritable": False,
+        "unexpected_socket_bytes": 0,
+        "socket_received_bytes": 0,
+        "socket_preconnected": True,
+        "socket_inheritable": True,
+        "file_inheritable": True,
+        "socket_is_socket": True,
+        "file_is_regular": True,
+        "file_unchanged": True,
     }
     assert assess(value)["status"] == "FAIL"
     value["host_facts"]["fd_canary_observation"]["preconnected_inheritable"] = True

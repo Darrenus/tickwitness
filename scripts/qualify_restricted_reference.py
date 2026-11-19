@@ -31,7 +31,11 @@ _FIELDS = {
     "filesystem": {"attempts", "link_replacement_attempts", "link_replacement_denials"},
     "readonly": {"attempts", "input_sha256_before", "input_sha256_after"},
     "environment": {
-        "environment_keys", "unexpected_keys", "secret_canaries_absent", "home", "tmpdir",
+        "environment_keys",
+        "unexpected_keys",
+        "secret_canaries_absent",
+        "home",
+        "tmpdir",
     },
     "identity": {"uid", "gid", "groups", "no_new_privs", "seccomp", "cap_eff"},
     "network_ipv4": {"attempts", "denial_stage", "external_packets_requested"},
@@ -41,15 +45,22 @@ _FIELDS = {
     "inherited_fds": {"attempts"},
     "memory": {"allocation_failed", "allocated_chunks"},
     "pids": {
-        "threads_created", "thread_limit_observed", "thread_release_confirmed",
-        "children_created", "fork_errno",
+        "threads_created",
+        "thread_limit_observed",
+        "thread_release_confirmed",
+        "children_created",
+        "fork_errno",
     },
     "disk_bytes": {"files_created", "bytes_written", "write_errno"},
     "inodes": {"files_created", "bytes_written", "write_errno"},
     "fds": {"opened_descriptors", "open_errno"},
     "file_size": {"bytes_written", "write_errno"},
     "detached": {
-        "descendant_pid", "descendant_sid", "sigterm_ignored", "heartbeat_nonce", "double_fork",
+        "descendant_pid",
+        "descendant_sid",
+        "sigterm_ignored",
+        "heartbeat_nonce",
+        "double_fork",
     },
     "namespace_denial": {"attempts"},
     "privileged_syscalls": {"attempts"},
@@ -123,7 +134,8 @@ def _all_denied(value: object, *, allowed: set[int], count: int) -> bool:
     for item in value:
         record = _mapping(item, "denial observation")
         if set(record) not in (
-            {"operation", "result", "errno"}, {"syscall_number", "result", "errno"}
+            {"operation", "result", "errno"},
+            {"syscall_number", "result", "errno"},
         ):
             raise ValueError("Actual denial fields differ")
         identifier = record.get("operation", record.get("syscall_number"))
@@ -187,8 +199,11 @@ def _detached_proof(host: dict[str, object], facts: dict[str, object], nonce: st
     pid = _integer(facts["descendant_pid"], "detached guest PID")
     sid = _integer(facts["descendant_sid"], "detached guest SID")
     if (
-        pid <= 1 or sid <= 1 or pid == sid
-        or facts["double_fork"] is not True or facts["sigterm_ignored"] is not True
+        pid <= 1
+        or sid <= 1
+        or pid == sid
+        or facts["double_fork"] is not True
+        or facts["sigterm_ignored"] is not True
         or facts["heartbeat_nonce"] != nonce
     ):
         return False
@@ -218,9 +233,13 @@ def _detached_proof(host: dict[str, object], facts: dict[str, object], nonce: st
     ignored = str(member.get("signal_ignored", ""))
     live = str(member.get("state", "")).split()
     if (
-        namespace_pids[0] != member.get("pid") or namespace_sids[0] != member.get("sid_host")
-        or namespace_sids[-1] != sid or not int(ignored, 16) & (1 << 14)
-        or member.get("ignores_sigterm") is not True or not live or live[0] in {"Z", "X"}
+        namespace_pids[0] != member.get("pid")
+        or namespace_sids[0] != member.get("sid_host")
+        or namespace_sids[-1] != sid
+        or not int(ignored, 16) & (1 << 14)
+        or member.get("ignores_sigterm") is not True
+        or not live
+        or live[0] in {"Z", "X"}
         or str(member.get("uid", "")).split() != ["61184"] * 4
     ):
         return False
@@ -239,9 +258,14 @@ def _detached_proof(host: dict[str, object], facts: dict[str, object], nonce: st
         raise ValueError("Stopped heartbeat fields differ")
     ticks = document["ticks"]
     return (
-        document["nonce"] == nonce and document["guest_pid"] == pid and document["guest_sid"] == sid
-        and document["sigign"] == ignored and isinstance(ticks, str) and len(ticks) == 20
-        and ticks.isdecimal() and int(ticks) > 0
+        document["nonce"] == nonce
+        and document["guest_pid"] == pid
+        and document["guest_sid"] == sid
+        and document["sigign"] == ignored
+        and isinstance(ticks, str)
+        and len(ticks) == 20
+        and ticks.isdecimal()
+        and int(ticks) > 0
     )
 
 
@@ -255,7 +279,10 @@ def _common(
     if result.get("stop_confirmed") is not True or result.get("cleanup_confirmed") is not True:
         raise ValueError("Actual complete stop or cleanup remains unconfirmed")
     if result.get("failure") in {
-        "setup_refused", "host_observation_failed", "stop_unconfirmed", "cleanup_unconfirmed"
+        "setup_refused",
+        "host_observation_failed",
+        "stop_unconfirmed",
+        "cleanup_unconfirmed",
     }:
         raise ValueError("Required actual host control or observation failed")
     if result.get("failure") not in {None, "deadline_exceeded", "stdout_limit", "stderr_limit"}:
@@ -267,8 +294,7 @@ def _common(
     before = _mapping(host.get("cgroup_before"), "pre-probe cgroup")
     after = _mapping(host.get("cgroup_after"), "post-stop cgroup")
     if any(
-        before.get(key) != value or after.get(key) != value
-        for key, value in CONTROL_VALUES.items()
+        before.get(key) != value or after.get(key) != value for key, value in CONTROL_VALUES.items()
     ):
         raise ValueError("Actual original resource readback differs")
     if _counter(after, "cgroup.events", "populated") != 0 or after.get("cgroup.procs") != []:
@@ -308,8 +334,11 @@ def _common(
 
 
 def _assess_normal(
-    name: str, facts: dict[str, object], host: dict[str, object],
-    before: dict[str, object], after: dict[str, object]
+    name: str,
+    facts: dict[str, object],
+    host: dict[str, object],
+    before: dict[str, object],
+    after: dict[str, object],
 ) -> bool:
     if name == "positive":
         return facts["input_read"] is True and facts["scratch_roundtrip"] is True
@@ -317,7 +346,8 @@ def _assess_normal(
         return (
             _all_denied(
                 facts["attempts"],
-                allowed={errno.EPERM, errno.EACCES, errno.ENOENT, errno.ELOOP}, count=8,
+                allowed={errno.EPERM, errno.EACCES, errno.ENOENT, errno.ELOOP},
+                count=8,
             )
             and facts["link_replacement_attempts"] == 128
             and facts["link_replacement_denials"] == 128
@@ -337,8 +367,11 @@ def _assess_normal(
         )
     if name == "identity":
         return (
-            facts["uid"] == 61184 and facts["gid"] == 61184 and facts["groups"] == []
-            and facts["no_new_privs"] == 1 and facts["seccomp"] == 2
+            facts["uid"] == 61184
+            and facts["gid"] == 61184
+            and facts["groups"] == []
+            and facts["no_new_privs"] == 1
+            and facts["seccomp"] == 2
             and int(str(facts["cap_eff"]), 16) == 0
         )
     if name.startswith("network_"):
@@ -351,12 +384,20 @@ def _assess_normal(
     if name == "inherited_fds":
         observed = _mapping(host.get("fd_canary_observation"), "host descriptor canaries")
         return (
-            observed.get("socket_fd") == 200 and observed.get("file_fd") == 201
+            observed.get("socket_fd") == 200
+            and observed.get("file_fd") == 201
             and observed.get("preconnected_inheritable") is True
-            and all(observed.get(key) is True for key in (
-                "socket_preconnected", "socket_inheritable", "file_inheritable",
-                "socket_is_socket", "file_is_regular", "file_unchanged",
-            ))
+            and all(
+                observed.get(key) is True
+                for key in (
+                    "socket_preconnected",
+                    "socket_inheritable",
+                    "file_inheritable",
+                    "socket_is_socket",
+                    "file_is_regular",
+                    "file_unchanged",
+                )
+            )
             and observed.get("unexpected_socket_bytes") == 0
             and observed.get("socket_received_bytes") == 0
             and _all_denied(facts["attempts"], allowed={errno.EBADF}, count=4)
@@ -420,17 +461,12 @@ def assess_probe(
             )
         elif name == "detached":
             facts = payload_facts(result, name, nonce)
-            passed = (
-                result.get("failure") == "deadline_exceeded"
-                and _detached_proof(host, facts, nonce)
+            passed = result.get("failure") == "deadline_exceeded" and _detached_proof(
+                host, facts, nonce
             )
         elif name == "output_flood":
-            passed = (
-                result.get("failure") in {"stdout_limit", "stderr_limit"}
-                and (
-                    result.get("stdout_truncated") is True
-                    or result.get("stderr_truncated") is True
-                )
+            passed = result.get("failure") in {"stdout_limit", "stderr_limit"} and (
+                result.get("stdout_truncated") is True or result.get("stderr_truncated") is True
             )
         elif name == "stdio_closed":
             passed = result["actual_exit_code"] == 0 and result.get("failure") is None
@@ -464,7 +500,9 @@ def assess_probe(
 
 def remote_guard() -> None:
     if (
-        sys.platform != "linux" or platform.machine() != "x86_64" or os.geteuid() != 0
+        sys.platform != "linux"
+        or platform.machine() != "x86_64"
+        or os.geteuid() != 0
         or os.environ.get("GITHUB_ACTIONS") != "true"
         or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted"
     ):
@@ -553,15 +591,22 @@ def main(arguments: list[str] | None = None) -> int:
         stopped = False
         for name in PROBE_NAMES:
             if stopped or time.monotonic_ns() >= deadline:
-                cases.append({
-                    "name": name, "admission_submitted": False, "status": "UNKNOWN",
-                    "reason": "not_admitted_after_original_window_or_uncertainty",
-                })
+                cases.append(
+                    {
+                        "name": name,
+                        "admission_submitted": False,
+                        "status": "UNKNOWN",
+                        "reason": "not_admitted_after_original_window_or_uncertainty",
+                    }
+                )
                 continue
             nonce = secrets.token_hex(16)
             case: dict[str, object] = {
-                "name": name, "nonce": nonce, "admission_submitted": True,
-                "status": "UNKNOWN", "reason": "execution_outcome_unavailable",
+                "name": name,
+                "nonce": nonce,
+                "admission_submitted": True,
+                "status": "UNKNOWN",
+                "reason": "execution_outcome_unavailable",
             }
             cases.append(case)
             write_report(evidence / "report.json", report)
@@ -571,28 +616,38 @@ def main(arguments: list[str] | None = None) -> int:
             write_report(evidence / "report.json", report)
             if assessment["status"] != "PASS":
                 stopped = True
-        all_passed = (
-            len(cases) == len(PROBE_NAMES) and all(case["status"] == "PASS" for case in cases)
+        all_passed = len(cases) == len(PROBE_NAMES) and all(
+            case["status"] == "PASS" for case in cases
         )
         report["controls_status"] = "QUALIFIED_REFERENCE_ONLY" if all_passed else "NOT_QUALIFIED"
         report.update(admission_accounting(cases))
         report["completed_at_monotonic_ns"] = time.monotonic_ns()
         write_report(evidence / "report.json", report)
-        sys.stdout.write(json.dumps({
-            "controls_status": report["controls_status"], "production_m1": "DISABLED",
-            "admissions_charged": report["admissions_charged"],
-            "observed_payload_starts": report["observed_payload_starts"],
-            "manifest_sha256": runner.manifest_sha256,
-        }) + "\n")
+        sys.stdout.write(
+            json.dumps(
+                {
+                    "controls_status": report["controls_status"],
+                    "production_m1": "DISABLED",
+                    "admissions_charged": report["admissions_charged"],
+                    "observed_payload_starts": report["observed_payload_starts"],
+                    "manifest_sha256": runner.manifest_sha256,
+                }
+            )
+            + "\n"
+        )
         return 0 if all_passed else 1
     except Exception as error:
         admitted_names = {case["name"] for case in cases}
         for name in PROBE_NAMES:
             if name not in admitted_names:
-                cases.append({
-                    "name": name, "admission_submitted": False, "status": "UNKNOWN",
-                    "reason": "not_admitted_after_harness_failure",
-                })
+                cases.append(
+                    {
+                        "name": name,
+                        "admission_submitted": False,
+                        "status": "UNKNOWN",
+                        "reason": "not_admitted_after_harness_failure",
+                    }
+                )
         report["failure"] = {"type": type(error).__name__, "reason": str(error)[:2048]}
         report.update(admission_accounting(cases))
         if evidence.is_dir() and not evidence.is_symlink():

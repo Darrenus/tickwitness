@@ -85,13 +85,13 @@ def main() -> int:
             if (cgroup / name).read_text().strip() != value:
                 raise ValueError("Reference controller readback differs: " + name)
         os.sched_setscheduler(0, os.SCHED_OTHER, os.sched_param(0))
-        for number, value in (
+        for number, ceiling in (
             (resource.RLIMIT_FSIZE, 8388608),
             (resource.RLIMIT_NOFILE, 64),
             (resource.RLIMIT_CORE, 0),
             (resource.RLIMIT_RTPRIO, 0),
         ):
-            resource.setrlimit(number, (value, value))
+            resource.setrlimit(number, (ceiling, ceiling))
         os.setgroups([])
         os.setresgid(61184, 61184, 61184)
         os.setresuid(61184, 61184, 61184)
