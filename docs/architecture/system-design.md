@@ -1,24 +1,28 @@
 # TickWitness：系统设计
 
-状态：**Proposed / 尚未实现**。TickWitness 是面向可重放证据的研究平台，目标仓库为 `Darrenus/tickwitness`。本文给出分阶段目标架构及其发布约束。接口、目录、表名和状态均为建议契约，未经过实现验证；不构成现有产品能力声明。领域术语以 [domain-model.md](domain-model.md) 为准。
+更新：2026-11-19，Asia/Singapore。本文是 **目标架构与分阶段实施约束**，保留尚未实现的接口、目录、表名和流程设想；实际支持以[分版本矩阵](../support.md)、各功能合同及 owner 接受记录为准。S13-01 的[执行信任合同](../contracts/execution-trust-v1.md)冻结当前 M0、未实现/未资格/关闭的 M1 与不支持的 M2，不能从下图或目标组件名称推断已有沙箱、服务端点或资源保证。领域术语以 [domain-model.md](domain-model.md) 为准。
 
 当前实施次序与发布 gate 见 [路线图](../planning/roadmap.md)、[Sprint backlog](../planning/sprint-backlog.md) 和 [质量策略](../quality/quality-strategy.md)。本文描述目标架构及依赖，不要求所有目标能力同时进入 0.1。项目软件采用已选择的 Apache-2.0；依赖和输入数据权利独立核查。
 
 ## 1. 架构目标与初期边界
 
-平台首先面向本地研究者：读取已捕获的数据与策略 artifact，冻结研究协议，使用现成引擎执行受约束情景，将反例、覆盖和判定保存为可迁移证据包。初期采用 **Python 模块化单体 + 隔离 worker + 本地内容寻址存储 + SQLite 元数据目录 + Parquet/DuckDB 分析**。
+平台首先面向本地研究者：读取已捕获的数据与策略 artifact，冻结研究协议，使用现成引擎执行受约束情景，将反例、覆盖和判定保存为可迁移证据包。目标组合为 **Python 模块化单体 + 受控 worker + 本地内容寻址存储 + SQLite 元数据目录 + Parquet/DuckDB 分析**；分析层与安全隔离等目标能力不因架构列名而成立。
 
 业务边界与部署边界分别设计。多个 bounded context 可以在一个进程中运行；计算任务和不可信代码需要独立执行边界，不意味着每个上下文都要变成服务。首期不引入 Kafka、Kubernetes、分布式事务或强制 Event Sourcing。
 
 首个实施范围应限制为一个交易所、一个交易对、一个版本固定的引擎 adapter、少量基础策略和两种变换：额外延迟压力与L2队列解释。时钟证据先保留来源、区间和未知值；获得可校准证据后再扩展时钟情景变换。多交易所、实时托管、多用户协作和更多成交模型逐项扩展。
 
+当前已接受路径是规范化 JSONL、不可执行声明、限定 EUR-USD 内置执行/见证、预算/Job 与部分资源控制、五方法 SDK 子集，不是任意策略 runner 或通用采集/分析/托管平台。用户 `.py` 只作有界语法/哈希绑定数据登记，native 路径执行已资格内置策略。单 owner 在受支持远端机器运行仍是 M0；M1 的具体机制/环境/数字限额未选定，M2 的身份、权限及服务安全边界未实现。后续发布范围按冻结合同及真实证据推进。
+
 ## 2. 组件与信任边界
+
+下图保留目标数据流；标为规划的服务、只读挂载及不可信执行边界尚未提供。窄 IPC 和 coordinator 的逻辑写入权不代表 OS 权限隔离。
 
 ```mermaid
 flowchart TD
   USER[用户 / 自动化客户端] --> CLI[CLI / Python SDK]
-  USER --> API[Typed API]
-  USER --> MCP[MCP 工具入口]
+  USER --> API[Typed HTTP API / 规划未提供]
+  USER --> MCP[MCP 工具入口 / 规划未提供]
   CLI --> APP[同一应用服务 / 可信 Coordinator]
   API --> APP
   MCP --> APP
@@ -26,13 +30,14 @@ flowchart TD
   APP --> CAT[(SQLite Catalog + Outbox)]
   APP --> CAS[(CAS 对象 / Manifest)]
   APP --> QUEUE[作业租约 / 本地调度器]
-  QUEUE --> WORKER[受控 Worker]
+  QUEUE --> WORKER[受控可信 Worker / 当前 M0]
   WORKER -->|窄 IPC / 心跳与提交| APP
   WORKER --> ADAPTER[引擎 Adapter / 能力检查]
   ADAPTER --> ENGINE[固定版本第三方回放引擎]
   APP --> VERIFY[独立可行性 / 见证验证器]
-  ENGINE --> STRAT[隔离策略执行边界]
-  CAS -->|只读挂载| WORKER
+  ENGINE --> STRAT[当前受支持内置策略]
+  ENGINE -.-> ISOLATE[不可信执行边界 / M1 未实现关闭]
+  CAS -->|目标只读挂载 / M1 要求| WORKER
   WORKER -->|受限暂存输出| STAGE[Staging]
   STAGE --> CHECK[Schema / 配额 / 哈希检查]
   CHECK --> CAS
@@ -43,9 +48,9 @@ flowchart TD
   QUERY --> APP
 ```
 
-策略执行边界的具体方式取决于引擎能力。若引擎必须把策略代码加载进同一 Python 解释器，则**整个执行 worker 都视为不可信区域**，通过受控宿主验证输出。不能把图中的逻辑分离误当成已经具有安全隔离。
+未来策略执行边界的具体方式取决于选定环境与引擎能力。若将来加载不可信代码到引擎的同一 Python 解释器，则整个执行 worker 都须纳入不可信区域，由可信控制侧独立验证输出。当前不执行已登记的用户源码，也没有该隔离实现；不能把图中的逻辑分离误当成已有安全边界。
 
-可信 coordinator 是本地 Catalog 的唯一 writer，可与应用服务同进程部署；独立 verifier 由其调度，不信任策略 worker 自报的验证结果。worker 只有只读输入和受配额 staging，通过窄 IPC 交互，不获得数据库写连接或最终发布权。
+现有 Job 路径由可信 coordinator 写 Catalog、校验原预算和最终结果；native worker 接收窄数据载荷，不获得 Catalog/ledger 路径或逻辑最终发布权。但 worker 仍以同 UID 及宿主权限运行，继承环境没有清洗，生产路径没有网络默认拒绝。只读输入/TCB、受总配额 staging、独立身份与文件视图属于未来 M1 要求，不是路径未传递就已实现的权限收缩。当前有范围的 CPU/单文件/FD、deadline、group 停止及 owned scratch 检查与其缺口见[执行信任矩阵](../contracts/execution-trust-v1.md#current-controls-and-their-exact-limits)。
 
 ## 3. 建议代码组织
 
@@ -152,12 +157,14 @@ CAS 去重不自动提供访问控制。将来多租户须按 workspace scope �
 
 ### 6.1 执行流程
 
+以下是后续统一调度/transport 的目标流程，不是当前 SDK v1 接口或 M1 安全边界。已实现 Job 的冻结描述、原预算、显式重试和 ACK 按[既有合同](../contracts/job-followups-v1.md)执行，不因目标流程而新增权限或自动重跑。
+
 ```mermaid
 sequenceDiagram
-  participant Client as CLI / SDK / API / MCP
+  participant Client as CLI / 未来 SDK/API/MCP transport
   participant App as 应用服务 / 可信 Coordinator
   participant DB as Catalog
-  participant Worker as 隔离 Worker
+  participant Worker as 受控 Worker / 目标流程
   participant Stage as 受限 Staging
   participant CAS as CAS / Manifest
   Client->>App: SubmitCampaign(protocol_ref, idempotency_key)
@@ -233,9 +240,9 @@ checkpoint 至少包括数据 cursor 和 epoch、初始/当前订单簿、策略
 
 ## 8. API、SDK 与 MCP
 
-所有入口调用相同应用服务和授权端口。MCP 不是特权后门，也不应内嵌另一套判定逻辑。Python SDK 可以在本地嵌入应用服务；HTTP 客户端和 MCP 只是不同 transport。
+现有 CLI 与 SDK v1 复用各自已开放的应用服务，SDK 仅五个数据/声明/受限 development-read 方法，没有执行或 Job handle。HTTP/MCP 为条件性 DEFER，当前未实现，也没有 listener。未来入口须复用同一应用服务和既有授权规则，不能内嵌另一套判定逻辑或作为特权后门；transport、用户权限与执行隔离分别验收。
 
-建议 use cases：
+以下是目标 use cases，不是现有 SDK 方法目录、HTTP 路由或 MCP 工具清单：
 
 | 应用服务 | 输入 | 输出 |
 | --- | --- | --- |
@@ -251,30 +258,34 @@ checkpoint 至少包括数据 cursor 和 epoch、初始/当前订单簿、策略
 
 公开请求/响应采用版本化 JSON Schema；不允许 NaN/Infinity，64 位以上精确整数在跨 JavaScript 边界时用单位明确的十进制字符串。时间使用 epoch ns 的字符串并明确 clock domain；人类展示层再格式化时区。
 
-长任务返回 job ID；HTTP 可采用 `202 Accepted`，SDK 返回 handle，MCP 返回同一 job ref 并通过查询工具获取状态。分页、大小上限、deadline、错误代码、request ID、schema version 均属于契约。
+未来提供相应长任务 transport 时，可采用 HTTP `202 Accepted`、明确的 SDK handle 或 MCP job ref/查询工具；它们仍需单独冻结、实现与验收，不自动扩展当前 SDK v1。分页、大小上限、deadline、错误代码、request ID、schema version 均须进入对应契约。
 
-MCP 权限分级可以是 `read_evidence`、`query_registered_data`、`submit_bounded_run`、`manage_protocol`。Agent 不拥有修改已冻结对象、解封任意 holdout、执行任意 shell、调用宿主文件系统或把 draft report 提升为 final verdict 的能力。正式权限隔离尚未实现前，README 应明确只适合可信本地研究。
+未来 MCP 权限分级可以是 `read_evidence`、`query_registered_data`、`submit_bounded_run`、`manage_protocol`，须禁止 Agent 修改已冻结对象、解封任意 holdout、执行任意 shell、调用宿主文件系统或把 draft report 提升为 final verdict。当前没有该入口或完整权限隔离；这些目标规则不能限制 owner 在产品外另行授予 Agent 的宿主权限，README 应明确现有 M0 范围。
 
 确认数据控制分两层逐步实现：冻结协议的最小应用路径即检查研究阶段与样本范围，拒绝探索接口读取确认数据；后续 exposure ledger 记录何人、何时、通过哪个协议接触过哪些结果。派生协议、新 trial 或重新开窗必须继承已接触记录，不能恢复未见状态。该策略约束应用入口；本地宿主 owner 能直接读取其文件，产品不承诺对 owner 保密或阻止其离线篡改。
 
 ## 9. 不可信代码与发布门槛
 
-**独立 Python 进程只隔离崩溃，不提供恶意代码安全边界。** 用户策略、依赖和自定义变换可能读取文件、联网、fork、消耗内存、写超量输出或伪造结果。普通 Docker 配置也不能仅凭“用了容器”就宣称安全。
+**独立 Python 进程可以提供限定的崩溃/超时边界，不提供恶意代码安全边界。** `-I`、临时 cwd、有限 FD 或 SDK 测试中的 socket/Popen monkeypatch 同样不是生产安全隔离。被执行的恶意依赖/代码仍可能读取宿主文件与继承凭据、联网、fork、消耗内存或修改同 UID 文件；普通容器也不能仅凭名称证明安全。
 
-本地首期可仅运行用户自己审阅的可信策略，明确风险模型；即使如此仍应启用资源限制、只读输入、独立工作目录和无凭据环境。托管运行第三方代码前必须有独立 release gate：
+当前只支持 M0 中已资格的内置 profile 和可信依赖；`.py` 源码登记不授权执行，普通 development/确认访问策略也不能对宿主 owner 隐藏其文件。现有 Job 的可选 CPU/单文件/FD 控制、固定入场期限、owned scratch 与停止检查按各自合同成立，不提供整树 RAM/PID/CPU、总磁盘/inode、环境清洗、网络拒绝或恶意逃逸后代控制。哈希只能相对锚点核验内容，不认证作者、真实来源或 owner 的全部历史。
 
-| 控制 | 最低可验证要求 |
+[Execution trust v1](../contracts/execution-trust-v1.md) 的 M1 当前未实现、未资格、关闭，M2 托管/需要独立身份权限的协作服务不支持。下表是未来选择一个有界 M1 profile 后必须以真实负例验证的要求；具体机制、环境和数字限额在本故事均为 NOT_SELECTED，不得默认降级到 M0 运行不可信代码：
+
+| 未来控制 | 启用前最低证据要求，当前未完成 |
 | --- | --- |
-| 执行隔离 | 经评估的容器/微虚拟机或等效边界；非 root、无宿主敏感挂载、无 Docker socket、capabilities 最小化 |
-| 网络 | 默认无网络；依赖预先构建和固定；不能访问云 metadata、内网和控制平面 |
-| 文件系统 | 输入只读、输出独立且受配额、禁止逃逸 symlink 和任意宿主路径 |
-| 资源 | CPU、memory、PID、文件描述符、墙钟、磁盘与输出字节硬限制；宿主可强制终止 |
-| 凭据 | worker 不持有用户 API key、服务数据库写凭据或对象存储全权限 token |
+| 执行隔离 | 声明并验证隔离身份、文件视图、TCB 与权限；无宿主敏感挂载/设备/控制 socket，不能从普通容器推定成立 |
+| 网络 | OS 默认拒绝，包括 DNS、IPv4/IPv6、loopback 与继承 socket 路径；仅保留明确限定的非网络 IPC |
+| 文件系统 | 输入/TCB 不可变只读、仅私有受总配额 scratch 可写；以越界/链接/替换攻击证明控制文件和宿主 canary 未改 |
+| 资源 | 声明数字、单位及整树范围的 CPU/time、memory、PID、FD、总写入存储/inode 控制；实际耗尽与独立停止观测 |
+| 凭据 | 最小环境/FD allowlist，无 home、宿主 socket、用户 API key、服务写凭据或全权限 token；验证秘密 canary 不可见 |
 | 通信 | schema 化窄 IPC；禁止宿主反序列化不可信 pickle；限定日志和结果大小 |
 | 输出核验 | 宿主不信任 worker 状态和哈希声明，独立检查对象与关键账本不变量 |
-| 验证 | 专项测试文件读取、网络、子进程、fork bomb、内存/磁盘耗尽、输出污染和超时逃逸 |
+| 验证 | 在已授权远端 profile 实测文件/网络越权、fork/detach、内存/多文件/inode 耗尽、输出污染、停止与安全回收；缺证据/不确定状态保持 UNKNOWN/NOT_QUALIFIED |
 
-release gate 未通过就不能提供“任意仓库上传即运行”的公开托管服务。多租户身份、配额、对象授权和租户隔离同样是托管 gate，不属于可推迟的 UI 功能。
+安全模式或验收不能重置原协议预算；真实重跑须使用同一原预算新槽，已提交结果只复核/ACK，失败/中断/未知 reservation 不退款。独立安全复核尚未进行；开启不可信能力前按工作协议寻求实际选定范围的外部复核，证据不足就保持关闭。CI、AI 和 owner 接受不是该独立复核，也不计仍为 0/0/PENDING 的外部真人复验。
+
+即使某个 M1 profile 通过，M2 也不会自动可用。“任意仓库上传即运行”的托管、协作身份/归属/权限、租户隔离和服务运维仍需独立威胁模型、明确授权与发布 gate，不能作为延后补齐的 UI 功能。
 
 ## 10. 确定性与版本策略
 
@@ -313,7 +324,7 @@ GC 采用 manifest 引用图与宽限期，保护进行中的 staging、租约�
 | 最简化测试 | 缩减保留有效初始状态与序列；重放仍触发同一证伪条件；最简性主张符合实际算法 |
 | 幂等与故障测试 | 在对象发布、manifest、Catalog commit、租约更新等边界崩溃后能安全重试 |
 | 恢复一致性测试 | checkpoint resume 与完整重放在声明确定性级别一致；不支持的引擎拒绝恢复 |
-| 安全测试 | 本地可信模式边界清晰；托管模式通过第 9 节的逃逸和资源控制验证 |
+| 安全测试 | M0 边界与实际实现一致；未来 M1 绑定具体 profile 的第9节负例，M2 仍须独立服务门；文档/旧 CI 不充作已跑攻击 |
 | 产品端到端测试 | 从干净环境可离线验证证据包并重放至少一个最小反例，不依赖 Agent 的记忆 |
 
 性能 benchmark 分开测采集、标准化、范围查询、单次回放、搜索和 witness 验证，报告硬件、数据规模、真实/合成输入、冷热缓存、重跑命令和误差。首期没有实测数据前，不把吞吐、P99 或压缩比写成已达成指标。
@@ -323,8 +334,8 @@ GC 采用 manifest 引用图与宽限期，保护进行中的 staging、租约�
 | 阶段 | 架构 | 迁移触发条件与退出要求 |
 | --- | --- | --- |
 | A：本地可信研究 | 模块化单体、SQLite、本地 CAS、单机 workers | 两个可重放 witness、明确 coverage、原子发布和崩溃恢复验证通过 |
-| B：团队共享 | 同一领域模块、Postgres Catalog、对象存储、独立调度 | 出现多主机写入需求、SQLite 锁等待持续超过约定 SLO，或权限/运维需要集中服务；完成数据迁移、幂等、租约和备份恢复验证 |
-| C：托管不可信执行 | 独立控制平面与沙箱 workers、租户配额/授权 | 第 9 节 gate、多租户隔离、依赖构建和运营响应验证通过后才开放 |
+| B：团队共享，当前不支持的服务目标 | 同一领域模块、Postgres Catalog、对象存储、独立调度 | 出现多主机/集中权限需求后另立 M2 服务威胁模型；迁移、幂等、租约、备份恢复及身份/归属/权限边界均需实际验收 |
+| C：托管不可信执行，当前不支持 | 独立控制平面与经资格的执行边界、租户配额/授权 | M1 具体 profile、第9节独立复核及 M2 多租户/服务/运营门分别通过后才可另行授权开放 |
 | D：有证据的拆分 | 按实际瓶颈拆独立数据或执行服务 | 存在独立扩缩容/故障隔离/团队所有权需求；先保持 published contracts，再拆部署 |
 
 不以数据行数本身作为迁移数据库理由；SQLite 的问题主要来自写入并发、跨主机协调和运维要求。Parquet 分析规模增大可以先优化布局和 DuckDB 扫描，不必同时更换 Catalog。

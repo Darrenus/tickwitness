@@ -1,6 +1,6 @@
 # TickWitness 需求与验收追踪
 
-状态：滚动维护，2026-10-25。以下是产品目标、领域规则、故事与目标验收证据的映射，不表示整行能力已实现。实际工程状态见[Sprint1](sprint-01-status.md)、[Sprint2](sprint-02-status.md)与GitHub Issues。规则定义以[领域模型](../architecture/domain-model.md)及[质量策略](../quality/quality-strategy.md)为准。
+状态：滚动维护，2026-11-19 Asia/Singapore。以下是产品目标、领域规则、故事与目标验收证据的映射，不表示整行能力已实现。实际工程状态见各Sprint记录、[已接受SDK与接入状态](sprint-12-status.md)、[执行信任与隔离状态](sprint-13-status.md)及GitHub Issues。规则定义以[领域模型](../architecture/domain-model.md)及[质量策略](../quality/quality-strategy.md)为准。
 
 | 用户目标或质量规则 | 领域责任 | 首批故事 | 发布证据 |
 | --- | --- | --- | --- |
@@ -13,13 +13,15 @@
 | 缩减不改变原研究条件 Q-07/Q-11 | 搜索 / 回放 | S09-01、S09-02、S09-03 | [S09状态](sprint-09-status.md)：01a准备与01b原预算回放／terminal投影审计已接受；02有限局部缩减与独立false数值保持判定实现中，cooperative取消不扩大原预算；当前不支持checkpoint |
 | 探索和确认有透明账本 Q-09/Q-10 | 实验注册 | S02-03、S07-01、S08-02 | 所有attempt、暴露继承、固定确认窗口和声明范围 |
 | 长任务可控和可恢复 | 作业 / coordinator | S10-01、S10-02、S10-03 | 崩溃、重试、fencing、取消与资源限制演练 |
-| 数据与策略不越过信任边界 | 导入 / 执行 / 入口 | S02-01、S04-02、S13-01–S13-03 | 安全解析负例；支持范围内的隔离测试；未达范围关闭 |
+| 数据与策略不越过信任边界 | 导入 / 执行 / 入口；infrastructure与运维边界 | S02-01、S04-02、S13-01–S13-03 | [执行信任合同](../contracts/execution-trust-v1.md)／[ADR0044](../adr/0044-explicit-execution-trust-boundaries.md)、[S13状态](sprint-13-status.md)：M0仅现有已资格内置profile；M1未实现／未资格，M2托管权限边界不支持；T01–T10区分当前控制证据与后续未执行负例，缺证保持关闭 |
 | 接入现有工作流 | 应用服务 / CLI / SDK | S04-01、S12-01、S12-02 | [已接受SDK与接入状态](sprint-12-status.md)、[自有案例流程](../user-onboarding.md)及[实际招募缺口](s12-02-recruitment-gap.md)；材料与技术成功不冒充真人激活 |
 | SDK兼容与自助接入 | SDK driving adapter / 共享应用服务 / 质量 | S12-03 | [兼容合同](../contracts/sdk-compatibility-v1.md)、具名文档实际安装执行、SDK/CLI未知字段拒绝与开放参数保留、[分层支持矩阵](../support.md)；四档SDK新资格不继承历史绿色 |
 | 长期证据可读、更正可追踪 | 证据 / 运维 | S16-02、S18-01–S18-03、S19-02 | 原件保留、迁移、撤回、依赖影响和备份恢复 |
 | 自动搜索有可测价值 | 搜索 / 产品验证 | S07-01、S20-01、S21-01 | 同预算基线、未见案例、失败结果和独立复验 |
 | 用户愿意再次使用 | 产品验证 | S12-02、S16-01、S21-03、S24-03 | Beta激活门与GA满30天第二研究复用门；[空白记录](../templates/onboarding-case-v1.md)及[示例判定](../templates/onboarding-review-examples.md)不计采用 |
 | 能持续维护与发行 | 交付 / 治理 | S19-01–S19-03、S22-01–S24-03 | 许可、SBOM、provenance、RC、支持矩阵和维护政策 |
+
+S13-01先冻结三模式及威胁模型，不新增sandbox、模式开关或研究权限。原S13专项10+16+8=34h和持续质量容量不变；原协议预算及5／8／11槽、golden／PR94不重置或退款。既有安全解析／Job／SDK测试不构成本轮隔离攻击资格；本候选远端检查、owner接受、独立安全复核与外部真人研究复验分别记录。独立安全复核尚未完成，外部真人0／0／PENDING及实际自有案例空登记保持，不能以文档或CI成功计作采用。
 
 ## 领域建模如何持续演进
 
