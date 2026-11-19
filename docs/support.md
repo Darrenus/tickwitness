@@ -62,7 +62,7 @@ runner 标签不是所有 CPU 架构、发行版或文件系统的认证。实�
 | 模式 | 当前状态 | 使用或启用边界 |
 | --- | --- | --- |
 | M0 TRUSTED_LOCAL／可信本地 | 当前支持边界，仅既有已资格内置 profile | owner、输入/存储根及祖先、解释器、依赖和宿主可信；只处理合法授权数据。同一可信 owner 在受支持远端主机通过 SSH 操作仍是 M0 |
-| M1 RESTRICTED_SINGLE_HOST／受限单机隔离 | 规范要求，**未实现／未资格／关闭** | S13-02已先冻结[内部参考环境与限额](contracts/restricted-reference-v1.md)，产品执行仍未接入；实际控制证据与独立安全复核另计，缺证据保持不可用，不自动退回 M0 执行不可信代码 |
+| M1 RESTRICTED_SINGLE_HOST／受限单机隔离 | 内部参考后端候选已实现；**参考未获资格／产品关闭** | S13-02已先冻结[内部参考环境与限额](contracts/restricted-reference-v1.md)，[实际环境预检拒绝](security/restricted-reference-evidence-2026-11-19.md)，完整负例资格未通过，产品执行仍未接入；实际控制证据与独立安全复核另计，缺证据保持不可用，不自动退回 M0 执行不可信代码 |
 | M2 HOSTED_UNSUPPORTED／不支持托管 | 不支持不可信托管任务、需要独立用户/租户权限边界的协作和多租户服务 | 尚无独立用户/租户身份、资源归属与权限、跨用户数据/秘密隔离、租户配额和服务运维资格；自托管、容器或单项 M1 负例通过不自动提供这些边界 |
 
 当前 0.2 的可选 [Job controls](contracts/job-controls-v1.md) 在支持的平台上设置 worker CPU、单文件与 FD 限额，并以固定 monotonic deadline 控制入场和发布；未配置的历史 worker 不自动获得这些控制。owned scratch、进程组终止和 no-follow 回收处理的是其已声明生命周期，不是 hostile/escaped 进程 containment。同步校验、kernel IO、fsync 可能延迟物理停止或确认；未知停止、live lifetime 或路径替换时按原合同保留 scratch 和诊断。

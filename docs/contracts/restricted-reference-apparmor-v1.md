@@ -68,3 +68,7 @@ Independent human security review remains NOT_PERFORMED; external-human reproduc
 - [Ubuntu24.04 userns restrictions and named-unconfined exception](https://documentation.ubuntu.com/release-notes/24.04/); [Ubuntu AppArmor scope](https://documentation.ubuntu.com/security/security-features/privilege-restriction/apparmor/).
 - [aa_change_profile](https://manpages.ubuntu.com/manpages/noble/man2/aa_change_profile.2.html), [parser add/cache semantics](https://manpages.ubuntu.com/manpages/noble/man8/apparmor_parser.8.html), [NNP/LSM semantics](https://docs.kernel.org/userspace-api/no_new_privs.html).
 - [Upstream named-unconfined inheritance report](https://gitlab.com/apparmor/apparmor/-/issues/527): a reported behavior to verify, not certification of the selected GHA kernel.
+
+## Actual post-freeze status
+
+Policy/contract freeze commits `0860658` and `aceda2c` were pushed before implementation. The loader and explicit transition candidate now exist, but actual run44548411070/head`8b9d8ff` refused before external commands or load because 100 of124 loaded attachments were opaque. [Evidence and the remaining environment gate](../security/restricted-reference-evidence-2026-11-19.md) supersede only the implementation-status wording above, not any control or acceptance rule. Loading, transition and complete negative qualification have still not passed.

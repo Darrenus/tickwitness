@@ -357,14 +357,26 @@ def test_known_cache_config_is_overridden_even_for_readonly_version_command(
 
 def pseudo_stat(*, size: int = 4096, inode: int = 2) -> SimpleNamespace:
     return SimpleNamespace(
-        st_dev=1, st_ino=inode, st_mode=stat.S_IFREG | 0o444, st_uid=0, st_gid=0,
-        st_nlink=1, st_size=size, st_mtime_ns=0, st_ctime_ns=0,
+        st_dev=1,
+        st_ino=inode,
+        st_mode=stat.S_IFREG | 0o444,
+        st_uid=0,
+        st_gid=0,
+        st_nlink=1,
+        st_size=size,
+        st_mtime_ns=0,
+        st_ctime_ns=0,
     )
 
 
 def stubbed_read(
-    monkeypatch: pytest.MonkeyPatch, path: Path, *, size: int = 4096,
-    after_inode: int = 2, raw: bytes = b"Y\n", limit: int = 16,
+    monkeypatch: pytest.MonkeyPatch,
+    path: Path,
+    *,
+    size: int = 4096,
+    after_inode: int = 2,
+    raw: bytes = b"Y\n",
+    limit: int = 16,
 ) -> bytes:
     stats = iter((pseudo_stat(size=size), pseudo_stat(size=size, inode=after_inode)))
     chunks = iter((raw, b""))
@@ -379,15 +391,20 @@ def stubbed_read(
 @pytest.mark.parametrize(
     "path",
     [
-        policy.AA_ENABLED, policy.RESTRICT, policy.PROFILE_TABLE,
-        policy.CONTROLLER_LABEL, policy.CONTROLLER_STATUS, policy.BOOT_ID,
+        policy.AA_ENABLED,
+        policy.RESTRICT,
+        policy.PROFILE_TABLE,
+        policy.CONTROLLER_LABEL,
+        policy.CONTROLLER_STATUS,
+        policy.BOOT_ID,
         policy.FEATURE_ROOT / "domain/change_profile",
         policy.PROFILE_ROOT / "other.1/name",
         policy.PROFILE_ROOT / "parent.1/profiles/hat.2/attach",
     ],
 )
 def test_fixed_kernel_input_uses_actual_bytes_not_reported_stat_size(
-    monkeypatch: pytest.MonkeyPatch, path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    path: Path,
 ) -> None:
     assert stubbed_read(monkeypatch, path) == b"Y\n"
 
@@ -395,16 +412,22 @@ def test_fixed_kernel_input_uses_actual_bytes_not_reported_stat_size(
 @pytest.mark.parametrize(
     "path",
     [
-        Path("/tmp/policy-report.json"), policy.STAGED_POLICY, policy.ABI,
-        policy.PARSER_CONFIG, policy.LIBAPPARMOR,
-        Path("/sys/kernel/unselected-input"), Path("/proc/sys/kernel/random/unselected"),
+        Path("/tmp/policy-report.json"),
+        policy.STAGED_POLICY,
+        policy.ABI,
+        policy.PARSER_CONFIG,
+        policy.LIBAPPARMOR,
+        Path("/sys/kernel/unselected-input"),
+        Path("/proc/sys/kernel/random/unselected"),
         policy.PROFILE_ROOT / "other.1/raw_data",
         policy.PROFILE_ROOT / "other.1/not-profiles/hat.2/name",
     ],
 )
 @pytest.mark.parametrize("reported_size", [0, 4096])
 def test_disk_and_unselected_paths_keep_exact_reported_length(
-    monkeypatch: pytest.MonkeyPatch, path: Path, reported_size: int,
+    monkeypatch: pytest.MonkeyPatch,
+    path: Path,
+    reported_size: int,
 ) -> None:
     with pytest.raises(policy.SetupRefused):
         stubbed_read(monkeypatch, path, size=reported_size)
@@ -431,3 +454,93 @@ def test_parent_components_are_rejected_before_open(monkeypatch: pytest.MonkeyPa
         with pytest.raises(policy.SetupRefused, match="traversal"):
             policy.bounded_read(policy.FEATURE_ROOT / "../policy", 16)
     assert opened == []
+
+
+def test_main_unknown_attachment_refuses_before_any_command_or_policy_load(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Model the main admission boundary, not a real root or kernel qualification."""
+    evidence = tmp_path / "evidence"
+    staged = tmp_path / "selected-policy"
+    release = tmp_path / "os-release"
+    release.write_text('ID=ubuntu\nVERSION_ID="24.04"\n')
+    inputs = {
+        "AA_ENABLED": "Y\n",
+        "RESTRICT": "1\n",
+        "CONTROLLER_LABEL": "unconfined\n",
+        "CONTROLLER_STATUS": "NoNewPrivs:\t0\n",
+        "PROFILE_TABLE": "other (enforce)\n",
+    }
+    for name, value in inputs.items():
+        location = tmp_path / name.lower()
+        location.write_text(value)
+        monkeypatch.setattr(policy, name, location)
+    profiles = tmp_path / "profiles"
+    profile_directory(profiles / "other.1", "other", "enforce", "<unknown>")
+    monkeypatch.setattr(policy, "PROFILE_ROOT", profiles)
+    monkeypatch.setattr(policy, "EVIDENCE", evidence)
+    monkeypatch.setattr(policy, "STAGED_POLICY", staged)
+    monkeypatch.setattr(policy, "POLICY_SOURCE", tmp_path / "must-not-read-policy")
+    monkeypatch.setattr(policy.sys, "argv", ["prepare_reference_policy.py"])
+    monkeypatch.setattr(policy.sys, "platform", "linux")
+    monkeypatch.setattr(policy.platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(policy.os, "geteuid", lambda: 0)
+    for name, value in {
+        "GITHUB_ACTIONS": "true",
+        "RUNNER_ENVIRONMENT": "github-hosted",
+        "GITHUB_SHA": "a" * 40,
+        "GITHUB_RUN_ID": "1",
+        "GITHUB_RUN_ATTEMPT": "1",
+    }.items():
+        monkeypatch.setenv(name, value)
+    original_lstat = Path.lstat
+
+    def modeled_root_directory(path: Path) -> object:
+        observed = original_lstat(path)
+        if path == evidence:
+            return SimpleNamespace(st_uid=0, st_mode=observed.st_mode)
+        return observed
+
+    def selected_path(value: object) -> Path:
+        return release if str(value) == "/etc/os-release" else Path(value)
+
+    calls = []
+
+    def forbidden_command(*args: object, **kwargs: object) -> object:
+        calls.append(args)
+        raise AssertionError("Unknown attachment reached an external command")
+
+    monkeypatch.setattr(Path, "lstat", modeled_root_directory)
+    monkeypatch.setattr(policy, "Path", selected_path)
+    monkeypatch.setattr(policy.subprocess, "Popen", forbidden_command)
+    assert policy.main() == 1
+    report = json.loads((evidence / "policy-setup.json").read_bytes())
+    assert report["status"] == "REFUSED"
+    assert report["phase"] == "preflight"
+    assert "Loaded attachment expression is unknown" in report["reason"]
+    assert report["load_submitted"] is False
+    assert report["retry_performed"] is False
+    assert report["commands"] == [] and calls == []
+    assert report["source_revision"] == "a" * 40
+    assert report["product_m1"] == "DISABLED"
+    assert report["observations"] == {
+        "loaded_profiles_before": [{"name": "other", "mode": "enforce"}],
+        "attachments_before": [
+            {"name": "other", "mode": "enforce", "attachment": "<unknown>"}
+        ],
+        "restrict_before": "1",
+        "apparmor_enabled": "Y",
+        "controller_label": "unconfined",
+    }
+    assert not staged.exists()
+    assert sorted(path.name for path in evidence.iterdir()) == ["policy-setup.json"]
+    for field in (
+        "admissions_charged",
+        "confirmed_backend_admissions",
+        "observed_payload_starts",
+        "research_reservations",
+        "replay_engine_invocations",
+        "controls_status",
+        "preload_manifest_sha256",
+    ):
+        assert field not in report

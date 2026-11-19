@@ -165,11 +165,7 @@ def evidence_directory(directory: Path) -> bool:
             return False
         directory.mkdir(mode=0o755)
         info = directory.stat(follow_symlinks=False)
-    if (
-        not stat.S_ISDIR(info.st_mode)
-        or info.st_uid != os.geteuid()
-        or info.st_mode & 0o022
-    ):
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o022:
         return False
     directory.chmod(0o755)
     return True

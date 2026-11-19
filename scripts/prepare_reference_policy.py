@@ -134,7 +134,12 @@ def kernel_pseudo_path(path: Path) -> bool:
     if ".." in path.parts:
         raise SetupRefused("Parent traversal is forbidden in fixed input locators")
     if path in {
-        AA_ENABLED, RESTRICT, PROFILE_TABLE, CONTROLLER_LABEL, CONTROLLER_STATUS, BOOT_ID,
+        AA_ENABLED,
+        RESTRICT,
+        PROFILE_TABLE,
+        CONTROLLER_LABEL,
+        CONTROLLER_STATUS,
+        BOOT_ID,
     }:
         return True
     if path.is_relative_to(FEATURE_ROOT):
@@ -142,7 +147,8 @@ def kernel_pseudo_path(path: Path) -> bool:
     if path.is_relative_to(PROFILE_ROOT):
         parts = path.relative_to(PROFILE_ROOT).parts
         return (
-            len(parts) >= 2 and len(parts) % 2 == 0
+            len(parts) >= 2
+            and len(parts) % 2 == 0
             and parts[-1] in {"name", "mode", "attach"}
             and all(parts[index] == "profiles" for index in range(1, len(parts) - 1, 2))
         )

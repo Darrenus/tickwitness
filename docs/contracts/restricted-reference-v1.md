@@ -93,3 +93,7 @@ Qualification success under this exact tuple does not open M1 product admission,
 - [Linux cgroupv2](https://docs.kernel.org/admin-guide/cgroup-v2.html): controller scopes, CPU bandwidth, memory/PID accounting and task-group observation; actual availability/readbacks still require the selected host.
 - [bubblewrap upstream manual](https://github.com/containers/bubblewrap/blob/main/bwrap.xml): required versus optional namespace flags, userns disable, clearenv, FD/seccomp and non-recursive read-only remount semantics. The actually used binary/digest is recorded, not inferred from upstream main.
 - [Linux seccomp filter](https://docs.kernel.org/userspace-api/seccomp_filter.html), [no_new_privs](https://docs.kernel.org/userspace-api/no_new_privs.html) and [tmpfs](https://docs.kernel.org/filesystems/tmpfs.html): mechanism boundaries, architecture checks and storage/inode scope, not an existing TickWitness qualification.
+
+## Implementation status after the freeze
+
+The internal adapter and fixed probes are implemented as a candidate. [Actual remote evidence](../security/restricted-reference-evidence-2026-11-19.md) records a pre-load refusal: the selected VM does not expose a complete executable-attachment conflict closure. This reference is NOT_QUALIFIED; the full probe matrix, policy transition and product M1 remain unqualified/disabled. The original frozen controls above are unchanged.

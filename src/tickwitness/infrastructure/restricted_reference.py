@@ -490,10 +490,8 @@ def validate_policy_setup(report: Row, preload: Row) -> None:
         or old != sorted(old, key=lambda row: cast("str", row["name"]))
     ):
         raise ValueError("Loaded profile receipt is not a sorted typed unique list")
-    expected = sorted(
-        [*old, {"name": PROFILE_NAME, "mode": "unconfined"}],
-        key=lambda row: cast("str", row["name"]),
-    )
+    policy_rows: list[Row] = [*old, {"name": PROFILE_NAME, "mode": "unconfined"}]
+    expected = sorted(policy_rows, key=lambda row: cast("str", row["name"]))
     if any(row["name"] == PROFILE_NAME for row in old) or after != expected:
         raise ValueError("Policy receipt reused/replaced a pre-existing profile")
     identities = _row(report["identities"], set(_POLICY_IDENTITIES))
