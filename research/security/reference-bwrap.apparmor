@@ -1,0 +1,5 @@
+abi <abi/4.0>,
+
+profile tickwitness-reference-bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+}
