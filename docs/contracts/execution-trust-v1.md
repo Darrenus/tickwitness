@@ -34,6 +34,8 @@ M0/M1/M2 are documentation labels, not existing CLI/SDK options. Deployment loca
 
 M1 qualification must name concrete mechanisms and numeric units before enabling anything. This document deliberately does not invent safe RAM/PID/disk defaults without an implemented reference environment. Future unavailable-mode admission must stop explicitly before worker launch/research reservation, with no silent M0 fallback. There is currently no mode selector to activate M1/M2; registering a source, setting a scalar parameter or changing an execution flag cannot create one. M1 work does not automatically add arbitrary strategy execution, another adapter or a service endpoint.
 
+S13-02 has now first frozen the [bounded reference profile](restricted-reference-v1.md) and [ADR0045](../adr/0045-restricted-reference-qualification.md) in pushed commit [`5fc3377`](https://github.com/Darrenus/tickwitness/commit/5fc3377834831a00e4a4929d9f3196c3621912ad), before implementation. That separate internal qualification scope selects concrete controls and units; it does not activate M1 or replace this original product trust boundary. The S13-01 NOT_SELECTED snapshot above is historical selection state, not a claim that S13-02 has no chosen reference. Actual current-head implementation, host tuple and negative evidence are tracked in [S13 status](../planning/sprint-13-status.md).
+
 ## Current controls and their exact limits
 
 | Current control | Actual scope | What it does not establish |

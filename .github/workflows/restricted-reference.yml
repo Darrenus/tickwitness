@@ -1,0 +1,58 @@
+name: Restricted reference
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restricted-reference-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  restricted-reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the actual candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the selected namespace tool before qualification
+        timeout-minutes: 5
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y bubblewrap
+      - name: Prepare the explicitly frozen userns authorization
+        timeout-minutes: 1
+        run: >-
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,ImageOS,ImageVersion,GITHUB_SHA,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT
+          /usr/bin/python3 -I scripts/prepare_reference_policy.py
+      - name: Freeze the actual host tuple and qualify bounded controls
+        timeout-minutes: 12
+        run: >-
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,ImageOS,ImageVersion,GITHUB_SHA,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT
+          /usr/bin/python3 -I scripts/qualify_restricted_reference.py
+          --evidence-dir /tmp/tickwitness-reference-evidence
+      - name: Capture bounded kernel refusal evidence without changing policy
+        if: always()
+        timeout-minutes: 1
+        run: >-
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT
+          /usr/bin/python3 -I scripts/diagnose_restricted_reference.py
+          --evidence-dir /tmp/tickwitness-reference-evidence
+      - name: Preserve sanitized actual reference evidence on every outcome
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: restricted-reference-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            /tmp/tickwitness-reference-evidence
+            /tmp/tickwitness-reference-policy-evidence
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30

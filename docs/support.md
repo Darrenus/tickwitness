@@ -1,6 +1,6 @@
 # 分版本支持范围与恢复政策
 
-更新：2026-11-19，Asia/Singapore。先根据安装包的版本、来源和接口合同选择入口；相同包版本号不代表相同构建字节。SDK v1 已随 [PR110](https://github.com/Darrenus/tickwitness/pull/110) 接受；S12-03 的文档执行与兼容回归按 [独立合同](contracts/sdk-compatibility-v1.md) 完成，并由 owner 合并 [PR113](https://github.com/Darrenus/tickwitness/pull/113) 接受，真实 merge 为 `df10923663a3d3c09b5b917995fbb554da60ea40`。S13-01 先冻结 [执行信任与威胁模型](contracts/execution-trust-v1.md)，本候选的远端检查和 owner 接受仍须按实际结果记录；历史绿色不代替本轮验收。这里没有新的发行、平台认证或已实现隔离的声明。
+更新：2026-11-19，Asia/Singapore。先根据安装包的版本、来源和接口合同选择入口；相同包版本号不代表相同构建字节。SDK v1 已随 [PR110](https://github.com/Darrenus/tickwitness/pull/110) 接受；S12-03 的文档执行与兼容回归按 [独立合同](contracts/sdk-compatibility-v1.md) 完成，并由 owner 合并 [PR113](https://github.com/Darrenus/tickwitness/pull/113) 接受，真实 merge 为 `df10923663a3d3c09b5b917995fbb554da60ea40`。S13-01 的[执行信任与威胁模型](contracts/execution-trust-v1.md)已随[PR114](https://github.com/Darrenus/tickwitness/pull/114)由owner实际接受，真实merge `6c350b9fe32dfed96392edd2b856e937f767e342`。S13-02先冻结[受限参考资格合同](contracts/restricted-reference-v1.md)，仅内部参考后端与固定合成探针；产品M1未开放、任意策略不支持、M2托管不支持，不能把普通CI或参考控制结果当作产品隔离／新平台认证。当前候选自己的远端结果另行记录，历史绿色不代替本轮验收。这里没有新的发行。
 
 | 版本/接口 | 取得方式与状态 | 正确入口 |
 | --- | --- | --- |
@@ -62,7 +62,7 @@ runner 标签不是所有 CPU 架构、发行版或文件系统的认证。实�
 | 模式 | 当前状态 | 使用或启用边界 |
 | --- | --- | --- |
 | M0 TRUSTED_LOCAL／可信本地 | 当前支持边界，仅既有已资格内置 profile | owner、输入/存储根及祖先、解释器、依赖和宿主可信；只处理合法授权数据。同一可信 owner 在受支持远端主机通过 SSH 操作仍是 M0 |
-| M1 RESTRICTED_SINGLE_HOST／受限单机隔离 | 规范要求，**未实现／未资格／关闭** | 后续先选定具体环境、机制和数字限额，再证明受限文件/身份/环境、无网络、资源和停止/回收边界；缺证据保持不可用，不自动退回 M0 执行不可信代码 |
+| M1 RESTRICTED_SINGLE_HOST／受限单机隔离 | 内部参考后端候选已实现；**参考未获资格／产品关闭** | S13-02已先冻结[内部参考环境与限额](contracts/restricted-reference-v1.md)，[实际环境预检拒绝](security/restricted-reference-evidence-2026-11-19.md)，完整负例资格未通过，产品执行仍未接入；实际控制证据与独立安全复核另计，缺证据保持不可用，不自动退回 M0 执行不可信代码 |
 | M2 HOSTED_UNSUPPORTED／不支持托管 | 不支持不可信托管任务、需要独立用户/租户权限边界的协作和多租户服务 | 尚无独立用户/租户身份、资源归属与权限、跨用户数据/秘密隔离、租户配额和服务运维资格；自托管、容器或单项 M1 负例通过不自动提供这些边界 |
 
 当前 0.2 的可选 [Job controls](contracts/job-controls-v1.md) 在支持的平台上设置 worker CPU、单文件与 FD 限额，并以固定 monotonic deadline 控制入场和发布；未配置的历史 worker 不自动获得这些控制。owned scratch、进程组终止和 no-follow 回收处理的是其已声明生命周期，不是 hostile/escaped 进程 containment。同步校验、kernel IO、fsync 可能延迟物理停止或确认；未知停止、live lifetime 或路径替换时按原合同保留 scratch 和诊断。
