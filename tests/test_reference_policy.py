@@ -525,9 +525,7 @@ def test_main_unknown_attachment_refuses_before_any_command_or_policy_load(
     assert report["product_m1"] == "DISABLED"
     assert report["observations"] == {
         "loaded_profiles_before": [{"name": "other", "mode": "enforce"}],
-        "attachments_before": [
-            {"name": "other", "mode": "enforce", "attachment": "<unknown>"}
-        ],
+        "attachments_before": [{"name": "other", "mode": "enforce", "attachment": "<unknown>"}],
         "restrict_before": "1",
         "apparmor_enabled": "Y",
         "controller_label": "unconfined",
