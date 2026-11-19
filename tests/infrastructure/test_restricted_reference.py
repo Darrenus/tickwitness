@@ -155,6 +155,107 @@ def _file_stat(size, **overrides):
     return SimpleNamespace(**(values | overrides))
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/sys/module/apparmor/parameters/enabled",
+        "/proc/sys/kernel/apparmor_restrict_unprivileged_userns",
+        "/sys/kernel/security/apparmor/profiles",
+        "/sys/kernel/security/apparmor/features/domain/version",
+        "/sys/kernel/security/apparmor/policy/profiles/profile.1/name",
+        "/sys/kernel/security/apparmor/policy/profiles/profile.1/profiles/child.2/attach",
+        "/proc/self/attr/current",
+        "/proc/self/status",
+        "/proc/sys/kernel/random/boot_id",
+    ],
+)
+def test_kernel_policy_size_exception_is_a_fixed_input_closure(path):
+    assert reference._kernel_policy_input(reference.Path(path))
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/tmp/policy-setup.json",
+        "/proc/sys/kernel/hostname",
+        "/proc/self/fd/3/policy-setup.json",
+        "/sys/kernel/security/apparmor/features",
+        "/sys/kernel/security/apparmor/features/../profiles",
+        "/sys/kernel/security/apparmor/policy/profiles/profile.1/hash",
+        "/sys/kernel/security/apparmor/policy/profiles/profile.1/unexpected/child/name",
+        "sys/module/apparmor/parameters/enabled",
+    ],
+)
+def test_kernel_policy_size_exception_rejects_other_locators(path):
+    assert not reference._kernel_policy_input(reference.Path(path))
+
+
+def _stub_policy_read(monkeypatch, stats, raw=b"Y\n"):
+    observations, chunks, closed = iter(stats), iter((raw, b"")), []
+    monkeypatch.setattr(reference.os, "open", lambda *_args: 17)
+    monkeypatch.setattr(reference.os, "fstat", lambda _fd: next(observations))
+    monkeypatch.setattr(reference.os, "read", lambda *_args: next(chunks))
+    monkeypatch.setattr(reference.os, "close", closed.append)
+    monkeypatch.setattr(reference.time, "monotonic_ns", lambda: 1)
+    return closed
+
+
+def test_kernel_policy_read_uses_bounded_bytes_instead_of_virtual_size(monkeypatch):
+    info = _file_stat(4096, st_uid=0)
+    closed = _stub_policy_read(monkeypatch, (info, info))
+    assert (
+        reference._policy_read(reference.Path("/sys/module/apparmor/parameters/enabled"), 16, 2)
+        == b"Y\n"
+    )
+    assert closed == [17]
+
+
+def test_current_proc_label_accepts_kernel_defined_write_mode(monkeypatch):
+    info = _file_stat(0, st_uid=0, st_mode=stat.S_IFREG | 0o666)
+    closed = _stub_policy_read(monkeypatch, (info, info))
+    assert reference._policy_read(reference.Path("/proc/self/attr/current"), 16, 2) == b"Y\n"
+    assert closed == [17]
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/tmp/policy-setup.json", "/sys/module/apparmor/parameters/enabled", "/proc/self/status"],
+)
+def test_other_policy_inputs_still_refuse_write_mode(monkeypatch, path):
+    info = _file_stat(0, st_uid=0, st_mode=stat.S_IFREG | 0o666)
+    closed = _stub_policy_read(monkeypatch, (info,))
+    with pytest.raises(ValueError, match="root-owned regular input"):
+        reference._policy_read(reference.Path(path), 16, 2)
+    assert closed == [17]
+
+
+@pytest.mark.parametrize("size", [0, 4096])
+def test_disk_policy_read_keeps_exact_size_requirement(monkeypatch, size):
+    info = _file_stat(size, st_uid=0)
+    closed = _stub_policy_read(monkeypatch, (info, info))
+    with pytest.raises(ValueError, match="changed or exceeded"):
+        reference._policy_read(reference.Path("/tmp/policy-setup.json"), 16, 2)
+    assert closed == [17]
+
+
+@pytest.mark.parametrize("changed", [{"st_ino": 9}, {"st_size": 99}, {"st_mtime_ns": 20}])
+def test_kernel_policy_read_still_rejects_changed_identity(monkeypatch, changed):
+    closed = _stub_policy_read(
+        monkeypatch, (_file_stat(4096, st_uid=0), _file_stat(4096, st_uid=0, **changed))
+    )
+    with pytest.raises(ValueError, match="changed or exceeded"):
+        reference._policy_read(reference.Path("/sys/module/apparmor/parameters/enabled"), 16, 2)
+    assert closed == [17]
+
+
+def test_kernel_policy_read_still_rejects_excess_actual_bytes(monkeypatch):
+    info = _file_stat(4096, st_uid=0)
+    closed = _stub_policy_read(monkeypatch, (info, info), b"Y" * 17)
+    with pytest.raises(ValueError, match="changed or exceeded"):
+        reference._policy_read(reference.Path("/sys/module/apparmor/parameters/enabled"), 16, 2)
+    assert closed == [17]
+
+
 def test_stopped_named_file_accepts_atime_only_change(tmp_path, monkeypatch):
     raw = b'{"nonce":"fixed"}\n'
     (tmp_path / "heartbeat").write_bytes(raw)
@@ -266,39 +367,80 @@ def _policy_receipt():
     identities = {}
     for key, path in reference._POLICY_IDENTITIES.items():
         identities[key] = {
-            "path": str(path), "realpath": str(path), "exists": True,
-            "sha256": "b" * 64, "bytes": 1024, "uid": 0, "gid": 0, "mode": 0o755,
-            "device": 1, "inode": 2, "mtime_ns": 3, "ctime_ns": 4,
+            "path": str(path),
+            "realpath": str(path),
+            "exists": True,
+            "sha256": "b" * 64,
+            "bytes": 1024,
+            "uid": 0,
+            "gid": 0,
+            "mode": 0o755,
+            "device": 1,
+            "inode": 2,
+            "mtime_ns": 3,
+            "ctime_ns": 4,
         }
     config = reference._POLICY_IDENTITIES["parser_config"]
     identities["parser_config"] = {
-        "path": str(config), "realpath": None, "exists": False,
-        "sha256": None, "bytes": None, "reason": "not_present",
+        "path": str(config),
+        "realpath": None,
+        "exists": False,
+        "sha256": None,
+        "bytes": None,
+        "reason": "not_present",
     }
     policy = {
-        "path": str(reference._STAGED_POLICY), "sha256": reference.POLICY_SHA256, "bytes": 111
+        "path": str(reference._STAGED_POLICY),
+        "sha256": reference.POLICY_SHA256,
+        "bytes": 111,
     }
-    files = [{"path": "/sys/kernel/security/apparmor/features/domain/version",
-              "relative_path": "domain/version", "sha256": "c" * 64, "bytes": 1}]
+    files = [
+        {
+            "path": "/sys/kernel/security/apparmor/features/domain/version",
+            "relative_path": "domain/version",
+            "sha256": "c" * 64,
+            "bytes": 1,
+        }
+    ]
     features = {"files": files, "canonical_sha256": reference._sha(reference._canonical(files))}
     parser = str(reference._POLICY_IDENTITIES["parser"])
     argv = [parser, "--add", "--skip-cache", "--base=/etc/apparmor.d", policy["path"]]
     commands = []
-    for index, command in enumerate((
-        [parser, "--skip-cache", "--version"],
-        ["/usr/bin/dpkg-query", "--show", "--showformat=${binary:Package}\t${Version}\t${Status}\n",
-         "apparmor", "libapparmor1", "bubblewrap"],
-        argv,
-    )):
-        commands.append({
-            "argv": command, "started": True, "returncode": 0, "stop_confirmed": True,
-            "timed_out": False, "overflow": None, "exception": None,
-            "started_monotonic_ns": 10 + index, "finished_monotonic_ns": 20 + index,
-            "original_deadline_ns": 30000000010, "stdout_bytes": 0, "stderr_bytes": 0,
-        })
+    for index, command in enumerate(
+        (
+            [parser, "--skip-cache", "--version"],
+            [
+                "/usr/bin/dpkg-query",
+                "--show",
+                "--showformat=${binary:Package}\t${Version}\t${Status}\n",
+                "apparmor",
+                "libapparmor1",
+                "bubblewrap",
+            ],
+            argv,
+        )
+    ):
+        commands.append(
+            {
+                "argv": command,
+                "started": True,
+                "returncode": 0,
+                "stop_confirmed": True,
+                "timed_out": False,
+                "overflow": None,
+                "exception": None,
+                "started_monotonic_ns": 10 + index,
+                "finished_monotonic_ns": 20 + index,
+                "original_deadline_ns": 30000000010,
+                "stdout_bytes": 0,
+                "stderr_bytes": 0,
+            }
+        )
     selected = {"name": reference.PROFILE_NAME, "mode": "unconfined"}
     loader = {
-        **commands[2], "commands": commands, "original_started_ns": 10,
+        **commands[2],
+        "commands": commands,
+        "original_started_ns": 10,
         "original_deadline_ns": 30000000010,
         "bounds": {"window_ns": 30000000000, "max_commands": 3, "per_stream_bytes": 65536},
         "attachments_before": [],
@@ -306,23 +448,43 @@ def _policy_receipt():
         "parser_configuration_guard": reference.parser_configuration_guard(None),
     }
     report = {
-        "kind": "restricted_reference_policy_setup_v1", "schema_version": 1,
-        "status": "LOADED_REFERENCE_ONLY", "profile_name": reference.PROFILE_NAME,
-        "attachment": "/usr/bin/bwrap", "mode": "unconfined", "policy": policy,
-        "identities": identities, "features": features, "loader": loader,
-        "loaded_profiles_before": [], "loaded_profiles_after": [selected],
-        "restrict_before": "1", "restrict_after": "1", "source_revision": "d" * 40,
+        "kind": "restricted_reference_policy_setup_v1",
+        "schema_version": 1,
+        "status": "LOADED_REFERENCE_ONLY",
+        "profile_name": reference.PROFILE_NAME,
+        "attachment": "/usr/bin/bwrap",
+        "mode": "unconfined",
+        "policy": policy,
+        "identities": identities,
+        "features": features,
+        "loader": loader,
+        "loaded_profiles_before": [],
+        "loaded_profiles_after": [selected],
+        "restrict_before": "1",
+        "restrict_after": "1",
+        "source_revision": "d" * 40,
         "preload_manifest_sha256": "e" * 64,
     }
-    preload = {key: copy.deepcopy(report[key]) for key in (
-        "policy", "identities", "features", "source_revision",
-        "loaded_profiles_before", "restrict_before"
-    )}
-    preload.update({
-        "kind": "restricted_reference_policy_preload_v1", "schema_version": 1,
-        "parser_argv": argv, "attachments_before": [],
-        "parser_configuration_guard": reference.parser_configuration_guard(None),
-    })
+    preload = {
+        key: copy.deepcopy(report[key])
+        for key in (
+            "policy",
+            "identities",
+            "features",
+            "source_revision",
+            "loaded_profiles_before",
+            "restrict_before",
+        )
+    }
+    preload.update(
+        {
+            "kind": "restricted_reference_policy_preload_v1",
+            "schema_version": 1,
+            "parser_argv": argv,
+            "attachments_before": [],
+            "parser_configuration_guard": reference.parser_configuration_guard(None),
+        }
+    )
     return report, preload
 
 
@@ -332,10 +494,17 @@ def test_selected_loader_receipt_is_structural_evidence_not_product_admission():
     assert report["status"] == "LOADED_REFERENCE_ONLY" and report["mode"] == "unconfined"
 
 
-@pytest.mark.parametrize("change", [
-    {"status": "UNKNOWN"}, {"mode": "enforce"}, {"attachment": "/usr/bin/*"},
-    {"restrict_after": "0"}, {"profile_name": "other"}, {"unexpected_permission": True},
-])
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"status": "UNKNOWN"},
+        {"mode": "enforce"},
+        {"attachment": "/usr/bin/*"},
+        {"restrict_after": "0"},
+        {"profile_name": "other"},
+        {"unexpected_permission": True},
+    ],
+)
 def test_unknown_or_broadened_policy_receipts_never_authorize_probe(change):
     report, preload = _policy_receipt()
     report.update(change)
@@ -361,10 +530,18 @@ def test_unknown_or_late_setup_command_cannot_be_hidden_by_success_status():
         reference.validate_policy_setup(report, preload)
 
 
-@pytest.mark.parametrize("raw", [
-    b"Include /tmp/other", b"base=/tmp", b"namespace other", b"features-file=/tmp/a",
-    b"write-cache\nwrite-cache\n", b"abi=/tmp/other", b"\xff",
-])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"Include /tmp/other",
+        b"base=/tmp",
+        b"namespace other",
+        b"features-file=/tmp/a",
+        b"write-cache\nwrite-cache\n",
+        b"abi=/tmp/other",
+        b"\xff",
+    ],
+)
 def test_parser_redirection_and_unknown_configuration_are_refused(raw):
     with pytest.raises(ValueError):
         reference.parser_configuration_guard(raw)

@@ -19,6 +19,7 @@ import stat
 import subprocess
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 
 PROFILE_NAME = "tickwitness-reference-bwrap"
@@ -36,17 +37,41 @@ FEATURE_ROOT = Path("/sys/kernel/security/apparmor/features")
 PROFILE_TABLE = Path("/sys/kernel/security/apparmor/profiles")
 PROFILE_ROOT = Path("/sys/kernel/security/apparmor/policy/profiles")
 RESTRICT = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
+AA_ENABLED = Path("/sys/module/apparmor/parameters/enabled")
+CONTROLLER_LABEL = Path("/proc/self/attr/current")
+CONTROLLER_STATUS = Path("/proc/self/status")
+BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
 WINDOW_NS = 30_000_000_000
 STREAM_LIMIT = 65_536
 DOCUMENT_LIMIT = 262_144
 SUCCESS_FIELDS = {
-    "kind", "schema_version", "status", "profile_name", "attachment", "mode", "policy",
-    "identities", "features", "loader", "loaded_profiles_before", "loaded_profiles_after",
-    "restrict_before", "restrict_after", "source_revision", "preload_manifest_sha256",
+    "kind",
+    "schema_version",
+    "status",
+    "profile_name",
+    "attachment",
+    "mode",
+    "policy",
+    "identities",
+    "features",
+    "loader",
+    "loaded_profiles_before",
+    "loaded_profiles_after",
+    "restrict_before",
+    "restrict_after",
+    "source_revision",
+    "preload_manifest_sha256",
 }
 _STABLE = (
-    "st_dev", "st_ino", "st_mode", "st_uid", "st_gid", "st_nlink", "st_size",
-    "st_mtime_ns", "st_ctime_ns",
+    "st_dev",
+    "st_ino",
+    "st_mode",
+    "st_uid",
+    "st_gid",
+    "st_nlink",
+    "st_size",
+    "st_mtime_ns",
+    "st_ctime_ns",
 )
 
 
@@ -69,7 +94,9 @@ def check_window(deadline: int) -> None:
 
 def remote_guard() -> None:
     if (
-        os.geteuid() != 0 or sys.platform != "linux" or platform.machine() != "x86_64"
+        os.geteuid() != 0
+        or sys.platform != "linux"
+        or platform.machine() != "x86_64"
         or os.environ.get("GITHUB_ACTIONS") != "true"
         or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted"
     ):
@@ -94,17 +121,36 @@ def evidence_directory(path: Path) -> None:
     for part in (None, *relative.parts):
         if part is not None:
             current = current / part
-        try:
+        with suppress(FileExistsError):
             current.mkdir(mode=0o755)
-        except FileExistsError:
-            pass
         info = current.lstat()
         if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid():
             raise SetupRefused("Evidence directory identity is not owned by this controller")
         current.chmod(0o755, follow_symlinks=False)
 
 
+def kernel_pseudo_path(path: Path) -> bool:
+    """Select only the fixed kernel inputs whose stat size is not byte length."""
+    if ".." in path.parts:
+        raise SetupRefused("Parent traversal is forbidden in fixed input locators")
+    if path in {
+        AA_ENABLED, RESTRICT, PROFILE_TABLE, CONTROLLER_LABEL, CONTROLLER_STATUS, BOOT_ID,
+    }:
+        return True
+    if path.is_relative_to(FEATURE_ROOT):
+        return bool(path.relative_to(FEATURE_ROOT).parts)
+    if path.is_relative_to(PROFILE_ROOT):
+        parts = path.relative_to(PROFILE_ROOT).parts
+        return (
+            len(parts) >= 2 and len(parts) % 2 == 0
+            and parts[-1] in {"name", "mode", "attach"}
+            and all(parts[index] == "profiles" for index in range(1, len(parts) - 1, 2))
+        )
+    return False
+
+
 def bounded_read(path: Path, limit: int) -> bytes:
+    kernel_input = kernel_pseudo_path(path)
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
         before = os.fstat(descriptor)
@@ -121,7 +167,8 @@ def bounded_read(path: Path, limit: int) -> bytes:
         raw = b"".join(pieces)
         after = os.fstat(descriptor)
         if (
-            len(raw) > limit or (before.st_size > 0 and len(raw) != before.st_size)
+            len(raw) > limit
+            or (not kernel_input and len(raw) != before.st_size)
             or any(getattr(before, key) != getattr(after, key) for key in _STABLE)
         ):
             raise SetupRefused("Required input changed or exceeded its bound: " + str(path))
@@ -137,16 +184,22 @@ def file_identity(path: Path, deadline: int, *, optional: bool = False) -> dict[
     except FileNotFoundError:
         if optional and not os.path.lexists(path):
             return {
-                "path": str(path), "realpath": None, "exists": False,
-                "sha256": None, "bytes": None, "reason": "not_present",
+                "path": str(path),
+                "realpath": None,
+                "exists": False,
+                "sha256": None,
+                "bytes": None,
+                "reason": "not_present",
             }
         raise SetupRefused("Required identity input is absent: " + str(path)) from None
     descriptor = os.open(real, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
         before = os.fstat(descriptor)
         if (
-            not stat.S_ISREG(before.st_mode) or before.st_uid != 0
-            or before.st_mode & 0o022 or before.st_nlink != 1
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != 0
+            or before.st_mode & 0o022
+            or before.st_nlink != 1
         ):
             raise SetupRefused("Required identity is not an immutable root-owned file")
         digest = hashlib.sha256()
@@ -164,11 +217,17 @@ def file_identity(path: Path, deadline: int, *, optional: bool = False) -> dict[
         ):
             raise SetupRefused("Required identity changed during hashing")
         return {
-            "path": str(path), "realpath": str(real), "exists": True,
-            "sha256": digest.hexdigest(), "bytes": count,
-            "uid": before.st_uid, "gid": before.st_gid,
-            "mode": stat.S_IMODE(before.st_mode), "device": before.st_dev,
-            "inode": before.st_ino, "mtime_ns": before.st_mtime_ns,
+            "path": str(path),
+            "realpath": str(real),
+            "exists": True,
+            "sha256": digest.hexdigest(),
+            "bytes": count,
+            "uid": before.st_uid,
+            "gid": before.st_gid,
+            "mode": stat.S_IMODE(before.st_mode),
+            "device": before.st_dev,
+            "inode": before.st_ino,
+            "mtime_ns": before.st_mtime_ns,
             "ctime_ns": before.st_ctime_ns,
         }
     finally:
@@ -215,7 +274,7 @@ def expand_fixed_braces(expression: str, depth: int = 0) -> list[str]:
                 break
     if closing is None:
         raise SetupRefused("Attachment expression has unbalanced braces")
-    body = expression[opening + 1:closing]
+    body = expression[opening + 1 : closing]
     choices = []
     nesting = 0
     previous = 0
@@ -229,7 +288,7 @@ def expand_fixed_braces(expression: str, depth: int = 0) -> list[str]:
         raise SetupRefused("Unknown single-alternative attachment expression")
     result = []
     for choice in choices:
-        expanded = expression[:opening] + choice + expression[closing + 1:]
+        expanded = expression[:opening] + choice + expression[closing + 1 :]
         result.extend(expand_fixed_braces(expanded, depth + 1))
         if len(result) > 64:
             raise SetupRefused("Attachment alternatives exceed the selected bound")
@@ -266,6 +325,7 @@ def validate_policy_bytes(raw: bytes) -> None:
     if sha(raw) != POLICY_SHA256:
         raise SetupRefused("Selected source policy bytes differ from their frozen pin")
 
+
 def capture_attachments(
     root: Path, profiles: list[dict[str, str]], deadline: int
 ) -> list[dict[str, str]]:
@@ -299,9 +359,7 @@ def capture_attachments(
     return sorted(records, key=lambda row: row["name"])
 
 
-def refuse_conflicts(
-    profiles: list[dict[str, str]], attachments: list[dict[str, str]]
-) -> None:
+def refuse_conflicts(profiles: list[dict[str, str]], attachments: list[dict[str, str]]) -> None:
     if any(row["name"] == PROFILE_NAME for row in profiles):
         raise SetupRefused("Selected profile already exists; reuse or replacement is forbidden")
     if any(attachment_may_conflict(row["attachment"]) for row in attachments):
@@ -331,10 +389,14 @@ def capture_features(root: Path, deadline: int) -> tuple[dict[str, object], dict
                     raise SetupRefused("Kernel feature bytes exceed their bound")
                 relative = str(item.relative_to(root))
                 contents[relative] = raw
-                files.append({
-                    "path": str(item), "relative_path": relative,
-                    "sha256": sha(raw), "bytes": len(raw),
-                })
+                files.append(
+                    {
+                        "path": str(item),
+                        "relative_path": relative,
+                        "sha256": sha(raw),
+                        "bytes": len(raw),
+                    }
+                )
             else:
                 raise SetupRefused("Unknown kernel feature input type")
 
@@ -353,7 +415,8 @@ def parse_packages(raw: str) -> dict[str, str]:
         name = values[0].split(":", 1)[0]
         if (
             name not in {"apparmor", "libapparmor1", "bubblewrap"}
-            or name in result or not values[1]
+            or name in result
+            or not values[1]
         ):
             raise SetupRefused("Required package identity differs")
         result[name] = values[1]
@@ -391,9 +454,7 @@ def checked_parser_version(
     config_raw: bytes | None, deadline: int
 ) -> tuple[dict[str, object], dict[str, object]]:
     guard = validate_parser_config(config_raw)
-    record = bounded_command(
-        (str(PARSER), "--skip-cache", "--version"), deadline, capture_number=1
-    )
+    record = bounded_command((str(PARSER), "--skip-cache", "--version"), deadline, capture_number=1)
     return guard, record
 
 
@@ -409,9 +470,13 @@ def bounded_command(
     process = None
     try:
         process = subprocess.Popen(
-            argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
-            close_fds=True, start_new_session=True,
+            close_fds=True,
+            start_new_session=True,
         )
         with selectors.DefaultSelector() as selector:
             for label, stream in (("stdout", process.stdout), ("stderr", process.stderr)):
@@ -441,7 +506,8 @@ def bounded_command(
         process.wait(timeout=max(0.001, (deadline - time.monotonic_ns()) / 1e9))
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         error_record = {
-            "type": type(error).__name__, "errno": getattr(error, "errno", None),
+            "type": type(error).__name__,
+            "errno": getattr(error, "errno", None),
             "reason": str(error)[:1024],
         }
         if process is not None and process.poll() is None:
@@ -456,12 +522,16 @@ def bounded_command(
                 if stream is not None:
                     stream.close()
     record = {
-        "argv": list(argv), "started": process is not None,
+        "argv": list(argv),
+        "started": process is not None,
         "returncode": process.poll() if process is not None else None,
         "stop_confirmed": process is not None and process.poll() is not None,
         "exception": error_record,
-        "started_monotonic_ns": started, "finished_monotonic_ns": time.monotonic_ns(),
-        "original_deadline_ns": deadline, "timed_out": timed_out, "overflow": overflow,
+        "started_monotonic_ns": started,
+        "finished_monotonic_ns": time.monotonic_ns(),
+        "original_deadline_ns": deadline,
+        "timed_out": timed_out,
+        "overflow": overflow,
         "stop_scope": "Owned trusted setup helper; not a hostile task containment claim",
     }
     for label, buffer in retained.items():
@@ -475,25 +545,31 @@ def bounded_command(
         record[label + "_file"] = str(destination)
     return record
 
+
 def require_command(record: dict[str, object]) -> None:
     if (
-        record.get("started") is not True or record.get("stop_confirmed") is not True
-        or record.get("returncode") != 0 or record.get("timed_out")
-        or record.get("overflow") or record.get("exception") is not None
+        record.get("started") is not True
+        or record.get("stop_confirmed") is not True
+        or record.get("returncode") != 0
+        or record.get("timed_out")
+        or record.get("overflow")
+        or record.get("exception") is not None
     ):
         raise SetupRefused("Required fixed setup command did not complete successfully")
 
 
 def loaded_after_is_selected(
-    before: list[dict[str, str]], after: list[dict[str, str]],
+    before: list[dict[str, str]],
+    after: list[dict[str, str]],
     attachments: list[dict[str, str]],
 ) -> bool:
     expected = sorted(
-        before + [{"name": PROFILE_NAME, "mode": "unconfined"}], key=lambda row: row["name"]
+        [*before, {"name": PROFILE_NAME, "mode": "unconfined"}], key=lambda row: row["name"]
     )
     selected = [row for row in attachments if row["name"] == PROFILE_NAME]
     return (
-        after == expected and len(selected) == 1
+        after == expected
+        and len(selected) == 1
         and selected[0] == {"name": PROFILE_NAME, "mode": "unconfined", "attachment": ATTACHMENT}
     )
 
@@ -527,33 +603,39 @@ def main() -> int:
         if os.path.lexists(STAGED_POLICY):
             raise SetupRefused("Staged policy already exists; no overwrite is permitted")
         restrict_before = bounded_read(RESTRICT, 16).decode().strip()
-        enabled = bounded_read(Path("/sys/module/apparmor/parameters/enabled"), 16).decode().strip()
-        controller_label = bounded_read(Path("/proc/self/attr/current"), 4096).decode().strip()
+        enabled = bounded_read(AA_ENABLED, 16).decode().strip()
+        controller_label = bounded_read(CONTROLLER_LABEL, 4096).decode().strip()
         if restrict_before != "1" or enabled != "Y" or controller_label != "unconfined":
             raise SetupRefused("Required unchanged AppArmor host state is unavailable")
         release_raw = bounded_read(Path("/etc/os-release").resolve(strict=True), 65_536).decode()
         release = {
             key: value.strip('"')
-            for line in release_raw.splitlines() if "=" in line
+            for line in release_raw.splitlines()
+            if "=" in line
             for key, value in [line.split("=", 1)]
         }
         if release.get("ID") != "ubuntu" or release.get("VERSION_ID") != "24.04":
             raise SetupRefused("Observed OS is outside the selected Ubuntu24.04 family")
-        controller_status = bounded_read(Path("/proc/self/status"), 65_536).decode()
+        controller_status = bounded_read(CONTROLLER_STATUS, 65_536).decode()
         status_fields = {
             key: value.strip()
-            for line in controller_status.splitlines() if ":" in line
+            for line in controller_status.splitlines()
+            if ":" in line
             for key, value in [line.split(":", 1)]
         }
         if status_fields.get("NoNewPrivs") != "0":
             raise SetupRefused("Controller already has incompatible no-new-privileges state")
         before = parse_profiles(bounded_read(PROFILE_TABLE, DOCUMENT_LIMIT))
         attachments_before = capture_attachments(PROFILE_ROOT, before, deadline)
-        observations.update({
-            "loaded_profiles_before": before, "attachments_before": attachments_before,
-            "restrict_before": restrict_before, "apparmor_enabled": enabled,
-            "controller_label": controller_label,
-        })
+        observations.update(
+            {
+                "loaded_profiles_before": before,
+                "attachments_before": attachments_before,
+                "restrict_before": restrict_before,
+                "apparmor_enabled": enabled,
+                "controller_label": controller_label,
+            }
+        )
         refuse_conflicts(before, attachments_before)
         source = bounded_read(POLICY_SOURCE, 65_536)
         validate_policy_bytes(source)
@@ -590,10 +672,18 @@ def main() -> int:
         require_command(version)
         if version["stdout_preview_truncated"] or not version["stdout"].strip():
             raise SetupRefused("Observed parser version output is empty")
-        packages = bounded_command((
-            str(DPKG), "--show", "--showformat=${binary:Package}\t${Version}\t${Status}\n",
-            "apparmor", "libapparmor1", "bubblewrap",
-        ), deadline, capture_number=2)
+        packages = bounded_command(
+            (
+                str(DPKG),
+                "--show",
+                "--showformat=${binary:Package}\t${Version}\t${Status}\n",
+                "apparmor",
+                "libapparmor1",
+                "bubblewrap",
+            ),
+            deadline,
+            capture_number=2,
+        )
         commands.append(packages)
         require_command(packages)
         if packages["stdout_preview_truncated"]:
@@ -604,39 +694,57 @@ def main() -> int:
         policy = {"path": str(STAGED_POLICY), "sha256": sha(source), "bytes": len(source)}
         staged_identity = file_identity(STAGED_POLICY, deadline)
         host = {
-            "system": platform.system(), "release": platform.release(),
-            "version": platform.version(), "architecture": platform.machine(),
+            "system": platform.system(),
+            "release": platform.release(),
+            "version": platform.version(),
+            "architecture": platform.machine(),
             "os_release": release_raw,
-            "boot_id": bounded_read(Path("/proc/sys/kernel/random/boot_id"), 128).decode().strip(),
+            "boot_id": bounded_read(BOOT_ID, 128).decode().strip(),
             "runner_image_os": os.environ.get("ImageOS"),  # noqa: SIM112 -- provider spelling
             "runner_image_version": os.environ.get("ImageVersion"),  # noqa: SIM112
             "run_id": os.environ.get("GITHUB_RUN_ID"),
             "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
-            "controller_uid": os.geteuid(), "controller_gid": os.getegid(),
+            "controller_uid": os.geteuid(),
+            "controller_gid": os.getegid(),
             "controller_label": controller_label,
         }
         loader_raw = bounded_read(Path(__file__), 65_536)
         loader_source = {
-            "path": str(Path(__file__)), "sha256": sha(loader_raw), "bytes": len(loader_raw),
+            "path": str(Path(__file__)),
+            "sha256": sha(loader_raw),
+            "bytes": len(loader_raw),
         }
-        argv = (
-            str(PARSER), "--add", "--skip-cache", "--base=/etc/apparmor.d", str(STAGED_POLICY)
-        )
+        argv = (str(PARSER), "--add", "--skip-cache", "--base=/etc/apparmor.d", str(STAGED_POLICY))
         preload = {
-            "kind": "restricted_reference_policy_preload_v1", "schema_version": 1,
-            "profile_name": PROFILE_NAME, "attachment": ATTACHMENT, "mode": "unconfined",
-            "policy": policy, "staged_identity": staged_identity,
+            "kind": "restricted_reference_policy_preload_v1",
+            "schema_version": 1,
+            "profile_name": PROFILE_NAME,
+            "attachment": ATTACHMENT,
+            "mode": "unconfined",
+            "policy": policy,
+            "staged_identity": staged_identity,
             "policy_source": {
-                "path": str(POLICY_SOURCE), "sha256": sha(source), "bytes": len(source),
+                "path": str(POLICY_SOURCE),
+                "sha256": sha(source),
+                "bytes": len(source),
             },
-            "identities": identities, "features": features, "host": host,
-            "loaded_profiles_before": before, "attachments_before": attachments_before,
-            "restrict_before": restrict_before, "source_revision": os.environ.get("GITHUB_SHA"),
-            "parser_argv": list(argv), "parser_version": version, "packages": package_versions,
+            "identities": identities,
+            "features": features,
+            "host": host,
+            "loaded_profiles_before": before,
+            "attachments_before": attachments_before,
+            "restrict_before": restrict_before,
+            "source_revision": os.environ.get("GITHUB_SHA"),
+            "parser_argv": list(argv),
+            "parser_version": version,
+            "packages": package_versions,
             "parser_configuration_guard": configuration_guard,
-            "dpkg_identity": dpkg_identity, "loader_source": loader_source,
+            "dpkg_identity": dpkg_identity,
+            "loader_source": loader_source,
             "original_started_ns": started,
-            "original_deadline_ns": deadline, "max_commands": 3, "per_stream_bytes": STREAM_LIMIT,
+            "original_deadline_ns": deadline,
+            "max_commands": 3,
+            "per_stream_bytes": STREAM_LIMIT,
         }
         preload_raw = canonical(preload)
         write_exclusive(EVIDENCE / "preload-manifest.json", preload_raw)
@@ -655,8 +763,11 @@ def main() -> int:
             evidence_directory(target.parent)
             write_exclusive(target, content, limit=4096)
         for key, path in (
-            ("bwrap", Path(ATTACHMENT)), ("parser", PARSER), ("abi", ABI),
-            ("parser_config", PARSER_CONFIG), ("libapparmor", LIBAPPARMOR),
+            ("bwrap", Path(ATTACHMENT)),
+            ("parser", PARSER),
+            ("abi", ABI),
+            ("parser_config", PARSER_CONFIG),
+            ("libapparmor", LIBAPPARMOR),
         ):
             if file_identity(path, deadline, optional=key == "parser_config") != identities[key]:
                 raise SetupRefused("Pre-load binary/configuration identity changed")
@@ -681,37 +792,56 @@ def main() -> int:
         after = parse_profiles(bounded_read(PROFILE_TABLE, DOCUMENT_LIMIT))
         attachments_after = capture_attachments(PROFILE_ROOT, after, deadline)
         restrict_after = bounded_read(RESTRICT, 16).decode().strip()
-        observations.update({
-            "loaded_profiles_after": after, "attachments_after": attachments_after,
-            "restrict_after": restrict_after,
-        })
+        observations.update(
+            {
+                "loaded_profiles_after": after,
+                "attachments_after": attachments_after,
+                "restrict_after": restrict_after,
+            }
+        )
         require_command(loaded)
         check_window(deadline)
         foreign_after = [row for row in attachments_after if row["name"] != PROFILE_NAME]
         if (
-            restrict_after != "1" or foreign_after != attachments_before
+            restrict_after != "1"
+            or foreign_after != attachments_before
             or not loaded_after_is_selected(before, after, attachments_after)
         ):
             raise SetupRefused(
                 "Loaded profile name/mode/attachment or unchanged restriction was not established"
             )
         loader = {
-            **loaded, "version": version["stdout"], "packages": package_versions,
-            "commands": commands, "original_started_ns": started, "original_deadline_ns": deadline,
-            "host": host, "policy_source": preload["policy_source"],
+            **loaded,
+            "version": version["stdout"],
+            "packages": package_versions,
+            "commands": commands,
+            "original_started_ns": started,
+            "original_deadline_ns": deadline,
+            "host": host,
+            "policy_source": preload["policy_source"],
             "loader_source": loader_source,
-            "staged_identity": staged_identity, "dpkg_identity": dpkg_identity,
-            "attachments_before": attachments_before, "attachments_after": attachments_after,
+            "staged_identity": staged_identity,
+            "dpkg_identity": dpkg_identity,
+            "attachments_before": attachments_before,
+            "attachments_after": attachments_after,
             "parser_configuration_guard": configuration_guard,
             "bounds": {"window_ns": WINDOW_NS, "max_commands": 3, "per_stream_bytes": STREAM_LIMIT},
         }
         report = {
-            "kind": "restricted_reference_policy_setup_v1", "schema_version": 1,
-            "status": "LOADED_REFERENCE_ONLY", "profile_name": PROFILE_NAME,
-            "attachment": ATTACHMENT, "mode": "unconfined", "policy": policy,
-            "identities": identities, "features": features, "loader": loader,
-            "loaded_profiles_before": before, "loaded_profiles_after": after,
-            "restrict_before": restrict_before, "restrict_after": restrict_after,
+            "kind": "restricted_reference_policy_setup_v1",
+            "schema_version": 1,
+            "status": "LOADED_REFERENCE_ONLY",
+            "profile_name": PROFILE_NAME,
+            "attachment": ATTACHMENT,
+            "mode": "unconfined",
+            "policy": policy,
+            "identities": identities,
+            "features": features,
+            "loader": loader,
+            "loaded_profiles_before": before,
+            "loaded_profiles_after": after,
+            "restrict_before": restrict_before,
+            "restrict_after": restrict_after,
             "source_revision": os.environ.get("GITHUB_SHA"),
             "preload_manifest_sha256": preload_sha,
         }
@@ -722,18 +852,24 @@ def main() -> int:
         return 0
     except Exception as error:
         report = {
-            "kind": "restricted_reference_policy_setup_failure_v1", "schema_version": 1,
-            "status": "UNKNOWN" if load_submitted else "REFUSED", "phase": phase,
+            "kind": "restricted_reference_policy_setup_failure_v1",
+            "schema_version": 1,
+            "status": "UNKNOWN" if load_submitted else "REFUSED",
+            "phase": phase,
             "reason": (type(error).__name__ + ": " + str(error))[:2048],
-            "load_submitted": load_submitted, "commands": commands,
-            "original_started_ns": started, "original_deadline_ns": deadline,
+            "load_submitted": load_submitted,
+            "commands": commands,
+            "original_started_ns": started,
+            "original_deadline_ns": deadline,
             "source_revision": os.environ.get("GITHUB_SHA"),
-            "product_m1": "DISABLED", "retry_performed": False,
+            "product_m1": "DISABLED",
+            "retry_performed": False,
             "observations": observations,
         }
         if len(canonical(report)) + 1 > DOCUMENT_LIMIT:
             report["observations"] = {
-                "retained": False, "reason": "report_bound_exceeded",
+                "retained": False,
+                "reason": "report_bound_exceeded",
                 "canonical_sha256": sha(canonical(observations)),
             }
         if created:

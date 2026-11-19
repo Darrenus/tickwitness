@@ -12,6 +12,7 @@ import os
 import stat
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -34,8 +35,10 @@ def profile_directory(root: Path, name: str, mode: str, attachment: str) -> None
 
 def test_loaded_table_refuses_truncation_duplicates_and_missing_mode() -> None:
     for value in (
-        b"truncated", b"alpha (enforce)\nalpha (complain)\n",
-        b"alpha ()\n", b"alpha (unknown-mode)\n",
+        b"truncated",
+        b"alpha (enforce)\nalpha (complain)\n",
+        b"alpha ()\n",
+        b"alpha (unknown-mode)\n",
     ):
         with pytest.raises(policy.SetupRefused):
             policy.parse_profiles(value)
@@ -86,9 +89,7 @@ def test_unknown_kernel_attachment_cannot_be_assumed_safe() -> None:
 
 def test_existing_selected_name_cannot_be_reused_even_if_mode_matches() -> None:
     with pytest.raises(policy.SetupRefused, match="already exists"):
-        policy.refuse_conflicts(
-            [{"name": policy.PROFILE_NAME, "mode": "unconfined"}], []
-        )
+        policy.refuse_conflicts([{"name": policy.PROFILE_NAME, "mode": "unconfined"}], [])
 
 
 def test_attachment_introspection_must_cover_the_actual_loaded_table(tmp_path: Path) -> None:
@@ -100,7 +101,7 @@ def test_attachment_introspection_must_cover_the_actual_loaded_table(tmp_path: P
     ]
     with pytest.raises(policy.SetupRefused, match="disagree"):
         policy.capture_attachments(
-            root, before + [{"name": "missing", "mode": "enforce"}], deadline()
+            root, [*before, {"name": "missing", "mode": "enforce"}], deadline()
         )
 
 
@@ -118,7 +119,7 @@ def test_nested_profile_introspection_uses_full_names(tmp_path: Path) -> None:
 
 def test_loaded_readback_requires_only_one_named_unconfined_addition() -> None:
     before = [{"name": "other", "mode": "enforce"}]
-    after = before + [{"name": policy.PROFILE_NAME, "mode": "unconfined"}]
+    after = [*before, {"name": policy.PROFILE_NAME, "mode": "unconfined"}]
     attachments = [
         {"name": policy.PROFILE_NAME, "mode": "unconfined", "attachment": "/usr/bin/bwrap"}
     ]
@@ -127,11 +128,13 @@ def test_loaded_readback_requires_only_one_named_unconfined_addition() -> None:
         before, [{"name": "other", "mode": "complain"}, after[-1]], attachments
     )
     assert not policy.loaded_after_is_selected(
-        before, before + [{"name": policy.PROFILE_NAME, "mode": "enforce"}], attachments
+        before, [*before, {"name": policy.PROFILE_NAME, "mode": "enforce"}], attachments
     )
-    assert not policy.loaded_after_is_selected(before, after, [
-        {"name": policy.PROFILE_NAME, "mode": "unconfined", "attachment": "/usr/bin/*"}
-    ])
+    assert not policy.loaded_after_is_selected(
+        before,
+        after,
+        [{"name": policy.PROFILE_NAME, "mode": "unconfined", "attachment": "/usr/bin/*"}],
+    )
 
 
 def test_optional_absence_is_explicit_not_a_hash_of_empty_bytes(tmp_path: Path) -> None:
@@ -190,17 +193,25 @@ def test_selected_package_closure_requires_all_three_installed_packages() -> Non
 @pytest.mark.parametrize(
     "change",
     [
-        {"returncode": 1}, {"returncode": None}, {"timed_out": True},
-        {"overflow": "stderr"}, {"exception": {"type": "TimeoutExpired"}},
-        {"started": False}, {"stop_confirmed": False},
+        {"returncode": 1},
+        {"returncode": None},
+        {"timed_out": True},
+        {"overflow": "stderr"},
+        {"exception": {"type": "TimeoutExpired"}},
+        {"started": False},
+        {"stop_confirmed": False},
     ],
 )
 def test_nonzero_overflow_timeout_or_unknown_command_never_authorizes_load(
     change: dict[str, object],
 ) -> None:
     record = {
-        "started": True, "stop_confirmed": True, "returncode": 0,
-        "timed_out": False, "overflow": None, "exception": None,
+        "started": True,
+        "stop_confirmed": True,
+        "returncode": 0,
+        "timed_out": False,
+        "overflow": None,
+        "exception": None,
     }
     policy.require_command(record)
     with pytest.raises(policy.SetupRefused):
@@ -221,7 +232,8 @@ def test_existing_owned_policy_or_evidence_file_is_never_overwritten(tmp_path: P
 
 
 def test_nonremote_refusal_precedes_any_command_or_filesystem_write(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     evidence = tmp_path / "evidence"
     monkeypatch.setattr(policy, "EVIDENCE", evidence)
@@ -249,7 +261,8 @@ def test_preload_canonical_digest_binds_the_exact_persisted_bytes(tmp_path: Path
 
 
 def test_private_umask_does_not_hide_any_frozen_evidence_ancestor(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     evidence = tmp_path / "evidence"
     monkeypatch.setattr(policy, "EVIDENCE", evidence)
@@ -263,7 +276,9 @@ def test_private_umask_does_not_hide_any_frozen_evidence_ancestor(
     finally:
         os.umask(original)
     for directory in (
-        evidence, evidence / "inputs", evidence / "kernel-features",
+        evidence,
+        evidence / "inputs",
+        evidence / "kernel-features",
         evidence / "kernel-features/domain",
     ):
         assert stat.S_IMODE(directory.stat().st_mode) == 0o755
@@ -278,7 +293,8 @@ def test_private_umask_does_not_hide_any_frozen_evidence_ancestor(
     [(None, []), (b"", []), (b"# comment\n \n", []), (b"# cache\nwrite-cache\n", ["write-cache"])],
 )
 def test_only_empty_comments_or_overridden_known_cache_config_is_allowed(
-    raw: bytes | None, expected: list[str],
+    raw: bytes | None,
+    expected: list[str],
 ) -> None:
     guard = policy.validate_parser_config(raw)
     assert guard["allowed_options"] == expected
@@ -290,14 +306,20 @@ def test_only_empty_comments_or_overridden_known_cache_config_is_allowed(
 @pytest.mark.parametrize(
     "raw",
     [
-        b"Include=/tmp/other\n", b"base=/tmp/other\n",
-        b"override-policy-abi=/tmp/other\n", b"kernel-features=/tmp/features\n",
-        b"namespace=other\n", b"unknown-option\n", b"write-cache\nwrite-cache\n",
-        b"write-cache # unparsed inline option\n", b"\xff",
+        b"Include=/tmp/other\n",
+        b"base=/tmp/other\n",
+        b"override-policy-abi=/tmp/other\n",
+        b"kernel-features=/tmp/features\n",
+        b"namespace=other\n",
+        b"unknown-option\n",
+        b"write-cache\nwrite-cache\n",
+        b"write-cache # unparsed inline option\n",
+        b"\xff",
     ],
 )
 def test_unsafe_or_unknown_default_config_is_refused_before_popen(
-    raw: bytes, monkeypatch: pytest.MonkeyPatch,
+    raw: bytes,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = []
 
@@ -319,11 +341,93 @@ def test_known_cache_config_is_overridden_even_for_readonly_version_command(
     def captured(argv: tuple[str, ...], limit: int, *, capture_number: int) -> dict[str, object]:
         observed.append(argv)
         return {
-            "started": True, "stop_confirmed": True, "returncode": 0,
-            "timed_out": False, "overflow": None, "exception": None,
+            "started": True,
+            "stop_confirmed": True,
+            "returncode": 0,
+            "timed_out": False,
+            "overflow": None,
+            "exception": None,
         }
 
     monkeypatch.setattr(policy, "bounded_command", captured)
     guard, _record = policy.checked_parser_version(b"write-cache\n", deadline())
     assert guard["allowed_options"] == ["write-cache"]
     assert observed == [(str(policy.PARSER), "--skip-cache", "--version")]
+
+
+def pseudo_stat(*, size: int = 4096, inode: int = 2) -> SimpleNamespace:
+    return SimpleNamespace(
+        st_dev=1, st_ino=inode, st_mode=stat.S_IFREG | 0o444, st_uid=0, st_gid=0,
+        st_nlink=1, st_size=size, st_mtime_ns=0, st_ctime_ns=0,
+    )
+
+
+def stubbed_read(
+    monkeypatch: pytest.MonkeyPatch, path: Path, *, size: int = 4096,
+    after_inode: int = 2, raw: bytes = b"Y\n", limit: int = 16,
+) -> bytes:
+    stats = iter((pseudo_stat(size=size), pseudo_stat(size=size, inode=after_inode)))
+    chunks = iter((raw, b""))
+    with monkeypatch.context() as patcher:
+        patcher.setattr(policy.os, "open", lambda *args, **kwargs: 17)
+        patcher.setattr(policy.os, "fstat", lambda _descriptor: next(stats))
+        patcher.setattr(policy.os, "read", lambda *_args: next(chunks, b""))
+        patcher.setattr(policy.os, "close", lambda _descriptor: None)
+        return policy.bounded_read(path, limit)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        policy.AA_ENABLED, policy.RESTRICT, policy.PROFILE_TABLE,
+        policy.CONTROLLER_LABEL, policy.CONTROLLER_STATUS, policy.BOOT_ID,
+        policy.FEATURE_ROOT / "domain/change_profile",
+        policy.PROFILE_ROOT / "other.1/name",
+        policy.PROFILE_ROOT / "parent.1/profiles/hat.2/attach",
+    ],
+)
+def test_fixed_kernel_input_uses_actual_bytes_not_reported_stat_size(
+    monkeypatch: pytest.MonkeyPatch, path: Path,
+) -> None:
+    assert stubbed_read(monkeypatch, path) == b"Y\n"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        Path("/tmp/policy-report.json"), policy.STAGED_POLICY, policy.ABI,
+        policy.PARSER_CONFIG, policy.LIBAPPARMOR,
+        Path("/sys/kernel/unselected-input"), Path("/proc/sys/kernel/random/unselected"),
+        policy.PROFILE_ROOT / "other.1/raw_data",
+        policy.PROFILE_ROOT / "other.1/not-profiles/hat.2/name",
+    ],
+)
+@pytest.mark.parametrize("reported_size", [0, 4096])
+def test_disk_and_unselected_paths_keep_exact_reported_length(
+    monkeypatch: pytest.MonkeyPatch, path: Path, reported_size: int,
+) -> None:
+    with pytest.raises(policy.SetupRefused):
+        stubbed_read(monkeypatch, path, size=reported_size)
+
+
+def test_kernel_size_exception_keeps_actual_byte_bound_and_stable_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(policy.SetupRefused):
+        stubbed_read(monkeypatch, policy.AA_ENABLED, raw=b"Y" * 17)
+    with pytest.raises(policy.SetupRefused):
+        stubbed_read(monkeypatch, policy.AA_ENABLED, after_inode=3)
+
+
+def test_parent_components_are_rejected_before_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    opened = []
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        opened.append(args)
+        raise AssertionError("Traversal locator reached open")
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(policy.os, "open", forbidden)
+        with pytest.raises(policy.SetupRefused, match="traversal"):
+            policy.bounded_read(policy.FEATURE_ROOT / "../policy", 16)
+    assert opened == []
