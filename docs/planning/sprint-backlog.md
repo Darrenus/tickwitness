@@ -375,3 +375,6 @@
 2026-11-18，owner于14:37:31Z合并#111，真实merge `d7696ba01f92a58a3bb26f6b58e421a30698c93a`，接受S12-02缺口路径及伴随#112；#35/#112完成，真人仍0/0/PENDING。S12-03先冻结[SDK兼容与可执行文档](../contracts/sdk-compatibility-v1.md)：封闭schema拒绝、开放参数保留、未知时间不填造；具名文档片段由实际安装wheel运行，复用原32调用/180秒资格预算与原17checks，不新造SDK验证器或HTTP/MCP入口。原8h／S12总34h及持续质量容量不变，无实际工时声明；#36在owner接受前OPEN，原5/8/11研究槽和既有封存不重置。
 
 2026-11-19 Asia/Singapore，owner于2026-11-18T16:03:09Z合并#113，真实merge `df10923663a3d3c09b5b917995fbb554da60ea40`，接受S12-03，#36完成。S13-01先提交推送[执行信任与威胁模型v1](../contracts/execution-trust-v1.md)／[ADR0044](../adr/0044-explicit-execution-trust-boundaries.md)，再对齐现有支持与运维入口：M0仅既有已资格内置profile，M1受限单机隔离未实现／未资格／关闭，M2需独立用户／租户权限边界的托管／协作服务不支持；文件、环境、网络、资源、同UID与哈希来源缺口逐项列明。原10h／S13总10+16+8=34h与持续质量容量不变，无实际工时声明；#37在owner接受前OPEN，02／03未提前实现。原协议共同预算、5/8/11、golden、PR94与历史封存不重置／退款／重跑，项目执行继续仅远端CPU。真人0/0/PENDING与独立安全复核未完成分别记录，不以模型文档、CI、AI或owner接受代替；HTTP/MCP仍条件性S14或以后。
+
+
+2026-11-19 Asia/Singapore，owner实际merge `6c350b9fe32dfed96392edd2b856e937f767e342` 于13:09:12Z接受PR114／S13-01，#37完成。S13-02原16h先实际推送[参考合同](../contracts/restricted-reference-v1.md)与[ADR0045](../adr/0045-restricted-reference-qualification.md)，再推进内部OS控制后端与固定合成负例；当前候选远端证据及owner接受分别记录，M1产品入口保持关闭，M2不支持，不把普通绿色或参考资格等同产品隔离支持。原S13共34h／持续质量及原协议预算不变；所有项目执行仅远端CPU，外部真人0/0/PENDING与独立安全复核NOT_PERFORMED分别保留。详见[S13状态](sprint-13-status.md)。

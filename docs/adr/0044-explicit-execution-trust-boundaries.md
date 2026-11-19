@@ -1,6 +1,6 @@
 # ADR0044：执行信任边界与未启用隔离的明确合同
 
-状态：S13-01冻结，2026-11-19 Asia/Singapore；文档决定待owner接受，受限隔离实现及独立安全复核尚未完成。
+状态：S13-01冻结，已由owner合并[PR114](https://github.com/Darrenus/tickwitness/pull/114)接受，真实merge `6c350b9fe32dfed96392edd2b856e937f767e342`，2026-11-19T13:09:12Z。原决定的未选择／未实现描述保留其历史范围；S13-02另以[ADR0045](0045-restricted-reference-qualification.md)先冻结参考资格，生产M1仍关闭，独立安全复核尚未完成。
 
 ## 背景
 

@@ -152,4 +152,6 @@ raw 与显式字段业务投影分别给每通道首差异，保留原始值、�
 
 ## 执行信任决策记录
 
-- [ADR0044：执行信任边界与未启用隔离的明确合同](../adr/0044-explicit-execution-trust-boundaries.md)：S13-01先冻结三模式、当前控制／缺口与后续启用证据；只有现有可信owner内置profile属于当前支持，受限隔离未实现／未资格，托管／协作不支持，原预算及真人门不变。
+- [ADR0044：执行信任边界与未启用隔离的明确合同](../adr/0044-explicit-execution-trust-boundaries.md)：S13-01已随PR114实际接受；只有现有可信owner内置profile属于当前支持，M1产品入口关闭，托管／协作不支持，原预算及真人门不变。
+
+- [ADR0045：有界远端参考环境与固定隔离资格](../adr/0045-restricted-reference-qualification.md)：S13-02先实际推送Ubuntu24.04/x86_64、独立身份、bubblewrap／cgroupv2／seccomp／单配额tmpfs和数字限额，再实现内部后端与固定合成负例；实际tuple须先冻结，未测／拒绝／未知不当通过，普通绿色不启用M1。
