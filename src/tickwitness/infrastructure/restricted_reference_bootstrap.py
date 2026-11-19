@@ -7,6 +7,7 @@ root controller attaches this live child before releasing the first gate.
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import json
 import os
 import resource
@@ -23,6 +24,55 @@ _LIMITS = {
     "memory.oom.group": "1",
     "pids.max": "32",
 }
+_POLICY_SHA256 = "a71430ec3060e80404e01d2ece292ef9569837eb5e679deccd7fd8d9d8be9427"
+_PROFILE = b"tickwitness-reference-bwrap"
+_LABEL = "tickwitness-reference-bwrap (unconfined)"
+_LIBRARY = Path("/usr/lib/x86_64-linux-gnu/libapparmor.so.1")
+
+
+def _enter_profile(library_sha256: str, deadline: int) -> dict[str, object]:
+    before = Path("/proc/self/attr/current").read_text().strip()
+    if (before != "unconfined"
+            or "NoNewPrivs:\t0" not in Path("/proc/self/status").read_text().splitlines()):
+        raise ValueError("Explicit profile transition requires the original pre-NNP state")
+    real = _LIBRARY.resolve(strict=True)
+    descriptor = os.open(real, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        info = os.fstat(descriptor)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
+                or info.st_mode & 0o022 or info.st_nlink != 1):
+            raise ValueError("Bound transition library is not root-owned immutable state")
+        digest, count = hashlib.sha256(), 0
+        while True:
+            if time.monotonic_ns() >= deadline:
+                raise ValueError("Original bootstrap deadline expired before profile transition")
+            raw = os.read(descriptor, 65536)
+            if not raw:
+                break
+            digest.update(raw)
+            count += len(raw)
+        after = os.fstat(descriptor)
+        if (digest.hexdigest() != library_sha256 or count != info.st_size
+                or any(getattr(info, key) != getattr(after, key) for key in (
+                    "st_dev", "st_ino", "st_mode", "st_uid", "st_gid", "st_nlink",
+                    "st_size", "st_mtime_ns", "st_ctime_ns",
+                ))):
+            raise ValueError("Actual transition library differs from frozen tuple")
+    finally:
+        os.close(descriptor)
+    library = ctypes.CDLL(str(_LIBRARY), use_errno=True)
+    change = library.aa_change_profile
+    change.argtypes = [ctypes.c_char_p]
+    change.restype = ctypes.c_int
+    ctypes.set_errno(0)
+    returned = int(change(_PROFILE))
+    error = ctypes.get_errno()
+    return {
+        "before_label": before,
+        "after_label": Path("/proc/self/attr/current").read_text().strip(),
+        "returncode": returned, "errno": error, "library_path": str(_LIBRARY),
+        "library_sha256": library_sha256,
+    }
 
 
 def _prctl(option: int, value: int) -> None:
@@ -60,8 +110,16 @@ def main() -> int:
         ):
             raise ValueError("Reference bootstrap configuration is not root owned")
         config = json.loads(config_path.read_bytes())
-        if not isinstance(config, dict) or set(config) != {"cgroup", "argv"}:
+        if not isinstance(config, dict) or set(config) != {
+            "cgroup", "argv", "policy_setup_sha256", "policy_sha256", "libapparmor_sha256"
+        }:
             raise ValueError("Reference bootstrap configuration fields differ")
+        if config["policy_sha256"] != _POLICY_SHA256 or any(
+            not isinstance(config[key], str) or len(config[key]) != 64
+            or any(value not in "0123456789abcdef" for value in config[key])
+            for key in ("policy_setup_sha256", "libapparmor_sha256")
+        ):
+            raise ValueError("Explicit profile binding is absent or unknown")
         cgroup = Path(config["cgroup"])
         argv = config["argv"]
         if (
@@ -84,6 +142,12 @@ def main() -> int:
         for name, value in _LIMITS.items():
             if (cgroup / name).read_text().strip() != value:
                 raise ValueError("Reference controller readback differs: " + name)
+        transition = _enter_profile(config["libapparmor_sha256"], deadline)
+        if transition["returncode"] != 0 or transition["after_label"] != _LABEL:
+            failure = {"kind": "restricted_reference_bootstrap_transition_failed_v1",
+                       "apparmor_transition": transition, "policy_sha256": _POLICY_SHA256}
+            os.write(report, json.dumps(failure, sort_keys=True).encode() + b"\n")
+            return 78
         os.sched_setscheduler(0, os.SCHED_OTHER, os.sched_param(0))
         for number, ceiling in (
             (resource.RLIMIT_FSIZE, 8388608),
@@ -104,6 +168,8 @@ def main() -> int:
             or os.getppid() != parent
         ):
             raise ValueError("Reference identity drop was not irreversible")
+        if Path("/proc/self/attr/current").read_text().strip() != _LABEL:
+            raise ValueError("Named-unconfined label was lost during identity/NNP setup")
         receipt = {
             "kind": "restricted_reference_bootstrap_v1",
             "pid": os.getpid(),
@@ -111,6 +177,10 @@ def main() -> int:
             "uid": list(os.getresuid()),
             "gid": list(os.getresgid()),
             "groups": os.getgroups(),
+            "apparmor_transition": transition,
+            "apparmor_label": Path("/proc/self/attr/current").read_text().strip(),
+            "policy_setup_sha256": config["policy_setup_sha256"],
+            "policy_sha256": _POLICY_SHA256,
         }
         raw = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode() + b"\n"
         if os.write(report, raw) != len(raw):
@@ -124,7 +194,7 @@ def main() -> int:
         os.set_inheritable(bpf, True)
         # bwrap consumes the BPF FD; its final exec filter applies after setup.
         os.execv(argv[0], argv)
-    except (OSError, ValueError, TypeError, KeyError) as error:
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
         sys.stderr.write(("restricted_reference_bootstrap_refused: " + str(error))[:2048] + "\n")
         return 78
     return 78

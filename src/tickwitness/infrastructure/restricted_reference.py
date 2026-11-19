@@ -76,6 +76,33 @@ WINDOW_NS = 600_000_000_000
 _CGROUP_ROOT = Path("/sys/fs/cgroup")
 _PYTHON = Path("/usr/bin/python3.12")
 _BWRAP = Path("/usr/bin/bwrap")
+POLICY_SHA256 = "a71430ec3060e80404e01d2ece292ef9569837eb5e679deccd7fd8d9d8be9427"
+PROFILE_NAME = "tickwitness-reference-bwrap"
+EXPECTED_LABEL = PROFILE_NAME + " (unconfined)"
+_POLICY_EVIDENCE = Path("/tmp/tickwitness-reference-policy-evidence")
+_STAGED_POLICY = Path("/etc/apparmor.d/tickwitness-reference-bwrap")
+_LIBAPPARMOR = Path("/usr/lib/x86_64-linux-gnu/libapparmor.so.1")
+_PROFILE_TABLE = Path("/sys/kernel/security/apparmor/profiles")
+_PROFILE_ROOT = Path("/sys/kernel/security/apparmor/policy/profiles")
+_FEATURE_ROOT = Path("/sys/kernel/security/apparmor/features")
+_RESTRICT = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
+_DOCUMENT_LIMIT = 262144
+_POLICY_FIELDS = {
+    "kind", "schema_version", "status", "profile_name", "attachment", "mode", "policy",
+    "identities", "features", "loader", "loaded_profiles_before", "loaded_profiles_after",
+    "restrict_before", "restrict_after", "source_revision", "preload_manifest_sha256",
+}
+_POLICY_IDENTITIES = {
+    "bwrap": _BWRAP,
+    "parser": Path("/usr/sbin/apparmor_parser"),
+    "abi": Path("/etc/apparmor.d/abi/4.0"),
+    "parser_config": Path("/etc/apparmor/parser.conf"),
+    "libapparmor": _LIBAPPARMOR,
+}
+_STABLE = (
+    "st_dev", "st_ino", "st_mode", "st_uid", "st_gid", "st_nlink", "st_size",
+    "st_mtime_ns", "st_ctime_ns",
+)
 _CLONE_NS = 0x7E020080  # Includes CLONE_NEWTIME as well as the older namespace flags.
 # Linux native x86_64 ABI. The selected host header is independently checked.
 DENIED_SYSCALLS = {
@@ -172,6 +199,292 @@ def _canonical(value: object) -> bytes:
 
 def _sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
+
+
+def _row(value: object, keys: set[str] | None = None) -> Row:
+    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+        raise ValueError("Policy evidence requires an object")
+    result = cast("Row", value)
+    if keys is not None and set(result) != keys:
+        raise ValueError("Policy evidence fields differ")
+    return result
+
+
+def _policy_read(path: Path, limit: int, deadline: int, *, root_owned: bool = True) -> bytes:
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        before = os.fstat(descriptor)
+        if (not stat.S_ISREG(before.st_mode) or (root_owned and before.st_uid != 0)
+                or before.st_mode & 0o022 or before.st_nlink != 1):
+            raise ValueError("Policy control is not a root-owned regular input")
+        raw = bytearray()
+        while len(raw) <= limit:
+            if time.monotonic_ns() >= deadline:
+                raise TimeoutError("Original reference policy observation window expired")
+            chunk = os.read(descriptor, min(65536, limit + 1 - len(raw)))
+            if not chunk:
+                break
+            raw.extend(chunk)
+        after = os.fstat(descriptor)
+        if (len(raw) > limit or (before.st_size > 0 and len(raw) != before.st_size)
+                or any(getattr(before, key) != getattr(after, key) for key in _STABLE)):
+            raise ValueError("Policy input changed or exceeded its bound")
+        return bytes(raw)
+    finally:
+        os.close(descriptor)
+
+
+def _policy_document(name: str, deadline: int, limit: int = _DOCUMENT_LIMIT) -> bytes:
+    allowed = {"policy-setup.json", "preload-manifest.json"} | {
+        f"command-{index}.{stream}" for index in (1, 2, 3) for stream in ("stdout", "stderr")
+    }
+    if name not in allowed:
+        raise ValueError("Policy evidence locator is not in the fixed closure")
+    directory = os.open(_POLICY_EVIDENCE, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(directory)
+        if info.st_uid != 0 or info.st_mode & 0o022:
+            raise ValueError("Policy evidence directory is not root-owned private control")
+        # /proc/self/fd keeps the proven directory open; the child is no-follow.
+        return _policy_read(Path(f"/proc/self/fd/{directory}") / name, limit, deadline)
+    finally:
+        os.close(directory)
+
+
+def _policy_identity(path: Path, deadline: int, *, optional: bool = False) -> Row:
+    try:
+        real = path.resolve(strict=True)
+    except FileNotFoundError:
+        if optional and not os.path.lexists(path):
+            return {"path": str(path), "realpath": None, "exists": False,
+                    "sha256": None, "bytes": None, "reason": "not_present"}
+        raise ValueError("Required policy identity is missing") from None
+    descriptor = os.open(real, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        before = os.fstat(descriptor)
+        if (not stat.S_ISREG(before.st_mode) or before.st_uid != 0
+                or before.st_mode & 0o022 or before.st_nlink != 1):
+            raise ValueError("Policy identity is not immutable root-owned state")
+        digest, count = hashlib.sha256(), 0
+        while True:
+            if time.monotonic_ns() >= deadline:
+                raise TimeoutError("Original reference policy identity deadline expired")
+            raw = os.read(descriptor, 65536)
+            if not raw:
+                break
+            digest.update(raw)
+            count += len(raw)
+            if path in (_POLICY_IDENTITIES["abi"], _POLICY_IDENTITIES["parser_config"]):
+                if count > 65536:
+                    raise ValueError("ABI/configuration exceeds its frozen bound")
+        after = os.fstat(descriptor)
+        if count != before.st_size or any(
+            getattr(before, key) != getattr(after, key) for key in _STABLE
+        ):
+            raise ValueError("Policy identity changed during independent hashing")
+        return {
+            "path": str(path), "realpath": str(real), "exists": True,
+            "sha256": digest.hexdigest(), "bytes": count, "uid": before.st_uid,
+            "gid": before.st_gid, "mode": stat.S_IMODE(before.st_mode),
+            "device": before.st_dev, "inode": before.st_ino,
+            "mtime_ns": before.st_mtime_ns, "ctime_ns": before.st_ctime_ns,
+        }
+    finally:
+        os.close(descriptor)
+
+
+def _profiles(raw: bytes) -> list[Row]:
+    result: list[Row] = []
+    for line in raw.decode().splitlines():
+        if " (" not in line or not line.endswith(")"):
+            raise ValueError("Loaded profile table is ambiguous")
+        name, mode = line.rsplit(" (", 1)
+        if not name or not mode[:-1] or len(result) >= 512:
+            raise ValueError("Loaded profile table exceeds its declared scope")
+        result.append({"name": name, "mode": mode[:-1]})
+    if len({row["name"] for row in result}) != len(result):
+        raise ValueError("Duplicate loaded profile name")
+    return sorted(result, key=lambda row: cast("str", row["name"]))
+
+
+def _attachments(profiles: list[Row], deadline: int) -> list[Row]:
+    result: list[Row] = []
+
+    def visit(directory: Path, parent: str, depth: int) -> None:
+        if depth > 8:
+            raise ValueError("Policy namespace depth exceeds its bound")
+        for path in sorted(directory.iterdir()):
+            if path.is_symlink() or not path.is_dir() or len(result) >= 512:
+                raise ValueError("Unknown or excessive policy namespace")
+            name = _policy_read(path / "name", 4096, deadline).decode().strip()
+            mode = _policy_read(path / "mode", 4096, deadline).decode().strip()
+            attachment = _policy_read(path / "attach", 4096, deadline).decode().strip()
+            full = parent + "//" + name if parent and not name.startswith(parent + "//") else name
+            result.append({"name": full, "mode": mode, "attachment": attachment})
+            if (path / "profiles").exists():
+                visit(path / "profiles", full, depth + 1)
+
+    visit(_PROFILE_ROOT, "", 0)
+    result.sort(key=lambda row: cast("str", row["name"]))
+    if [{"name": row["name"], "mode": row["mode"]} for row in result] != profiles:
+        raise ValueError("Current attachment/profile observations disagree")
+    return result
+
+
+def _features(deadline: int) -> Row:
+    files: list[Row] = []
+    total = 0
+
+    def visit(directory: Path, depth: int) -> None:
+        nonlocal total
+        if depth > 8:
+            raise ValueError("Policy feature depth exceeds its bound")
+        for path in sorted(directory.iterdir()):
+            mode = path.stat(follow_symlinks=False).st_mode
+            if stat.S_ISDIR(mode):
+                visit(path, depth + 1)
+            elif stat.S_ISREG(mode) and len(files) < 256:
+                raw = _policy_read(path, 4096, deadline)
+                total += len(raw)
+                if total > 1048576:
+                    raise ValueError("Policy feature bytes exceed their bound")
+                files.append({
+                    "path": str(path), "relative_path": str(path.relative_to(_FEATURE_ROOT)),
+                    "sha256": _sha(raw), "bytes": len(raw),
+                })
+            else:
+                raise ValueError("Policy feature type/count exceeds its bound")
+
+    visit(_FEATURE_ROOT, 0)
+    if not files:
+        raise ValueError("Policy feature closure is unavailable")
+    return {"files": files, "canonical_sha256": _sha(_canonical(files))}
+
+
+def parser_configuration_guard(raw: bytes | None) -> Row:
+    options: list[str] = []
+    if raw is not None:
+        for line in raw.decode("utf-8").splitlines():
+            value = line.strip()
+            if not value or value.startswith("#"):
+                continue
+            if value != "write-cache" or options:
+                raise ValueError("Parser configuration can redirect or enlarge fixed input closure")
+            options.append(value)
+    return {
+        "kind": "fixed_parser_configuration_guard_v1", "exists": raw is not None,
+        "source_sha256": _sha(raw) if raw is not None else None,
+        "allowed_options": options, "cache_disabled_for_all_parser_commands": True,
+        "input_redirection_options_permitted": False,
+    }
+
+
+def validate_policy_setup(report: Row, preload: Row) -> None:
+    """Validate the fixed receipt without treating its assertions as OS readbacks."""
+    _row(report, _POLICY_FIELDS)
+    if (report["kind"] != "restricted_reference_policy_setup_v1"
+            or type(report["schema_version"]) is not int or report["schema_version"] != 1
+            or report["status"] != "LOADED_REFERENCE_ONLY" or report["profile_name"] != PROFILE_NAME
+            or report["attachment"] != str(_BWRAP) or report["mode"] != "unconfined"
+            or report["restrict_before"] != "1" or report["restrict_after"] != "1"):
+        raise ValueError("Selected policy setup was not established")
+    policy = _row(report["policy"], {"path", "sha256", "bytes"})
+    if (policy["path"] != str(_STAGED_POLICY) or policy["sha256"] != POLICY_SHA256
+            or type(policy["bytes"]) is not int or not 0 < cast("int", policy["bytes"]) <= 65536):
+        raise ValueError("Fixed selected policy identity differs")
+    before, after = report["loaded_profiles_before"], report["loaded_profiles_after"]
+    if not isinstance(before, list) or not isinstance(after, list) or len(before) > 512:
+        raise ValueError("Loaded policy receipts are not bounded typed lists")
+    old = [_row(row, {"name", "mode"}) for row in before]
+    if (any(not isinstance(row[key], str) or not row[key] for row in old for key in row)
+            or len({row["name"] for row in old}) != len(old)
+            or old != sorted(old, key=lambda row: cast("str", row["name"]))):
+        raise ValueError("Loaded profile receipt is not a sorted typed unique list")
+    expected = sorted(old + [{"name": PROFILE_NAME, "mode": "unconfined"}],
+                      key=lambda row: cast("str", row["name"]))
+    if any(row["name"] == PROFILE_NAME for row in old) or after != expected:
+        raise ValueError("Policy receipt reused/replaced a pre-existing profile")
+    identities = _row(report["identities"], set(_POLICY_IDENTITIES))
+    for key, path in _POLICY_IDENTITIES.items():
+        identity = _row(identities[key])
+        if identity.get("path") != str(path):
+            raise ValueError("Policy identity locator differs")
+        if identity.get("exists") is False:
+            if key != "parser_config" or identity != {
+                "path": str(path), "realpath": None, "exists": False,
+                "sha256": None, "bytes": None, "reason": "not_present",
+            }:
+                raise ValueError("Only parser configuration may be explicitly absent")
+        else:
+            if (set(identity) != {"path", "realpath", "exists", "sha256", "bytes", "uid", "gid",
+                                  "mode", "device", "inode", "mtime_ns", "ctime_ns"}
+                    or identity.get("exists") is not True
+                    or not isinstance(identity.get("realpath"), str)
+                    or re.fullmatch("[0-9a-f]{64}", str(identity.get("sha256"))) is None
+                    or any(type(identity.get(field)) is not int or cast("int", identity[field]) < 0
+                           for field in ("bytes", "uid", "gid", "mode", "device", "inode",
+                                         "mtime_ns", "ctime_ns"))):
+                raise ValueError("Policy identity receipt schema differs")
+    feature = _row(report["features"], {"files", "canonical_sha256"})
+    if (not isinstance(feature["files"], list) or not 0 < len(feature["files"]) <= 256
+            or _sha(_canonical(feature["files"])) != feature["canonical_sha256"]):
+        raise ValueError("Policy feature closure digest differs")
+    loader = _row(report["loader"])
+    argv = [str(_POLICY_IDENTITIES["parser"]), "--add", "--skip-cache",
+            "--base=/etc/apparmor.d", str(_STAGED_POLICY)]
+    commands = loader.get("commands")
+    started, deadline = loader.get("original_started_ns"), loader.get("original_deadline_ns")
+    if (loader.get("argv") != argv or not isinstance(commands, list) or len(commands) != 3
+            or type(started) is not int or type(deadline) is not int
+            or cast("int", deadline) - cast("int", started) != 30000000000
+            or loader.get("bounds") != {"window_ns": 30000000000, "max_commands": 3,
+                                       "per_stream_bytes": 65536}):
+        raise ValueError("Policy setup command/window proof differs")
+    expected_commands = [
+        [str(_POLICY_IDENTITIES["parser"]), "--skip-cache", "--version"],
+        ["/usr/bin/dpkg-query", "--show", "--showformat=${binary:Package}\t${Version}\t${Status}\n",
+         "apparmor", "libapparmor1", "bubblewrap"],
+        argv,
+    ]
+    for index, command in enumerate(commands):
+        row = _row(command)
+        if (row.get("argv") != expected_commands[index]
+                or row.get("started") is not True or row.get("stop_confirmed") is not True
+                or type(row.get("returncode")) is not int or row.get("returncode") != 0
+                or row.get("timed_out") is not False
+                or row.get("overflow") is not None or row.get("exception") is not None
+                or row.get("original_deadline_ns") != deadline
+                or type(row.get("started_monotonic_ns")) is not int
+                or type(row.get("finished_monotonic_ns")) is not int
+                or cast("int", row["started_monotonic_ns"]) < cast("int", started)
+                or cast("int", row["finished_monotonic_ns"])
+                < cast("int", row["started_monotonic_ns"])
+                or cast("int", row["finished_monotonic_ns"]) > cast("int", deadline)):
+            raise ValueError("Policy setup command is failed, unknown or late")
+        for stream in ("stdout", "stderr"):
+            count = row.get(stream + "_bytes")
+            if type(count) is not int or not 0 <= cast("int", count) <= 65536:
+                raise ValueError("Policy setup output proof exceeds its bound")
+    attachments = loader.get("attachments_after")
+    if not isinstance(attachments, list):
+        raise ValueError("Policy attachment receipt is absent")
+    selected = [row for row in attachments if _row(row).get("name") == PROFILE_NAME]
+    foreign = [row for row in attachments if _row(row).get("name") != PROFILE_NAME]
+    if (selected != [{"name": PROFILE_NAME, "mode": "unconfined", "attachment": str(_BWRAP)}]
+            or foreign != loader.get("attachments_before")):
+        raise ValueError("Policy attachment receipt changed foreign state")
+    for key in ("policy", "identities", "features", "source_revision", "loaded_profiles_before",
+                "restrict_before"):
+        if report[key] != preload.get(key):
+            raise ValueError("Pre-load and post-load policy bindings disagree")
+    if (preload.get("kind") != "restricted_reference_policy_preload_v1"
+            or type(preload.get("schema_version")) is not int
+            or preload.get("schema_version") != 1 or preload.get("parser_argv") != argv):
+        raise ValueError("Pre-load policy identity differs")
+    if (preload.get("attachments_before") != loader.get("attachments_before")
+            or preload.get("parser_configuration_guard")
+            != loader.get("parser_configuration_guard")):
+        raise ValueError("Pre-load parser/attachment observations differ")
 
 
 def _write(path: Path, raw: bytes) -> None:
@@ -511,6 +824,97 @@ class ReferenceRunner:
         _write(self.artifact_dir / "manifest.json", manifest_raw)
         _write(self.artifact_dir / "manifest.sha256", self.manifest_sha256.encode() + b"\n")
 
+    def _capture_policy(self) -> Row:
+        deadline = self._started_ns + WINDOW_NS
+        raw = _policy_document("policy-setup.json", deadline)
+        preload_raw = _policy_document("preload-manifest.json", deadline)
+        report = _row(json.loads(raw))
+        preload = _row(json.loads(preload_raw))
+        if raw != _canonical(report) + b"\n" or preload_raw != _canonical(preload):
+            raise ValueError("Policy documents are not exact canonical frozen bytes")
+        validate_policy_setup(report, preload)
+        if _sha(preload_raw) != report["preload_manifest_sha256"]:
+            raise ValueError("Actual pre-load manifest byte hash differs")
+        if (report["source_revision"] != os.environ.get("GITHUB_SHA")
+                or re.fullmatch("[0-9a-f]{40}", str(report["source_revision"])) is None):
+            raise ValueError("Policy setup belongs to another source revision")
+        policy = _row(report["policy"])
+        policy_raw = _policy_read(_STAGED_POLICY, 65536, deadline)
+        if _sha(policy_raw) != POLICY_SHA256 or len(policy_raw) != policy["bytes"]:
+            raise ValueError("Actual installed policy bytes differ from the source freeze")
+        identities = {
+            key: _policy_identity(path, deadline, optional=key == "parser_config")
+            for key, path in _POLICY_IDENTITIES.items()
+        }
+        if identities != report["identities"]:
+            raise ValueError("Actual parser/ABI/config/library/bwrap tuple differs")
+        configuration = (
+            _policy_read(_POLICY_IDENTITIES["parser_config"].resolve(), 65536, deadline)
+            if identities["parser_config"]["exists"] else None
+        )
+        loader = _row(report["loader"])
+        if parser_configuration_guard(configuration) != loader.get("parser_configuration_guard"):
+            raise ValueError("Actual parser configuration closure is not the selected guard")
+        for index, command in enumerate(cast("list[object]", loader["commands"]), 1):
+            command_row = _row(command)
+            for stream in ("stdout", "stderr"):
+                captured = _policy_document(f"command-{index}.{stream}", deadline, 65536)
+                if (len(captured) != command_row[stream + "_bytes"]
+                        or _sha(captured) != command_row[stream + "_sha256"]):
+                    raise ValueError("Actual bounded parser command bytes differ")
+        if (cast("int", identities["bwrap"]["mode"]) & 0o6000
+                or cast("int", identities["parser"]["mode"]) & 0o6000):
+            raise ValueError("Selected parser/bwrap mode carries privileges")
+        if _policy_identity(_STAGED_POLICY, deadline) != preload.get("staged_identity"):
+            raise ValueError("Exclusive staged policy identity changed after loading")
+        if _features(deadline) != report["features"]:
+            raise ValueError("Actual kernel policy features changed")
+        profiles = _profiles(_policy_read(_PROFILE_TABLE, _DOCUMENT_LIMIT, deadline))
+        loader = _row(report["loader"])
+        attachments = _attachments(profiles, deadline)
+        if (profiles != report["loaded_profiles_after"]
+                or attachments != loader["attachments_after"]):
+            raise ValueError("Actual loaded policy name/mode/attachment differs")
+        restrict = _policy_read(_RESTRICT, 16, deadline).decode().strip()
+        enabled = _policy_read(Path("/sys/module/apparmor/parameters/enabled"), 16, deadline)
+        label = _policy_read(Path("/proc/self/attr/current"), 4096, deadline).decode().strip()
+        if (restrict != "1" or enabled.strip() != b"Y" or label != "unconfined"
+                or _status(Path("/proc/self/status")).get("NoNewPrivs", "").strip() != "0"):
+            raise ValueError("Controller AppArmor/NNP/global userns state differs")
+        host = {
+            "system": platform.system(), "release": platform.release(),
+            "version": platform.version(), "architecture": platform.machine(),
+            "os_release": _policy_read(Path("/etc/os-release").resolve(), 65536, deadline).decode(),
+            "boot_id": _policy_read(
+                Path("/proc/sys/kernel/random/boot_id"), 128, deadline
+            ).decode().strip(),
+            "runner_image_os": os.environ.get("ImageOS"),  # noqa: SIM112 -- provider spelling
+            "runner_image_version": os.environ.get("ImageVersion"),  # noqa: SIM112
+            "run_id": os.environ.get("GITHUB_RUN_ID"),
+            "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+            "controller_uid": os.geteuid(), "controller_gid": os.getegid(),
+            "controller_label": label,
+        }
+        if host != loader.get("host") or host != preload.get("host"):
+            raise ValueError("Policy setup is not bound to the actual current host/job")
+        for field, path in (
+            ("loader_source", self.payload.parent / "prepare_reference_policy.py"),
+            ("policy_source", self.payload.parent.parent
+             / "research/security/reference-bwrap.apparmor"),
+        ):
+            identity = _row(loader.get(field), {"path", "sha256", "bytes"})
+            source = _policy_read(path, 65536, deadline, root_owned=False)
+            if identity != {"path": str(path), "sha256": _sha(source), "bytes": len(source)}:
+                raise ValueError("Actual trusted policy-loader source changed")
+            if identity != preload.get(field):
+                raise ValueError("Pre-load and final policy source bindings differ")
+        return {
+            "report": report, "report_sha256": _sha(raw),
+            "preload_manifest_sha256": _sha(preload_raw), "actual_host": host,
+            "current_loaded_profiles": profiles, "current_attachments": attachments,
+            "controller_label": label, "expected_task_label": EXPECTED_LABEL,
+        }
+
     def _capture_manifest(self) -> Row:
         reasons: list[str] = []
         binaries: Row = {}
@@ -605,6 +1009,12 @@ class ReferenceRunner:
                     reasons.append("bwrap_version_unavailable")
             except (OSError, UnicodeError, subprocess.SubprocessError):
                 reasons.append("bwrap_version_unavailable")
+        policy_setup: Row
+        try:
+            policy_setup = self._capture_policy()
+        except (OSError, ValueError, TypeError, KeyError, RecursionError) as error:
+            policy_setup = {"verified": False, "reason": str(error)[:2048]}
+            reasons.append("explicit_policy_setup_unavailable")
         return {
             "kind": "restricted_reference_manifest_v1",
             "production_m1_enabled": False,
@@ -628,6 +1038,7 @@ class ReferenceRunner:
             "host_namespaces": _namespace_links(os.getpid()) if sys.platform == "linux" else None,
             "controllers": controllers,
             "apparmor": apparmor,
+            "explicit_userns_authorization": policy_setup,
             "bwrap_actual_version": bwrap_version,
             "bwrap_package_version": package_version,
             "parent_subtree_control": (_CGROUP_ROOT / "cgroup.subtree_control").read_text().strip()
@@ -670,6 +1081,8 @@ class ReferenceRunner:
                 or _sha(Path(cast("str", record["path"])).read_bytes()) != record["sha256"]
             ):
                 raise ValueError("Frozen reference binary/payload tuple changed")
+        if self._capture_policy() != self.manifest["explicit_userns_authorization"]:
+            raise ValueError("Frozen explicit policy/control tuple changed")
 
     def _frozen_bytes(self, name: str) -> bytes:
         record = cast("Row", cast("Row", self.manifest["binaries"])[name])
@@ -883,6 +1296,12 @@ class ReferenceRunner:
         scheduler = os.sched_getscheduler(pid)
         if scheduler != os.SCHED_OTHER:
             raise ValueError("Actual task did not inherit the selected fair scheduler")
+        actual_label = (root / "attr/current").read_text().strip()
+        if actual_label != EXPECTED_LABEL:
+            raise ValueError("Actual task lost its selected named-unconfined authorization label")
+        controller_label = Path("/proc/self/attr/current").read_text().strip()
+        if controller_label != "unconfined":
+            raise ValueError("Task transition unexpectedly changed the host controller label")
         return {
             "pid": pid,
             "status": status,
@@ -896,7 +1315,8 @@ class ReferenceRunner:
             "limits": limits,
             "scheduler_policy": scheduler,
             "cgroup": (root / "cgroup").read_text(),
-            "apparmor_label": (root / "attr/current").read_text().strip(),
+            "apparmor_label": actual_label,
+            "controller_apparmor_label": controller_label,
         }
 
     def _stop(
@@ -1037,6 +1457,8 @@ class ReferenceRunner:
             if not self.manifest["available_for_probe"]:
                 raise ValueError("Selected host tuple preflight is unavailable")
             self._unchanged_tuple()
+            if time.monotonic_ns() >= deadline:
+                raise TimeoutError("Original deadline expired during policy/TCB preflight")
             setup, cgroup = self._prepare_case(name, nonce, facts)
             if time.monotonic_ns() >= deadline:
                 raise TimeoutError("Reference setup exhausted original deadline")
@@ -1059,7 +1481,15 @@ class ReferenceRunner:
             bpf = os.open(setup / "filter.bpf", os.O_RDONLY)
             descriptors.append(bpf)
             argv = _guest_argv(setup, bpf, name, nonce)
-            _write(setup / "launch.json", _canonical({"cgroup": str(cgroup), "argv": argv}))
+            policy_setup = _row(self.manifest["explicit_userns_authorization"])
+            policy_report = _row(policy_setup["report"])
+            library_identity = _row(_row(policy_report["identities"])["libapparmor"])
+            _write(setup / "launch.json", _canonical({
+                "cgroup": str(cgroup), "argv": argv,
+                "policy_setup_sha256": policy_setup["report_sha256"],
+                "policy_sha256": POLICY_SHA256,
+                "libapparmor_sha256": library_identity["sha256"],
+            }))
             _write(setup / "bootstrap.py", self._frozen_bytes("bootstrap"))
             cast("Row", facts["canaries_before"])["protected_tcb_sha256"] = self._protected_hashes(
                 setup
@@ -1108,6 +1538,18 @@ class ReferenceRunner:
             ):
                 raise ValueError("Host attachment verification differs")
             facts["child_attached"] = True
+            pretransition = {
+                key: value.strip()
+                for key, value in _status(Path(f"/proc/{process.pid}/status")).items()
+            }
+            prelabel = Path(f"/proc/{process.pid}/attr/current").read_text().strip()
+            if (prelabel != "unconfined" or pretransition.get("NoNewPrivs") != "0"
+                    or pretransition.get("Uid", "").split() != ["0"] * 4):
+                raise ValueError("Actual attached bootstrap is not in the selected pre-NNP state")
+            facts["bootstrap_pretransition"] = {
+                "host_status": pretransition, "apparmor_label": prelabel,
+                "host_cgroup": Path(f"/proc/{process.pid}/cgroup").read_text(),
+            }
             os.write(gate_write, b"A")
             os.close(report_write)
             descriptors.remove(report_write)
@@ -1124,6 +1566,10 @@ class ReferenceRunner:
                 receipt.extend(chunk)
             if not receipt.endswith(b"\n"):
                 raise TimeoutError("Bootstrap admission did not finish within original deadline")
+            receipt_document = _row(json.loads(receipt))
+            facts["bootstrap_admission"] = {"receipt": receipt_document}
+            if receipt_document.get("kind") != "restricted_reference_bootstrap_v1":
+                raise ValueError("Explicit bootstrap profile transition failed")
             observed = {
                 key: value.strip()
                 for key, value in _status(Path(f"/proc/{process.pid}/status")).items()
@@ -1136,10 +1582,22 @@ class ReferenceRunner:
                 or any(int(observed.get(key, "1"), 16) for key in ("CapEff", "CapPrm", "CapAmb"))
             ):
                 raise ValueError("Host bootstrap identity observation differs")
+            label = Path(f"/proc/{process.pid}/attr/current").read_text().strip()
+            transition = _row(receipt_document.get("apparmor_transition"))
+            if (label != EXPECTED_LABEL or receipt_document.get("apparmor_label") != label
+                    or transition.get("returncode") != 0
+                    or transition.get("before_label") != "unconfined"
+                    or transition.get("after_label") != label
+                    or transition.get("library_path") != str(_LIBAPPARMOR)
+                    or transition.get("library_sha256") != library_identity["sha256"]
+                    or receipt_document.get("policy_setup_sha256") != policy_setup["report_sha256"]
+                    or receipt_document.get("policy_sha256") != POLICY_SHA256):
+                raise ValueError("Actual bootstrap named-unconfined policy binding differs")
             facts["bootstrap_admission"] = {
-                "receipt": json.loads(receipt),
+                "receipt": receipt_document,
                 "host_status": observed,
                 "host_cgroup": Path(f"/proc/{process.pid}/cgroup").read_text(),
+                "apparmor_label": label,
             }
             if time.monotonic_ns() >= deadline:
                 raise TimeoutError("Original deadline expired before unprivileged exec")

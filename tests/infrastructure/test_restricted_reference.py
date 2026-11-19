@@ -1,5 +1,6 @@
 """Data-only policy/admission regressions; no root, namespaces or actual attacks."""
 
+import copy
 import hashlib
 import os
 import stat
@@ -9,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from tickwitness.infrastructure import restricted_reference as reference
+from tickwitness.infrastructure import restricted_reference_bootstrap as bootstrap
 
 
 def _filter_result(number, arch=0xC000003E, clone_flags=0):
@@ -258,3 +260,157 @@ def test_stop_cannot_confirm_after_original_deadline(monkeypatch, tmp_path, late
     assert runner._stop(tmp_path, process, 10) is False
     assert (tmp_path / "cgroup.kill").read_text() == "1"
     assert bool(waits) is (late_stage == "wait")
+
+
+def _policy_receipt():
+    identities = {}
+    for key, path in reference._POLICY_IDENTITIES.items():
+        identities[key] = {
+            "path": str(path), "realpath": str(path), "exists": True,
+            "sha256": "b" * 64, "bytes": 1024, "uid": 0, "gid": 0, "mode": 0o755,
+            "device": 1, "inode": 2, "mtime_ns": 3, "ctime_ns": 4,
+        }
+    config = reference._POLICY_IDENTITIES["parser_config"]
+    identities["parser_config"] = {
+        "path": str(config), "realpath": None, "exists": False,
+        "sha256": None, "bytes": None, "reason": "not_present",
+    }
+    policy = {
+        "path": str(reference._STAGED_POLICY), "sha256": reference.POLICY_SHA256, "bytes": 111
+    }
+    files = [{"path": "/sys/kernel/security/apparmor/features/domain/version",
+              "relative_path": "domain/version", "sha256": "c" * 64, "bytes": 1}]
+    features = {"files": files, "canonical_sha256": reference._sha(reference._canonical(files))}
+    parser = str(reference._POLICY_IDENTITIES["parser"])
+    argv = [parser, "--add", "--skip-cache", "--base=/etc/apparmor.d", policy["path"]]
+    commands = []
+    for index, command in enumerate((
+        [parser, "--skip-cache", "--version"],
+        ["/usr/bin/dpkg-query", "--show", "--showformat=${binary:Package}\t${Version}\t${Status}\n",
+         "apparmor", "libapparmor1", "bubblewrap"],
+        argv,
+    )):
+        commands.append({
+            "argv": command, "started": True, "returncode": 0, "stop_confirmed": True,
+            "timed_out": False, "overflow": None, "exception": None,
+            "started_monotonic_ns": 10 + index, "finished_monotonic_ns": 20 + index,
+            "original_deadline_ns": 30000000010, "stdout_bytes": 0, "stderr_bytes": 0,
+        })
+    selected = {"name": reference.PROFILE_NAME, "mode": "unconfined"}
+    loader = {
+        **commands[2], "commands": commands, "original_started_ns": 10,
+        "original_deadline_ns": 30000000010,
+        "bounds": {"window_ns": 30000000000, "max_commands": 3, "per_stream_bytes": 65536},
+        "attachments_before": [],
+        "attachments_after": [{**selected, "attachment": "/usr/bin/bwrap"}],
+        "parser_configuration_guard": reference.parser_configuration_guard(None),
+    }
+    report = {
+        "kind": "restricted_reference_policy_setup_v1", "schema_version": 1,
+        "status": "LOADED_REFERENCE_ONLY", "profile_name": reference.PROFILE_NAME,
+        "attachment": "/usr/bin/bwrap", "mode": "unconfined", "policy": policy,
+        "identities": identities, "features": features, "loader": loader,
+        "loaded_profiles_before": [], "loaded_profiles_after": [selected],
+        "restrict_before": "1", "restrict_after": "1", "source_revision": "d" * 40,
+        "preload_manifest_sha256": "e" * 64,
+    }
+    preload = {key: copy.deepcopy(report[key]) for key in (
+        "policy", "identities", "features", "source_revision",
+        "loaded_profiles_before", "restrict_before"
+    )}
+    preload.update({
+        "kind": "restricted_reference_policy_preload_v1", "schema_version": 1,
+        "parser_argv": argv, "attachments_before": [],
+        "parser_configuration_guard": reference.parser_configuration_guard(None),
+    })
+    return report, preload
+
+
+def test_selected_loader_receipt_is_structural_evidence_not_product_admission():
+    report, preload = _policy_receipt()
+    reference.validate_policy_setup(report, preload)
+    assert report["status"] == "LOADED_REFERENCE_ONLY" and report["mode"] == "unconfined"
+
+
+@pytest.mark.parametrize("change", [
+    {"status": "UNKNOWN"}, {"mode": "enforce"}, {"attachment": "/usr/bin/*"},
+    {"restrict_after": "0"}, {"profile_name": "other"}, {"unexpected_permission": True},
+])
+def test_unknown_or_broadened_policy_receipts_never_authorize_probe(change):
+    report, preload = _policy_receipt()
+    report.update(change)
+    with pytest.raises(ValueError):
+        reference.validate_policy_setup(report, preload)
+
+
+def test_policy_setup_cannot_claim_replacement_or_cache_based_load():
+    report, preload = _policy_receipt()
+    report["loaded_profiles_before"] = copy.deepcopy(report["loaded_profiles_after"])
+    with pytest.raises(ValueError, match="reused/replaced"):
+        reference.validate_policy_setup(report, preload)
+    report, preload = _policy_receipt()
+    report["loader"]["argv"] = ["/usr/sbin/apparmor_parser", "--replace", "/tmp/other"]
+    with pytest.raises(ValueError, match="command/window"):
+        reference.validate_policy_setup(report, preload)
+
+
+def test_unknown_or_late_setup_command_cannot_be_hidden_by_success_status():
+    report, preload = _policy_receipt()
+    report["loader"]["commands"][0]["finished_monotonic_ns"] = 30000000011
+    with pytest.raises(ValueError, match="failed, unknown or late"):
+        reference.validate_policy_setup(report, preload)
+
+
+@pytest.mark.parametrize("raw", [
+    b"Include /tmp/other", b"base=/tmp", b"namespace other", b"features-file=/tmp/a",
+    b"write-cache\nwrite-cache\n", b"abi=/tmp/other", b"\xff",
+])
+def test_parser_redirection_and_unknown_configuration_are_refused(raw):
+    with pytest.raises(ValueError):
+        reference.parser_configuration_guard(raw)
+
+
+def test_absent_configuration_is_distinct_from_present_empty_configuration():
+    absent = reference.parser_configuration_guard(None)
+    empty = reference.parser_configuration_guard(b"")
+    assert absent["exists"] is False and absent["source_sha256"] is None
+    assert empty["exists"] is True and empty["source_sha256"] == hashlib.sha256(b"").hexdigest()
+    accepted = reference.parser_configuration_guard(b"# fixed comment\nwrite-cache\n")
+    assert accepted["allowed_options"] == ["write-cache"]
+
+
+def test_current_policy_tuple_change_refuses_before_any_child(monkeypatch):
+    runner = object.__new__(reference.ReferenceRunner)
+    runner.manifest = {"binaries": {}, "explicit_userns_authorization": {"report_sha256": "a"}}
+    monkeypatch.setattr(runner, "_capture_policy", lambda: {"report_sha256": "b"})
+    with pytest.raises(ValueError, match="explicit policy/control tuple changed"):
+        runner._unchanged_tuple()
+
+
+def test_unknown_identity_types_do_not_equal_valid_numeric_or_boolean_proof():
+    report, preload = _policy_receipt()
+    report["identities"]["libapparmor"]["exists"] = 1
+    with pytest.raises(ValueError, match="schema differs"):
+        reference.validate_policy_setup(report, preload)
+
+
+@pytest.mark.parametrize("label,nnp", [("unconfined", 1), ("other (enforce)", 0)])
+def test_profile_transition_rejects_incompatible_state_before_loading_library(
+    monkeypatch, label, nnp
+):
+    def fake_path(value):
+        content = label if str(value).endswith("current") else f"NoNewPrivs:\t{nnp}\n"
+        return SimpleNamespace(read_text=lambda: content)
+
+    def never_load(*_args, **_kwargs):
+        pytest.fail("Incompatible pre-NNP state reached a library transition")
+
+    monkeypatch.setattr(bootstrap, "Path", fake_path)
+    monkeypatch.setattr(bootstrap.ctypes, "CDLL", never_load)
+    with pytest.raises(ValueError, match="pre-NNP"):
+        bootstrap._enter_profile("a" * 64, 1)
+
+
+def test_policy_evidence_cannot_select_an_arbitrary_path():
+    with pytest.raises(ValueError, match="fixed closure"):
+        reference._policy_document("../../other", 1)
