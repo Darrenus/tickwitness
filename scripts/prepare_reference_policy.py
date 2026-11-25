@@ -465,7 +465,11 @@ def checked_parser_version(
 
 
 def bounded_command(
-    argv: tuple[str, ...], deadline: int, *, capture_number: int
+    argv: tuple[str, ...],
+    deadline: int,
+    *,
+    capture_number: int,
+    evidence_dir: Path | None = None,
 ) -> dict[str, object]:
     check_window(deadline)
     started = time.monotonic_ns()
@@ -542,7 +546,9 @@ def bounded_command(
     }
     for label, buffer in retained.items():
         raw = bytes(buffer)
-        destination = EVIDENCE / ("command-" + str(capture_number) + "." + label)
+        destination = (EVIDENCE if evidence_dir is None else evidence_dir) / (
+            "command-" + str(capture_number) + "." + label
+        )
         write_exclusive(destination, raw, limit=STREAM_LIMIT)
         record[label] = raw[:4096].decode("utf-8", errors="replace")
         record[label + "_preview_truncated"] = len(raw) > 4096

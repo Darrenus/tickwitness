@@ -1,6 +1,7 @@
 """Data-only policy/admission regressions; no root, namespaces or actual attacks."""
 
 import copy
+import dataclasses
 import hashlib
 import os
 import stat
@@ -11,6 +12,8 @@ import pytest
 
 from tickwitness.infrastructure import restricted_reference as reference
 from tickwitness.infrastructure import restricted_reference_bootstrap as bootstrap
+from tickwitness.infrastructure import restricted_reference_ec2 as ec2
+from tickwitness.infrastructure.restricted_reference_ec2 import Ec2Run, ProbeAdmission
 
 
 def _filter_result(number, arch=0xC000003E, clone_flags=0):
@@ -73,6 +76,8 @@ def _unavailable_runner(tmp_path, monkeypatch):
     runner.manifest_sha256 = "a" * 64
     runner.host_tuple_digest = runner.manifest_sha256
     runner._started_ns = reference.time.monotonic_ns()
+    runner._qualification_deadline_ns = runner._started_ns + reference.WINDOW_NS
+    runner._ec2_run = None
     runner._admissions = 0
     runner._poisoned = False
     runner._nonces = set()
@@ -591,3 +596,232 @@ def test_profile_transition_rejects_incompatible_state_before_loading_library(
 def test_policy_evidence_cannot_select_an_arbitrary_path():
     with pytest.raises(ValueError, match="fixed closure"):
         reference._policy_document("../../other", 1)
+
+
+def _ec2_policy_receipt():
+    report, preload = _policy_receipt()
+    run = object.__new__(Ec2Run)
+    run.staged_policy = reference.Path(
+        "/var/lib/tickwitness-reference-ec2/runs/" + "a" * 32 + "/policy.apparmor"
+    )
+    run.started_ns = 10
+    run.setup_deadline_ns = 30_000_000_010
+    run.source_revision = report["source_revision"]
+    run.run_id = "a" * 32
+    run.boot_id = "11111111-1111-1111-1111-111111111111"
+    run.run_dir = run.staged_policy.parent
+    run._host = {
+        "system": "Linux", "release": "fixture-release", "version": "fixture-version",
+        "architecture": "x86_64", "os_release": {"ID": "ubuntu", "VERSION_ID": "24.04"},
+        "boot_id": run.boot_id, "controller_uid": 0, "controller_gid": 0,
+        "controller_label": "unconfined",
+    }
+    records = {}
+    run._seals = {}
+    for field, path in (
+        ("provider_source", ec2.SOURCE_ROOT / ec2.SOURCE_FILES[0]),
+        ("source_lock", ec2.ROOT / "sources" / run.source_revision / "source-lock.json"),
+        ("identity_document", run.run_dir / "instance-identity-document.json"),
+    ):
+        item = {"path": str(path), "sha256": "f" * 64, "bytes": 1}
+        records[field] = item
+        run._seals[str(path)] = (item, (1, 2, 0, 0o600, 1))
+    run._state = {"provider_context": {
+        "kind": "restricted_reference_ec2_host_v1", "schema_version": 1,
+        "provider": reference.EC2_FAMILY, "source_revision": run.source_revision,
+        "expected_identity": dict(ec2.EXPECTED_IDENTITY),
+        "observed_identity": dict(ec2.EXPECTED_IDENTITY),
+        "run_id": run.run_id, "boot_id": run.boot_id, "host": run._host,
+        "gha_metadata": None, "gha_metadata_reason": "not_applicable_aws_ec2", **records,
+    }}
+    report.update(
+        kind="restricted_reference_ec2_policy_setup_v1",
+        profile_name=reference.EC2_PROFILE_NAME,
+        attachment=None,
+        provider_context=copy.deepcopy(run.provider_record),
+    )
+    preload.update(
+        kind="restricted_reference_ec2_policy_preload_v1",
+        provider_context=copy.deepcopy(run.provider_record),
+    )
+    for document in (report, preload):
+        document["policy"].update(
+            path=str(run.staged_policy), sha256=reference.EC2_POLICY_SHA256
+        )
+    selected = {"name": reference.EC2_PROFILE_NAME, "mode": "unconfined"}
+    report["loaded_profiles_after"] = [selected]
+    loader = report["loader"]
+    loader["argv"][-1] = str(run.staged_policy)
+    preload["parser_argv"][-1] = str(run.staged_policy)
+    loader["attachments_after"] = [{**selected, "attachment": reference.EC2_PROFILE_NAME}]
+    loader["provider_context"] = copy.deepcopy(run.provider_record)
+    loader["manual_attachment_observation"] = {
+        "raw": reference.EC2_PROFILE_NAME,
+        "interpretation": "kernel_profile_name_fallback_no_exec_attachment",
+    }
+    return report, preload, run
+
+
+def test_ec2_receipt_is_a_separate_family_and_preserves_opaque_foreign_state():
+    report, preload, run = _ec2_policy_receipt()
+    foreign = {"name": "opaque-foreign", "mode": "unconfined"}
+    attachment = {**foreign, "attachment": "<unknown>"}
+    report["loaded_profiles_before"] = [foreign]
+    report["loaded_profiles_after"].insert(0, foreign)
+    preload["loaded_profiles_before"] = copy.deepcopy(report["loaded_profiles_before"])
+    report["loader"]["attachments_before"] = [attachment]
+    report["loader"]["attachments_after"].insert(0, attachment)
+    preload["attachments_before"] = [attachment]
+    reference.validate_policy_setup(report, preload, ec2_run=run)
+    assert attachment["attachment"] == "<unknown>"
+    with pytest.raises(ValueError):
+        reference.validate_policy_setup(report, preload)
+
+
+@pytest.mark.parametrize("raw", ["", "<unknown>", "/usr/bin/bwrap", "/usr/*", "other"])
+def test_ec2_selected_profile_cannot_hide_opaque_or_executable_attachment(raw):
+    report, preload, run = _ec2_policy_receipt()
+    report["loader"]["attachments_after"][0]["attachment"] = raw
+    with pytest.raises(ValueError, match="attachment"):
+        reference.validate_policy_setup(report, preload, ec2_run=run)
+
+
+@pytest.mark.parametrize("document", ["report", "preload", "loader"])
+def test_ec2_policy_provider_bindings_cannot_change_between_receipts(document):
+    report, preload, run = _ec2_policy_receipt()
+    selected = {"report": report, "preload": preload, "loader": report["loader"]}[document]
+    selected["provider_context"]["run_id"] = "b" * 32
+    with pytest.raises(ValueError, match="provider bindings"):
+        reference.validate_policy_setup(report, preload, ec2_run=run)
+
+
+def test_ec2_setup_cannot_receive_a_fresh_window_after_claim():
+    report, preload, run = _ec2_policy_receipt()
+    run.started_ns -= 1
+    run.setup_deadline_ns -= 1
+    with pytest.raises(ValueError, match="original claimed window"):
+        reference.validate_policy_setup(report, preload, ec2_run=run)
+
+
+@pytest.mark.parametrize("family", ["other", "tickwitness-reference-ec2", {}, False, 1])
+def test_bootstrap_family_cannot_select_an_arbitrary_profile_or_pin(family):
+    with pytest.raises(ValueError, match="fixed reference policy family"):
+        bootstrap._policy_selection(family)
+
+
+def test_bootstrap_has_only_two_source_pinned_reference_selections():
+    assert bootstrap._policy_selection() == (
+        reference.PROFILE_NAME.encode(), reference.EXPECTED_LABEL, reference.POLICY_SHA256
+    )
+    assert bootstrap._policy_selection(reference.EC2_FAMILY) == (
+        reference.EC2_PROFILE_NAME.encode(),
+        reference.EC2_PROFILE_NAME + " (unconfined)",
+        reference.EC2_POLICY_SHA256,
+    )
+
+
+def _ec2_unavailable_runner(tmp_path, monkeypatch):
+    runner = _unavailable_runner(tmp_path, monkeypatch)
+    admitted = runner._started_ns + 1
+    ticket = ProbeAdmission(
+        "a" * 32, "b" * 36, "c" * 40, 1, "positive", "d" * 32,
+        admitted, admitted + reference.WALL_NS,
+    )
+    accepted, outcomes = [], []
+    runner._ec2_run = SimpleNamespace(
+        run_id=ticket.run_id,
+        boot_id=ticket.boot_id,
+        source_revision=ticket.source_revision,
+        admit_probe=accepted.append,
+        finish_probe=lambda admission, **outcome: outcomes.append((admission, outcome)),
+    )
+    return runner, ticket, accepted, outcomes
+
+
+def test_ec2_backend_uses_durable_original_ticket_without_a_second_charge(tmp_path, monkeypatch):
+    runner, ticket, accepted, outcomes = _ec2_unavailable_runner(tmp_path, monkeypatch)
+    monkeypatch.setattr(reference.time, "monotonic_ns", lambda: ticket.admitted_ns + 2_000_000_000)
+    result = runner.run_probe("positive", (ticket.nonce,), ec2_admission=ticket)
+    assert accepted == [ticket] and runner._admissions == 1
+    assert result["host_facts"]["original_admission_ns"] == ticket.admitted_ns
+    assert result["host_facts"]["original_deadline_ns"] == ticket.deadline_ns
+    raw = (tmp_path / ("positive-" + ticket.nonce + ".json")).read_bytes()
+    assert outcomes == [(ticket, {
+        "result_sha256": hashlib.sha256(raw).hexdigest(), "stop_confirmed": False,
+        "cleanup_confirmed": False, "failure": "setup_refused",
+    })]
+    assert runner._poisoned is True
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"name": "identity"}, {"nonce": "e" * 32}, {"run_id": "e" * 32},
+        {"boot_id": "e" * 36}, {"source_revision": "e" * 40}, {"admission_number": 2},
+        {"deadline_ns": 1},
+    ],
+)
+def test_ec2_backend_rejects_mismatched_or_renewed_ticket_before_acceptance(
+    tmp_path, monkeypatch, change
+):
+    runner, ticket, accepted, outcomes = _ec2_unavailable_runner(tmp_path, monkeypatch)
+    altered = dataclasses.replace(ticket, **change)
+    with pytest.raises(ValueError, match="durable EC2 admission"):
+        runner.run_probe("positive", (ticket.nonce,), ec2_admission=altered)
+    assert accepted == [] and outcomes == [] and runner._admissions == 0
+    assert not list(tmp_path.iterdir())
+
+
+def test_ec2_backend_requires_ticket_and_gha_cannot_accept_it(tmp_path, monkeypatch):
+    runner, ticket, accepted, outcomes = _ec2_unavailable_runner(tmp_path, monkeypatch)
+    with pytest.raises(ValueError, match="durable EC2 admission"):
+        runner.run_probe("positive", (ticket.nonce,))
+    runner._ec2_run = None
+    with pytest.raises(ValueError, match="GHA reference family"):
+        runner.run_probe("positive", (ticket.nonce,), ec2_admission=ticket)
+    assert accepted == [] and outcomes == [] and runner._admissions == 0
+
+
+def test_ec2_result_write_failure_preserves_accepted_pending_charge(tmp_path, monkeypatch):
+    runner, ticket, accepted, outcomes = _ec2_unavailable_runner(tmp_path, monkeypatch)
+    original_write = reference._write
+
+    def fail_final_receipt(path, raw, *, durable=False):
+        if path.suffix == ".json":
+            raise OSError("injected final receipt write failure")
+        original_write(path, raw, durable=durable)
+
+    monkeypatch.setattr(reference, "_write", fail_final_receipt)
+    with pytest.raises(OSError, match="final receipt"):
+        runner.run_probe("positive", (ticket.nonce,), ec2_admission=ticket)
+    assert accepted == [ticket] and runner._admissions == 1
+    assert outcomes == []
+    assert not (tmp_path / ("positive-" + ticket.nonce + ".json")).exists()
+
+
+def test_ec2_per_probe_tuple_readback_keeps_original_ticket_deadline(monkeypatch):
+    runner = object.__new__(reference.ReferenceRunner)
+    expected = {"report_sha256": "a"}
+    runner.manifest = {"binaries": {}, "explicit_userns_authorization": expected}
+    deadlines = []
+
+    def capture(*, deadline_ns=None):
+        deadlines.append(deadline_ns)
+        return expected
+
+    monkeypatch.setattr(runner, "_capture_policy", capture)
+    runner._unchanged_tuple(deadline_ns=123)
+    assert deadlines == [123]
+
+
+def test_ec2_constructor_rejects_duck_authority_before_access_or_creation(tmp_path):
+    class FakeRun:
+        def __getattr__(self, _name):
+            pytest.fail("Unrecognized authority was inspected or acquired")
+
+    output = tmp_path / "must-not-exist"
+    with pytest.raises(ValueError, match="Actual closed EC2 run authority"):
+        reference.ReferenceRunner(output, tmp_path / "payload.py", ec2_run=FakeRun())
+    assert not output.exists()
+    with pytest.raises(ValueError, match="Actual closed EC2 run authority"):
+        reference.validate_policy_setup({}, {}, ec2_run=FakeRun())

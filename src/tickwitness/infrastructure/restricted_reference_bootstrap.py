@@ -27,10 +27,28 @@ _LIMITS = {
 _POLICY_SHA256 = "a71430ec3060e80404e01d2ece292ef9569837eb5e679deccd7fd8d9d8be9427"
 _PROFILE = b"tickwitness-reference-bwrap"
 _LABEL = "tickwitness-reference-bwrap (unconfined)"
+_EC2_FAMILY = "aws_ec2_dedicated_v1"
+_EC2_POLICY_SHA256 = "62c319e3655d13e4c4f856e3591efb48dda36ce3ba175681688ff49b05592314"
 _LIBRARY = Path("/usr/lib/x86_64-linux-gnu/libapparmor.so.1")
 
 
-def _enter_profile(library_sha256: str, deadline: int) -> dict[str, object]:
+def _policy_selection(family: object = None) -> tuple[bytes, str, str]:
+    """A closed source-pinned family, never a caller-selected profile or hash."""
+    if family is None:
+        return _PROFILE, _LABEL, _POLICY_SHA256
+    if family == _EC2_FAMILY:
+        return (
+            b"tickwitness-reference-ec2",
+            "tickwitness-reference-ec2 (unconfined)",
+            _EC2_POLICY_SHA256,
+        )
+    raise ValueError("Unknown fixed reference policy family")
+
+
+def _enter_profile(
+    library_sha256: str, deadline: int, *, family: object = None
+) -> dict[str, object]:
+    profile, _, _ = _policy_selection(family)
     before = Path("/proc/self/attr/current").read_text().strip()
     if (
         before != "unconfined"
@@ -84,7 +102,7 @@ def _enter_profile(library_sha256: str, deadline: int) -> dict[str, object]:
     change.argtypes = [ctypes.c_char_p]
     change.restype = ctypes.c_int
     ctypes.set_errno(0)
-    returned = int(change(_PROFILE))
+    returned = int(change(profile))
     error = ctypes.get_errno()
     return {
         "before_label": before,
@@ -131,15 +149,23 @@ def main() -> int:
         ):
             raise ValueError("Reference bootstrap configuration is not root owned")
         config = json.loads(config_path.read_bytes())
-        if not isinstance(config, dict) or set(config) != {
+        fields = {
             "cgroup",
             "argv",
             "policy_setup_sha256",
             "policy_sha256",
             "libapparmor_sha256",
-        }:
+        }
+        if not isinstance(config, dict) or set(config) not in (
+            fields,
+            fields | {"reference_family"},
+        ):
             raise ValueError("Reference bootstrap configuration fields differ")
-        if config["policy_sha256"] != _POLICY_SHA256 or any(
+        family = config.get("reference_family")
+        if "reference_family" in config and family != _EC2_FAMILY:
+            raise ValueError("Explicit reference family must select the fixed EC2 profile")
+        _, expected_label, policy_sha256 = _policy_selection(family)
+        if config["policy_sha256"] != policy_sha256 or any(
             not isinstance(config[key], str)
             or len(config[key]) != 64
             or any(value not in "0123456789abcdef" for value in config[key])
@@ -168,12 +194,12 @@ def main() -> int:
         for name, value in _LIMITS.items():
             if (cgroup / name).read_text().strip() != value:
                 raise ValueError("Reference controller readback differs: " + name)
-        transition = _enter_profile(config["libapparmor_sha256"], deadline)
-        if transition["returncode"] != 0 or transition["after_label"] != _LABEL:
+        transition = _enter_profile(config["libapparmor_sha256"], deadline, family=family)
+        if transition["returncode"] != 0 or transition["after_label"] != expected_label:
             failure = {
                 "kind": "restricted_reference_bootstrap_transition_failed_v1",
                 "apparmor_transition": transition,
-                "policy_sha256": _POLICY_SHA256,
+                "policy_sha256": policy_sha256,
             }
             os.write(report, json.dumps(failure, sort_keys=True).encode() + b"\n")
             return 78
@@ -197,7 +223,7 @@ def main() -> int:
             or os.getppid() != parent
         ):
             raise ValueError("Reference identity drop was not irreversible")
-        if Path("/proc/self/attr/current").read_text().strip() != _LABEL:
+        if Path("/proc/self/attr/current").read_text().strip() != expected_label:
             raise ValueError("Named-unconfined label was lost during identity/NNP setup")
         receipt = {
             "kind": "restricted_reference_bootstrap_v1",
@@ -209,8 +235,10 @@ def main() -> int:
             "apparmor_transition": transition,
             "apparmor_label": Path("/proc/self/attr/current").read_text().strip(),
             "policy_setup_sha256": config["policy_setup_sha256"],
-            "policy_sha256": _POLICY_SHA256,
+            "policy_sha256": policy_sha256,
         }
+        if family is not None:
+            receipt["reference_family"] = family
         raw = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode() + b"\n"
         if os.write(report, raw) != len(raw):
             raise ValueError("Reference bootstrap receipt was not delivered")

@@ -22,7 +22,10 @@ import tempfile
 import time
 from contextlib import suppress
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from tickwitness.infrastructure.restricted_reference_ec2 import Ec2Run, ProbeAdmission
 
 type Row = dict[str, object]
 
@@ -79,6 +82,9 @@ _BWRAP = Path("/usr/bin/bwrap")
 POLICY_SHA256 = "a71430ec3060e80404e01d2ece292ef9569837eb5e679deccd7fd8d9d8be9427"
 PROFILE_NAME = "tickwitness-reference-bwrap"
 EXPECTED_LABEL = PROFILE_NAME + " (unconfined)"
+EC2_POLICY_SHA256 = "62c319e3655d13e4c4f856e3591efb48dda36ce3ba175681688ff49b05592314"
+EC2_PROFILE_NAME = "tickwitness-reference-ec2"
+EC2_FAMILY = "aws_ec2_dedicated_v1"
 _POLICY_EVIDENCE = Path("/tmp/tickwitness-reference-policy-evidence")
 _STAGED_POLICY = Path("/etc/apparmor.d/tickwitness-reference-bwrap")
 _LIBAPPARMOR = Path("/usr/lib/x86_64-linux-gnu/libapparmor.so.1")
@@ -287,13 +293,20 @@ def _policy_read(path: Path, limit: int, deadline: int, *, root_owned: bool = Tr
         os.close(descriptor)
 
 
-def _policy_document(name: str, deadline: int, limit: int = _DOCUMENT_LIMIT) -> bytes:
+def _policy_document(
+    name: str,
+    deadline: int,
+    limit: int = _DOCUMENT_LIMIT,
+    *,
+    evidence_dir: Path | None = None,
+) -> bytes:
     allowed = {"policy-setup.json", "preload-manifest.json"} | {
         f"command-{index}.{stream}" for index in (1, 2, 3) for stream in ("stdout", "stderr")
     }
     if name not in allowed:
         raise ValueError("Policy evidence locator is not in the fixed closure")
-    directory = os.open(_POLICY_EVIDENCE, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    selected = _POLICY_EVIDENCE if evidence_dir is None else evidence_dir
+    directory = os.open(selected, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         info = os.fstat(directory)
         if info.st_uid != 0 or info.st_mode & 0o022:
@@ -457,16 +470,42 @@ def parser_configuration_guard(raw: bytes | None) -> Row:
     }
 
 
-def validate_policy_setup(report: Row, preload: Row) -> None:
+def _require_ec2_run(ec2_run: Ec2Run) -> None:
+    # The default GHA path does not import or acquire EC2 provider authority.
+    from tickwitness.infrastructure.restricted_reference_ec2 import Ec2Run as ActualEc2Run
+
+    if type(ec2_run) is not ActualEc2Run:
+        raise ValueError("Actual closed EC2 run authority is required")
+
+
+def validate_policy_setup(report: Row, preload: Row, *, ec2_run: Ec2Run | None = None) -> None:
     """Validate the fixed receipt without treating its assertions as OS readbacks."""
-    _row(report, _POLICY_FIELDS)
+    is_ec2 = ec2_run is not None
+    if ec2_run is not None:
+        _require_ec2_run(ec2_run)
+    profile_name = EC2_PROFILE_NAME if is_ec2 else PROFILE_NAME
+    policy_sha256 = EC2_POLICY_SHA256 if is_ec2 else POLICY_SHA256
+    staged_policy = ec2_run.staged_policy if ec2_run is not None else _STAGED_POLICY
+    attachment = None if is_ec2 else str(_BWRAP)
+    setup_kind = (
+        "restricted_reference_ec2_policy_setup_v1"
+        if is_ec2
+        else "restricted_reference_policy_setup_v1"
+    )
+    preload_kind = (
+        "restricted_reference_ec2_policy_preload_v1"
+        if is_ec2
+        else "restricted_reference_policy_preload_v1"
+    )
+    fields = _POLICY_FIELDS | {"provider_context"} if is_ec2 else _POLICY_FIELDS
+    _row(report, fields)
     if (
-        report["kind"] != "restricted_reference_policy_setup_v1"
+        report["kind"] != setup_kind
         or type(report["schema_version"]) is not int
         or report["schema_version"] != 1
         or report["status"] != "LOADED_REFERENCE_ONLY"
-        or report["profile_name"] != PROFILE_NAME
-        or report["attachment"] != str(_BWRAP)
+        or report["profile_name"] != profile_name
+        or report["attachment"] != attachment
         or report["mode"] != "unconfined"
         or report["restrict_before"] != "1"
         or report["restrict_after"] != "1"
@@ -474,8 +513,8 @@ def validate_policy_setup(report: Row, preload: Row) -> None:
         raise ValueError("Selected policy setup was not established")
     policy = _row(report["policy"], {"path", "sha256", "bytes"})
     if (
-        policy["path"] != str(_STAGED_POLICY)
-        or policy["sha256"] != POLICY_SHA256
+        policy["path"] != str(staged_policy)
+        or policy["sha256"] != policy_sha256
         or type(policy["bytes"]) is not int
         or not 0 < policy["bytes"] <= 65536
     ):
@@ -490,9 +529,9 @@ def validate_policy_setup(report: Row, preload: Row) -> None:
         or old != sorted(old, key=lambda row: cast("str", row["name"]))
     ):
         raise ValueError("Loaded profile receipt is not a sorted typed unique list")
-    policy_rows: list[Row] = [*old, {"name": PROFILE_NAME, "mode": "unconfined"}]
+    policy_rows: list[Row] = [*old, {"name": profile_name, "mode": "unconfined"}]
     expected = sorted(policy_rows, key=lambda row: cast("str", row["name"]))
-    if any(row["name"] == PROFILE_NAME for row in old) or after != expected:
+    if any(row["name"] == profile_name for row in old) or after != expected:
         raise ValueError("Policy receipt reused/replaced a pre-existing profile")
     identities = _row(report["identities"], set(_POLICY_IDENTITIES))
     for key, path in _POLICY_IDENTITIES.items():
@@ -557,7 +596,7 @@ def validate_policy_setup(report: Row, preload: Row) -> None:
         "--add",
         "--skip-cache",
         "--base=/etc/apparmor.d",
-        str(_STAGED_POLICY),
+        str(staged_policy),
     ]
     commands = loader.get("commands")
     started, deadline = loader.get("original_started_ns"), loader.get("original_deadline_ns")
@@ -572,6 +611,10 @@ def validate_policy_setup(report: Row, preload: Row) -> None:
         != {"window_ns": 30000000000, "max_commands": 3, "per_stream_bytes": 65536}
     ):
         raise ValueError("Policy setup command/window proof differs")
+    if ec2_run is not None and (
+        started != ec2_run.started_ns or deadline != ec2_run.setup_deadline_ns
+    ):
+        raise ValueError("EC2 setup did not retain the original claimed window")
     expected_commands = [
         [str(_POLICY_IDENTITIES["parser"]), "--skip-cache", "--version"],
         [
@@ -610,10 +653,14 @@ def validate_policy_setup(report: Row, preload: Row) -> None:
     attachments = loader.get("attachments_after")
     if not isinstance(attachments, list):
         raise ValueError("Policy attachment receipt is absent")
-    selected = [row for row in attachments if _row(row).get("name") == PROFILE_NAME]
-    foreign = [row for row in attachments if _row(row).get("name") != PROFILE_NAME]
+    selected = [row for row in attachments if _row(row).get("name") == profile_name]
+    foreign = [row for row in attachments if _row(row).get("name") != profile_name]
     if selected != [
-        {"name": PROFILE_NAME, "mode": "unconfined", "attachment": str(_BWRAP)}
+        {
+            "name": profile_name,
+            "mode": "unconfined",
+            "attachment": profile_name if is_ec2 else str(_BWRAP),
+        }
     ] or foreign != loader.get("attachments_before"):
         raise ValueError("Policy attachment receipt changed foreign state")
     for key in (
@@ -627,7 +674,7 @@ def validate_policy_setup(report: Row, preload: Row) -> None:
         if report[key] != preload.get(key):
             raise ValueError("Pre-load and post-load policy bindings disagree")
     if (
-        preload.get("kind") != "restricted_reference_policy_preload_v1"
+        preload.get("kind") != preload_kind
         or type(preload.get("schema_version")) is not int
         or preload.get("schema_version") != 1
         or preload.get("parser_argv") != argv
@@ -637,13 +684,34 @@ def validate_policy_setup(report: Row, preload: Row) -> None:
         "parser_configuration_guard"
     ) != loader.get("parser_configuration_guard"):
         raise ValueError("Pre-load parser/attachment observations differ")
+    if ec2_run is not None:
+        context = ec2_run.provider_record
+        if any(
+            document.get("provider_context") != context for document in (report, preload, loader)
+        ):
+            raise ValueError("EC2 policy provider bindings differ")
+        manual = _row(loader.get("manual_attachment_observation"), {"raw", "interpretation"})
+        if manual != {
+            "raw": EC2_PROFILE_NAME,
+            "interpretation": "kernel_profile_name_fallback_no_exec_attachment",
+        }:
+            raise ValueError("EC2 selected manual attachment readback differs")
 
 
-def _write(path: Path, raw: bytes) -> None:
+def _write(path: Path, raw: bytes, *, durable: bool = False) -> None:
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
     with os.fdopen(descriptor, "wb") as output:
         os.fchmod(output.fileno(), 0o644)
         output.write(raw)
+        if durable:
+            output.flush()
+            os.fsync(output.fileno())
+    if durable:
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
 
 
 def build_seccomp() -> bytes:
@@ -954,11 +1022,39 @@ def _guest_argv(setup: Path, bpf_fd: int, name: str, nonce: str) -> tuple[str, .
 class ReferenceRunner:
     """Root-only, one immutable manifest and at most24 fixed probe admissions."""
 
-    def __init__(self, artifact_dir: Path, fixed_payload_path: Path) -> None:
+    def __init__(
+        self,
+        artifact_dir: Path,
+        fixed_payload_path: Path,
+        *,
+        ec2_run: Ec2Run | None = None,
+    ) -> None:
+        if ec2_run is not None:
+            _require_ec2_run(ec2_run)
         self.artifact_dir = artifact_dir.absolute()
         self.payload = fixed_payload_path.absolute()
-        self._started_ns = time.monotonic_ns()
-        self._admissions = 0
+        self._ec2_run = ec2_run
+        self._profile_name = PROFILE_NAME if ec2_run is None else EC2_PROFILE_NAME
+        self._policy_sha256 = POLICY_SHA256 if ec2_run is None else EC2_POLICY_SHA256
+        self._expected_label = self._profile_name + " (unconfined)"
+        self._staged_policy = _STAGED_POLICY if ec2_run is None else ec2_run.staged_policy
+        self._policy_evidence = _POLICY_EVIDENCE if ec2_run is None else ec2_run.policy_evidence_dir
+        if ec2_run is None:
+            self._started_ns = time.monotonic_ns()
+            self._qualification_deadline_ns = self._started_ns + WINDOW_NS
+            self._admissions = 0
+        else:
+            if self.artifact_dir != ec2_run.artifact_dir:
+                raise ValueError("EC2 evidence must use the already owned run artifact directory")
+            selected_payload = Path(__file__).resolve().parents[3] / "scripts"
+            if self.payload != selected_payload / "restricted_reference_payload.py":
+                raise ValueError("EC2 qualification requires the fixed source-locked payload")
+            budget = ec2_run.acquire_runner()
+            if budget.deadline_ns - budget.started_ns != WINDOW_NS or budget.max_admissions != 24:
+                raise ValueError("EC2 run has a different original qualification budget")
+            self._started_ns = budget.started_ns
+            self._qualification_deadline_ns = budget.deadline_ns
+            self._admissions = budget.backend_confirmed
         self._nonces: set[str] = set()
         self._poisoned = False
         self._owned: dict[str, tuple[Path, Path]] = {}
@@ -973,28 +1069,44 @@ class ReferenceRunner:
         manifest_raw = _canonical(self.manifest) + b"\n"
         self.manifest_sha256 = _sha(manifest_raw)
         self.host_tuple_digest = self.manifest_sha256
-        _write(self.artifact_dir / "manifest.json", manifest_raw)
-        _write(self.artifact_dir / "manifest.sha256", self.manifest_sha256.encode() + b"\n")
+        durable = self._ec2_run is not None
+        _write(self.artifact_dir / "manifest.json", manifest_raw, durable=durable)
+        _write(
+            self.artifact_dir / "manifest.sha256",
+            self.manifest_sha256.encode() + b"\n",
+            durable=durable,
+        )
 
-    def _capture_policy(self) -> Row:
-        deadline = self._started_ns + WINDOW_NS
-        raw = _policy_document("policy-setup.json", deadline)
-        preload_raw = _policy_document("preload-manifest.json", deadline)
+    def _capture_policy(self, *, deadline_ns: int | None = None) -> Row:
+        deadline = self._qualification_deadline_ns
+        if deadline_ns is not None:
+            deadline = min(deadline, deadline_ns)
+        if self._ec2_run is not None:
+            self._ec2_run.revalidate(deadline_ns=deadline)
+        raw = _policy_document("policy-setup.json", deadline, evidence_dir=self._policy_evidence)
+        preload_raw = _policy_document(
+            "preload-manifest.json", deadline, evidence_dir=self._policy_evidence
+        )
         report = _row(json.loads(raw))
         preload = _row(json.loads(preload_raw))
         if raw != _canonical(report) + b"\n" or preload_raw != _canonical(preload):
             raise ValueError("Policy documents are not exact canonical frozen bytes")
-        validate_policy_setup(report, preload)
+        validate_policy_setup(report, preload, ec2_run=self._ec2_run)
         if _sha(preload_raw) != report["preload_manifest_sha256"]:
             raise ValueError("Actual pre-load manifest byte hash differs")
+        revision = (
+            os.environ.get("GITHUB_SHA")
+            if self._ec2_run is None
+            else self._ec2_run.source_revision
+        )
         if (
-            report["source_revision"] != os.environ.get("GITHUB_SHA")
+            report["source_revision"] != revision
             or re.fullmatch("[0-9a-f]{40}", str(report["source_revision"])) is None
         ):
             raise ValueError("Policy setup belongs to another source revision")
         policy = _row(report["policy"])
-        policy_raw = _policy_read(_STAGED_POLICY, 65536, deadline)
-        if _sha(policy_raw) != POLICY_SHA256 or len(policy_raw) != policy["bytes"]:
+        policy_raw = _policy_read(self._staged_policy, 65536, deadline)
+        if _sha(policy_raw) != self._policy_sha256 or len(policy_raw) != policy["bytes"]:
             raise ValueError("Actual installed policy bytes differ from the source freeze")
         identities = {
             key: _policy_identity(path, deadline, optional=key == "parser_config")
@@ -1013,7 +1125,12 @@ class ReferenceRunner:
         for index, command in enumerate(cast("list[object]", loader["commands"]), 1):
             command_row = _row(command)
             for stream in ("stdout", "stderr"):
-                captured = _policy_document(f"command-{index}.{stream}", deadline, 65536)
+                captured = _policy_document(
+                    f"command-{index}.{stream}",
+                    deadline,
+                    65536,
+                    evidence_dir=self._policy_evidence,
+                )
                 if (
                     len(captured) != command_row[stream + "_bytes"]
                     or _sha(captured) != command_row[stream + "_sha256"]
@@ -1024,7 +1141,7 @@ class ReferenceRunner:
             or cast("int", identities["parser"]["mode"]) & 0o6000
         ):
             raise ValueError("Selected parser/bwrap mode carries privileges")
-        if _policy_identity(_STAGED_POLICY, deadline) != preload.get("staged_identity"):
+        if _policy_identity(self._staged_policy, deadline) != preload.get("staged_identity"):
             raise ValueError("Exclusive staged policy identity changed after loading")
         if _features(deadline) != report["features"]:
             raise ValueError("Actual kernel policy features changed")
@@ -1055,23 +1172,50 @@ class ReferenceRunner:
             "boot_id": _policy_read(Path("/proc/sys/kernel/random/boot_id"), 128, deadline)
             .decode()
             .strip(),
-            "runner_image_os": os.environ.get("ImageOS"),  # noqa: SIM112 -- provider spelling
-            "runner_image_version": os.environ.get("ImageVersion"),  # noqa: SIM112
-            "run_id": os.environ.get("GITHUB_RUN_ID"),
-            "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+            "runner_image_os": (
+                os.environ.get("ImageOS") if self._ec2_run is None else None
+            ),  # noqa: SIM112 -- provider spelling
+            "runner_image_version": (
+                os.environ.get("ImageVersion") if self._ec2_run is None else None
+            ),  # noqa: SIM112
+            "run_id": (
+                os.environ.get("GITHUB_RUN_ID")
+                if self._ec2_run is None
+                else self._ec2_run.run_id
+            ),
+            "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT") if self._ec2_run is None else None,
             "controller_uid": os.geteuid(),
             "controller_gid": os.getegid(),
             "controller_label": label,
         }
         if host != loader.get("host") or host != preload.get("host"):
             raise ValueError("Policy setup is not bound to the actual current host/job")
-        for field, path in (
-            ("loader_source", self.payload.parent / "prepare_reference_policy.py"),
+        source_bindings = [
+            (
+                "loader_source",
+                self.payload.parent
+                / (
+                    "prepare_reference_policy.py"
+                    if self._ec2_run is None
+                    else "prepare_reference_policy_ec2.py"
+                ),
+            ),
             (
                 "policy_source",
-                self.payload.parent.parent / "research/security/reference-bwrap.apparmor",
+                self.payload.parent.parent
+                / "research/security"
+                / (
+                    "reference-bwrap.apparmor"
+                    if self._ec2_run is None
+                    else "reference-ec2.apparmor"
+                ),
             ),
-        ):
+        ]
+        if self._ec2_run is not None:
+            source_bindings.append(
+                ("shared_loader_source", self.payload.parent / "prepare_reference_policy.py")
+            )
+        for field, path in source_bindings:
             identity = _row(loader.get(field), {"path", "sha256", "bytes"})
             source = _policy_read(path, 65536, deadline, root_owned=False)
             if identity != {"path": str(path), "sha256": _sha(source), "bytes": len(source)}:
@@ -1086,20 +1230,29 @@ class ReferenceRunner:
             "current_loaded_profiles": profiles,
             "current_attachments": attachments,
             "controller_label": label,
-            "expected_task_label": EXPECTED_LABEL,
+            "expected_task_label": self._expected_label,
         }
 
     def _capture_manifest(self) -> Row:
         reasons: list[str] = []
         binaries: Row = {}
-        for name, path in {
+        selected_sources = {
             "python": _PYTHON,
             "bwrap": _BWRAP,
             "libc": Path("/usr/lib/x86_64-linux-gnu/libc.so.6"),
             "launcher": Path(__file__),
             "bootstrap": Path(__file__).with_name("restricted_reference_bootstrap.py"),
             "payload": self.payload,
-        }.items():
+        }
+        if self._ec2_run is not None:
+            selected_sources.update(
+                {
+                    "ec2_provider": Path(__file__).with_name("restricted_reference_ec2.py"),
+                    "ec2_policy_loader": self.payload.parent / "prepare_reference_policy_ec2.py",
+                    "shared_policy_loader": self.payload.parent / "prepare_reference_policy.py",
+                }
+            )
+        for name, path in selected_sources.items():
             try:
                 binaries[name] = _identity(path)
                 if path.stat().st_mode & (stat.S_ISUID | stat.S_ISGID):
@@ -1190,7 +1343,11 @@ class ReferenceRunner:
             policy_setup = {"verified": False, "reason": str(error)[:2048]}
             reasons.append("explicit_policy_setup_unavailable")
         return {
-            "kind": "restricted_reference_manifest_v1",
+            "kind": (
+                "restricted_reference_manifest_v1"
+                if self._ec2_run is None
+                else "restricted_reference_ec2_manifest_v1"
+            ),
             "production_m1_enabled": False,
             "available_for_probe": not reasons,
             "unavailable_reasons": reasons,
@@ -1199,9 +1356,17 @@ class ReferenceRunner:
             "architecture": platform.machine(),
             "python_version": sys.version,
             "libc_version": list(platform.libc_ver()),
-            "runner_image_os": os.environ.get("ImageOS"),  # noqa: SIM112 - provider-defined spelling
-            "runner_image_version": os.environ.get("ImageVersion"),  # noqa: SIM112 - provider-defined spelling
-            "source_revision": os.environ.get("GITHUB_SHA"),
+            "runner_image_os": (
+                os.environ.get("ImageOS") if self._ec2_run is None else None
+            ),  # noqa: SIM112 - provider-defined spelling
+            "runner_image_version": (
+                os.environ.get("ImageVersion") if self._ec2_run is None else None
+            ),  # noqa: SIM112 - provider-defined spelling
+            "source_revision": (
+                os.environ.get("GITHUB_SHA")
+                if self._ec2_run is None
+                else self._ec2_run.source_revision
+            ),
             "controller_uid": os.geteuid(),
             "controller_gid": os.getegid(),
             "reserved_uid_gid": 61184,
@@ -1244,9 +1409,19 @@ class ReferenceRunner:
                 "Host /usr is a trusted read-only runtime closure; selected binary hashes do not "
                 "hash/authenticate its full tree or the supplier. Kernel/host/harness are trusted."
             ),
+            **(
+                {}
+                if self._ec2_run is None
+                else {
+                    "schema_version": 1,
+                    "provider_context": self._ec2_run.provider_record,
+                    "qualification_started_ns": self._started_ns,
+                    "qualification_deadline_ns": self._qualification_deadline_ns,
+                }
+            ),
         }
 
-    def _unchanged_tuple(self) -> None:
+    def _unchanged_tuple(self, *, deadline_ns: int | None = None) -> None:
         binaries = cast("Row", self.manifest["binaries"])
         for value in binaries.values():
             record = cast("Row", value)
@@ -1255,7 +1430,12 @@ class ReferenceRunner:
                 or _sha(Path(cast("str", record["path"])).read_bytes()) != record["sha256"]
             ):
                 raise ValueError("Frozen reference binary/payload tuple changed")
-        if self._capture_policy() != self.manifest["explicit_userns_authorization"]:
+        current = (
+            self._capture_policy()
+            if deadline_ns is None
+            else self._capture_policy(deadline_ns=deadline_ns)
+        )
+        if current != self.manifest["explicit_userns_authorization"]:
             raise ValueError("Frozen explicit policy/control tuple changed")
 
     def _frozen_bytes(self, name: str) -> bytes:
@@ -1471,7 +1651,7 @@ class ReferenceRunner:
         if scheduler != os.SCHED_OTHER:
             raise ValueError("Actual task did not inherit the selected fair scheduler")
         actual_label = (root / "attr/current").read_text().strip()
-        if actual_label != EXPECTED_LABEL:
+        if actual_label != self._expected_label:
             raise ValueError("Actual task lost its selected named-unconfined authorization label")
         controller_label = Path("/proc/self/attr/current").read_text().strip()
         if controller_label != "unconfined":
@@ -1568,7 +1748,13 @@ class ReferenceRunner:
         del self._owned_seals[nonce]
         return True
 
-    def run_probe(self, name: str, arguments: tuple[str, ...] = ()) -> Row:
+    def run_probe(
+        self,
+        name: str,
+        arguments: tuple[str, ...] = (),
+        *,
+        ec2_admission: ProbeAdmission | None = None,
+    ) -> Row:
         if (
             name not in PROBE_NAMES
             or len(arguments) != 1
@@ -1581,11 +1767,32 @@ class ReferenceRunner:
             raise ValueError("Unconfirmed task ownership prevents later admission")
         if arguments[0] in self._nonces:
             raise ValueError("Reference nonce cannot be reused")
-        self._nonces.add(arguments[0])
-        self._admissions += 1
         nonce = arguments[0]
-        admitted = time.monotonic_ns()
-        deadline = min(admitted + WALL_NS, self._started_ns + WINDOW_NS)
+        if self._ec2_run is None:
+            if ec2_admission is not None:
+                raise ValueError("EC2 tickets cannot authorize the GHA reference family")
+            self._admissions += 1
+            admitted = time.monotonic_ns()
+            deadline = min(admitted + WALL_NS, self._started_ns + WINDOW_NS)
+        else:
+            if (
+                ec2_admission is None
+                or ec2_admission.name != name
+                or ec2_admission.nonce != nonce
+                or ec2_admission.run_id != self._ec2_run.run_id
+                or ec2_admission.boot_id != self._ec2_run.boot_id
+                or ec2_admission.source_revision != self._ec2_run.source_revision
+                or ec2_admission.admission_number != self._admissions + 1
+                or ec2_admission.admitted_ns < self._started_ns
+                or ec2_admission.deadline_ns
+                != min(ec2_admission.admitted_ns + WALL_NS, self._qualification_deadline_ns)
+            ):
+                raise ValueError("Original durable EC2 admission identity differs")
+            self._ec2_run.admit_probe(ec2_admission)
+            self._admissions = ec2_admission.admission_number
+            admitted = ec2_admission.admitted_ns
+            deadline = ec2_admission.deadline_ns
+        self._nonces.add(nonce)
         facts: Row = {
             "manifest_sha256": self.manifest_sha256,
             "admission_number": self._admissions,
@@ -1630,7 +1837,10 @@ class ReferenceRunner:
         try:
             if not self.manifest["available_for_probe"]:
                 raise ValueError("Selected host tuple preflight is unavailable")
-            self._unchanged_tuple()
+            if self._ec2_run is None:
+                self._unchanged_tuple()
+            else:
+                self._unchanged_tuple(deadline_ns=deadline)
             if time.monotonic_ns() >= deadline:
                 raise TimeoutError("Original deadline expired during policy/TCB preflight")
             setup, cgroup = self._prepare_case(name, nonce, facts)
@@ -1658,18 +1868,16 @@ class ReferenceRunner:
             policy_setup = _row(self.manifest["explicit_userns_authorization"])
             policy_report = _row(policy_setup["report"])
             library_identity = _row(_row(policy_report["identities"])["libapparmor"])
-            _write(
-                setup / "launch.json",
-                _canonical(
-                    {
-                        "cgroup": str(cgroup),
-                        "argv": argv,
-                        "policy_setup_sha256": policy_setup["report_sha256"],
-                        "policy_sha256": POLICY_SHA256,
-                        "libapparmor_sha256": library_identity["sha256"],
-                    }
-                ),
-            )
+            launch: Row = {
+                "cgroup": str(cgroup),
+                "argv": argv,
+                "policy_setup_sha256": policy_setup["report_sha256"],
+                "policy_sha256": self._policy_sha256,
+                "libapparmor_sha256": library_identity["sha256"],
+            }
+            if self._ec2_run is not None:
+                launch["reference_family"] = EC2_FAMILY
+            _write(setup / "launch.json", _canonical(launch))
             _write(setup / "bootstrap.py", self._frozen_bytes("bootstrap"))
             cast("Row", facts["canaries_before"])["protected_tcb_sha256"] = self._protected_hashes(
                 setup
@@ -1769,7 +1977,7 @@ class ReferenceRunner:
             label = Path(f"/proc/{process.pid}/attr/current").read_text().strip()
             transition = _row(receipt_document.get("apparmor_transition"))
             if (
-                label != EXPECTED_LABEL
+                label != self._expected_label
                 or receipt_document.get("apparmor_label") != label
                 or transition.get("returncode") != 0
                 or transition.get("before_label") != "unconfined"
@@ -1777,7 +1985,11 @@ class ReferenceRunner:
                 or transition.get("library_path") != str(_LIBAPPARMOR)
                 or transition.get("library_sha256") != library_identity["sha256"]
                 or receipt_document.get("policy_setup_sha256") != policy_setup["report_sha256"]
-                or receipt_document.get("policy_sha256") != POLICY_SHA256
+                or receipt_document.get("policy_sha256") != self._policy_sha256
+                or (
+                    self._ec2_run is not None
+                    and receipt_document.get("reference_family") != EC2_FAMILY
+                )
             ):
                 raise ValueError("Actual bootstrap named-unconfined policy binding differs")
             facts["bootstrap_admission"] = {
@@ -1897,8 +2109,32 @@ class ReferenceRunner:
                 result[label] = bytes(retained).decode("utf-8", errors="replace")
                 facts[label + "_retained_bytes"] = len(retained)
                 facts[label + "_sha256"] = _sha(bytes(retained))
-                _write(self.artifact_dir / (name + "-" + nonce + "." + label), bytes(retained))
-            _write(self.artifact_dir / (name + "-" + nonce + ".json"), _canonical(result) + b"\n")
+                _write(
+                    self.artifact_dir / (name + "-" + nonce + "." + label),
+                    bytes(retained),
+                    durable=self._ec2_run is not None,
+                )
+            result_raw = _canonical(result) + b"\n"
+            _write(
+                self.artifact_dir / (name + "-" + nonce + ".json"),
+                result_raw,
+                durable=self._ec2_run is not None,
+            )
+            if self._ec2_run is not None and ec2_admission is not None:
+                # The durable provider applies the catalog-specific expected
+                # termination rules. Local ownership uncertainty always fences.
+                self._poisoned = (
+                    self._poisoned
+                    or result["stop_confirmed"] is not True
+                    or result["cleanup_confirmed"] is not True
+                )
+                self._ec2_run.finish_probe(
+                    ec2_admission,
+                    result_sha256=_sha(result_raw),
+                    stop_confirmed=result["stop_confirmed"] is True,
+                    cleanup_confirmed=result["cleanup_confirmed"] is True,
+                    failure=cast("str | None", result["failure"]),
+                )
         return result
 
     def _pump(

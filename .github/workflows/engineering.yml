@@ -27,6 +27,8 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked
+      - name: Check trusted EC2 preparation shell syntax without provisioning
+        run: bash -n scripts/provision_ec2_reference_source.sh
       - run: make lint
       - if: always()
         run: make format

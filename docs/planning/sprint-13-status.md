@@ -1,5 +1,9 @@
 # Sprint 13 执行信任与隔离状态
 
+2026-11-25续作：专用EC2自动停机异常分支已完成[更正后的实测验收](../security/ec2-lifecycle-evidence-2026-11-25.md)，最后AWS明确Stopped。原日志查询格式／空输出误判已保留并撤回早期PASS，用新读回补证，未重跑原场景或重置研究预算。[独立EC2合同](../contracts/restricted-reference-ec2-v1.md)／[ADR0047](../adr/0047-dedicated-ec2-reference-admission.md)在提交[`5a86b8a`](https://github.com/Darrenus/tickwitness/commit/5a86b8a98d815da609b540f0ef91f9605ae3bcf0)实际推送并读回后才开始实现。新来源不用伪造GHA身份，也不改旧opaque拒绝结论。当前尚无EC2政策加载／隔离探针通过结果，M1产品仍DISABLED，PR115仍Draft、#38未完成；外部真人0/0/PENDING及独立安全NOT_PERFORMED分别保留。下面2026-11-19记录为上轮历史，不覆盖此续作状态。
+
+EC2接入现已完成静态实现及交叉审阅，待远端回归与实机资格：真实来源／九文件source lock、同一原始持久预算、单次票据、独立manifest家族和双记录终态验收见[操作流程](../security/ec2-reference-operations.md)。冻结文档触发的远端Engineering45622351548另暴露既有只读smoke在SQLite journal轮换时的拒绝竞态，已仅在harness原10s期限内补严格分类重试并保留每次拒绝；产品完整性门、worker执行及原研究预算未改。当前不把静态实现或源码测试等同实际隔离资格。
+
 更新2026-11-19 Asia/Singapore。Owner已合并[PR114](https://github.com/Darrenus/tickwitness/pull/114)，真实merge `6c350b9fe32dfed96392edd2b856e937f767e342`，2026-11-19T13:09:12Z（21:09:12 Asia/Singapore），接受S13-01的威胁模型、三模式及文件／环境／网络／资源缺口；#37已关闭Done。候选 `48c27b71b9250d737ee39295f1489177e887090d` 与实际CI checkout `dd3b24e633d6a58701e59eed3ab2c33c5c76f7b3` 不是owner merge；原307成员封存逐项复核不变，实际接受另存，不回写旧owner=false或首轮故障记录。
 
 上游S12已由owner合并[PR113](https://github.com/Darrenus/tickwitness/pull/113)接受，真实merge `df10923663a3d3c09b5b917995fbb554da60ea40`，2026-11-18T16:03:09Z；SDK契约回归／实际文档执行、#36与S12三项故事均已接受。模型、材料和软件接受不计真人激活或本轮隔离资格。

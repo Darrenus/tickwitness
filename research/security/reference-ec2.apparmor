@@ -1,0 +1,5 @@
+abi <abi/4.0>,
+
+profile tickwitness-reference-ec2 flags=(unconfined) {
+  userns,
+}
