@@ -24,7 +24,7 @@ from smoke_native_jobs import _RUNTIME, _bootstrap
 from smoke_reduction_execution import _GUARD, _LEDGER_VIEW, _canonical, _request, _sha, _tree
 
 _CONTROL_VIEW = """
-from tickwitness.application.jobs import JobConflictError
+from tickwitness.application.jobs import JobConflictError,JobStoreError
 from tickwitness.infrastructure.job_controls import JobControlStore
 from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
 def observe():
@@ -45,9 +45,13 @@ try:print(json.dumps(observe(),sort_keys=True,separators=(',',':')))
 except JobConflictError as error:
     print(json.dumps({'error':{'code':error.code,'message':str(error)}}),file=sys.stderr)
     raise SystemExit(9)
+except JobStoreError as error:
+    if type(error) is not JobStoreError or str(error)!='Job catalog path changed while open':raise
+    print(json.dumps({'error':{'code':'readonly_snapshot_unstable','message':str(error)}}),file=sys.stderr)
+    raise SystemExit(9)
 """
 _CATALOG_ONLY = """
-from tickwitness.application.jobs import JobConflictError
+from tickwitness.application.jobs import JobConflictError,JobStoreError
 from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
 try:
     store=SqliteJobStore(catalog,create=False)
@@ -58,6 +62,10 @@ try:
     print(json.dumps(value,sort_keys=True,separators=(',',':')))
 except JobConflictError as error:
     print(json.dumps({'error':{'code':error.code,'message':str(error)}}),file=sys.stderr)
+    raise SystemExit(9)
+except JobStoreError as error:
+    if type(error) is not JobStoreError or str(error)!='Job catalog path changed while open':raise
+    print(json.dumps({'error':{'code':'readonly_snapshot_unstable','message':str(error)}}),file=sys.stderr)
     raise SystemExit(9)
 """
 _NATIVE_WORKER = """
@@ -647,7 +655,13 @@ def main():
                 )
                 if not read_busy:
                     return payload
-                assert payload["error"]["code"] == "job_conflict"
+                # Only this read-only harness may repeat a refused observation.
+                # Preserve every refusal transcript and the same original10s
+                # deadline; never re-execute a worker or retry a mutation.
+                assert payload["error"]["code"] in {
+                    "job_conflict",
+                    "readonly_snapshot_unstable",
+                }
                 if time.monotonic() >= deadline:
                     raise AssertionError("Readonly control observation remained busy")
                 Event().wait(0.02)
