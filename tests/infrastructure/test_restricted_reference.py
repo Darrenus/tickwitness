@@ -611,9 +611,14 @@ def _ec2_policy_receipt():
     run.boot_id = "11111111-1111-1111-1111-111111111111"
     run.run_dir = run.staged_policy.parent
     run._host = {
-        "system": "Linux", "release": "fixture-release", "version": "fixture-version",
-        "architecture": "x86_64", "os_release": {"ID": "ubuntu", "VERSION_ID": "24.04"},
-        "boot_id": run.boot_id, "controller_uid": 0, "controller_gid": 0,
+        "system": "Linux",
+        "release": "fixture-release",
+        "version": "fixture-version",
+        "architecture": "x86_64",
+        "os_release": {"ID": "ubuntu", "VERSION_ID": "24.04"},
+        "boot_id": run.boot_id,
+        "controller_uid": 0,
+        "controller_gid": 0,
         "controller_label": "unconfined",
     }
     records = {}
@@ -626,14 +631,22 @@ def _ec2_policy_receipt():
         item = {"path": str(path), "sha256": "f" * 64, "bytes": 1}
         records[field] = item
         run._seals[str(path)] = (item, (1, 2, 0, 0o600, 1))
-    run._state = {"provider_context": {
-        "kind": "restricted_reference_ec2_host_v1", "schema_version": 1,
-        "provider": reference.EC2_FAMILY, "source_revision": run.source_revision,
-        "expected_identity": dict(ec2.EXPECTED_IDENTITY),
-        "observed_identity": dict(ec2.EXPECTED_IDENTITY),
-        "run_id": run.run_id, "boot_id": run.boot_id, "host": run._host,
-        "gha_metadata": None, "gha_metadata_reason": "not_applicable_aws_ec2", **records,
-    }}
+    run._state = {
+        "provider_context": {
+            "kind": "restricted_reference_ec2_host_v1",
+            "schema_version": 1,
+            "provider": reference.EC2_FAMILY,
+            "source_revision": run.source_revision,
+            "expected_identity": dict(ec2.EXPECTED_IDENTITY),
+            "observed_identity": dict(ec2.EXPECTED_IDENTITY),
+            "run_id": run.run_id,
+            "boot_id": run.boot_id,
+            "host": run._host,
+            "gha_metadata": None,
+            "gha_metadata_reason": "not_applicable_aws_ec2",
+            **records,
+        }
+    }
     report.update(
         kind="restricted_reference_ec2_policy_setup_v1",
         profile_name=reference.EC2_PROFILE_NAME,
@@ -645,9 +658,7 @@ def _ec2_policy_receipt():
         provider_context=copy.deepcopy(run.provider_record),
     )
     for document in (report, preload):
-        document["policy"].update(
-            path=str(run.staged_policy), sha256=reference.EC2_POLICY_SHA256
-        )
+        document["policy"].update(path=str(run.staged_policy), sha256=reference.EC2_POLICY_SHA256)
     selected = {"name": reference.EC2_PROFILE_NAME, "mode": "unconfined"}
     report["loaded_profiles_after"] = [selected]
     loader = report["loader"]
@@ -711,7 +722,9 @@ def test_bootstrap_family_cannot_select_an_arbitrary_profile_or_pin(family):
 
 def test_bootstrap_has_only_two_source_pinned_reference_selections():
     assert bootstrap._policy_selection() == (
-        reference.PROFILE_NAME.encode(), reference.EXPECTED_LABEL, reference.POLICY_SHA256
+        reference.PROFILE_NAME.encode(),
+        reference.EXPECTED_LABEL,
+        reference.POLICY_SHA256,
     )
     assert bootstrap._policy_selection(reference.EC2_FAMILY) == (
         reference.EC2_PROFILE_NAME.encode(),
@@ -724,8 +737,14 @@ def _ec2_unavailable_runner(tmp_path, monkeypatch):
     runner = _unavailable_runner(tmp_path, monkeypatch)
     admitted = runner._started_ns + 1
     ticket = ProbeAdmission(
-        "a" * 32, "b" * 36, "c" * 40, 1, "positive", "d" * 32,
-        admitted, admitted + reference.WALL_NS,
+        "a" * 32,
+        "b" * 36,
+        "c" * 40,
+        1,
+        "positive",
+        "d" * 32,
+        admitted,
+        admitted + reference.WALL_NS,
     )
     accepted, outcomes = [], []
     runner._ec2_run = SimpleNamespace(
@@ -746,18 +765,29 @@ def test_ec2_backend_uses_durable_original_ticket_without_a_second_charge(tmp_pa
     assert result["host_facts"]["original_admission_ns"] == ticket.admitted_ns
     assert result["host_facts"]["original_deadline_ns"] == ticket.deadline_ns
     raw = (tmp_path / ("positive-" + ticket.nonce + ".json")).read_bytes()
-    assert outcomes == [(ticket, {
-        "result_sha256": hashlib.sha256(raw).hexdigest(), "stop_confirmed": False,
-        "cleanup_confirmed": False, "failure": "setup_refused",
-    })]
+    assert outcomes == [
+        (
+            ticket,
+            {
+                "result_sha256": hashlib.sha256(raw).hexdigest(),
+                "stop_confirmed": False,
+                "cleanup_confirmed": False,
+                "failure": "setup_refused",
+            },
+        )
+    ]
     assert runner._poisoned is True
 
 
 @pytest.mark.parametrize(
     "change",
     [
-        {"name": "identity"}, {"nonce": "e" * 32}, {"run_id": "e" * 32},
-        {"boot_id": "e" * 36}, {"source_revision": "e" * 40}, {"admission_number": 2},
+        {"name": "identity"},
+        {"nonce": "e" * 32},
+        {"run_id": "e" * 32},
+        {"boot_id": "e" * 36},
+        {"source_revision": "e" * 40},
+        {"admission_number": 2},
         {"deadline_ns": 1},
     ],
 )

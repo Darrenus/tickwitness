@@ -1095,9 +1095,7 @@ class ReferenceRunner:
         if _sha(preload_raw) != report["preload_manifest_sha256"]:
             raise ValueError("Actual pre-load manifest byte hash differs")
         revision = (
-            os.environ.get("GITHUB_SHA")
-            if self._ec2_run is None
-            else self._ec2_run.source_revision
+            os.environ.get("GITHUB_SHA") if self._ec2_run is None else self._ec2_run.source_revision
         )
         if (
             report["source_revision"] != revision
@@ -1173,15 +1171,17 @@ class ReferenceRunner:
             .decode()
             .strip(),
             "runner_image_os": (
-                os.environ.get("ImageOS") if self._ec2_run is None else None
-            ),  # noqa: SIM112 -- provider spelling
-            "runner_image_version": (
-                os.environ.get("ImageVersion") if self._ec2_run is None else None
-            ),  # noqa: SIM112
-            "run_id": (
-                os.environ.get("GITHUB_RUN_ID")
+                os.environ.get("ImageOS")  # noqa: SIM112 -- provider-defined spelling
                 if self._ec2_run is None
-                else self._ec2_run.run_id
+                else None
+            ),
+            "runner_image_version": (
+                os.environ.get("ImageVersion")  # noqa: SIM112 -- provider-defined spelling
+                if self._ec2_run is None
+                else None
+            ),
+            "run_id": (
+                os.environ.get("GITHUB_RUN_ID") if self._ec2_run is None else self._ec2_run.run_id
             ),
             "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT") if self._ec2_run is None else None,
             "controller_uid": os.geteuid(),
@@ -1357,11 +1357,15 @@ class ReferenceRunner:
             "python_version": sys.version,
             "libc_version": list(platform.libc_ver()),
             "runner_image_os": (
-                os.environ.get("ImageOS") if self._ec2_run is None else None
-            ),  # noqa: SIM112 - provider-defined spelling
+                os.environ.get("ImageOS")  # noqa: SIM112 -- provider-defined spelling
+                if self._ec2_run is None
+                else None
+            ),
             "runner_image_version": (
-                os.environ.get("ImageVersion") if self._ec2_run is None else None
-            ),  # noqa: SIM112 - provider-defined spelling
+                os.environ.get("ImageVersion")  # noqa: SIM112 -- provider-defined spelling
+                if self._ec2_run is None
+                else None
+            ),
             "source_revision": (
                 os.environ.get("GITHUB_SHA")
                 if self._ec2_run is None

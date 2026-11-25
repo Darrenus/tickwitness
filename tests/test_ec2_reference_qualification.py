@@ -53,18 +53,25 @@ def driver(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
         boot_id = "actual-fake-boot"
         started_ns = 1000
         deadline_ns = 10**30
-        provider_record = {"provider": "fake unit fixture"}
         charged = 0
         confirmed = 0
         outcomes = 0
-        finished = []
+
+        def __init__(self) -> None:
+            self.provider_record = {"provider": "fake unit fixture"}
+            self.finished: list[tuple[str, str | None]] = []
 
         def snapshot(self) -> BudgetSnapshot:
             if mode[0] == "reserve_persist_uncertain" and self.charged:
                 raise ValueError("injected fenced durable counters")
             return BudgetSnapshot(
-                self.started_ns, self.deadline_ns, 24, self.charged, self.confirmed,
-                self.charged - self.confirmed, False,
+                self.started_ns,
+                self.deadline_ns,
+                24,
+                self.charged,
+                self.confirmed,
+                self.charged - self.confirmed,
+                False,
                 self.charged - self.outcomes,
             )
 
@@ -74,16 +81,30 @@ def driver(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
             if mode[0] == "reserve_persist_uncertain":
                 raise OSError("injected uncertain submitted ticket")
             return ProbeAdmission(
-                RUN_ID, self.boot_id, REVISION, self.charged, name, nonce, 1000, 10**30,
+                RUN_ID,
+                self.boot_id,
+                REVISION,
+                self.charged,
+                name,
+                nonce,
+                1000,
+                10**30,
             )
 
         def finish(
-            self, *, outcome: str, reason: str | None, final_report_sha256: str | None = None,
+            self,
+            *,
+            outcome: str,
+            reason: str | None,
+            final_report_sha256: str | None = None,
         ) -> None:
             if outcome == "QUALIFIED_REFERENCE_ONLY":
-                assert final_report_sha256 == qualification.hashlib.sha256(
-                    (tmp_path / "qualification-report.json").read_bytes()
-                ).hexdigest()
+                assert (
+                    final_report_sha256
+                    == qualification.hashlib.sha256(
+                        (tmp_path / "qualification-report.json").read_bytes()
+                    ).hexdigest()
+                )
                 assert mode[0] != "terminal_failure" or self.charged == 24
                 if mode[0] == "terminal_failure":
                     raise OSError("injected terminal write failure")
@@ -110,22 +131,29 @@ def driver(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
         return {}
 
     def assess_probe(
-        result: dict[str, object], name: str, nonce: str, manifest: str,
+        result: dict[str, object],
+        name: str,
+        nonce: str,
+        manifest: str,
     ) -> dict[str, object]:
         assert result["name"] == name and result["nonce"] == nonce and manifest == "d" * 64
         return {"status": "FAIL" if mode[0] == "fail" else "PASS", "reason": "unit fixture"}
 
     class Runner:
-        manifest = {"fixed_cases": list(qualification.PROBE_NAMES)}
         manifest_sha256 = "d" * 64
 
         def __init__(self, artifact: Path, payload: Path, *, ec2_run: Run) -> None:
+            self.manifest = {"fixed_cases": list(qualification.PROBE_NAMES)}
             assert artifact == run.artifact_dir and ec2_run is run
             assert payload.name == "restricted_reference_payload.py"
             events.append(("runner",))
 
         def run_probe(
-            self, name: str, *, arguments: tuple[str, ...], ec2_admission: ProbeAdmission,
+            self,
+            name: str,
+            *,
+            arguments: tuple[str, ...],
+            ec2_admission: ProbeAdmission,
         ) -> dict[str, object]:
             assert run.charged == ec2_admission.admission_number
             report = json.loads((tmp_path / "qualification-report.json").read_bytes())
@@ -142,10 +170,13 @@ def driver(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
     monkeypatch.setattr(qualification, "Ec2Run", SimpleNamespace(claim=claim))
     monkeypatch.setattr(qualification, "ReferenceRunner", Runner)
     monkeypatch.setattr(
-        qualification, "_script",
-        lambda name: SimpleNamespace(prepare_policy=prepare_policy)
-        if name == "prepare_reference_policy_ec2.py"
-        else SimpleNamespace(assess_probe=assess_probe),
+        qualification,
+        "_script",
+        lambda name: (
+            SimpleNamespace(prepare_policy=prepare_policy)
+            if name == "prepare_reference_policy_ec2.py"
+            else SimpleNamespace(assess_probe=assess_probe)
+        ),
     )
     return SimpleNamespace(run=run, events=events, mode=mode, path=tmp_path)
 
@@ -178,7 +209,8 @@ def test_driver_claims_before_setup_and_reserves_before_each_backend(
 
 @pytest.mark.parametrize("mode", ["fail", "lost_before_confirm", "cancel"])
 def test_failures_preserve_submitted_charge_and_stop_the_catalog(
-    driver: SimpleNamespace, mode: str,
+    driver: SimpleNamespace,
+    mode: str,
 ) -> None:
     driver.mode[0] = mode
     assert invoke() == 1
@@ -219,7 +251,8 @@ def test_fenced_charge_is_unknown_and_previous_zero_is_only_a_lower_bound(
 
 
 def test_first_report_failure_finishes_claim_before_payload(
-    driver: SimpleNamespace, monkeypatch: pytest.MonkeyPatch,
+    driver: SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def failed_write(*_args: object, **_kwargs: object) -> str:
         raise OSError("injected durable report failure")
@@ -233,7 +266,8 @@ def test_first_report_failure_finishes_claim_before_payload(
 
 @pytest.mark.parametrize("mode", ["terminal_failure", "receipt_failure"])
 def test_report_or_terminal_alone_cannot_publish_success(
-    driver: SimpleNamespace, mode: str,
+    driver: SimpleNamespace,
+    mode: str,
 ) -> None:
     driver.mode[0] = mode
     assert invoke() == 1
@@ -248,7 +282,14 @@ def test_report_or_terminal_alone_cannot_publish_success(
 
 def test_cli_has_no_host_policy_command_or_evidence_override() -> None:
     with pytest.raises(SystemExit) as error:
-        qualification.main([
-            "--source-revision", REVISION, "--run-id", RUN_ID, "--evidence-dir", "/tmp/other",
-        ])
+        qualification.main(
+            [
+                "--source-revision",
+                REVISION,
+                "--run-id",
+                RUN_ID,
+                "--evidence-dir",
+                "/tmp/other",
+            ]
+        )
     assert error.value.code == 2

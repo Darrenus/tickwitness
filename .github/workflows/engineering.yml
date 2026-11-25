@@ -29,7 +29,20 @@ jobs:
       - run: uv sync --locked
       - name: Check trusted EC2 preparation shell syntax without provisioning
         run: bash -n scripts/provision_ec2_reference_source.sh
-      - run: make lint
+      - name: Run fixed reference decisions before the full runtime matrix
+        env:
+          PYTHONPATH: tests:tests/application:tests/domain:tests/infrastructure:tests/integration
+        run: >-
+          uv run --locked pytest -q
+          tests/test_reference_policy.py
+          tests/test_restricted_reference_qualification.py
+          tests/test_ec2_reference_policy.py
+          tests/test_ec2_reference_qualification.py
+          tests/infrastructure/test_restricted_reference.py
+          tests/infrastructure/test_restricted_reference_ec2.py
+          tests/test_control_observation_refusals.py
+      - if: always()
+        run: make lint
       - if: always()
         run: make format
       - if: always()

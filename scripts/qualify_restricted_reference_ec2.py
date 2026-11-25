@@ -77,8 +77,10 @@ def _budget(run: Ec2Run, report: Row) -> None:
             "an uncertain submitted slot is retained and never refunded or retried."
         )
         for key in (
-            "admissions_charged", "confirmed_backend_admissions",
-            "backend_unconfirmed_admissions", "pending_probe_outcomes",
+            "admissions_charged",
+            "confirmed_backend_admissions",
+            "backend_unconfirmed_admissions",
+            "pending_probe_outcomes",
         ):
             report.pop(key, None)
         raise
@@ -106,15 +108,20 @@ def main(arguments: list[str] | None = None) -> int:
     run: Ec2Run | None = None
     cases: list[Row] = []
     report: Row = {
-        "kind": "restricted_reference_ec2_qualification_v1", "schema_version": 1,
-        "controls_status": "NOT_QUALIFIED", "production_m1": "DISABLED",
+        "kind": "restricted_reference_ec2_qualification_v1",
+        "schema_version": 1,
+        "controls_status": "NOT_QUALIFIED",
+        "production_m1": "DISABLED",
         "independent_human_security_review": "NOT_PERFORMED",
         "external_human_reproduction": "0/0/PENDING",
-        "research_reservations": 0, "replay_engine_invocations": 0,
-        "source_revision": args.source_revision, "run_id": args.run_id,
+        "research_reservations": 0,
+        "replay_engine_invocations": 0,
+        "source_revision": args.source_revision,
+        "run_id": args.run_id,
         "acceptance_gate": "matching_durable_terminal_and_final_report_sha256",
         "original_qualification_budget": {
-            "max_admissions": MAX_ADMISSIONS, "window_ns": WINDOW_NS,
+            "max_admissions": MAX_ADMISSIONS,
+            "window_ns": WINDOW_NS,
         },
         "cases": cases,
         "scope": "Owner-trusted fixed EC2 synthetic controls; product M1 remains DISABLED",
@@ -139,7 +146,8 @@ def main(arguments: list[str] | None = None) -> int:
         loader.prepare_policy(ec2_run=run)
         report["provider_context"] = run.provider_record
         runner = ReferenceRunner(
-            run.artifact_dir, _SOURCE / "scripts" / "restricted_reference_payload.py",
+            run.artifact_dir,
+            _SOURCE / "scripts" / "restricted_reference_payload.py",
             ec2_run=run,
         )
         if runner.manifest.get("fixed_cases") != list(PROBE_NAMES):
@@ -148,17 +156,24 @@ def main(arguments: list[str] | None = None) -> int:
         stopped = False
         for name in PROBE_NAMES:
             if stopped or time.monotonic_ns() >= run.deadline_ns:
-                cases.append({
-                    "name": name, "admission_submitted": False, "status": "UNKNOWN",
-                    "reason": "not_admitted_after_original_window_or_uncertainty",
-                })
+                cases.append(
+                    {
+                        "name": name,
+                        "admission_submitted": False,
+                        "status": "UNKNOWN",
+                        "reason": "not_admitted_after_original_window_or_uncertainty",
+                    }
+                )
                 continue
             nonce = secrets.token_hex(16)
             # fsync the submitted charge before entering a backend that might fail to return.
             admission = run.reserve_probe(name=name, nonce=nonce)
             case: Row = {
-                "name": name, "nonce": nonce, "admission_submitted": True,
-                "admission": dataclasses.asdict(admission), "status": "UNKNOWN",
+                "name": name,
+                "nonce": nonce,
+                "admission_submitted": True,
+                "admission": dataclasses.asdict(admission),
+                "status": "UNKNOWN",
                 "reason": "execution_outcome_unavailable",
             }
             cases.append(case)
@@ -167,16 +182,18 @@ def main(arguments: list[str] | None = None) -> int:
             result = runner.run_probe(name, arguments=(nonce,), ec2_admission=admission)
             result_path = run.run_dir / f"case-{admission.admission_number:02d}.json"
             result_hash = _write(result_path, result, first=True, limit=2_097_152)
-            assessment = assessment_module.assess_probe(
-                result, name, nonce, runner.manifest_sha256
+            assessment = assessment_module.assess_probe(result, name, nonce, runner.manifest_sha256)
+            case.update(
+                {
+                    **assessment,
+                    "execution_evidence": {
+                        "path": str(result_path),
+                        "sha256": result_hash,
+                        "bytes": result_path.stat().st_size,
+                    },
+                    "payload_started": result.get("payload_started") is True,
+                }
             )
-            case.update({
-                **assessment, "execution_evidence": {
-                    "path": str(result_path), "sha256": result_hash,
-                    "bytes": result_path.stat().st_size,
-                },
-                "payload_started": result.get("payload_started") is True,
-            })
             _budget(run, report)
             _write(report_path, report)
             stopped = assessment["status"] != "PASS"
@@ -192,18 +209,26 @@ def main(arguments: list[str] | None = None) -> int:
         _budget(run, report)
         final_report_hash = _write(report_path, report)
         run.finish(
-            outcome=outcome, reason=None if all_passed else "fixed_catalog_incomplete",
+            outcome=outcome,
+            reason=None if all_passed else "fixed_catalog_incomplete",
             final_report_sha256=final_report_hash if all_passed else None,
         )
         terminal = True
         receipt = run.qualification_receipt() if all_passed else None
-        sys.stdout.write(json.dumps({
-            "controls_status": outcome, "production_m1": "DISABLED",
-            "admissions_charged": report["admissions_charged"],
-            "manifest_sha256": runner.manifest_sha256,
-            "run_id": run.run_id, "boot_id": run.boot_id,
-            "terminal_receipt": receipt,
-        }) + "\n")
+        sys.stdout.write(
+            json.dumps(
+                {
+                    "controls_status": outcome,
+                    "production_m1": "DISABLED",
+                    "admissions_charged": report["admissions_charged"],
+                    "manifest_sha256": runner.manifest_sha256,
+                    "run_id": run.run_id,
+                    "boot_id": run.boot_id,
+                    "terminal_receipt": receipt,
+                }
+            )
+            + "\n"
+        )
         return 0 if all_passed else 1
     except BaseException as error:
         report["controls_status"] = "NOT_QUALIFIED"
@@ -211,10 +236,14 @@ def main(arguments: list[str] | None = None) -> int:
         represented = {case["name"] for case in cases}
         for name in PROBE_NAMES:
             if name not in represented:
-                cases.append({
-                    "name": name, "admission_submitted": False, "status": "UNKNOWN",
-                    "reason": "not_admitted_after_harness_failure",
-                })
+                cases.append(
+                    {
+                        "name": name,
+                        "admission_submitted": False,
+                        "status": "UNKNOWN",
+                        "reason": "not_admitted_after_harness_failure",
+                    }
+                )
         if run is not None:
             if not terminal:
                 try:
@@ -222,7 +251,8 @@ def main(arguments: list[str] | None = None) -> int:
                     terminal = True
                 except Exception as finish_error:
                     report["durable_finalization"] = {
-                        "status": "UNKNOWN", "type": type(finish_error).__name__,
+                        "status": "UNKNOWN",
+                        "type": type(finish_error).__name__,
                     }
             try:
                 _budget(run, report)
@@ -230,14 +260,15 @@ def main(arguments: list[str] | None = None) -> int:
                 report["accounting_failure"] = {"type": type(accounting_error).__name__}
             try:
                 _write(
-                    run.run_dir / "qualification-report.json", report,
+                    run.run_dir / "qualification-report.json",
+                    report,
                     first=not report_created,
                 )
             except Exception as publication_error:
-                sys.stderr.write("qualification_evidence_uncertain: "
-                                 + type(publication_error).__name__ + "\n")
-        sys.stderr.write("restricted_reference_ec2_not_qualified: "
-                         + type(error).__name__ + "\n")
+                sys.stderr.write(
+                    "qualification_evidence_uncertain: " + type(publication_error).__name__ + "\n"
+                )
+        sys.stderr.write("restricted_reference_ec2_not_qualified: " + type(error).__name__ + "\n")
         return 1
     finally:
         signal.signal(signal.SIGTERM, previous_term)

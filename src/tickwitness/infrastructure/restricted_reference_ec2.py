@@ -19,6 +19,7 @@ import signal
 import stat
 import threading
 import time
+from contextlib import suppress
 from pathlib import Path
 from typing import cast
 
@@ -48,20 +49,55 @@ SETUP_NS = 30_000_000_000
 PROBE_NS = 10_000_000_000
 MAX_ADMISSIONS = 24
 FIXED_PROBES = (
-    "positive", "filesystem", "readonly", "environment", "identity", "network_ipv4",
-    "network_ipv6", "network_dns", "network_loopback", "inherited_fds", "memory", "pids",
-    "disk_bytes", "inodes", "fds", "file_size", "cpu", "output_flood", "detached",
-    "namespace_denial", "privileged_syscalls", "abi_denial", "malformed_output", "stdio_closed",
+    "positive",
+    "filesystem",
+    "readonly",
+    "environment",
+    "identity",
+    "network_ipv4",
+    "network_ipv6",
+    "network_dns",
+    "network_loopback",
+    "inherited_fds",
+    "memory",
+    "pids",
+    "disk_bytes",
+    "inodes",
+    "fds",
+    "file_size",
+    "cpu",
+    "output_flood",
+    "detached",
+    "namespace_denial",
+    "privileged_syscalls",
+    "abi_denial",
+    "malformed_output",
+    "stdio_closed",
 )
 _HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 _HEX32 = re.compile(r"[0-9a-f]{32}\Z")
 _HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 _BOOT = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
 _STATE_KEYS = {
-    "kind", "schema_version", "source_revision", "run_id", "boot_id", "owner",
-    "started_ns", "deadline_ns", "setup_deadline_ns", "phase", "host_preparation_started",
-    "provider_context", "policy_receipts", "charged", "backend_confirmed", "admissions",
-    "poisoned", "outcome", "reason",
+    "kind",
+    "schema_version",
+    "source_revision",
+    "run_id",
+    "boot_id",
+    "owner",
+    "started_ns",
+    "deadline_ns",
+    "setup_deadline_ns",
+    "phase",
+    "host_preparation_started",
+    "provider_context",
+    "policy_receipts",
+    "charged",
+    "backend_confirmed",
+    "admissions",
+    "poisoned",
+    "outcome",
+    "reason",
     "final_report_sha256",
 }
 
@@ -76,8 +112,10 @@ def _sha(raw: bytes) -> str:
 
 
 def _mapping(value: object, keys: set[str], label: str) -> Row:
-    if not isinstance(value, dict) or set(value) != keys or any(
-        not isinstance(key, str) for key in value
+    if (
+        not isinstance(value, dict)
+        or set(value) != keys
+        or any(not isinstance(key, str) for key in value)
     ):
         raise ValueError("Invalid or unknown " + label + " fields")
     return cast(Row, value)
@@ -130,14 +168,23 @@ def _secure_read(path: Path, limit: int) -> tuple[bytes, tuple[int, int, int, in
 
 def _stable(info: os.stat_result) -> tuple[int, ...]:
     return (
-        info.st_dev, info.st_ino, info.st_uid, info.st_gid, info.st_mode,
-        info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns,
+        info.st_dev,
+        info.st_ino,
+        info.st_uid,
+        info.st_gid,
+        info.st_mode,
+        info.st_nlink,
+        info.st_size,
+        info.st_mtime_ns,
+        info.st_ctime_ns,
     )
 
 
 def _regular_root(info: os.stat_result) -> bool:
     return (
-        stat.S_ISREG(info.st_mode) and info.st_uid == 0 and info.st_nlink == 1
+        stat.S_ISREG(info.st_mode)
+        and info.st_uid == 0
+        and info.st_nlink == 1
         and not info.st_mode & 0o022
     )
 
@@ -181,7 +228,7 @@ def _boot_id() -> str:
 def _owner() -> Row:
     # Field22 starttime binds this PID, not a recycled numeric PID.
     raw = Path("/proc/self/stat").read_text()
-    fields = raw[raw.rfind(")") + 2:].split()
+    fields = raw[raw.rfind(")") + 2 :].split()
     if len(fields) < 20 or not fields[19].isdecimal():
         raise ValueError("Missing actual controller process identity")
     return {"pid": os.getpid(), "start_ticks": int(fields[19]), "uid": os.geteuid()}
@@ -198,9 +245,15 @@ def _host() -> Row:
     if label != "unconfined" or "NoNewPrivs:\t0" not in status:
         raise ValueError("Controller must retain original unconfined pre-NNP context")
     return {
-        "system": platform.system(), "release": platform.release(), "version": platform.version(),
-        "architecture": platform.machine(), "os_release": release, "boot_id": _boot_id(),
-        "controller_uid": os.geteuid(), "controller_gid": os.getegid(), "controller_label": label,
+        "system": platform.system(),
+        "release": platform.release(),
+        "version": platform.version(),
+        "architecture": platform.machine(),
+        "os_release": release,
+        "boot_id": _boot_id(),
+        "controller_uid": os.geteuid(),
+        "controller_gid": os.getegid(),
+        "controller_label": label,
     }
 
 
@@ -261,8 +314,10 @@ def _metadata(*, deadline_ns: int) -> bytes:
         if not token or any(ord(char) < 33 or ord(char) > 126 for char in token):
             raise ValueError("Invalid bounded IMDSv2 token")
         return request(
-            "GET", "/latest/dynamic/instance-identity/document",
-            {"X-aws-ec2-metadata-token": token}, 16384,
+            "GET",
+            "/latest/dynamic/instance-identity/document",
+            {"X-aws-ec2-metadata-token": token},
+            16384,
         )
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
@@ -357,23 +412,40 @@ class Ec2Run:
             instance._fenced = False
             instance._seals = {}
             instance._state = {
-                "kind": "restricted_reference_ec2_run_v1", "schema_version": 1,
-                "source_revision": source_revision, "run_id": run_id,
-                "boot_id": instance.boot_id, "owner": instance._owner,
-                "started_ns": started, "deadline_ns": instance.deadline_ns,
-                "setup_deadline_ns": instance.setup_deadline_ns, "phase": "CLAIMED",
-                "host_preparation_started": False, "provider_context": None,
-                "policy_receipts": None, "charged": 0, "backend_confirmed": 0,
-                "admissions": [], "poisoned": False, "outcome": None, "reason": None,
+                "kind": "restricted_reference_ec2_run_v1",
+                "schema_version": 1,
+                "source_revision": source_revision,
+                "run_id": run_id,
+                "boot_id": instance.boot_id,
+                "owner": instance._owner,
+                "started_ns": started,
+                "deadline_ns": instance.deadline_ns,
+                "setup_deadline_ns": instance.setup_deadline_ns,
+                "phase": "CLAIMED",
+                "host_preparation_started": False,
+                "provider_context": None,
+                "policy_receipts": None,
+                "charged": 0,
+                "backend_confirmed": 0,
+                "admissions": [],
+                "poisoned": False,
+                "outcome": None,
+                "reason": None,
                 "final_report_sha256": None,
             }
-            claim = canonical({
-                "kind": "restricted_reference_ec2_claim_v1", "schema_version": 1,
-                "source_revision": source_revision, "run_id": run_id,
-                "boot_id": instance.boot_id, "owner": instance._owner,
-                "started_ns": started, "deadline_ns": instance.deadline_ns,
-                "setup_deadline_ns": instance.setup_deadline_ns,
-            })
+            claim = canonical(
+                {
+                    "kind": "restricted_reference_ec2_claim_v1",
+                    "schema_version": 1,
+                    "source_revision": source_revision,
+                    "run_id": run_id,
+                    "boot_id": instance.boot_id,
+                    "owner": instance._owner,
+                    "started_ns": started,
+                    "deadline_ns": instance.deadline_ns,
+                    "setup_deadline_ns": instance.setup_deadline_ns,
+                }
+            )
             if os.write(lock_fd, claim) != len(claim):
                 raise OSError("Partial durable host claim write")
             os.fsync(lock_fd)
@@ -402,27 +474,27 @@ class Ec2Run:
         path = ROOT / "sources" / self.source_revision / "source-lock.json"
         raw, seal = _secure_read(path, 65536)
         document = _mapping(
-            _json(raw), {"kind", "schema_version", "source_revision", "source_root", "files"},
+            _json(raw),
+            {"kind", "schema_version", "source_revision", "source_root", "files"},
             "source-lock",
         )
         if (
             document["kind"] != "restricted_reference_ec2_source_lock_v1"
-            or type(document["schema_version"]) is not int or document["schema_version"] != 1
+            or type(document["schema_version"]) is not int
+            or document["schema_version"] != 1
             or document["source_revision"] != self.source_revision
             or document["source_root"] != str(SOURCE_ROOT)
         ):
             raise ValueError("Trusted actual source-lock identity differs")
         files = _mapping(document["files"], set(SOURCE_FILES), "source closure")
-        self._seals[str(path)] = (
-            {"path": str(path), "sha256": _sha(raw), "bytes": len(raw)}, seal
-        )
+        self._seals[str(path)] = ({"path": str(path), "sha256": _sha(raw), "bytes": len(raw)}, seal)
         for relative in SOURCE_FILES:
             expected = _mapping(files[relative], {"sha256", "bytes"}, "source entry")
             if (
                 not isinstance(expected["sha256"], str)
                 or not _HEX64.fullmatch(expected["sha256"])
                 or type(expected["bytes"]) is not int
-                or not 0 < cast(int, expected["bytes"]) <= 1_048_576
+                or not 0 < expected["bytes"] <= 1_048_576
             ):
                 raise ValueError("Invalid actual source digest or length")
             source_path = SOURCE_ROOT / relative
@@ -431,22 +503,25 @@ class Ec2Run:
                 raise ValueError("Actual trusted source bytes differ")
             self._seals[str(source_path)] = (actual, source_seal)
         self._source_lock = self._seals[str(path)][0]
-        self._provider_source = self._seals[
-            str(SOURCE_ROOT / SOURCE_FILES[0])
-        ][0]
+        self._provider_source = self._seals[str(SOURCE_ROOT / SOURCE_FILES[0])][0]
 
     def _live(self) -> None:
         if self._fenced:
             raise ValueError("Durable claim is fenced after uncertain persistence")
         for field in (
-            "source_revision", "run_id", "boot_id", "started_ns", "deadline_ns",
+            "source_revision",
+            "run_id",
+            "boot_id",
+            "started_ns",
+            "deadline_ns",
             "setup_deadline_ns",
         ):
             if getattr(self, field) != self._state[field]:
                 raise ValueError("Original claim identity or clock cannot be reassigned")
         expected_dir = ROOT / "runs" / self.run_id
         if (
-            self.run_dir != expected_dir or self.staged_policy != expected_dir / "policy.apparmor"
+            self.run_dir != expected_dir
+            or self.staged_policy != expected_dir / "policy.apparmor"
             or self.policy_evidence_dir != expected_dir / "policy-evidence"
             or self.artifact_dir != expected_dir / "qualification"
         ):
@@ -480,10 +555,8 @@ class Ec2Run:
         except BaseException:
             self._fenced = True
             # An exclusive, persistent marker prevents an uncertain write being retried.
-            try:
+            with suppress(OSError):
                 write_exclusive(self.run_dir / "persistence-uncertain", b"FENCED\n")
-            except OSError:
-                pass
             raise
 
     def _poison(self, reason: str) -> None:
@@ -501,17 +574,34 @@ class Ec2Run:
     @property
     def provider_record(self) -> Row:
         value = self._state["provider_context"]
-        record = _mapping(value, {
-            "kind", "schema_version", "provider", "expected_identity", "observed_identity",
-            "source_revision", "run_id", "boot_id", "host", "gha_metadata",
-            "gha_metadata_reason", "provider_source", "source_lock", "identity_document",
-        }, "provider context")
+        record = _mapping(
+            value,
+            {
+                "kind",
+                "schema_version",
+                "provider",
+                "expected_identity",
+                "observed_identity",
+                "source_revision",
+                "run_id",
+                "boot_id",
+                "host",
+                "gha_metadata",
+                "gha_metadata_reason",
+                "provider_source",
+                "source_lock",
+                "identity_document",
+            },
+            "provider context",
+        )
         if (
             record["kind"] != "restricted_reference_ec2_host_v1"
-            or type(record["schema_version"]) is not int or record["schema_version"] != 1
+            or type(record["schema_version"]) is not int
+            or record["schema_version"] != 1
             or record["provider"] != "aws_ec2_dedicated_v1"
             or record["source_revision"] != self.source_revision
-            or record["run_id"] != self.run_id or record["boot_id"] != self.boot_id
+            or record["run_id"] != self.run_id
+            or record["boot_id"] != self.boot_id
             or record["gha_metadata"] is not None
             or record["gha_metadata_reason"] != "not_applicable_aws_ec2"
         ):
@@ -522,19 +612,37 @@ class Ec2Run:
                 type(value) is not str for value in identity.values()
             ):
                 raise ValueError("Unknown/mismatched selected EC2 identity")
-        host = _mapping(record["host"], {
-            "system", "release", "version", "architecture", "os_release", "boot_id",
-            "controller_uid", "controller_gid", "controller_label",
-        }, "provider host")
+        host = _mapping(
+            record["host"],
+            {
+                "system",
+                "release",
+                "version",
+                "architecture",
+                "os_release",
+                "boot_id",
+                "controller_uid",
+                "controller_gid",
+                "controller_label",
+            },
+            "provider host",
+        )
         release = host["os_release"]
         if (
-            host != self._host or host["system"] != "Linux" or host["architecture"] != "x86_64"
-            or host["boot_id"] != self.boot_id or host["controller_label"] != "unconfined"
-            or type(host["controller_uid"]) is not int or host["controller_uid"] != 0
+            host != self._host
+            or host["system"] != "Linux"
+            or host["architecture"] != "x86_64"
+            or host["boot_id"] != self.boot_id
+            or host["controller_label"] != "unconfined"
+            or type(host["controller_uid"]) is not int
+            or host["controller_uid"] != 0
             or type(host["controller_gid"]) is not int
-            or not isinstance(host["release"], str) or not host["release"]
-            or not isinstance(host["version"], str) or not host["version"]
-            or not isinstance(release, dict) or release.get("ID") != "ubuntu"
+            or not isinstance(host["release"], str)
+            or not host["release"]
+            or not isinstance(host["version"], str)
+            or not host["version"]
+            or not isinstance(release, dict)
+            or release.get("ID") != "ubuntu"
             or release.get("VERSION_ID") != "24.04"
             or any(type(key) is not str or type(value) is not str for key, value in release.items())
         ):
@@ -546,9 +654,11 @@ class Ec2Run:
         ):
             item = _mapping(record[field], {"path", "sha256", "bytes"}, field)
             if (
-                item["path"] != str(path) or not isinstance(item["sha256"], str)
-                or not _HEX64.fullmatch(item["sha256"]) or type(item["bytes"]) is not int
-                or not 0 < cast(int, item["bytes"]) <= limit
+                item["path"] != str(path)
+                or not isinstance(item["sha256"], str)
+                or not _HEX64.fullmatch(item["sha256"])
+                or type(item["bytes"]) is not int
+                or not 0 < item["bytes"] <= limit
                 or self._seals.get(str(path), (None, None))[0] != item
             ):
                 raise ValueError("Unbound provider source/cache receipt")
@@ -577,12 +687,19 @@ class Ec2Run:
             iid_record, iid_seal = _file_record(path, 16384)
             self._seals[str(path)] = (iid_record, iid_seal)
             self._state["provider_context"] = {
-                "kind": "restricted_reference_ec2_host_v1", "schema_version": 1,
-                "provider": "aws_ec2_dedicated_v1", "expected_identity": dict(EXPECTED_IDENTITY),
-                "observed_identity": observed, "source_revision": self.source_revision,
-                "run_id": self.run_id, "boot_id": self.boot_id, "host": self._host,
-                "gha_metadata": None, "gha_metadata_reason": "not_applicable_aws_ec2",
-                "provider_source": self._provider_source, "source_lock": self._source_lock,
+                "kind": "restricted_reference_ec2_host_v1",
+                "schema_version": 1,
+                "provider": "aws_ec2_dedicated_v1",
+                "expected_identity": dict(EXPECTED_IDENTITY),
+                "observed_identity": observed,
+                "source_revision": self.source_revision,
+                "run_id": self.run_id,
+                "boot_id": self.boot_id,
+                "host": self._host,
+                "gha_metadata": None,
+                "gha_metadata_reason": "not_applicable_aws_ec2",
+                "provider_source": self._provider_source,
+                "source_lock": self._source_lock,
                 "identity_document": iid_record,
             }
             self._persist()
@@ -594,8 +711,10 @@ class Ec2Run:
     def revalidate(self, *, deadline_ns: int) -> Row:
         self._live()
         if (
-            type(deadline_ns) is not int or deadline_ns > self.deadline_ns
-            or time.monotonic_ns() >= deadline_ns or self._state["poisoned"] is not False
+            type(deadline_ns) is not int
+            or deadline_ns > self.deadline_ns
+            or time.monotonic_ns() >= deadline_ns
+            or self._state["poisoned"] is not False
             or self._state["phase"] == "TERMINAL"
         ):
             raise ValueError("Original claim deadline/phase refuses admission")
@@ -610,7 +729,8 @@ class Ec2Run:
         self.require_phase("CLAIMED")
         self.revalidate(deadline_ns=self.setup_deadline_ns)
         for name, digest in (
-            ("preload-manifest.json", preload_sha256), ("policy-setup.json", report_sha256),
+            ("preload-manifest.json", preload_sha256),
+            ("policy-setup.json", report_sha256),
         ):
             if not _HEX64.fullmatch(digest):
                 raise ValueError("Invalid policy receipt digest")
@@ -618,7 +738,8 @@ class Ec2Run:
             if record["sha256"] != digest:
                 raise ValueError("Actual policy receipt digest differs")
         self._state["policy_receipts"] = {
-            "preload_sha256": preload_sha256, "report_sha256": report_sha256,
+            "preload_sha256": preload_sha256,
+            "report_sha256": report_sha256,
         }
         self._state["phase"] = "POLICY_READY"
         self._persist()
@@ -635,8 +756,13 @@ class Ec2Run:
         charged = cast(int, self._state["charged"])
         confirmed = cast(int, self._state["backend_confirmed"])
         return BudgetSnapshot(
-            self.started_ns, self.deadline_ns, MAX_ADMISSIONS, charged, confirmed,
-            charged - confirmed, self._state["poisoned"] is True,
+            self.started_ns,
+            self.deadline_ns,
+            MAX_ADMISSIONS,
+            charged,
+            confirmed,
+            charged - confirmed,
+            self._state["poisoned"] is True,
             sum(row["outcome"] is None for row in self._admissions()),
         )
 
@@ -660,8 +786,14 @@ class Ec2Run:
         if admitted >= self.deadline_ns:
             raise TimeoutError("Original qualification window exhausted before durable charge")
         ticket = ProbeAdmission(
-            self.run_id, self.boot_id, self.source_revision, len(admissions) + 1, name, nonce,
-            admitted, min(self.deadline_ns, admitted + PROBE_NS),
+            self.run_id,
+            self.boot_id,
+            self.source_revision,
+            len(admissions) + 1,
+            name,
+            nonce,
+            admitted,
+            min(self.deadline_ns, admitted + PROBE_NS),
         )
         admissions.append({**dataclasses.asdict(ticket), "accepted": False, "outcome": None})
         self._state["charged"] = len(admissions)
@@ -691,37 +823,50 @@ class Ec2Run:
         self._persist()
 
     def finish_probe(
-        self, admission: ProbeAdmission, *, result_sha256: str, stop_confirmed: bool,
-        cleanup_confirmed: bool, failure: str | None,
+        self,
+        admission: ProbeAdmission,
+        *,
+        result_sha256: str,
+        stop_confirmed: bool,
+        cleanup_confirmed: bool,
+        failure: str | None,
     ) -> None:
         self._live()
         row = self._ticket(admission)
         if (
-            self._state["phase"] != "QUALIFYING" or row["accepted"] is not True
-            or row["outcome"] is not None or not _HEX64.fullmatch(result_sha256)
-            or type(stop_confirmed) is not bool or type(cleanup_confirmed) is not bool
+            self._state["phase"] != "QUALIFYING"
+            or row["accepted"] is not True
+            or row["outcome"] is not None
+            or not _HEX64.fullmatch(result_sha256)
+            or type(stop_confirmed) is not bool
+            or type(cleanup_confirmed) is not bool
             or (failure is not None and not isinstance(failure, str))
         ):
             raise ValueError("Probe outcome cannot replace or invent an admission")
         row["outcome"] = {
-            "result_sha256": result_sha256, "stop_confirmed": stop_confirmed,
-            "cleanup_confirmed": cleanup_confirmed, "failure": failure,
+            "result_sha256": result_sha256,
+            "stop_confirmed": stop_confirmed,
+            "cleanup_confirmed": cleanup_confirmed,
+            "failure": failure,
         }
         expected_termination = (
             admission.name in {"cpu", "detached"} and failure == "deadline_exceeded"
-        ) or (
-            admission.name == "output_flood" and failure in {"stdout_limit", "stderr_limit"}
-        )
+        ) or (admission.name == "output_flood" and failure in {"stdout_limit", "stderr_limit"})
         if (
             (failure is not None and not expected_termination)
-            or not stop_confirmed or not cleanup_confirmed
+            or not stop_confirmed
+            or not cleanup_confirmed
         ):
             self._state["poisoned"] = True
             self._state["reason"] = "probe_failed_or_stop_cleanup_uncertain"
         self._persist()
 
     def finish(
-        self, *, outcome: str, reason: str | None, final_report_sha256: str | None = None,
+        self,
+        *,
+        outcome: str,
+        reason: str | None,
+        final_report_sha256: str | None = None,
     ) -> None:
         self._live()
         if self._state["phase"] == "TERMINAL":
@@ -730,8 +875,10 @@ class Ec2Run:
             raise ValueError("Unknown fixed qualification outcome")
         pending = any(row["outcome"] is None for row in self._admissions())
         if outcome == "QUALIFIED_REFERENCE_ONLY" and (
-            self._state["phase"] != "QUALIFYING" or self._state["poisoned"] is not False
-            or pending or len(self._admissions()) != len(FIXED_PROBES)
+            self._state["phase"] != "QUALIFYING"
+            or self._state["poisoned"] is not False
+            or pending
+            or len(self._admissions()) != len(FIXED_PROBES)
         ):
             raise ValueError("Incomplete/uncertain run cannot qualify")
         if outcome == "QUALIFIED_REFERENCE_ONLY":
@@ -755,7 +902,8 @@ class Ec2Run:
         cases = report.get("cases")
         if (
             report.get("kind") != "restricted_reference_ec2_qualification_v1"
-            or type(report.get("schema_version")) is not int or report.get("schema_version") != 1
+            or type(report.get("schema_version")) is not int
+            or report.get("schema_version") != 1
             or report.get("source_revision") != self.source_revision
             or report.get("run_id") != self.run_id
             or report.get("boot_id") != self.boot_id
@@ -769,12 +917,14 @@ class Ec2Run:
             or report.get("durable_budget_status") != "CONFIRMED"
             or report.get("durable_budget") != dataclasses.asdict(self.snapshot())
             or report.get("failure") is not None
-            or not isinstance(cases, list) or len(cases) != len(FIXED_PROBES)
+            or not isinstance(cases, list)
+            or len(cases) != len(FIXED_PROBES)
         ):
             raise ValueError("Final report lacks complete matching scoped evidence")
         for name, case in zip(FIXED_PROBES, cases, strict=True):
             if (
-                not isinstance(case, dict) or case.get("name") != name
+                not isinstance(case, dict)
+                or case.get("name") != name
                 or case.get("status") != "PASS"
             ):
                 raise ValueError("Final report has incomplete fixed-case evidence")
@@ -792,8 +942,12 @@ class Ec2Run:
         digest = self._state["final_report_sha256"]
         self._check_final_report(cast(str | None, digest))
         return {
-            "kind": "restricted_reference_ec2_terminal_receipt_v1", "schema_version": 1,
-            "run_id": self.run_id, "source_revision": self.source_revision,
-            "boot_id": self.boot_id, "final_report_sha256": digest,
-            "controls_status": "QUALIFIED_REFERENCE_ONLY", "production_m1": "DISABLED",
+            "kind": "restricted_reference_ec2_terminal_receipt_v1",
+            "schema_version": 1,
+            "run_id": self.run_id,
+            "source_revision": self.source_revision,
+            "boot_id": self.boot_id,
+            "final_report_sha256": digest,
+            "controls_status": "QUALIFIED_REFERENCE_ONLY",
+            "production_m1": "DISABLED",
         }

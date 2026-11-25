@@ -32,12 +32,21 @@ def host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
     monkeypatch.setattr(ec2.time, "monotonic_ns", lambda: clock[0])
     monkeypatch.setattr(ec2, "_boot_id", lambda: boot[0])
     monkeypatch.setattr(ec2, "_owner", lambda: {"pid": 123, "start_ticks": 456, "uid": 0})
-    monkeypatch.setattr(ec2, "_host", lambda: {
-        "boot_id": boot[0], "system": "Linux", "release": "fixture-release",
-        "version": "fixture-version", "architecture": "x86_64",
-        "os_release": {"ID": "ubuntu", "VERSION_ID": "24.04"},
-        "controller_uid": 0, "controller_gid": 0, "controller_label": "unconfined",
-    })
+    monkeypatch.setattr(
+        ec2,
+        "_host",
+        lambda: {
+            "boot_id": boot[0],
+            "system": "Linux",
+            "release": "fixture-release",
+            "version": "fixture-version",
+            "architecture": "x86_64",
+            "os_release": {"ID": "ubuntu", "VERSION_ID": "24.04"},
+            "controller_uid": 0,
+            "controller_gid": 0,
+            "controller_label": "unconfined",
+        },
+    )
 
     def directory(path: Path, *, create: bool = False) -> None:
         if create:
@@ -46,9 +55,9 @@ def host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
 
     monkeypatch.setattr(ec2, "_secure_directory", directory)
     monkeypatch.setattr(
-        ec2, "_regular_root",
-        lambda info: stat.S_ISREG(info.st_mode) and info.st_nlink == 1
-        and not info.st_mode & 0o022,
+        ec2,
+        "_regular_root",
+        lambda info: stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and not info.st_mode & 0o022,
     )
     files = {}
     for relative in ec2.SOURCE_FILES:
@@ -60,10 +69,17 @@ def host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
     lock_dir = root / "sources" / REVISION
     lock_dir.mkdir(parents=True)
     lock = lock_dir / "source-lock.json"
-    lock.write_bytes(ec2.canonical({
-        "kind": "restricted_reference_ec2_source_lock_v1", "schema_version": 1,
-        "source_revision": REVISION, "source_root": str(source), "files": files,
-    }))
+    lock.write_bytes(
+        ec2.canonical(
+            {
+                "kind": "restricted_reference_ec2_source_lock_v1",
+                "schema_version": 1,
+                "source_revision": REVISION,
+                "source_root": str(source),
+                "files": files,
+            }
+        )
+    )
     requests = []
 
     def metadata(*, deadline_ns: int) -> bytes:
@@ -72,7 +88,12 @@ def host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
 
     monkeypatch.setattr(ec2, "_metadata", metadata)
     return SimpleNamespace(
-        root=root, source=source, clock=clock, boot=boot, lock=lock, requests=requests,
+        root=root,
+        source=source,
+        clock=clock,
+        boot=boot,
+        lock=lock,
+        requests=requests,
     )
 
 
@@ -142,7 +163,8 @@ def test_duplicate_constructor_poison_does_not_reset(host: SimpleNamespace) -> N
 
 
 def test_clock_crossing_during_revalidation_never_grants_a_late_slot(
-    host: SimpleNamespace, monkeypatch: pytest.MonkeyPatch,
+    host: SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     run = prepared(host)
     run.acquire_runner()
@@ -221,17 +243,20 @@ def test_revalidation_is_cached_and_detects_changed_source(host: SimpleNamespace
 
 @pytest.mark.parametrize("field,value", [("unexpected", True), ("schema_version", True)])
 def test_provider_record_has_explicit_strict_schema_even_in_own_durable_state(
-    host: SimpleNamespace, field: str, value: object,
+    host: SimpleNamespace,
+    field: str,
+    value: object,
 ) -> None:
     run = prepared(host)
     run._state["provider_context"][field] = value
     run._persist()
-    with pytest.raises(ValueError, match="[Uu]nknown"):
+    with pytest.raises(ValueError, match=r"[Uu]nknown"):
         run.revalidate(deadline_ns=run.deadline_ns)
 
 
 def test_loader_repeat_and_metadata_mismatch_do_not_retry(
-    host: SimpleNamespace, monkeypatch: pytest.MonkeyPatch,
+    host: SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = []
 
@@ -250,7 +275,8 @@ def test_loader_repeat_and_metadata_mismatch_do_not_retry(
 
 
 def test_persistence_failure_fences_original_charge(
-    host: SimpleNamespace, monkeypatch: pytest.MonkeyPatch,
+    host: SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     run = prepared(host)
     run.acquire_runner()
@@ -273,7 +299,10 @@ def test_outcome_failure_poison_and_partial_catalog_cannot_qualify(host: SimpleN
     ticket = run.reserve_probe(name="positive", nonce="1" * 32)
     run.admit_probe(ticket)
     run.finish_probe(
-        ticket, result_sha256=DIGEST, stop_confirmed=False, cleanup_confirmed=False,
+        ticket,
+        result_sha256=DIGEST,
+        stop_confirmed=False,
+        cleanup_confirmed=False,
         failure="setup_refused",
     )
     assert run.snapshot().charged == 1
@@ -290,11 +319,16 @@ def test_only_catalog_specific_controlled_termination_preserves_admissions(
     for index, name in enumerate(ec2.FIXED_PROBES):
         ticket = run.reserve_probe(name=name, nonce=f"{index + 1:032x}")
         run.admit_probe(ticket)
-        failure = "deadline_exceeded" if name in {"cpu", "detached"} else (
-            "stdout_limit" if name == "output_flood" else None
+        failure = (
+            "deadline_exceeded"
+            if name in {"cpu", "detached"}
+            else ("stdout_limit" if name == "output_flood" else None)
         )
         run.finish_probe(
-            ticket, result_sha256=DIGEST, stop_confirmed=True, cleanup_confirmed=True,
+            ticket,
+            result_sha256=DIGEST,
+            stop_confirmed=True,
+            cleanup_confirmed=True,
             failure=failure,
         )
         assert not run.snapshot().poisoned
@@ -303,12 +337,18 @@ def test_only_catalog_specific_controlled_termination_preserves_admissions(
     with pytest.raises(ValueError, match="bound final report"):
         run.finish(outcome="QUALIFIED_REFERENCE_ONLY", reason=None)
     report = {
-        "kind": "restricted_reference_ec2_qualification_v1", "schema_version": 1,
-        "source_revision": REVISION, "run_id": RUN_ID, "boot_id": BOOT,
-        "controls_status": "QUALIFIED_REFERENCE_ONLY", "production_m1": "DISABLED",
+        "kind": "restricted_reference_ec2_qualification_v1",
+        "schema_version": 1,
+        "source_revision": REVISION,
+        "run_id": RUN_ID,
+        "boot_id": BOOT,
+        "controls_status": "QUALIFIED_REFERENCE_ONLY",
+        "production_m1": "DISABLED",
         "acceptance_gate": "matching_durable_terminal_and_final_report_sha256",
-        "admissions_charged": 24, "confirmed_backend_admissions": 24,
-        "pending_probe_outcomes": 0, "durable_budget": dataclasses.asdict(run.snapshot()),
+        "admissions_charged": 24,
+        "confirmed_backend_admissions": 24,
+        "pending_probe_outcomes": 0,
+        "durable_budget": dataclasses.asdict(run.snapshot()),
         "durable_budget_status": "CONFIRMED",
         "cases": [{"name": name, "status": "PASS"} for name in ec2.FIXED_PROBES],
     }
@@ -325,7 +365,8 @@ def test_only_catalog_specific_controlled_termination_preserves_admissions(
 
 @pytest.mark.parametrize("stage", ["headers", "body"])
 def test_metadata_combined_alarm_bounds_slow_drip(
-    monkeypatch: pytest.MonkeyPatch, stage: str,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
 ) -> None:
     clock = [0]
     handlers = {}
@@ -395,11 +436,18 @@ def test_duplicate_json_and_existing_controller_alarm_refuse(
         ec2._metadata(deadline_ns=ec2.time.monotonic_ns() + ec2.SETUP_NS)
 
 
-@pytest.mark.parametrize("fault,expected_calls", [
-    ("redirect", 1), ("oversized_token", 1), ("oversized_iid", 2),
-])
+@pytest.mark.parametrize(
+    "fault,expected_calls",
+    [
+        ("redirect", 1),
+        ("oversized_token", 1),
+        ("oversized_iid", 2),
+    ],
+)
 def test_metadata_does_not_redirect_retry_or_exceed_body_caps(
-    monkeypatch: pytest.MonkeyPatch, fault: str, expected_calls: int,
+    monkeypatch: pytest.MonkeyPatch,
+    fault: str,
+    expected_calls: int,
 ) -> None:
     calls = []
 
@@ -432,7 +480,7 @@ def test_metadata_does_not_redirect_retry_or_exceed_body_caps(
             pass
 
     monkeypatch.setattr(ec2.http.client, "HTTPConnection", Connection)
-    with pytest.raises(ValueError, match="refused|exceeds"):
+    with pytest.raises(ValueError, match=r"refused|exceeds"):
         ec2._metadata(deadline_ns=ec2.time.monotonic_ns() + ec2.SETUP_NS)
     assert len(calls) == expected_calls
     assert calls[0][0] == "PUT"

@@ -62,10 +62,8 @@ def loaded_after_is_selected(
     return (
         not any(row["name"] == PROFILE_NAME for row in before)
         and after == expected
-        and selected
-        == [{"name": PROFILE_NAME, "mode": "unconfined", "attachment": PROFILE_NAME}]
-        and [row for row in attachments_after if row["name"] != PROFILE_NAME]
-        == attachments_before
+        and selected == [{"name": PROFILE_NAME, "mode": "unconfined", "attachment": PROFILE_NAME}]
+        and [row for row in attachments_after if row["name"] != PROFILE_NAME] == attachments_before
     )
 
 
@@ -225,7 +223,9 @@ def prepare_policy(*, ec2_run: Ec2Run) -> Row:
             raise SetupRefused("Parser configuration changed before version observation")
         version = shared.bounded_command(
             (str(shared.PARSER), "--skip-cache", "--version"),
-            deadline, capture_number=1, evidence_dir=evidence,
+            deadline,
+            capture_number=1,
+            evidence_dir=evidence,
         )
         commands.append(version)
         shared.require_command(version)
@@ -233,11 +233,16 @@ def prepare_policy(*, ec2_run: Ec2Run) -> Row:
             raise SetupRefused("Observed parser version output is empty")
         packages = shared.bounded_command(
             (
-                str(shared.DPKG), "--show",
+                str(shared.DPKG),
+                "--show",
                 "--showformat=${binary:Package}\t${Version}\t${Status}\n",
-                "apparmor", "libapparmor1", "bubblewrap",
+                "apparmor",
+                "libapparmor1",
+                "bubblewrap",
             ),
-            deadline, capture_number=2, evidence_dir=evidence,
+            deadline,
+            capture_number=2,
+            evidence_dir=evidence,
         )
         commands.append(packages)
         shared.require_command(packages)
@@ -250,13 +255,18 @@ def prepare_policy(*, ec2_run: Ec2Run) -> Row:
         policy = {"path": str(staged), "sha256": shared.sha(source), "bytes": len(source)}
         staged_identity = shared.file_identity(staged, deadline)
         host = {
-            "system": platform.system(), "release": platform.release(),
-            "version": platform.version(), "architecture": platform.machine(),
+            "system": platform.system(),
+            "release": platform.release(),
+            "version": platform.version(),
+            "architecture": platform.machine(),
             "os_release": release_raw,
             "boot_id": shared.bounded_read(shared.BOOT_ID, 128).decode().strip(),
-            "runner_image_os": None, "runner_image_version": None,
-            "run_id": ec2_run.run_id, "run_attempt": None,
-            "controller_uid": os.geteuid(), "controller_gid": os.getegid(),
+            "runner_image_os": None,
+            "runner_image_version": None,
+            "run_id": ec2_run.run_id,
+            "run_attempt": None,
+            "controller_uid": os.geteuid(),
+            "controller_gid": os.getegid(),
             "controller_label": controller_label,
         }
         if host["boot_id"] != ec2_run.boot_id:
@@ -265,21 +275,37 @@ def prepare_policy(*, ec2_run: Ec2Run) -> Row:
         shared_loader_source = _source_record(_SHARED_PATH)
         argv = (str(shared.PARSER), "--add", "--skip-cache", "--base=/etc/apparmor.d", str(staged))
         preload = {
-            "kind": "restricted_reference_ec2_policy_preload_v1", "schema_version": 1,
-            "profile_name": PROFILE_NAME, "attachment": None, "mode": "unconfined",
-            "policy": policy, "staged_identity": staged_identity,
+            "kind": "restricted_reference_ec2_policy_preload_v1",
+            "schema_version": 1,
+            "profile_name": PROFILE_NAME,
+            "attachment": None,
+            "mode": "unconfined",
+            "policy": policy,
+            "staged_identity": staged_identity,
             "policy_source": {
-                "path": str(POLICY_SOURCE), "sha256": shared.sha(source), "bytes": len(source)
+                "path": str(POLICY_SOURCE),
+                "sha256": shared.sha(source),
+                "bytes": len(source),
             },
-            "identities": identities, "features": features, "host": host,
+            "identities": identities,
+            "features": features,
+            "host": host,
             "provider_context": provider_context,
-            "loaded_profiles_before": before, "attachments_before": attachments_before,
-            "restrict_before": restrict_before, "source_revision": ec2_run.source_revision,
-            "parser_argv": list(argv), "parser_version": version, "packages": package_versions,
-            "parser_configuration_guard": configuration_guard, "dpkg_identity": dpkg_identity,
-            "loader_source": loader_source, "shared_loader_source": shared_loader_source,
-            "original_started_ns": started, "original_deadline_ns": deadline,
-            "max_commands": 3, "per_stream_bytes": shared.STREAM_LIMIT,
+            "loaded_profiles_before": before,
+            "attachments_before": attachments_before,
+            "restrict_before": restrict_before,
+            "source_revision": ec2_run.source_revision,
+            "parser_argv": list(argv),
+            "parser_version": version,
+            "packages": package_versions,
+            "parser_configuration_guard": configuration_guard,
+            "dpkg_identity": dpkg_identity,
+            "loader_source": loader_source,
+            "shared_loader_source": shared_loader_source,
+            "original_started_ns": started,
+            "original_deadline_ns": deadline,
+            "max_commands": 3,
+            "per_stream_bytes": shared.STREAM_LIMIT,
         }
         preload_raw = shared.canonical(preload)
         shared.write_exclusive(evidence / "preload-manifest.json", preload_raw)
@@ -301,8 +327,10 @@ def prepare_policy(*, ec2_run: Ec2Run) -> Row:
 
         def revalidate_tcb() -> None:
             for key, path in (
-                ("bwrap", Path("/usr/bin/bwrap")), ("parser", shared.PARSER),
-                ("abi", shared.ABI), ("parser_config", shared.PARSER_CONFIG),
+                ("bwrap", Path("/usr/bin/bwrap")),
+                ("parser", shared.PARSER),
+                ("abi", shared.ABI),
+                ("parser_config", shared.PARSER_CONFIG),
                 ("libapparmor", shared.LIBAPPARMOR),
             ):
                 if (
@@ -361,13 +389,21 @@ def prepare_policy(*, ec2_run: Ec2Run) -> Row:
         revalidate_tcb()
         shared.check_window(deadline)
         loader = {
-            **loaded, "version": version["stdout"], "packages": package_versions,
-            "commands": commands, "original_started_ns": started, "original_deadline_ns": deadline,
-            "host": host, "provider_context": provider_context,
-            "policy_source": preload["policy_source"], "loader_source": loader_source,
+            **loaded,
+            "version": version["stdout"],
+            "packages": package_versions,
+            "commands": commands,
+            "original_started_ns": started,
+            "original_deadline_ns": deadline,
+            "host": host,
+            "provider_context": provider_context,
+            "policy_source": preload["policy_source"],
+            "loader_source": loader_source,
             "shared_loader_source": shared_loader_source,
-            "staged_identity": staged_identity, "dpkg_identity": dpkg_identity,
-            "attachments_before": attachments_before, "attachments_after": attachments_after,
+            "staged_identity": staged_identity,
+            "dpkg_identity": dpkg_identity,
+            "attachments_before": attachments_before,
+            "attachments_after": attachments_after,
             "manual_attachment_observation": dict(MANUAL_OBSERVATION),
             "parser_configuration_guard": configuration_guard,
             "bounds": {
@@ -377,14 +413,23 @@ def prepare_policy(*, ec2_run: Ec2Run) -> Row:
             },
         }
         report = {
-            "kind": "restricted_reference_ec2_policy_setup_v1", "schema_version": 1,
-            "status": "LOADED_REFERENCE_ONLY", "profile_name": PROFILE_NAME,
-            "attachment": None, "mode": "unconfined", "policy": policy,
-            "identities": identities, "features": features, "loader": loader,
+            "kind": "restricted_reference_ec2_policy_setup_v1",
+            "schema_version": 1,
+            "status": "LOADED_REFERENCE_ONLY",
+            "profile_name": PROFILE_NAME,
+            "attachment": None,
+            "mode": "unconfined",
+            "policy": policy,
+            "identities": identities,
+            "features": features,
+            "loader": loader,
             "provider_context": provider_context,
-            "loaded_profiles_before": before, "loaded_profiles_after": after,
-            "restrict_before": restrict_before, "restrict_after": restrict_after,
-            "source_revision": ec2_run.source_revision, "preload_manifest_sha256": preload_sha,
+            "loaded_profiles_before": before,
+            "loaded_profiles_after": after,
+            "restrict_before": restrict_before,
+            "restrict_after": restrict_after,
+            "source_revision": ec2_run.source_revision,
+            "preload_manifest_sha256": preload_sha,
         }
         if set(report) != shared.SUCCESS_FIELDS | {"provider_context"}:
             raise SetupRefused("Internal EC2 success receipt schema differs")
@@ -395,17 +440,25 @@ def prepare_policy(*, ec2_run: Ec2Run) -> Row:
         return report
     except Exception as error:
         failure: Row = {
-            "kind": "restricted_reference_ec2_policy_setup_failure_v1", "schema_version": 1,
-            "status": "UNKNOWN" if load_submitted else "REFUSED", "phase": phase,
+            "kind": "restricted_reference_ec2_policy_setup_failure_v1",
+            "schema_version": 1,
+            "status": "UNKNOWN" if load_submitted else "REFUSED",
+            "phase": phase,
             "reason": (type(error).__name__ + ": " + str(error))[:2048],
-            "load_submitted": load_submitted, "commands": commands,
-            "original_started_ns": started, "original_deadline_ns": deadline,
-            "source_revision": ec2_run.source_revision, "provider_context": provider_context,
-            "product_m1": "DISABLED", "retry_performed": False, "observations": observations,
+            "load_submitted": load_submitted,
+            "commands": commands,
+            "original_started_ns": started,
+            "original_deadline_ns": deadline,
+            "source_revision": ec2_run.source_revision,
+            "provider_context": provider_context,
+            "product_m1": "DISABLED",
+            "retry_performed": False,
+            "observations": observations,
         }
         if len(shared.canonical(failure)) + 1 > shared.DOCUMENT_LIMIT:
             failure["observations"] = {
-                "retained": False, "reason": "report_bound_exceeded",
+                "retained": False,
+                "reason": "report_bound_exceeded",
                 "canonical_sha256": shared.sha(shared.canonical(observations)),
             }
         if created:

@@ -34,8 +34,7 @@ def test_frozen_manual_policy_has_no_executable_attachment() -> None:
     raw = policy.POLICY_SOURCE.read_bytes()
     policy.validate_policy_bytes(raw)
     assert raw == (
-        b"abi <abi/4.0>,\n\n"
-        b"profile tickwitness-reference-ec2 flags=(unconfined) {\n  userns,\n}\n"
+        b"abi <abi/4.0>,\n\nprofile tickwitness-reference-ec2 flags=(unconfined) {\n  userns,\n}\n"
     )
     assert policy.shared.sha(raw) == policy.POLICY_SHA256
     for changed in (raw.replace(b"userns,", b"userns, capability,"), raw + b"\n"):
@@ -98,7 +97,8 @@ def test_unowned_caller_cannot_obtain_policy_authority() -> None:
 
 @pytest.mark.parametrize("caller_kind", ["duck", "subclass"])
 def test_unowned_entry_refuses_before_any_property_or_host_operation(
-    monkeypatch: pytest.MonkeyPatch, caller_kind: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caller_kind: str,
 ) -> None:
     calls: list[str] = []
 
@@ -198,7 +198,8 @@ def test_failed_provider_keeps_original_anchor_and_does_not_retry(
 
 
 def test_exclusive_directory_reuse_refuses_without_normalizing_existing_state(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     existing = tmp_path / "policy-evidence"
     existing.mkdir(mode=0o700)
