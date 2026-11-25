@@ -66,6 +66,14 @@ host-evidence assessment, confirmed stop and cleanup. No automatic recovery or
 second run is supported; any later recovery needs a separate reviewed plan and
 preserved original records.
 
+The [first real EC2 attempt](ec2-reference-evidence-2026-11-25.md) failed before
+the positive guest gate because the private controller umask masked the input
+directory's requested mode. Keep that umask private; only the fresh owned input
+directory receives an explicit guest-readable/searchable mode. Existing or
+symlink paths must fail before any chmod. A source correction and CI success do
+not reopen the failed terminal run, refund its charged slot, or authorize a new
+qualification identity.
+
 ## Evidence and shutdown
 
 Retain bounded source-lock, raw identity, pre-load/setup/final manifests, run

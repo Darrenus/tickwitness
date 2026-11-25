@@ -1535,6 +1535,26 @@ class ReferenceRunner:
             }
         )
 
+    def _prepare_input(self, setup: Path, name: str, nonce: str) -> None:
+        inputs = setup / "input"
+        # mkdir's mode is filtered by the trusted controller's private umask.
+        # Change only our newly created directory; never reuse a foreign input.
+        inputs.mkdir(mode=0o755)
+        inputs.chmod(0o755)
+        _write(inputs / "payload.py", self._frozen_bytes("payload"))
+        _write(inputs / "immutable.txt", b"restricted-reference-immutable\n")
+        context = {
+            "name": name,
+            "nonce": nonce,
+            "outside_path": str(setup / "outside-readable.txt"),
+            "immutable_path": "/input/immutable.txt",
+            "secret_env_keys": ["TICKWITNESS_REFERENCE_SECRET"],
+            "fd_socket": 200,
+            "fd_file": 201,
+            "fd_canary_nonce": nonce,
+        }
+        _write(inputs / "probe-context.json", _canonical(context))
+
     def _prepare_case(self, name: str, nonce: str, facts: Row) -> tuple[Path, Path]:
         if os.geteuid() != 0:
             raise ValueError("Reference controller is not root")
@@ -1575,9 +1595,7 @@ class ReferenceRunner:
             (setup / "scratch" / child).mkdir(mode=0o700)
             os.chown(setup / "scratch" / child, 61184, 61184)
         facts["scratch_before"] = _scratch(setup / "scratch")
-        (setup / "input").mkdir(mode=0o755)
-        _write(setup / "input" / "payload.py", self._frozen_bytes("payload"))
-        _write(setup / "input" / "immutable.txt", b"restricted-reference-immutable\n")
+        self._prepare_input(setup, name, nonce)
         outside = setup / "outside-readable.txt"
         _write(outside, (nonce + "\n").encode())
         facts["canaries_before"] = {
@@ -1587,17 +1605,6 @@ class ReferenceRunner:
             "outside_mode": stat.S_IMODE(outside.stat().st_mode),
             "outside_parent_mode": stat.S_IMODE(setup.stat().st_mode),
         }
-        context = {
-            "name": name,
-            "nonce": nonce,
-            "outside_path": str(outside),
-            "immutable_path": "/input/immutable.txt",
-            "secret_env_keys": ["TICKWITNESS_REFERENCE_SECRET"],
-            "fd_socket": 200,
-            "fd_file": 201,
-            "fd_canary_nonce": nonce,
-        }
-        _write(setup / "input" / "probe-context.json", _canonical(context))
         return setup, cgroup
 
     def _observe_guest(self, cgroup: Path, name: str, nonce: str) -> Row:

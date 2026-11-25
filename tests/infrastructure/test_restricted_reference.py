@@ -3,6 +3,7 @@
 import copy
 import dataclasses
 import hashlib
+import json
 import os
 import stat
 import struct
@@ -299,6 +300,82 @@ def test_public_evidence_mode_is_explicit_under_private_umask(tmp_path):
     assert stat.S_IMODE(target.stat().st_mode) == 0o644
     with pytest.raises(FileExistsError):
         reference._write(target, b"replacement")
+
+
+def _input_runner(tmp_path):
+    payload = tmp_path / "frozen-payload.py"
+    payload.write_bytes(b"fixed-payload\n")
+    runner = object.__new__(reference.ReferenceRunner)
+    runner.manifest = {
+        "binaries": {
+            "payload": {
+                "path": str(payload),
+                "sha256": hashlib.sha256(b"fixed-payload\n").hexdigest(),
+            }
+        }
+    }
+    return runner
+
+
+def test_actual_case_input_is_guest_readable_under_private_umask(tmp_path):
+    runner = _input_runner(tmp_path)
+    setup = tmp_path / "owned-setup"
+    setup.mkdir()
+    setup.chmod(0o711)
+    nonce = "a" * 32
+    previous = os.umask(0o077)
+    try:
+        runner._prepare_input(setup, "positive", nonce)
+        retained_umask = os.umask(0o077)
+    finally:
+        os.umask(previous)
+    assert retained_umask == 0o077
+    assert stat.S_IMODE(setup.stat().st_mode) == 0o711
+    inputs = setup / "input"
+    assert stat.S_IMODE(inputs.stat().st_mode) == 0o755
+    assert inputs.stat().st_uid == setup.stat().st_uid
+    assert {path.name for path in inputs.iterdir()} == {
+        "payload.py",
+        "immutable.txt",
+        "probe-context.json",
+    }
+    for path in inputs.iterdir():
+        assert stat.S_IMODE(path.stat().st_mode) == 0o644
+        assert path.stat().st_uid == setup.stat().st_uid
+    assert (inputs / "payload.py").read_bytes() == b"fixed-payload\n"
+    assert (inputs / "immutable.txt").read_bytes() == b"restricted-reference-immutable\n"
+    assert json.loads((inputs / "probe-context.json").read_bytes()) == {
+        "name": "positive",
+        "nonce": nonce,
+        "outside_path": str(setup / "outside-readable.txt"),
+        "immutable_path": "/input/immutable.txt",
+        "secret_env_keys": ["TICKWITNESS_REFERENCE_SECRET"],
+        "fd_socket": 200,
+        "fd_file": 201,
+        "fd_canary_nonce": nonce,
+    }
+
+
+@pytest.mark.parametrize("symlink", [False, True])
+def test_case_input_refuses_existing_or_symlink_directory_without_chmod(tmp_path, symlink):
+    runner = _input_runner(tmp_path)
+    setup = tmp_path / "owned-setup"
+    setup.mkdir()
+    target = tmp_path / "foreign" if symlink else setup / "input"
+    target.mkdir()
+    target.chmod(0o700)
+    marker = target / "retained"
+    marker.write_bytes(b"untouched")
+    marker.chmod(0o600)
+    if symlink:
+        (setup / "input").symlink_to(target, target_is_directory=True)
+    with pytest.raises(FileExistsError):
+        runner._prepare_input(setup, "positive", "a" * 32)
+    assert stat.S_IMODE(target.stat().st_mode) == 0o700
+    assert stat.S_IMODE(marker.stat().st_mode) == 0o600
+    assert marker.read_bytes() == b"untouched"
+    assert {path.name for path in target.iterdir()} == {"retained"}
+    assert (setup / "input").is_symlink() is symlink
 
 
 def test_failed_member_diagnostic_does_not_suppress_owned_stop(monkeypatch, tmp_path):
