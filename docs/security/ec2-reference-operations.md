@@ -5,6 +5,12 @@ It runs only the closed synthetic catalog on the selected owner-trusted CPU host
 M1 product admission remains DISABLED; M2 is unsupported; external-human research
 reproduction stays0/0/PENDING and independent security review staysNOT_PERFORMED.
 
+The explicitly separate [one-use recovery procedure](ec2-reference-recovery-operations.md)
+retains the failed first host claim and adds one reviewed technical qualification
+allowance with cumulative historical accounting. It requires its own actual
+freeze/readback, guarded implementation and remote checks; ordinary v1 invocation
+does not silently acquire this path. No recovery host result is implied here.
+
 ## Preparation before an admission
 
 Complete the [automatic-stop acceptance](ec2-lifecycle-evidence-2026-11-25.md)

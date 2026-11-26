@@ -766,6 +766,123 @@ def test_ec2_receipt_is_a_separate_family_and_preserves_opaque_foreign_state():
         reference.validate_policy_setup(report, preload)
 
 
+@pytest.fixture
+def manifest_context(monkeypatch):
+    run = object.__new__(Ec2Run)
+    context = {
+        "kind": "restricted_reference_ec2_recovery_context_v1",
+        "schema_version": 1,
+        "plan_id": "ec2-recovery-20261126-v1",
+        "fixture_scope": "metadata decisions, not recovery authority",
+    }
+    active_context = [context]
+    snapshot = [ec2.BudgetSnapshot(10, 600_000_000_010, 24, 0, 0, 0, False, 0)]
+    calls = []
+    provider = {"kind": "fixture-provider", "recovery_context": context}
+    monkeypatch.setattr(Ec2Run, "provider_record", property(lambda _run: copy.deepcopy(provider)))
+    monkeypatch.setattr(
+        Ec2Run, "recovery_context", property(lambda _run: copy.deepcopy(active_context[0]))
+    )
+
+    def current_snapshot(_run):
+        calls.append("snapshot")
+        return snapshot[0]
+
+    def accounting(_run, observed):
+        assert observed == snapshot[0]
+        calls.append("accounting")
+        return {
+            "kind": "restricted_reference_ec2_recovery_budget_v1",
+            "schema_version": 1,
+            "prior_charged": 1,
+            "current_charged": observed.charged,
+            "cumulative_charged": 1 + observed.charged,
+        }
+
+    monkeypatch.setattr(Ec2Run, "snapshot", current_snapshot)
+    monkeypatch.setattr(Ec2Run, "recovery_accounting", accounting)
+    runner = object.__new__(reference.ReferenceRunner)
+    runner._ec2_run = run
+    runner._started_ns = snapshot[0].started_ns
+    runner._qualification_deadline_ns = snapshot[0].deadline_ns
+    return SimpleNamespace(
+        runner=runner,
+        context=context,
+        active_context=active_context,
+        provider=provider,
+        snapshot=snapshot,
+        calls=calls,
+    )
+
+
+def test_actual_manifest_context_binds_pre_probe_recovery_counts_without_later_rewrite(
+    manifest_context,
+):
+    fixture = manifest_context
+    result = fixture.runner._manifest_context()
+    assert result["kind"] == "restricted_reference_ec2_recovery_manifest_v1"
+    assert result["schema_version"] == 1
+    assert result["provider_context"] == fixture.provider
+    assert result["recovery_context"] == fixture.context
+    assert result["recovery_accounting_phase"] == "pre_probe_manifest"
+    assert result["recovery_accounting"]["current_charged"] == 0
+    assert result["recovery_accounting"]["cumulative_charged"] == 1
+    assert result["qualification_started_ns"] == fixture.snapshot[0].started_ns
+    assert result["qualification_deadline_ns"] == fixture.snapshot[0].deadline_ns
+    fixture.snapshot[0] = dataclasses.replace(fixture.snapshot[0], charged=1)
+    assert result["recovery_accounting"]["current_charged"] == 0
+    with pytest.raises(ValueError, match="pre-probe"):
+        fixture.runner._manifest_context()
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"charged": 1},
+        {"backend_confirmed": 1},
+        {"unconfirmed": 1},
+        {"pending_outcomes": 1},
+        {"poisoned": True},
+    ],
+)
+def test_recovery_manifest_refuses_a_consumed_or_uncertain_initial_snapshot(
+    manifest_context, changes
+):
+    fixture = manifest_context
+    fixture.snapshot[0] = dataclasses.replace(fixture.snapshot[0], **changes)
+    with pytest.raises(ValueError, match="pre-probe"):
+        fixture.runner._manifest_context()
+    assert fixture.calls == ["snapshot"]
+
+
+def test_default_ec2_and_gha_manifest_contexts_do_not_gain_recovery_fields(manifest_context):
+    fixture = manifest_context
+    fixture.active_context[0] = None
+    fixture.provider.clear()
+    fixture.provider.update(kind="fixture-default-provider")
+    assert fixture.runner._manifest_context() == {
+        "kind": "restricted_reference_ec2_manifest_v1",
+        "schema_version": 1,
+        "provider_context": fixture.provider,
+        "qualification_started_ns": fixture.snapshot[0].started_ns,
+        "qualification_deadline_ns": fixture.snapshot[0].deadline_ns,
+    }
+    assert fixture.calls == []
+    fixture.runner._ec2_run = None
+    assert fixture.runner._manifest_context() == {"kind": "restricted_reference_manifest_v1"}
+
+
+def test_unowned_manifest_metadata_cannot_read_caller_properties():
+    class Duck:
+        def __getattribute__(self, name):
+            pytest.fail("Unowned manifest properties were accessed: " + name)
+
+    runner = object.__new__(reference.ReferenceRunner)
+    runner._ec2_run = Duck()
+    with pytest.raises(ValueError, match="Actual"):
+        runner._manifest_context()
+
+
 @pytest.mark.parametrize("raw", ["", "<unknown>", "/usr/bin/bwrap", "/usr/*", "other"])
 def test_ec2_selected_profile_cannot_hide_opaque_or_executable_attachment(raw):
     report, preload, run = _ec2_policy_receipt()

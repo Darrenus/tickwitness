@@ -26,6 +26,7 @@ from tickwitness.infrastructure.restricted_reference import (  # noqa: E402
 from tickwitness.infrastructure.restricted_reference_ec2 import (  # noqa: E402
     FIXED_PROBES,
     MAX_ADMISSIONS,
+    RECOVERY_PLAN_ID,
     WINDOW_NS,
     Ec2Run,
     canonical,
@@ -67,10 +68,22 @@ def _write(path: Path, document: Row, *, first: bool = False, limit: int = 26214
 def _budget(run: Ec2Run, report: Row) -> None:
     try:
         snapshot = run.snapshot()
+        accounting = run.recovery_accounting(snapshot)
+        recovery = report.get("kind") == "restricted_reference_ec2_recovery_qualification_v1"
+        if recovery and (
+            accounting is None
+            or canonical(run.recovery_context) != canonical(report.get("recovery_context"))
+        ):
+            raise ValueError("Recovery counters lack their established immutable context")
+        if not recovery and accounting is not None:
+            raise ValueError("Default qualification cannot acquire recovery accounting")
     except Exception:
         previous = report.pop("durable_budget", None)
         if previous is not None:
             report["last_confirmed_budget_lower_bound"] = previous
+        previous_recovery = report.pop("recovery_accounting", None)
+        if previous_recovery is not None:
+            report["last_confirmed_recovery_accounting_lower_bound"] = previous_recovery
         report["durable_budget_status"] = "UNKNOWN"
         report["budget_uncertainty_scope"] = (
             "Last confirmed counters are a lower bound, not authoritative current zero; "
@@ -90,6 +103,8 @@ def _budget(run: Ec2Run, report: Row) -> None:
     report["confirmed_backend_admissions"] = snapshot.backend_confirmed
     report["backend_unconfirmed_admissions"] = snapshot.unconfirmed
     report["pending_probe_outcomes"] = snapshot.pending_outcomes
+    if accounting is not None:
+        report["recovery_accounting"] = accounting
     report["admission_accounting_scope"] = (
         "Submitted slots are charged before backend calls; backend ACK and pending outcome "
         "are separate durable counts. Failed or unknown slots are never refunded."
@@ -100,15 +115,66 @@ def _cancel(_number: int, _frame: object) -> None:
     raise InterruptedError("qualification_controller_cancelled")
 
 
+def _recovery_manifest(run: Ec2Run, manifest: Row) -> None:
+    context = run.recovery_context
+    snapshot = run.snapshot()
+    accounting = run.recovery_accounting(snapshot)
+    if (
+        context is None
+        or accounting is None
+        or snapshot.charged != 0
+        or snapshot.backend_confirmed != 0
+        or snapshot.pending_outcomes != 0
+        or snapshot.unconfirmed != 0
+        or snapshot.poisoned
+        or manifest.get("kind") != "restricted_reference_ec2_recovery_manifest_v1"
+        or type(manifest.get("schema_version")) is not int
+        or manifest.get("schema_version") != 1
+        or manifest.get("source_revision") != run.source_revision
+        or manifest.get("production_m1_enabled") is not False
+        or type(manifest.get("qualification_started_ns")) is not int
+        or manifest.get("qualification_started_ns") != run.started_ns
+        or type(manifest.get("qualification_deadline_ns")) is not int
+        or manifest.get("qualification_deadline_ns") != run.deadline_ns
+        or canonical(manifest.get("provider_context")) != canonical(run.provider_record)
+        or canonical(manifest.get("recovery_context")) != canonical(context)
+        or manifest.get("recovery_accounting_phase") != "pre_probe_manifest"
+        or canonical(manifest.get("recovery_accounting")) != canonical(accounting)
+    ):
+        raise ValueError("Recovery manifest lacks its bound pre-probe lineage and accounting")
+
+
+def _recovery_receipt(run: Ec2Run, report: Row, receipt: Row, digest: str) -> None:
+    expected = {
+        "kind": "restricted_reference_ec2_recovery_terminal_receipt_v1",
+        "schema_version": 1,
+        "run_id": run.run_id,
+        "source_revision": run.source_revision,
+        "boot_id": run.boot_id,
+        "final_report_sha256": digest,
+        "controls_status": "QUALIFIED_REFERENCE_ONLY",
+        "production_m1": "DISABLED",
+        "recovery_context": report["recovery_context"],
+        "recovery_accounting": report["recovery_accounting"],
+    }
+    if canonical(receipt) != canonical(expected):
+        raise ValueError("Recovery terminal receipt differs from the bound complete report")
+
+
 def main(arguments: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--recovery-plan", choices=(RECOVERY_PLAN_ID,))
     args = parser.parse_args(arguments)
     run: Ec2Run | None = None
     cases: list[Row] = []
     report: Row = {
-        "kind": "restricted_reference_ec2_qualification_v1",
+        "kind": (
+            "restricted_reference_ec2_qualification_v1"
+            if args.recovery_plan is None
+            else "restricted_reference_ec2_recovery_qualification_v1"
+        ),
         "schema_version": 1,
         "controls_status": "NOT_QUALIFIED",
         "production_m1": "DISABLED",
@@ -132,8 +198,20 @@ def main(arguments: list[str] | None = None) -> int:
     terminal = False
     report_created = False
     try:
-        # Claim captures both original clocks and durable zero counters before any setup.
-        run = Ec2Run.claim(source_revision=args.source_revision, run_id=args.run_id)
+        # Either factory captures this invocation's anchors before any setup;
+        # recovery also retains the separately charged predecessor in its context.
+        if args.recovery_plan is None:
+            run = Ec2Run.claim(source_revision=args.source_revision, run_id=args.run_id)
+        else:
+            run = Ec2Run.claim_recovery(
+                source_revision=args.source_revision,
+                run_id=args.run_id,
+                plan_id=args.recovery_plan,
+            )
+            context = run.recovery_context
+            if context is None:
+                raise ValueError("Recovery factory returned no established lineage")
+            report["recovery_context"] = context
         report["boot_id"] = run.boot_id
         report_path = run.run_dir / "qualification-report.json"
         _budget(run, report)
@@ -152,6 +230,8 @@ def main(arguments: list[str] | None = None) -> int:
         )
         if runner.manifest.get("fixed_cases") != list(PROBE_NAMES):
             raise ValueError("Frozen manifest catalog differs")
+        if args.recovery_plan is not None:
+            _recovery_manifest(run, runner.manifest)
         report["manifest_sha256"] = runner.manifest_sha256
         stopped = False
         for name in PROBE_NAMES:
@@ -215,20 +295,25 @@ def main(arguments: list[str] | None = None) -> int:
         )
         terminal = True
         receipt = run.qualification_receipt() if all_passed else None
-        sys.stdout.write(
-            json.dumps(
-                {
-                    "controls_status": outcome,
-                    "production_m1": "DISABLED",
-                    "admissions_charged": report["admissions_charged"],
-                    "manifest_sha256": runner.manifest_sha256,
-                    "run_id": run.run_id,
-                    "boot_id": run.boot_id,
-                    "terminal_receipt": receipt,
-                }
+        if args.recovery_plan is not None and all_passed:
+            if receipt is None:
+                raise ValueError("Successful recovery has no matching terminal receipt")
+            _recovery_receipt(run, report, receipt, final_report_hash)
+        summary: Row = {
+            "controls_status": outcome,
+            "production_m1": "DISABLED",
+            "admissions_charged": report["admissions_charged"],
+            "manifest_sha256": runner.manifest_sha256,
+            "run_id": run.run_id,
+            "boot_id": run.boot_id,
+            "terminal_receipt": receipt,
+        }
+        if args.recovery_plan is not None:
+            summary.update(
+                recovery_context=report["recovery_context"],
+                recovery_accounting=report["recovery_accounting"],
             )
-            + "\n"
-        )
+        sys.stdout.write(json.dumps(summary) + "\n")
         return 0 if all_passed else 1
     except BaseException as error:
         report["controls_status"] = "NOT_QUALIFIED"

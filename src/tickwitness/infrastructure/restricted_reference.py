@@ -1233,6 +1233,39 @@ class ReferenceRunner:
             "expected_task_label": self._expected_label,
         }
 
+    def _manifest_context(self) -> Row:
+        if self._ec2_run is None:
+            return {"kind": "restricted_reference_manifest_v1"}
+        _require_ec2_run(self._ec2_run)
+        fields: Row = {
+            "kind": "restricted_reference_ec2_manifest_v1",
+            "schema_version": 1,
+            "provider_context": self._ec2_run.provider_record,
+            "qualification_started_ns": self._started_ns,
+            "qualification_deadline_ns": self._qualification_deadline_ns,
+        }
+        context = self._ec2_run.recovery_context
+        if context is not None:
+            snapshot = self._ec2_run.snapshot()
+            if (
+                snapshot.charged != 0
+                or snapshot.backend_confirmed != 0
+                or snapshot.unconfirmed != 0
+                or snapshot.pending_outcomes != 0
+                or snapshot.poisoned
+            ):
+                raise ValueError("Recovery manifest requires its actual pre-probe snapshot")
+            accounting = self._ec2_run.recovery_accounting(snapshot)
+            if accounting is None:
+                raise ValueError("Recovery manifest lacks its cumulative accounting")
+            fields.update(
+                kind="restricted_reference_ec2_recovery_manifest_v1",
+                recovery_context=context,
+                recovery_accounting=accounting,
+                recovery_accounting_phase="pre_probe_manifest",
+            )
+        return fields
+
     def _capture_manifest(self) -> Row:
         reasons: list[str] = []
         binaries: Row = {}
@@ -1343,11 +1376,7 @@ class ReferenceRunner:
             policy_setup = {"verified": False, "reason": str(error)[:2048]}
             reasons.append("explicit_policy_setup_unavailable")
         return {
-            "kind": (
-                "restricted_reference_manifest_v1"
-                if self._ec2_run is None
-                else "restricted_reference_ec2_manifest_v1"
-            ),
+            **self._manifest_context(),
             "production_m1_enabled": False,
             "available_for_probe": not reasons,
             "unavailable_reasons": reasons,
@@ -1412,16 +1441,6 @@ class ReferenceRunner:
             "runtime_closure_scope": (
                 "Host /usr is a trusted read-only runtime closure; selected binary hashes do not "
                 "hash/authenticate its full tree or the supplier. Kernel/host/harness are trusted."
-            ),
-            **(
-                {}
-                if self._ec2_run is None
-                else {
-                    "schema_version": 1,
-                    "provider_context": self._ec2_run.provider_record,
-                    "qualification_started_ns": self._started_ns,
-                    "qualification_deadline_ns": self._qualification_deadline_ns,
-                }
             ),
         }
 

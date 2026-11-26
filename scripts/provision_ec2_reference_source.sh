@@ -3,8 +3,13 @@
 # No policy load, probe, research reservation, controller enablement or disk format.
 set -euo pipefail
 
+mode=default
+if [[ $# == 2 && $1 == --recovery ]]; then
+    mode=recovery
+    shift
+fi
 if [[ $# != 1 || ! $1 =~ ^[0-9a-f]{40}$ ]]; then
-    echo 'usage: provision_ec2_reference_source.sh <actual-pushed-40hex-commit>' >&2
+    echo 'usage: provision_ec2_reference_source.sh [--recovery] <actual-pushed-40hex-commit>' >&2
     exit 64
 fi
 revision=$1
@@ -64,7 +69,7 @@ if [[ $actual_revision != "$revision" || -n $(git -C "$checkout" status --porcel
     exit 78
 fi
 
-/usr/bin/python3 -I - "$revision" "$checkout" "$anchor" <<'PY'
+/usr/bin/python3 -I - "$revision" "$checkout" "$anchor" "$mode" <<'PY'
 import hashlib
 import json
 import os
@@ -73,6 +78,9 @@ import sys
 from pathlib import Path
 
 revision, source, anchor = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
+mode = sys.argv[4]
+if mode not in ('default', 'recovery'):
+    raise SystemExit('Unknown source-lock selection')
 selected = (
     'src/tickwitness/infrastructure/restricted_reference_ec2.py',
     'scripts/qualify_restricted_reference_ec2.py',
@@ -84,6 +92,8 @@ selected = (
     'scripts/restricted_reference_payload.py',
     'research/security/reference-ec2.apparmor',
 )
+if mode == 'recovery':
+    selected += ('scripts/prepare_ec2_reference_recovery.py',)
 rows = {}
 for relative in selected:
     path = source / relative
@@ -111,7 +121,8 @@ for relative in selected:
     rows[relative] = {'sha256': hashlib.sha256(raw).hexdigest(), 'bytes': len(raw)}
 
 lock = {
-    'kind': 'restricted_reference_ec2_source_lock_v1',
+    'kind': ('restricted_reference_ec2_recovery_source_lock_v1'
+             if mode == 'recovery' else 'restricted_reference_ec2_source_lock_v1'),
     'schema_version': 1,
     'source_revision': revision,
     'source_root': str(source),
