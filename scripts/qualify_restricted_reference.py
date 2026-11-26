@@ -210,8 +210,7 @@ def _kernel_pid(value: object, label: str) -> int:
 
 def _detached_guest_ids(value: object, label: str) -> list[int]:
     if not isinstance(value, str) or any(
-        not field.isascii() or not field.isdecimal() or int(field) <= 0
-        for field in value.split()
+        not field.isascii() or not field.isdecimal() or int(field) <= 0 for field in value.split()
     ):
         raise ValueError("Invalid positive ASCII namespace " + label)
     return _namespace_ids(value, label)
