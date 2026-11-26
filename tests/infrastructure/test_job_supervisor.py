@@ -46,7 +46,19 @@ import json, sys
 from pathlib import Path
 from tickwitness.infrastructure.job_supervisor import run_job
 from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
-row = run_job(SqliteJobStore(Path(sys.argv[1]), create=False), sys.argv[2],
+class ObservedStore(SqliteJobStore):
+    def heartbeat(self, *args, **kwargs):
+        row = super().heartbeat(*args, **kwargs)
+        # The actual transaction and connection have closed before this marker.
+        marker = {'job_id':row['job_id'], 'job_attempt_id':row['attempt']['job_attempt_id'],
+                  'heartbeat_sequence':row['attempt']['heartbeat_sequence'],
+                  'version':row['version']}
+        gate = Path(sys.argv[5])
+        pending = gate.with_suffix('.tmp')
+        pending.write_text(json.dumps(marker, sort_keys=True))
+        pending.replace(gate)
+        return row
+row = run_job(ObservedStore(Path(sys.argv[1]), create=False), sys.argv[2],
               _worker_command=(sys.executable, '-I', '-B', sys.argv[3], sys.argv[4]))
 print(json.dumps(row, sort_keys=True))
 """
@@ -226,10 +238,14 @@ def test_actual_sigkill_after_persisted_heartbeat_has_honest_liveness_and_reconc
 ):
     store, queued = _queued(tmp_path)
     gate = tmp_path / "worker-gate.json"
+    persisted_gate = tmp_path / "persisted-heartbeat.json"
     command = _command(
         tmp_path,
         "emit('job_heartbeat_v1',1)\n"
-        "Path(sys.argv[1]).write_text(json.dumps({'pid':os.getpid(),'job_id':request['job_id']}))\n"
+        "gate=Path(sys.argv[1]); pending=gate.with_suffix('.tmp')\n"
+        "pending.write_text(json.dumps({'pid':os.getpid(),'job_id':request['job_id'],\n"
+        "    'job_attempt_id':request['job_attempt_id']}))\n"
+        "pending.replace(gate)\n"
         "Event().wait(30)\n",
     )
     process = subprocess.Popen(
@@ -243,6 +259,7 @@ def test_actual_sigkill_after_persisted_heartbeat_has_honest_liveness_and_reconc
             queued["job_id"],
             command[-1],
             str(gate),
+            str(persisted_gate),
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -252,20 +269,29 @@ def test_actual_sigkill_after_persisted_heartbeat_has_honest_liveness_and_reconc
     try:
 
         def ready():
-            if not gate.is_file():
+            nonlocal worker_pid
+            if not gate.is_file() or not persisted_gate.is_file():
                 return None
+            gate_data = json.loads(gate.read_text())
+            persisted = json.loads(persisted_gate.read_text())
+            assert set(gate_data) == {"pid", "job_id", "job_attempt_id"}
+            assert set(persisted) == {"job_id", "job_attempt_id", "heartbeat_sequence", "version"}
+            assert gate_data["job_id"] == persisted["job_id"] == queued["job_id"]
+            assert gate_data["job_attempt_id"] == persisted["job_attempt_id"]
+            assert type(gate_data["pid"]) is int and gate_data["pid"] > 0
+            worker_pid = gate_data["pid"]
             try:
                 current = store.get(queued["job_id"])
             except JobConflictError:
-                return None  # A busy read has not observed the heartbeat yet.
-            if current["state"] != "RUNNING" or current["attempt"]["heartbeat_sequence"] < 1:
-                return None
+                return None  # A busy read supplies no persisted snapshot.
+            assert current["job_id"] == persisted["job_id"]
+            assert current["state"] == "RUNNING"
+            assert current["attempt"]["job_attempt_id"] == persisted["job_attempt_id"]
+            assert current["attempt"]["heartbeat_sequence"] == persisted["heartbeat_sequence"] == 1
+            assert current["version"] == persisted["version"]
             return current
 
         before = _wait_for(ready)
-        gate_data = json.loads(gate.read_text())
-        assert gate_data["job_id"] == queued["job_id"]
-        worker_pid = gate_data["pid"]
         if target == "worker":
             os.kill(worker_pid, signal.SIGKILL)
             stdout, stderr = process.communicate(timeout=15)

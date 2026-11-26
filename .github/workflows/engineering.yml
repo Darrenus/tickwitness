@@ -63,6 +63,7 @@ jobs:
           tests/infrastructure/test_job_controls.py
           tests/infrastructure/test_job_control_runtime.py
           tests/infrastructure/test_job_control_supervisor.py
+          tests/infrastructure/test_job_supervisor.py::test_actual_sigkill_after_persisted_heartbeat_has_honest_liveness_and_reconcile
           tests/test_job_control_cli.py
           tests/domain/test_job_resource_contracts.py
           tests/infrastructure/test_job_resource_store.py
