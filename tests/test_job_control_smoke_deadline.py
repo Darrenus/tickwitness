@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import json
+import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -411,3 +414,256 @@ def test_deadline_stays_within_original_slot_five_and_native_sixty_seconds(
         smoke._validate_native_deadline_outcome(
             evidence["observed"], evidence["request"], evidence["frames"]
         )
+
+
+GATE_BUSY = {
+    "error": {"code": "job_conflict", "message": "Another writer owns the Job control gate"}
+}
+
+
+@pytest.fixture
+def cancellation_harness(smoke, monkeypatch, tmp_path):
+    class Clock:
+        now = 100.0
+
+        def __init__(self):
+            self.sleeps = []
+
+        def monotonic(self):
+            return self.now
+
+        def wait(self, seconds):
+            assert 0 < seconds <= 0.02
+            self.sleeps.append(seconds)
+            self.now += seconds
+
+    clock = Clock()
+    transcripts = tmp_path / "transcripts"
+    transcripts.mkdir()
+    harness = SimpleNamespace(
+        clock=clock,
+        responses=[],
+        costs=[],
+        runs=[],
+        records=[],
+        transcripts=transcripts,
+        on_run=None,
+    )
+
+    def run(argv, **kwargs):
+        harness.runs.append((tuple(argv), dict(kwargs)))
+        assert kwargs["timeout"] > 0
+        if harness.on_run is not None:
+            harness.on_run()
+        if harness.costs:
+            clock.now += harness.costs.pop(0)
+        response = harness.responses.pop(0)
+        if isinstance(response, BaseException):
+            raise response
+        return subprocess.CompletedProcess(argv, *response)
+
+    def invoke(entry=None, command=None):
+        selected_command = (
+            [
+                "readonly",
+                "/owned/jobs",
+                "cancel-job",
+                JOB,
+                "--cancel-key",
+                "original-key",
+                "--jobs",
+                "/owned/jobs",
+            ]
+            if command is None
+            else command
+        )
+        return smoke._invoke_cancellation(
+            "/installed/core-python",
+            ["-c", "original-guard"] if entry is None else entry,
+            selected_command,
+            cwd=tmp_path,
+            calls=harness.records,
+            transcripts=transcripts,
+        )
+
+    harness.invoke = invoke
+    monkeypatch.setattr(smoke, "time", SimpleNamespace(monotonic=clock.monotonic))
+    monkeypatch.setattr(smoke, "Event", lambda: SimpleNamespace(wait=clock.wait))
+    monkeypatch.setattr(smoke, "subprocess", SimpleNamespace(run=run))
+    return harness
+
+
+def busy_response():
+    return 9, "", json.dumps(GATE_BUSY) + "\n"
+
+
+def test_cancel_gate_refusal_keeps_fixed_argv_original_window_and_raw_transcripts(
+    cancellation_harness,
+):
+    harness = cancellation_harness
+    entry = ["-c", "original-guard"]
+    command = [
+        "readonly",
+        "/owned/jobs",
+        "cancel-job",
+        JOB,
+        "--cancel-key",
+        "original-key",
+        "--jobs",
+        "/owned/jobs",
+    ]
+    expected_argv = ("/installed/core-python", "-I", *entry, *command)
+    response = {"status": "accepted", "job_id": JOB, "policy_id": "f" * 64}
+    harness.responses[:] = [busy_response(), (0, json.dumps(response), "")]
+    harness.costs[:] = [1.5, 0.25]
+
+    def mutate_original_arguments():
+        entry[:] = ["-c", "changed-guard"]
+        command[:] = ["cancel-job", "0" * 64, "--cancel-key", "changed-key"]
+
+    harness.on_run = mutate_original_arguments
+    assert harness.invoke(entry, command) == response
+    assert [argv for argv, _ in harness.runs] == [expected_argv, expected_argv]
+    assert [kwargs["timeout"] for _, kwargs in harness.runs] == pytest.approx([10, 8.48])
+    assert harness.clock.sleeps == [0.02]
+    assert harness.clock.now == pytest.approx(101.77)
+    assert [row["expected_exit_code"] for row in harness.records] == [9, 0]
+    stored = [json.loads(path.read_bytes()) for path in sorted(harness.transcripts.glob("*.json"))]
+    assert stored == harness.records
+    assert json.loads(stored[0]["stderr"]) == GATE_BUSY
+
+
+@pytest.mark.parametrize(
+    "status", ["accepted", "already_requested", "too_late", "already_terminal"]
+)
+def test_cancel_response_status_is_returned_once_without_promoting_it_to_acceptance(
+    cancellation_harness, status
+):
+    harness = cancellation_harness
+    response = {"status": status, "job_id": JOB}
+    harness.responses.append((0, json.dumps(response), ""))
+    assert harness.invoke() == response
+    assert len(harness.runs) == 1 and harness.clock.sleeps == []
+
+
+@pytest.mark.parametrize("change", ["command", "catalog"])
+def test_cancel_retry_is_not_available_to_other_mutations_or_catalogs(cancellation_harness, change):
+    harness = cancellation_harness
+    command = [
+        "readonly",
+        "/owned/jobs",
+        "cancel-job",
+        JOB,
+        "--cancel-key",
+        "original-key",
+        "--jobs",
+        "/owned/jobs",
+    ]
+    if change == "command":
+        command[2] = "configure-job-control"
+    else:
+        command[-1] = "/different/jobs"
+    with pytest.raises(AssertionError):
+        harness.invoke(command=command)
+    assert harness.runs == [] and harness.records == []
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "stderr"),
+    [
+        (9, "", json.dumps({"error": {"code": "job_conflict", "message": "Other writer"}})),
+        (9, "", json.dumps({"error": {"code": "readonly_snapshot_unstable", "message": "busy"}})),
+        (
+            9,
+            "",
+            json.dumps(
+                {
+                    "error": {
+                        "code": "job_conflict",
+                        "message": "Job already has a different accepted cancellation key",
+                    }
+                }
+            ),
+        ),
+        (9, "", json.dumps({**GATE_BUSY, "unknown": True})),
+        (9, "", "not-json"),
+        (9, "", json.dumps(GATE_BUSY) + "\n{}"),
+        (9, "partial-output", json.dumps(GATE_BUSY)),
+        (8, "", json.dumps(GATE_BUSY)),
+        (-9, "", ""),
+    ],
+)
+def test_cancel_repeats_no_other_conflict_partial_output_or_unknown_failure(
+    cancellation_harness, returncode, stdout, stderr
+):
+    harness = cancellation_harness
+    harness.responses.append((returncode, stdout, stderr))
+    with pytest.raises((AssertionError, RuntimeError, ValueError)):
+        harness.invoke()
+    assert len(harness.runs) == 1 and harness.clock.sleeps == []
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        '{"error":{"code":"job_conflict","code":"job_conflict",'
+        '"message":"Another writer owns the Job control gate"}}',
+        '{"error":{"code":"job_conflict","message":"Another writer owns the Job control gate"},'
+        '"error":{"code":"job_conflict","message":"Another writer owns the Job control gate"}}',
+        '{"error":{"code":"job_conflict","message":NaN}}',
+        '{"error":{"code":"job_conflict","message":Infinity}}',
+    ],
+)
+def test_cancel_ambiguous_or_non_json_constants_are_not_prewrite_refusal_proof(
+    cancellation_harness, stderr
+):
+    harness = cancellation_harness
+    harness.responses.append((9, "", stderr))
+    with pytest.raises(ValueError):
+        harness.invoke()
+    assert len(harness.runs) == len(harness.records) == 1
+    assert harness.clock.sleeps == []
+    assert harness.records[0]["stderr"] == stderr
+
+
+def test_cancel_subprocess_timeout_is_unknown_and_is_never_repeated(cancellation_harness):
+    harness = cancellation_harness
+    failure = subprocess.TimeoutExpired("cancel-job", 10, output="partial")
+    harness.responses.append(failure)
+    with pytest.raises(subprocess.TimeoutExpired) as caught:
+        harness.invoke()
+    assert caught.value is failure
+    assert len(harness.runs) == 1 and harness.clock.sleeps == []
+
+
+def test_cancel_io_error_is_not_a_known_prewrite_gate_refusal(cancellation_harness):
+    harness = cancellation_harness
+    failure = OSError("Cancellation command outcome is unconfirmed")
+    harness.responses.append(failure)
+    with pytest.raises(OSError) as caught:
+        harness.invoke()
+    assert caught.value is failure
+    assert len(harness.runs) == 1 and harness.clock.sleeps == []
+
+
+def test_cancel_gate_refusal_has_one_absolute_ten_second_limit(cancellation_harness):
+    harness = cancellation_harness
+    harness.responses[:] = [busy_response()] * 2
+    harness.costs[:] = [9.99]
+    with pytest.raises(AssertionError):
+        harness.invoke()
+    assert len(harness.runs) == 1
+    assert harness.clock.now == pytest.approx(110.0)
+    assert harness.clock.sleeps == pytest.approx([0.01])
+    assert len(harness.records) == 1
+
+
+def test_cancel_gate_refusal_cannot_create_a_seventeenth_attempt(cancellation_harness):
+    harness = cancellation_harness
+    harness.responses[:] = [busy_response()] * 17
+    with pytest.raises(AssertionError):
+        harness.invoke()
+    assert len(harness.runs) == len(harness.records) == 16
+    assert len(harness.responses) == 1
+    assert harness.clock.now < 110
+    assert all(row["expected_exit_code"] == 9 for row in harness.records)

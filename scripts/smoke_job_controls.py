@@ -342,6 +342,59 @@ def _capture(calls, transcripts, executable, entry, command, completed, expected
     return json.loads(output)
 
 
+def _invoke_cancellation(executable, entry, command, *, cwd, calls, transcripts):
+    """Repeat only a known pre-admission refusal, with one fixed command and window."""
+    entry, command = tuple(entry), tuple(command)
+    assert len(command) == 8 and command[0] == "readonly" and command[2] == "cancel-job"
+    assert command[4] == "--cancel-key" and command[6] == "--jobs"
+    assert command[1] == command[7] and Path(command[1]).is_absolute()
+    arguments = (executable, "-I", *entry, *command)
+    deadline = time.monotonic() + 10
+
+    def unique_object(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError("Duplicate cancellation refusal JSON key")
+            value[key] = item
+        return value
+
+    def invalid_constant(value):
+        raise ValueError("Invalid cancellation refusal JSON constant: " + value)
+
+    for attempt in range(16):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError("Cancellation control gate remained busy")
+        completed = subprocess.run(
+            arguments,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=remaining,
+        )
+        if completed.returncode != 9:
+            return _capture(calls, transcripts, executable, entry, command, completed, 0)
+        _capture(calls, transcripts, executable, entry, command, completed, 9)
+        refusal = json.loads(
+            completed.stderr, object_pairs_hook=unique_object, parse_constant=invalid_constant
+        )
+        assert refusal == {
+            "error": {
+                "code": "job_conflict",
+                "message": "Another writer owns the Job control gate",
+            }
+        }
+        if attempt == 15:
+            raise AssertionError("Cancellation control gate refused all sixteen admissions")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError("Cancellation control gate remained busy")
+        Event().wait(min(0.02, remaining))
+    raise AssertionError("Cancellation admission loop did not return")
+
+
 def _wait_gate(process, path, seconds=25):
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -1030,15 +1083,18 @@ def main():
 
         def cancellation(job_id, key, *, jobs=catalog):
             started = time.monotonic_ns()
-            response = run(
+            entry, prefix = guarded("\nraise SystemExit(main(sys.argv[1:]))\n", jobs)
+            command = (
+                *prefix,
                 "cancel-job",
                 job_id,
                 "--cancel-key",
                 key,
                 "--jobs",
                 str(jobs),
-                guard=True,
-                jobs=jobs,
+            )
+            response = _invoke_cancellation(
+                verifier, entry, command, cwd=cwd, calls=calls, transcripts=transcripts
             )
             returned = time.monotonic_ns()
             assert response["status"] in {"accepted", "already_requested"}

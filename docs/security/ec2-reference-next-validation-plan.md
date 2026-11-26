@@ -51,6 +51,13 @@ that scenario; missing native completion is recorded as NOT_OBSERVED. Other
 scenarios retain their completed-native requirements. Neither a longer timeout,
 clock rebasing nor another research reservation supplies this evidence.
 
+The cancellation smoke also treats only the exact, proven pre-write control-gate
+busy refusal as eligible for explicit same-command/key/Catalog retransmission.
+One original10s observation window and16-call cap include every refusal, timeout
+and backoff. Every completed refusal is retained; other conflicts, partial
+output, invalid JSON, IO errors or unknown write outcomes are not repeated.
+This harness path changes neither the product lock contract nor research slots.
+
 ## Then: freeze a prospective one-use successor, before implementation
 
 Any future full-catalog attempt needs a separately reviewed contract/ADR,
