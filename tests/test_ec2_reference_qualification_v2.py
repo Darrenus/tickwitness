@@ -536,14 +536,17 @@ def test_v2_finalization_failure_never_refunds_or_publishes_success(v2_driver, c
         {"unexpected": True},
     ],
 )
-def test_v2_receipt_mismatch_invalidates_pair_without_reopening_terminal(v2_driver, capsys, changes):
+def test_v2_receipt_mismatch_invalidates_pair_without_reopening_terminal(
+    v2_driver, capsys, changes
+):
     v2_driver.fault.receipt_changes.update(changes)
     assert invoke() == 1
     assert report(v2_driver)["controls_status"] == "NOT_QUALIFIED"
     assert v2_driver.run.finished == [("QUALIFIED_REFERENCE_ONLY", None)]
-    assert v2_driver.run.success_hash != hashlib.sha256(
-        (v2_driver.path / "qualification-report.json").read_bytes()
-    ).hexdigest()
+    assert (
+        v2_driver.run.success_hash
+        != hashlib.sha256((v2_driver.path / "qualification-report.json").read_bytes()).hexdigest()
+    )
     assert capsys.readouterr().out == ""
 
 

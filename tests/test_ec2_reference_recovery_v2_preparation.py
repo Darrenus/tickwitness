@@ -15,10 +15,10 @@ from tickwitness.infrastructure import restricted_reference_ec2 as ec2
 
 # Share filesystem scenarios with the provider tests, including their real v1 histories.
 sys.path.insert(0, str(Path(__file__).parent / "infrastructure"))
-from test_restricted_reference_ec2_recovery_v2 import CURRENT, assert_preserved  # noqa: E402
-from test_restricted_reference_ec2_recovery_v2 import host as host  # noqa: E402
-from test_restricted_reference_ec2_recovery_v2 import recovery as recovery  # noqa: E402
-from test_restricted_reference_ec2_recovery_v2 import v2_history as v2_history  # noqa: E402
+from test_restricted_reference_ec2_recovery_v2 import CURRENT, assert_preserved
+from test_restricted_reference_ec2_recovery_v2 import host as host
+from test_restricted_reference_ec2_recovery_v2 import recovery as recovery
+from test_restricted_reference_ec2_recovery_v2 import v2_history as v2_history
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "prepare_ec2_reference_recovery_v2.py"
 SPEC = importlib.util.spec_from_file_location("tickwitness_recovery_v2_preparation", SCRIPT)
@@ -88,7 +88,8 @@ def test_same_global_readonly_host_mutex_serializes_preparation(prepared_host):
 @pytest.mark.parametrize("target", ["state_sha256", "consumption_sha256", "stop", "helper"])
 def test_second_history_or_source_change_cannot_publish_plan(prepared_host, target):
     path = (
-        prepared_host.paths[target] if target in prepared_host.paths
+        prepared_host.paths[target]
+        if target in prepared_host.paths
         else getattr(prepared_host, target)
     )
     path.write_bytes(path.read_bytes() + b" ")
@@ -174,9 +175,9 @@ def test_unknown_cli_and_abbreviations_do_not_reach_preparation(monkeypatch):
 
 
 def test_cli_reports_prepared_only_without_claiming_m1(prepared_host, capsys):
-    assert preparation.main([
-        "--source-revision", CURRENT, "--plan-id", ec2.RECOVERY_V2_PLAN_ID
-    ]) == 0
+    assert (
+        preparation.main(["--source-revision", CURRENT, "--plan-id", ec2.RECOVERY_V2_PLAN_ID]) == 0
+    )
     result = json.loads(capsys.readouterr().out)
     assert result["status"] == "PREPARED_ONLY"
     assert result["qualification_started"] is False and result["production_m1"] == "DISABLED"

@@ -398,7 +398,9 @@ def _source_records(
     selected = (
         RECOVERY_V2_SOURCE_FILES
         if version == 2
-        else RECOVERY_SOURCE_FILES if recovery else SOURCE_FILES
+        else RECOVERY_SOURCE_FILES
+        if recovery
+        else SOURCE_FILES
     )
     files = _mapping(document["files"], set(selected), "source closure")
     source_lock = {"path": str(path), "sha256": _sha(raw), "bytes": len(raw)}
@@ -572,6 +574,7 @@ def _recovery_v2_history(
     seals: dict[str, tuple[Row, tuple[int, int, int, int, int]]],
 ) -> Row:
     """Read both fixed failures and their old v1 lineage, without rewriting history."""
+    expected: object
     _fixed(RECOVERY_V2_HISTORY["original"], RECOVERY_PREDECESSOR, "original history pins")
     _recovery_history(seals)
     previous = RECOVERY_V2_HISTORY["recovery"]
@@ -774,7 +777,8 @@ def _recovery_v2_history(
         or not _HEX32.fullmatch(admission["nonce"])
         or type(admission["admitted_ns"]) is not int
         or type(admission["deadline_ns"]) is not int
-        or not cast(int, invocation["started_ns"]) <= admission["admitted_ns"]
+        or not cast(int, invocation["started_ns"])
+        <= admission["admitted_ns"]
         < cast(int, invocation["deadline_ns"])
         or admission["deadline_ns"]
         != min(cast(int, invocation["deadline_ns"]), admission["admitted_ns"] + PROBE_NS)
@@ -971,7 +975,8 @@ def _recovery_v2_arguments(source_revision: str, run_id: str, plan_id: str) -> N
         or run_id != RECOVERY_V2_RUN_ID
         or type(plan_id) is not str
         or plan_id != RECOVERY_V2_PLAN_ID
-        or source_revision in {
+        or source_revision
+        in {
             RECOVERY_V2_HISTORY["original"]["source_revision"],
             RECOVERY_V2_HISTORY["recovery"]["source_revision"],
         }
@@ -1454,7 +1459,13 @@ class Ec2Run:
         context = _mapping(
             value,
             {
-                "kind", "schema_version", "plan_id", "plan", key, "consumption", "invocation",
+                "kind",
+                "schema_version",
+                "plan_id",
+                "plan",
+                key,
+                "consumption",
+                "invocation",
                 "allowance",
             },
             "immutable recovery context",

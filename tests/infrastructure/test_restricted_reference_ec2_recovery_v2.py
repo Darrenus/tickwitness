@@ -30,11 +30,17 @@ def manifest_for(run):
     result = dict.fromkeys(ec2.RECOVERY_MANIFEST_KEYS)
     version = run.recovery_schema_version
     result.update(
-        kind=f"restricted_reference_ec2_recovery_manifest_v{version}", schema_version=version,
-        source_revision=run.source_revision, provider_context=run.provider_record,
-        recovery_context=run.recovery_context, production_m1_enabled=False,
-        available_for_probe=True, unavailable_reasons=[], fixed_cases=list(ec2.FIXED_PROBES),
-        qualification_started_ns=run.started_ns, qualification_deadline_ns=run.deadline_ns,
+        kind=f"restricted_reference_ec2_recovery_manifest_v{version}",
+        schema_version=version,
+        source_revision=run.source_revision,
+        provider_context=run.provider_record,
+        recovery_context=run.recovery_context,
+        production_m1_enabled=False,
+        available_for_probe=True,
+        unavailable_reasons=[],
+        fixed_cases=list(ec2.FIXED_PROBES),
+        qualification_started_ns=run.started_ns,
+        qualification_deadline_ns=run.deadline_ns,
         recovery_accounting_phase="pre_probe_manifest",
         recovery_accounting=run.recovery_accounting(run.snapshot()),
         runtime_closure_scope="Synthetic publication decisions, not isolation evidence",
@@ -60,8 +66,10 @@ def v2_history(recovery, monkeypatch):
     preload_path = old.policy_evidence_dir / "preload-manifest.json"
     # This shared producer uses canonical JSON without our authority-record LF.
     preload_path.write_bytes(ec2.canonical(preload)[:-1])
-    setup = {"provider_context": old.provider_record,
-             "preload_manifest_sha256": record(preload_path)["sha256"]}
+    setup = {
+        "provider_context": old.provider_record,
+        "preload_manifest_sha256": record(preload_path)["sha256"],
+    }
     setup_path = old.policy_evidence_dir / "policy-setup.json"
     setup_path.write_bytes(ec2.canonical(setup))
     old.policy_ready(
@@ -75,48 +83,86 @@ def v2_history(recovery, monkeypatch):
     ticket = old.reserve_probe(name="positive", nonce="a" * 32)
     old.admit_probe(ticket)
     case_path = old.run_dir / "case-01.json"
-    case_path.write_bytes(ec2.canonical({
-        "name": "positive", "nonce": ticket.nonce, "payload_started": False,
-        "failure": "setup_refused", "stop_confirmed": True, "cleanup_confirmed": True,
-        "host_facts": {"manifest_sha256": record(manifest_path)["sha256"],
-                       "admission_number": 1, "original_admission_ns": ticket.admitted_ns,
-                       "original_deadline_ns": ticket.deadline_ns},
-    }))
+    case_path.write_bytes(
+        ec2.canonical(
+            {
+                "name": "positive",
+                "nonce": ticket.nonce,
+                "payload_started": False,
+                "failure": "setup_refused",
+                "stop_confirmed": True,
+                "cleanup_confirmed": True,
+                "host_facts": {
+                    "manifest_sha256": record(manifest_path)["sha256"],
+                    "admission_number": 1,
+                    "original_admission_ns": ticket.admitted_ns,
+                    "original_deadline_ns": ticket.deadline_ns,
+                },
+            }
+        )
+    )
     old.finish_probe(
-        ticket, result_sha256=record(case_path)["sha256"], stop_confirmed=True,
-        cleanup_confirmed=True, failure="setup_refused",
+        ticket,
+        result_sha256=record(case_path)["sha256"],
+        stop_confirmed=True,
+        cleanup_confirmed=True,
+        failure="setup_refused",
     )
     old.finish(outcome="NOT_QUALIFIED", reason="fixed_catalog_incomplete")
-    cases = [{"name": name, "status": "UNKNOWN", "admission_submitted": i == 0}
-             for i, name in enumerate(ec2.FIXED_PROBES)]
-    cases[0].update(admission=dataclasses.asdict(ticket), nonce=ticket.nonce,
-                    execution_evidence=record(case_path))
+    cases = [
+        {"name": name, "status": "UNKNOWN", "admission_submitted": i == 0}
+        for i, name in enumerate(ec2.FIXED_PROBES)
+    ]
+    cases[0].update(
+        admission=dataclasses.asdict(ticket),
+        nonce=ticket.nonce,
+        execution_evidence=record(case_path),
+    )
     report = {
-        "kind": "restricted_reference_ec2_recovery_qualification_v1", "schema_version": 1,
-        "source_revision": PREVIOUS, "run_id": old.run_id, "boot_id": old.boot_id,
-        "controls_status": "NOT_QUALIFIED", "admissions_charged": 1,
-        "confirmed_backend_admissions": 1, "backend_unconfirmed_admissions": 0,
-        "pending_probe_outcomes": 0, "observed_payload_starts": 0,
-        "research_reservations": 0, "replay_engine_invocations": 0, "cases": cases,
-        "provider_context": old.provider_record, "recovery_context": old.recovery_context,
+        "kind": "restricted_reference_ec2_recovery_qualification_v1",
+        "schema_version": 1,
+        "source_revision": PREVIOUS,
+        "run_id": old.run_id,
+        "boot_id": old.boot_id,
+        "controls_status": "NOT_QUALIFIED",
+        "admissions_charged": 1,
+        "confirmed_backend_admissions": 1,
+        "backend_unconfirmed_admissions": 0,
+        "pending_probe_outcomes": 0,
+        "observed_payload_starts": 0,
+        "research_reservations": 0,
+        "replay_engine_invocations": 0,
+        "cases": cases,
+        "provider_context": old.provider_record,
+        "recovery_context": old.recovery_context,
         "manifest_sha256": record(manifest_path)["sha256"],
         "recovery_accounting": old.recovery_accounting(old.snapshot()),
     }
     report_path = old.run_dir / "qualification-report.json"
     report_path.write_bytes(ec2.canonical(report))
     paths = {
-        "claim_sha256": old.run_dir / "claim.json", "state_sha256": old.run_dir / "state.json",
-        "report_sha256": report_path, "case_sha256": case_path,
-        "source_lock_sha256": recovery.current_lock, "manifest_sha256": manifest_path,
-        "plan_sha256": recovery.plan_path, "consumption_sha256": recovery.consumption,
-        "policy_setup_sha256": setup_path, "policy_preload_sha256": preload_path,
+        "claim_sha256": old.run_dir / "claim.json",
+        "state_sha256": old.run_dir / "state.json",
+        "report_sha256": report_path,
+        "case_sha256": case_path,
+        "source_lock_sha256": recovery.current_lock,
+        "manifest_sha256": manifest_path,
+        "plan_sha256": recovery.plan_path,
+        "consumption_sha256": recovery.consumption,
+        "policy_setup_sha256": setup_path,
+        "policy_preload_sha256": preload_path,
         "identity_document_sha256": old.run_dir / "instance-identity-document.json",
     }
-    history = {"original": dict(ec2.RECOVERY_PREDECESSOR),
-               "recovery": {**ec2.RECOVERY_V2_HISTORY["recovery"],
-                            "source_revision": PREVIOUS, "run_id": old.run_id,
-                            "boot_id": old.boot_id,
-                            **{key: record(path)["sha256"] for key, path in paths.items()}}}
+    history = {
+        "original": dict(ec2.RECOVERY_PREDECESSOR),
+        "recovery": {
+            **ec2.RECOVERY_V2_HISTORY["recovery"],
+            "source_revision": PREVIOUS,
+            "run_id": old.run_id,
+            "boot_id": old.boot_id,
+            **{key: record(path)["sha256"] for key, path in paths.items()},
+        },
+    }
     monkeypatch.setattr(ec2, "RECOVERY_V2_HISTORY", history)
     os.close(old._lock_fd)
     old._lock_fd = -1
@@ -130,20 +176,42 @@ def v2_history(recovery, monkeypatch):
     helper.write_bytes(b"synthetic v2 preparation source\n")
     lock = recovery.host.root / "sources" / CURRENT / "source-lock.json"
     lock.parent.mkdir()
-    lock.write_bytes(ec2.canonical({
-        "kind": "restricted_reference_ec2_recovery_source_lock_v2", "schema_version": 2,
-        "source_revision": CURRENT, "source_root": str(recovery.host.source),
-        "files": {relative: {key: record(recovery.host.source / relative)[key]
-                             for key in ("sha256", "bytes")}
-                  for relative in ec2.RECOVERY_V2_SOURCE_FILES},
-    }))
-    preserved = {path: (path.read_bytes(), path.stat().st_ino)
-                 for path in recovery.host.root.rglob("*") if path.is_file()}
+    lock.write_bytes(
+        ec2.canonical(
+            {
+                "kind": "restricted_reference_ec2_recovery_source_lock_v2",
+                "schema_version": 2,
+                "source_revision": CURRENT,
+                "source_root": str(recovery.host.source),
+                "files": {
+                    relative: {
+                        key: record(recovery.host.source / relative)[key]
+                        for key in ("sha256", "bytes")
+                    }
+                    for relative in ec2.RECOVERY_V2_SOURCE_FILES
+                },
+            }
+        )
+    )
+    preserved = {
+        path: (path.read_bytes(), path.stat().st_ino)
+        for path in recovery.host.root.rglob("*")
+        if path.is_file()
+    }
     context = SimpleNamespace(
-        host=recovery.host, previous=recovery, old=old, paths=paths, history=history,
-        stop=stop, helper=helper, source_lock=lock, preserved=preserved,
-        plan_path=directory / "plan.json", consumption=directory / "consumption.json",
-        new_dir=recovery.host.root / "runs" / ec2.RECOVERY_V2_RUN_ID, runs=[],
+        host=recovery.host,
+        previous=recovery,
+        old=old,
+        paths=paths,
+        history=history,
+        stop=stop,
+        helper=helper,
+        source_lock=lock,
+        preserved=preserved,
+        plan_path=directory / "plan.json",
+        consumption=directory / "consumption.json",
+        new_dir=recovery.host.root / "runs" / ec2.RECOVERY_V2_RUN_ID,
+        runs=[],
     )
     yield context
     for run in context.runs:
@@ -281,11 +349,25 @@ def test_validation_time_uses_entry_anchors_and_cannot_extend_setup(v2, monkeypa
     assert not v2.consumption.exists() and not v2.new_dir.exists()
 
 
-@pytest.mark.parametrize("target", [
-    "claim_sha256", "state_sha256", "report_sha256", "case_sha256", "source_lock_sha256",
-    "manifest_sha256", "plan_sha256", "consumption_sha256", "policy_setup_sha256",
-    "policy_preload_sha256", "identity_document_sha256", "stop", "helper", "source_lock",
-])
+@pytest.mark.parametrize(
+    "target",
+    [
+        "claim_sha256",
+        "state_sha256",
+        "report_sha256",
+        "case_sha256",
+        "source_lock_sha256",
+        "manifest_sha256",
+        "plan_sha256",
+        "consumption_sha256",
+        "policy_setup_sha256",
+        "policy_preload_sha256",
+        "identity_document_sha256",
+        "stop",
+        "helper",
+        "source_lock",
+    ],
+)
 def test_changed_second_history_or_current_source_refuses_before_consumption(v2, target):
     path = v2.paths[target] if target in v2.paths else getattr(v2, target)
     path.write_bytes(path.read_bytes() + b" ")
@@ -294,11 +376,17 @@ def test_changed_second_history_or_current_source_refuses_before_consumption(v2,
     assert not v2.consumption.exists() and not v2.new_dir.exists()
 
 
-@pytest.mark.parametrize("field,value", [
-    ("unknown", True), ("schema_version", True), ("schema_version", 2.0),
-    ("plan_id", ec2.RECOVERY_PLAN_ID), ("run_id", ec2.RECOVERY_RUN_ID),
-    ("freeze_revision", "f" * 40),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("unknown", True),
+        ("schema_version", True),
+        ("schema_version", 2.0),
+        ("plan_id", ec2.RECOVERY_PLAN_ID),
+        ("run_id", ec2.RECOVERY_RUN_ID),
+        ("freeze_revision", "f" * 40),
+    ],
+)
 def test_plan_version_lineage_unknown_fields_and_type_coercion_are_not_permission(v2, field, value):
     plan = {**v2.plan, field: value}
     v2.plan_path.write_bytes(ec2.canonical(plan))
@@ -308,9 +396,11 @@ def test_plan_version_lineage_unknown_fields_and_type_coercion_are_not_permissio
 
 
 def test_duplicate_plan_key_is_refused_before_any_consumption(v2):
-    v2.plan_path.write_bytes(v2.plan_path.read_bytes().replace(
-        b'"schema_version":2', b'"schema_version":2,"schema_version":2', 1
-    ))
+    v2.plan_path.write_bytes(
+        v2.plan_path.read_bytes().replace(
+            b'"schema_version":2', b'"schema_version":2,"schema_version":2', 1
+        )
+    )
     with pytest.raises(ValueError, match="Duplicate"):
         v2.claim()
     assert not v2.consumption.exists()
@@ -359,8 +449,18 @@ def test_consumption_faults_are_durable_used_allowances_not_free_retries(v2, mon
     assert_preserved(v2)
 
 
-@pytest.mark.parametrize("target", ["state_sha256", "consumption_sha256", "manifest_sha256",
-                                  "plan_path", "consumption", "stop", "helper"])
+@pytest.mark.parametrize(
+    "target",
+    [
+        "state_sha256",
+        "consumption_sha256",
+        "manifest_sha256",
+        "plan_path",
+        "consumption",
+        "stop",
+        "helper",
+    ],
+)
 def test_live_old_or_new_authority_change_stops_before_a_probe(v2, target):
     run = v2.claim()
     path = v2.paths[target] if target in v2.paths else getattr(v2, target)
@@ -408,11 +508,16 @@ def test_pending_backend_and_persistence_uncertainty_keep_the_third_charge(v2, m
     assert run._state["charged"] == 1 and v2.consumption.exists()
 
 
-@pytest.mark.parametrize("change,diagnostic", [
-    ("boolean_counter", "charged type"), ("pending", "admission outcome"),
-    ("unconfirmed", "backend_confirmed"), ("owner", "state owner"),
-    ("clock", "original deadline"),
-])
+@pytest.mark.parametrize(
+    "change,diagnostic",
+    [
+        ("boolean_counter", "charged type"),
+        ("pending", "admission outcome"),
+        ("unconfirmed", "backend_confirmed"),
+        ("owner", "state owner"),
+        ("clock", "original deadline"),
+    ],
+)
 def test_second_history_semantics_refuse_even_with_its_digest_rebound(
     v2, monkeypatch, change, diagnostic
 ):
@@ -477,43 +582,74 @@ def complete_catalog(v2):
         ticket = run.reserve_probe(name=name, nonce=f"{index + 1:032x}")
         run.admit_probe(ticket)
         path = run.run_dir / f"case-{index + 1:02d}.json"
-        path.write_bytes(ec2.canonical({
-            "name": name, "nonce": ticket.nonce, "payload_started": True,
-            "failure": None, "stop_confirmed": True, "cleanup_confirmed": True,
-            "host_facts": {"manifest_sha256": record(manifest_path)["sha256"],
-                           "admission_number": index + 1,
-                           "original_admission_ns": ticket.admitted_ns,
-                           "original_deadline_ns": ticket.deadline_ns},
-        }))
-        run.finish_probe(
-            ticket, result_sha256=record(path)["sha256"],
-            stop_confirmed=True, cleanup_confirmed=True, failure=None,
+        path.write_bytes(
+            ec2.canonical(
+                {
+                    "name": name,
+                    "nonce": ticket.nonce,
+                    "payload_started": True,
+                    "failure": None,
+                    "stop_confirmed": True,
+                    "cleanup_confirmed": True,
+                    "host_facts": {
+                        "manifest_sha256": record(manifest_path)["sha256"],
+                        "admission_number": index + 1,
+                        "original_admission_ns": ticket.admitted_ns,
+                        "original_deadline_ns": ticket.deadline_ns,
+                    },
+                }
+            )
         )
-        cases.append({
-            "name": name, "nonce": ticket.nonce, "admission_submitted": True,
-            "admission": dataclasses.asdict(ticket), "status": "PASS",
-            "reason": "actual_scoped_control_evidence", "payload_started": True,
-            "execution_evidence": record(path),
-        })
+        run.finish_probe(
+            ticket,
+            result_sha256=record(path)["sha256"],
+            stop_confirmed=True,
+            cleanup_confirmed=True,
+            failure=None,
+        )
+        cases.append(
+            {
+                "name": name,
+                "nonce": ticket.nonce,
+                "admission_submitted": True,
+                "admission": dataclasses.asdict(ticket),
+                "status": "PASS",
+                "reason": "actual_scoped_control_evidence",
+                "payload_started": True,
+                "execution_evidence": record(path),
+            }
+        )
     snapshot = run.snapshot()
     report = {
-        "kind": "restricted_reference_ec2_recovery_qualification_v2", "schema_version": 2,
-        "controls_status": "QUALIFIED_REFERENCE_ONLY", "production_m1": "DISABLED",
+        "kind": "restricted_reference_ec2_recovery_qualification_v2",
+        "schema_version": 2,
+        "controls_status": "QUALIFIED_REFERENCE_ONLY",
+        "production_m1": "DISABLED",
         "independent_human_security_review": "NOT_PERFORMED",
         "external_human_reproduction": "0/0/PENDING",
-        "research_reservations": 0, "replay_engine_invocations": 0,
-        "source_revision": CURRENT, "run_id": run.run_id, "boot_id": run.boot_id,
+        "research_reservations": 0,
+        "replay_engine_invocations": 0,
+        "source_revision": CURRENT,
+        "run_id": run.run_id,
+        "boot_id": run.boot_id,
         "acceptance_gate": "matching_durable_terminal_and_final_report_sha256",
         "original_qualification_budget": {"max_admissions": 24, "window_ns": ec2.WINDOW_NS},
-        "cases": cases, "scope": "Synthetic publication decisions; product M1 disabled",
+        "cases": cases,
+        "scope": "Synthetic publication decisions; product M1 disabled",
         "stop_scope": "Independent AWS state readback required",
-        "recovery_context": run.recovery_context, "durable_budget_status": "CONFIRMED",
-        "durable_budget": dataclasses.asdict(snapshot), "admissions_charged": 24,
-        "confirmed_backend_admissions": 24, "backend_unconfirmed_admissions": 0,
-        "pending_probe_outcomes": 0, "recovery_accounting": run.recovery_accounting(snapshot),
+        "recovery_context": run.recovery_context,
+        "durable_budget_status": "CONFIRMED",
+        "durable_budget": dataclasses.asdict(snapshot),
+        "admissions_charged": 24,
+        "confirmed_backend_admissions": 24,
+        "backend_unconfirmed_admissions": 0,
+        "pending_probe_outcomes": 0,
+        "recovery_accounting": run.recovery_accounting(snapshot),
         "admission_accounting_scope": "Synthetic fixture; submitted slots stay charged",
-        "provider_context": run.provider_record, "manifest_sha256": record(manifest_path)["sha256"],
-        "completed_at_monotonic_ns": v2.host.clock[0], "observed_payload_starts": 24,
+        "provider_context": run.provider_record,
+        "manifest_sha256": record(manifest_path)["sha256"],
+        "completed_at_monotonic_ns": v2.host.clock[0],
+        "observed_payload_starts": 24,
     }
     return run, report
 
@@ -547,10 +683,20 @@ def test_full_new_catalog_keeps_initial_two_then_final_twenty_six_and_receipt(v2
         run.qualification_receipt()
 
 
-@pytest.mark.parametrize("change", [
-    "v1_kind", "bool_schema", "unknown_report", "old_ticket", "old_case_path",
-    "missing_history", "boolean_history", "unknown_context", "missing_payload_gate",
-])
+@pytest.mark.parametrize(
+    "change",
+    [
+        "v1_kind",
+        "bool_schema",
+        "unknown_report",
+        "old_ticket",
+        "old_case_path",
+        "missing_history",
+        "boolean_history",
+        "unknown_context",
+        "missing_payload_gate",
+    ],
+)
 def test_success_publication_cannot_mix_older_results_or_drop_two_charges(v2, change):
     run, report = complete_catalog(v2)
     if change == "v1_kind":
