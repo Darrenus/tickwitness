@@ -1,5 +1,16 @@
 # Sprint 13 执行信任与隔离状态
 
+2026-11-27续作：owner明确要求修复版继续在真实AWS验证。新的
+[固定一次性恢复v2合同](../contracts/restricted-reference-ec2-recovery-v2.md)／
+[ADR0049](../adr/0049-one-use-corrected-ec2-qualification.md)经独立静态交叉审阅，
+已在仅两份文档的提交[`5ef1945`](https://github.com/Darrenus/tickwitness/commit/5ef1945c154cc944900a6d042f947bba0d620fd9)
+实际推送并读回后才开始实现。只允许固定第三次技术资格窗口：前两次2槽和全部
+原始记录保留，新最多24项／600s／30s setup，累计最多26，不重置研究协议预算，
+不自动授第四窗口。新路径／schema2与旧v1隔离，具体过程见
+[v2操作说明](../security/ec2-reference-recovery-v2-operations.md)。当前实现中，
+尚无修复版第三次实机结果；M1仍DISABLED、PR115 Draft、#38未完成，
+外部真人0/0/PENDING、独立安全NOT_PERFORMED不变。下列两次失败记录继续保留。
+
 2026-11-26实测续作：[一次性恢复验证](../security/ec2-reference-recovery-evidence-2026-11-26.md)已实际执行，仍为NOT_QUALIFIED。来源`d5f5fab`的远端Engineering全部16项及Documentation通过后，原主机新boot中的正例在独立进程限额读回门拒绝；固定Python已给出readiness，但未获GO，不能算正例或负例通过。本次1charged/1accepted、与旧记录累计2/2，0pending/0ACK未知，其余23项未入场；原始limits文本未保留，尾部列填充解析问题仅有独立静态源码证据。归档完整校验后，AWS明确Stopped／无公网IP／InstanceInitiatedShutdown。原一次恢复许可已消耗，保留全部历史和消费记录，不自动授第三窗口。后续源码修正保留原hard/soft限额并补真实Linux读回回归及失败观测；源码成功不续资格。M1仍DISABLED，PR115仍Draft、#38未完成；真人0/0/PENDING和安全NOT_PERFORMED不变。
 
 2026-11-26续作：[一次性恢复合同](../contracts/restricted-reference-ec2-recovery-v1.md)／[ADR0048](../adr/0048-one-use-ec2-recovery-qualification.md)已在仅两份文档的提交[`a19cff3`](https://github.com/Darrenus/tickwitness/commit/a19cff330df5a04e405c83baebcfb0bddf3498fa)实际推送并读回后才开始实现。明确追加一次技术资格24项／600s，旧1次扣额与失败记录永久保留，累计最多25次实际提交；不续旧时钟、不拼接剩余23项，也不增加研究协议预算。固定全局单次消费、只读旧claim互斥、独立恢复schema及初始／最终记账阶段见合同和[操作流程](../security/ec2-reference-recovery-operations.md)。当前仍无恢复实机通过结果，M1仍DISABLED，PR115仍Draft，#38未完成；外部真人与独立安全状态不变。
@@ -15,7 +26,7 @@ EC2接入完成静态实现及交叉审阅；源版本ae3d8e7的远端Engineerin
 | 故事 | 原容量 | 当前状态 |
 | --- | ---: | --- |
 | S13-01 / [#37](https://github.com/Darrenus/tickwitness/issues/37) | 10h | [执行信任与威胁模型](../contracts/execution-trust-v1.md)／[ADR0044](../adr/0044-explicit-execution-trust-boundaries.md)已随PR114实际接受；M0／M1／M2是信任文档标签，不是SDK模式开关 |
-| S13-02 / [#38](https://github.com/Darrenus/tickwitness/issues/38) | 16h | 参考合同与独立EC2恢复合同均先实际推送后实现；[恢复实测](../security/ec2-reference-recovery-evidence-2026-11-26.md)仍NOT_QUALIFIED／PR115 Draft，累计2槽保留、无第三窗口；源码回归另计，完整负例资格及owner接受未完成 |
+| S13-02 / [#38](https://github.com/Darrenus/tickwitness/issues/38) | 16h | 两次失败实测累计2槽保留；新的固定第三次v2合同已先推送后实现，尚无第三次实机结果／PR115 Draft；源码回归另计，完整负例资格及owner接受未完成 |
 | S13-03 / [#39](https://github.com/Darrenus/tickwitness/issues/39) | 8h | 独立安全复核准备／能力降级与真实采用观察尚未完成；不能用安全准备替代真人激活／复用 |
 
 原S13专项容量仍10+16+8=34h，持续质量容量不变，不补造实际工时。本轮属于infrastructure／operations边界，不新增领域聚合、SDK方法、CLI模式、Job/Catalog schema、研究结果或远程服务。

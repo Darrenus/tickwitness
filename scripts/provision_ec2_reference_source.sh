@@ -7,9 +7,12 @@ mode=default
 if [[ $# == 2 && $1 == --recovery ]]; then
     mode=recovery
     shift
+elif [[ $# == 2 && $1 == --recovery-v2 ]]; then
+    mode=recovery_v2
+    shift
 fi
 if [[ $# != 1 || ! $1 =~ ^[0-9a-f]{40}$ ]]; then
-    echo 'usage: provision_ec2_reference_source.sh [--recovery] <actual-pushed-40hex-commit>' >&2
+    echo 'usage: provision_ec2_reference_source.sh [--recovery|--recovery-v2] <actual-pushed-40hex-commit>' >&2
     exit 64
 fi
 revision=$1
@@ -79,7 +82,7 @@ from pathlib import Path
 
 revision, source, anchor = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
 mode = sys.argv[4]
-if mode not in ('default', 'recovery'):
+if mode not in ('default', 'recovery', 'recovery_v2'):
     raise SystemExit('Unknown source-lock selection')
 selected = (
     'src/tickwitness/infrastructure/restricted_reference_ec2.py',
@@ -94,6 +97,8 @@ selected = (
 )
 if mode == 'recovery':
     selected += ('scripts/prepare_ec2_reference_recovery.py',)
+elif mode == 'recovery_v2':
+    selected += ('scripts/prepare_ec2_reference_recovery_v2.py',)
 rows = {}
 for relative in selected:
     path = source / relative
@@ -120,10 +125,16 @@ for relative in selected:
         os.close(descriptor)
     rows[relative] = {'sha256': hashlib.sha256(raw).hexdigest(), 'bytes': len(raw)}
 
+lock_kind = 'restricted_reference_ec2_source_lock_v1'
+lock_version = 1
+if mode == 'recovery':
+    lock_kind = 'restricted_reference_ec2_recovery_source_lock_v1'
+elif mode == 'recovery_v2':
+    lock_kind = 'restricted_reference_ec2_recovery_source_lock_v2'
+    lock_version = 2
 lock = {
-    'kind': ('restricted_reference_ec2_recovery_source_lock_v1'
-             if mode == 'recovery' else 'restricted_reference_ec2_source_lock_v1'),
-    'schema_version': 1,
+    'kind': lock_kind,
+    'schema_version': lock_version,
     'source_revision': revision,
     'source_root': str(source),
     'files': rows,

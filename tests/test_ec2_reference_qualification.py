@@ -73,6 +73,10 @@ def driver(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
             self.recovery_context: dict[str, object] | None = None
             self.finished: list[tuple[str, str | None]] = []
 
+        @property
+        def recovery_schema_version(self) -> int | None:
+            return 1 if self.recovery_context is not None else None
+
         def snapshot(self) -> BudgetSnapshot:
             if mode[0] == "reserve_persist_uncertain" and self.charged:
                 raise ValueError("injected fenced durable counters")

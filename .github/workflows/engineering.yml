@@ -31,6 +31,7 @@ jobs:
         run: |
           bash -n scripts/provision_ec2_reference_source.sh
           bash -n scripts/run_ec2_reference_recovery.sh
+          bash -n scripts/run_ec2_reference_recovery_v2.sh
       - name: Run fixed reference decisions before the full runtime matrix
         env:
           PYTHONPATH: tests:tests/application:tests/domain:tests/infrastructure:tests/integration
@@ -40,11 +41,15 @@ jobs:
           tests/test_restricted_reference_qualification.py
           tests/test_ec2_reference_policy.py
           tests/test_ec2_reference_qualification.py
+          tests/test_ec2_reference_qualification_v2.py
           tests/infrastructure/test_restricted_reference.py
           tests/infrastructure/test_restricted_reference_process_limits.py
           tests/infrastructure/test_restricted_reference_ec2.py
           tests/infrastructure/test_restricted_reference_ec2_recovery.py
+          tests/infrastructure/test_restricted_reference_ec2_recovery_v2.py
+          tests/infrastructure/test_restricted_reference_ec2_manifest_v2.py
           tests/test_ec2_reference_recovery_preparation.py
+          tests/test_ec2_reference_recovery_v2_preparation.py
           tests/test_control_observation_refusals.py
       - if: always()
         run: make lint

@@ -27,6 +27,7 @@ from tickwitness.infrastructure.restricted_reference_ec2 import (  # noqa: E402
     FIXED_PROBES,
     MAX_ADMISSIONS,
     RECOVERY_PLAN_ID,
+    RECOVERY_V2_PLAN_ID,
     WINDOW_NS,
     Ec2Run,
     canonical,
@@ -66,17 +67,91 @@ def _write(path: Path, document: Row, *, first: bool = False, limit: int = 26214
     return hashlib.sha256(raw).hexdigest()
 
 
+def _recovery_kind(role: str, version: int) -> str:
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError("Unsupported fixed recovery schema")
+    return f"restricted_reference_ec2_recovery_{role}_v{version}"
+
+
+def _recovery_version(run: Ec2Run) -> int | None:
+    context = run.recovery_context
+    version = run.recovery_schema_version
+    if version is None:
+        if context is not None:
+            raise ValueError("Default authority cannot carry recovery context")
+        return None
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError("Recovery authority has an unsupported schema version")
+    selected = 1 if version == 1 else 2
+    if (
+        not isinstance(context, dict)
+        or context.get("kind") != _recovery_kind("context", selected)
+        or type(context.get("schema_version")) is not int
+        or context.get("schema_version") != selected
+        or context.get("plan_id") != (RECOVERY_PLAN_ID if selected == 1 else RECOVERY_V2_PLAN_ID)
+    ):
+        raise ValueError("Recovery authority differs from its verified schema context")
+    return selected
+
+
+def _report_recovery_version(report: Row) -> int | None:
+    if type(report.get("schema_version")) is not int:
+        raise ValueError("Qualification report has an invalid schema version")
+    if (
+        report.get("kind") == "restricted_reference_ec2_qualification_v1"
+        and report["schema_version"] == 1
+    ):
+        return None
+    for version in (1, 2):
+        if (
+            report.get("kind") == _recovery_kind("qualification", version)
+            and report["schema_version"] == version
+        ):
+            return version
+    raise ValueError("Qualification report has an unsupported recovery schema")
+
+
 def _budget(run: Ec2Run, report: Row) -> None:
     try:
         snapshot = run.snapshot()
         accounting = run.recovery_accounting(snapshot)
-        recovery = report.get("kind") == "restricted_reference_ec2_recovery_qualification_v1"
-        if recovery and (
-            accounting is None
-            or canonical(run.recovery_context) != canonical(report.get("recovery_context"))
-        ):
-            raise ValueError("Recovery counters lack their established immutable context")
-        if not recovery and accounting is not None:
+        version = _recovery_version(run)
+        if version != _report_recovery_version(report):
+            raise ValueError("Qualification report differs from its actual recovery version")
+        if version is not None:
+            if (
+                accounting is None
+                or accounting.get("kind") != _recovery_kind("budget", version)
+                or type(accounting.get("schema_version")) is not int
+                or accounting.get("schema_version") != version
+                or accounting.get("plan_id")
+                != (RECOVERY_PLAN_ID if version == 1 else RECOVERY_V2_PLAN_ID)
+                or canonical(run.recovery_context) != canonical(report.get("recovery_context"))
+            ):
+                raise ValueError("Recovery counters lack their established immutable context")
+            if version == 2 and canonical(accounting) != canonical(
+                {
+                    "kind": _recovery_kind("budget", 2),
+                    "schema_version": 2,
+                    "plan_id": RECOVERY_V2_PLAN_ID,
+                    "historical_run_ids": [
+                        "ec201aab11254e8bb7cd1573a96a0001",
+                        "ec201aab11254e8bb7cd1573a96a0002",
+                    ],
+                    "prior_charged": 2,
+                    "prior_backend_confirmed": 2,
+                    "current_charged": snapshot.charged,
+                    "current_backend_confirmed": snapshot.backend_confirmed,
+                    "current_unconfirmed": snapshot.unconfirmed,
+                    "current_pending_outcomes": snapshot.pending_outcomes,
+                    "cumulative_charged": 2 + snapshot.charged,
+                    "cumulative_backend_confirmed": 2 + snapshot.backend_confirmed,
+                    "max_current_admissions": 24,
+                    "max_cumulative_admissions": 26,
+                }
+            ):
+                raise ValueError("Recovery v2 counters differ from the fixed two-run history")
+        elif accounting is not None:
             raise ValueError("Default qualification cannot acquire recovery accounting")
     except Exception:
         previous = report.pop("durable_budget", None)
@@ -117,7 +192,10 @@ def _cancel(_number: int, _frame: object) -> None:
 
 
 def _recovery_manifest(run: Ec2Run, manifest: Row) -> None:
-    manifest = validate_recovery_manifest_shape(manifest)
+    version = _recovery_version(run)
+    if version is None:
+        raise ValueError("Recovery manifest requires an actual recovery authority")
+    manifest = validate_recovery_manifest_shape(manifest, version=version)
     context = run.recovery_context
     snapshot = run.snapshot()
     accounting = run.recovery_accounting(snapshot)
@@ -129,9 +207,9 @@ def _recovery_manifest(run: Ec2Run, manifest: Row) -> None:
         or snapshot.pending_outcomes != 0
         or snapshot.unconfirmed != 0
         or snapshot.poisoned
-        or manifest.get("kind") != "restricted_reference_ec2_recovery_manifest_v1"
+        or manifest.get("kind") != _recovery_kind("manifest", version)
         or type(manifest.get("schema_version")) is not int
-        or manifest.get("schema_version") != 1
+        or manifest.get("schema_version") != version
         or manifest.get("source_revision") != run.source_revision
         or manifest.get("production_m1_enabled") is not False
         or type(manifest.get("qualification_started_ns")) is not int
@@ -147,9 +225,12 @@ def _recovery_manifest(run: Ec2Run, manifest: Row) -> None:
 
 
 def _recovery_receipt(run: Ec2Run, report: Row, receipt: Row, digest: str) -> None:
+    version = _recovery_version(run)
+    if version is None or version != _report_recovery_version(report):
+        raise ValueError("Recovery receipt requires its actual report schema authority")
     expected = {
-        "kind": "restricted_reference_ec2_recovery_terminal_receipt_v1",
-        "schema_version": 1,
+        "kind": _recovery_kind("terminal_receipt", version),
+        "schema_version": version,
         "run_id": run.run_id,
         "source_revision": run.source_revision,
         "boot_id": run.boot_id,
@@ -167,17 +248,25 @@ def main(arguments: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--run-id", required=True)
-    parser.add_argument("--recovery-plan", choices=(RECOVERY_PLAN_ID,))
+    parser.add_argument("--recovery-plan", choices=(RECOVERY_PLAN_ID, RECOVERY_V2_PLAN_ID))
     args = parser.parse_args(arguments)
+    if args.recovery_plan is None:
+        selected_version = None
+    elif args.recovery_plan == RECOVERY_PLAN_ID:
+        selected_version = 1
+    elif args.recovery_plan == RECOVERY_V2_PLAN_ID:
+        selected_version = 2
+    else:
+        parser.error("Unsupported fixed recovery selection")
     run: Ec2Run | None = None
     cases: list[Row] = []
     report: Row = {
         "kind": (
             "restricted_reference_ec2_qualification_v1"
-            if args.recovery_plan is None
-            else "restricted_reference_ec2_recovery_qualification_v1"
+            if selected_version is None
+            else _recovery_kind("qualification", selected_version)
         ),
-        "schema_version": 1,
+        "schema_version": 1 if selected_version is None else selected_version,
         "controls_status": "NOT_QUALIFIED",
         "production_m1": "DISABLED",
         "independent_human_security_review": "NOT_PERFORMED",
@@ -202,17 +291,24 @@ def main(arguments: list[str] | None = None) -> int:
     try:
         # Either factory captures this invocation's anchors before any setup;
         # recovery also retains the separately charged predecessor in its context.
-        if args.recovery_plan is None:
+        if selected_version is None:
             run = Ec2Run.claim(source_revision=args.source_revision, run_id=args.run_id)
-        else:
+        elif selected_version == 1:
             run = Ec2Run.claim_recovery(
                 source_revision=args.source_revision,
                 run_id=args.run_id,
                 plan_id=args.recovery_plan,
             )
+        else:
+            run = Ec2Run.claim_recovery_v2(
+                source_revision=args.source_revision,
+                run_id=args.run_id,
+                plan_id=args.recovery_plan,
+            )
+        if selected_version is not None:
             context = run.recovery_context
-            if context is None:
-                raise ValueError("Recovery factory returned no established lineage")
+            if context is None or _recovery_version(run) != selected_version:
+                raise ValueError("Recovery factory returned no matching established lineage")
             report["recovery_context"] = context
         report["boot_id"] = run.boot_id
         report_path = run.run_dir / "qualification-report.json"

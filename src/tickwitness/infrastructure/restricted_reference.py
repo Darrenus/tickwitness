@@ -1269,8 +1269,21 @@ class ReferenceRunner:
             "qualification_started_ns": self._started_ns,
             "qualification_deadline_ns": self._qualification_deadline_ns,
         }
+        version = self._ec2_run.recovery_schema_version
         context = self._ec2_run.recovery_context
-        if context is not None:
+        if version is None:
+            if context is not None:
+                raise ValueError("Default EC2 manifest cannot discard recovery authority")
+        else:
+            if type(version) is not int or version not in (1, 2):
+                raise ValueError("Unknown exact recovery manifest version")
+            if (
+                context is None
+                or context.get("kind") != f"restricted_reference_ec2_recovery_context_v{version}"
+                or type(context.get("schema_version")) is not int
+                or context["schema_version"] != version
+            ):
+                raise ValueError("Recovery manifest version and established context differ")
             snapshot = self._ec2_run.snapshot()
             if (
                 snapshot.charged != 0
@@ -1284,7 +1297,8 @@ class ReferenceRunner:
             if accounting is None:
                 raise ValueError("Recovery manifest lacks its cumulative accounting")
             fields.update(
-                kind="restricted_reference_ec2_recovery_manifest_v1",
+                kind=f"restricted_reference_ec2_recovery_manifest_v{version}",
+                schema_version=version,
                 recovery_context=context,
                 recovery_accounting=accounting,
                 recovery_accounting_phase="pre_probe_manifest",
