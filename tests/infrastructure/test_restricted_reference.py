@@ -254,9 +254,16 @@ def test_failed_independent_guest_gate_retains_limit_bytes_and_never_sends_go(
         stdin=SimpleNamespace(write=sent.append, flush=lambda: sent.append("flushed")),
         poll=lambda: None,
     )
-    readiness = reference._canonical(
-        {"kind": "restricted_reference_started_v1", "name": fixture.name, "nonce": fixture.nonce}
-    ) + b"\n"
+    readiness = (
+        reference._canonical(
+            {
+                "kind": "restricted_reference_started_v1",
+                "name": fixture.name,
+                "nonce": fixture.nonce,
+            }
+        )
+        + b"\n"
+    )
 
     class Reader:
         def __init__(self):
