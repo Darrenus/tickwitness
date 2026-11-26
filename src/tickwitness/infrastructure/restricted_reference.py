@@ -758,6 +758,31 @@ def _status(path: Path) -> dict[str, str]:
     return result
 
 
+def _validate_process_limits(raw: str) -> None:
+    """Require exact ceilings while allowing procfs horizontal column padding."""
+    expected = {
+        "Max file size": r"[ \t]+8388608[ \t]+8388608[ \t]+bytes[ \t]*",
+        "Max core file size": r"[ \t]+0[ \t]+0[ \t]+bytes[ \t]*",
+        "Max open files": r"[ \t]+64[ \t]+64[ \t]+files[ \t]*",
+        "Max realtime priority": r"[ \t]+0[ \t]+0[ \t]*",
+    }
+    message = "Independent hard/soft process ceiling readback differs"
+    seen: set[str] = set()
+    for line in raw.split("\n"):
+        candidate = line.lstrip(" \t")
+        for label, columns in expected.items():
+            if not candidate.startswith(label):
+                continue
+            remainder = candidate[len(label) :]
+            if remainder and not remainder[0].isspace():
+                continue  # A different OS row may share a label prefix.
+            if label in seen or re.fullmatch(re.escape(label) + columns, line) is None:
+                raise ValueError(message + ": " + label)
+            seen.add(label)
+    if missing := set(expected) - seen:
+        raise ValueError(message + ": missing " + ", ".join(sorted(missing)))
+
+
 def parse_mounts(raw: str) -> list[Row]:
     mounts: list[Row] = []
     for line in raw.splitlines():
@@ -1626,7 +1651,7 @@ class ReferenceRunner:
         }
         return setup, cgroup
 
-    def _observe_guest(self, cgroup: Path, name: str, nonce: str) -> Row:
+    def _observe_guest(self, cgroup: Path, name: str, nonce: str, *, facts: Row) -> Row:
         candidates = []
         for pid in cast("list[int]", _snapshot(cgroup)["cgroup.procs"]):
             root = Path(f"/proc/{pid}")
@@ -1669,14 +1694,10 @@ class ReferenceRunner:
         ):
             raise ValueError("Final task inherited non-pipe or additional descriptors")
         limits = (root / "limits").read_text()
-        for expression in (
-            r"^Max file size\s+8388608\s+8388608\s+bytes$",
-            r"^Max core file size\s+0\s+0\s+bytes$",
-            r"^Max open files\s+64\s+64\s+files$",
-            r"^Max realtime priority\s+0\s+0\s*$",
-        ):
-            if re.search(expression, limits, re.M) is None:
-                raise ValueError("Independent hard/soft process ceiling readback differs")
+        # Partial observations diagnose a refusal; they do not open the guest gate.
+        facts["guest_process_limits_raw"] = limits
+        facts["guest_process_limits_pid"] = pid
+        _validate_process_limits(limits)
         scheduler = os.sched_getscheduler(pid)
         if scheduler != os.SCHED_OTHER:
             raise ValueError("Actual task did not inherit the selected fair scheduler")
@@ -1832,6 +1853,8 @@ class ReferenceRunner:
             "cgroup_after": None,
             "bootstrap_admission": None,
             "guest_process_observation": None,
+            "guest_process_limits_raw": None,
+            "guest_process_limits_pid": None,
             "mounts": None,
             "scratch_before": None,
             "scratch_after": None,
@@ -2214,7 +2237,7 @@ class ReferenceRunner:
                         line = bytes(output[label]).split(b"\n", 1)[0]
                         if len(line) > 1024 or json.loads(line) != expected:
                             raise ValueError("Fixed payload readiness frame differs")
-                        observation = self._observe_guest(cgroup, name, nonce)
+                        observation = self._observe_guest(cgroup, name, nonce, facts=facts)
                         facts["guest_process_observation"] = observation
                         facts["mounts"] = observation["mounts"]
                         facts["raw_mountinfo"] = observation["raw_mountinfo"]

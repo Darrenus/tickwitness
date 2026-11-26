@@ -7,6 +7,13 @@ trusted-owner preparation and fixed synthetic qualification. Product M1 stays
 DISABLED, external-human reproduction0/0/PENDING and human security review
 NOT_PERFORMED. This procedure's existence is not another completed host run.
 
+The [2026-11-26 actual recovery](ec2-reference-recovery-evidence-2026-11-26.md)
+has now consumed this procedure's sole additional invocation and ended
+NOT_QUALIFIED, followed by independently observed AWS Stopped. Current1 plus
+historical1 remain charged. The instructions below describe that reviewed
+procedure; they are not permission to repeat it, replace its records or use a
+corrected source to acquire a third invocation.
+
 ## Prepare while the instance is stopped
 
 Select the actually pushed, independently reviewed implementation revision after

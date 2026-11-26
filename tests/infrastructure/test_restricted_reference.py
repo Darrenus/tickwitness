@@ -70,6 +70,238 @@ def test_ambiguous_or_invalid_controller_counters_are_refused(raw):
         reference.parse_counters(raw)
 
 
+_PROCESS_LIMIT_ROWS = (
+    ("Max file size", "8388608", "8388608", "bytes"),
+    ("Max core file size", "0", "0", "bytes"),
+    ("Max open files", "64", "64", "files"),
+    ("Max realtime priority", "0", "0", None),
+)
+
+
+def _process_limits_text(rows=_PROCESS_LIMIT_ROWS, *, separator=" ", padding="     "):
+    lines = ["Limit Soft Limit Hard Limit Units", "Max cpu time unlimited unlimited seconds"]
+    for label, soft, hard, unit in rows:
+        columns = [label, soft, hard]
+        if unit is not None:
+            columns.append(unit)
+        lines.append(separator.join(columns) + padding)
+    return "\n".join(lines) + "\n"
+
+
+@pytest.mark.parametrize(
+    "separator,padding",
+    [(" ", ""), ("  ", "     "), ("\t", "\t"), (" \t", " \t ")],
+)
+def test_exact_process_limits_accept_only_horizontal_column_padding(separator, padding):
+    reference._validate_process_limits(_process_limits_text(separator=separator, padding=padding))
+
+
+@pytest.mark.parametrize("row", range(4))
+@pytest.mark.parametrize("column", [1, 2])
+def test_process_limit_numeric_soft_and_hard_differences_still_refuse(row, column):
+    rows = [list(item) for item in _PROCESS_LIMIT_ROWS]
+    rows[row][column] = str(int(rows[row][column]) + 1)
+    with pytest.raises(ValueError, match="Independent hard/soft process ceiling"):
+        reference._validate_process_limits(_process_limits_text(rows))
+
+
+@pytest.mark.parametrize("row", range(4))
+def test_process_limit_wrong_or_invented_unit_still_refuses(row):
+    rows = [list(item) for item in _PROCESS_LIMIT_ROWS]
+    rows[row][3] = "unexpected-unit"
+    with pytest.raises(ValueError, match="Independent hard/soft process ceiling"):
+        reference._validate_process_limits(_process_limits_text(rows))
+
+
+@pytest.mark.parametrize("column", [1, 2])
+def test_process_limit_unlimited_is_not_a_finite_ceiling(column):
+    rows = [list(item) for item in _PROCESS_LIMIT_ROWS]
+    rows[0][column] = "unlimited"
+    with pytest.raises(ValueError, match="Independent hard/soft process ceiling"):
+        reference._validate_process_limits(_process_limits_text(rows))
+
+
+@pytest.mark.parametrize("row", range(4))
+@pytest.mark.parametrize("change", ["missing", "duplicate"])
+def test_process_limits_require_one_complete_row_per_selected_label(row, change):
+    rows = list(_PROCESS_LIMIT_ROWS)
+    if change == "missing":
+        del rows[row]
+    else:
+        rows.append(rows[row])
+    with pytest.raises(ValueError, match="Independent hard/soft process ceiling"):
+        reference._validate_process_limits(_process_limits_text(rows))
+
+
+@pytest.mark.parametrize("separator", ["\n", "\r", "\v", "\f", "\u00a0"])
+def test_process_limit_columns_cannot_be_joined_across_lines_or_control_spaces(separator):
+    raw = _process_limits_text().replace(
+        "Max file size 8388608 8388608 bytes",
+        "Max file size 8388608" + separator + "8388608 bytes",
+    )
+    with pytest.raises(ValueError, match="Independent hard/soft process ceiling"):
+        reference._validate_process_limits(raw)
+
+
+def test_process_limits_retain_uncontrolled_os_rows_but_not_indented_duplicates():
+    raw = _process_limits_text() + "Max file locks unlimited unlimited locks\n"
+    reference._validate_process_limits(raw)
+    raw += "\tMax open files 64 64 files\n"
+    with pytest.raises(ValueError, match="Independent hard/soft process ceiling"):
+        reference._validate_process_limits(raw)
+
+
+@pytest.fixture
+def process_observation(monkeypatch, tmp_path):
+    """Inert procfs-shaped files exercise the actual observer without a guest process."""
+    pid, name, nonce = 12345, "positive", "a" * 32
+    proc = tmp_path / "proc-guest"
+    proc.mkdir()
+    (proc / "fd").mkdir()
+    (proc / "attr").mkdir()
+    (proc / "cmdline").write_bytes(
+        b"\0".join(
+            [
+                os.fsencode(reference._PYTHON),
+                b"-I",
+                b"-B",
+                b"/input/payload.py",
+                name.encode(),
+                nonce.encode(),
+                b"",
+            ]
+        )
+    )
+    (proc / "status").write_text(
+        "Uid:\t61184\t61184\t61184\t61184\n"
+        "Gid:\t61184\t61184\t61184\t61184\n"
+        "Groups:\nNoNewPrivs:\t1\nSeccomp:\t2\n"
+        "CapEff:\t0000000000000000\nCapPrm:\t0000000000000000\n"
+        "CapAmb:\t0000000000000000\n"
+    )
+    mount_lines = []
+    for index, path in enumerate(("/", "/usr", "/proc", "/input", "/scratch"), 1):
+        mode = "rw" if path == "/scratch" else "ro"
+        mount_lines.append(f"{index} 0 0:1 / {path} {mode},nosuid - tmpfs tmpfs rw")
+    (proc / "mountinfo").write_text("\n".join(mount_lines))
+    for number in ("0", "1", "2"):
+        (proc / "fd" / number).write_bytes(b"")
+    for filename in ("uid_map", "gid_map", "cgroup"):
+        (proc / filename).write_text("inert observation fixture\n")
+    expected_label = "tickwitness-reference-ec2 (unconfined)"
+    (proc / "attr/current").write_text(expected_label + "\n")
+    controller = tmp_path / "controller-label"
+    controller.write_text("unconfined\n")
+    original_path = reference.Path
+
+    def observed_path(value):
+        if str(value) == f"/proc/{pid}":
+            return proc
+        if str(value) == "/proc/self/attr/current":
+            return controller
+        return original_path(value)
+
+    monkeypatch.setattr(reference, "Path", observed_path)
+    monkeypatch.setattr(reference, "_snapshot", lambda _path: {"cgroup.procs": [pid]})
+    monkeypatch.setattr(
+        reference, "_namespace_links", lambda _pid: {"pid": "guest-pid", "user": "guest-user"}
+    )
+    monkeypatch.setattr(reference.os, "readlink", lambda path: "pipe:[" + path.name + "]")
+    monkeypatch.setattr(reference.os, "SCHED_OTHER", 0, raising=False)
+    monkeypatch.setattr(reference.os, "sched_getscheduler", lambda _pid: 0, raising=False)
+    runner = object.__new__(reference.ReferenceRunner)
+    runner._expected_label = expected_label
+    runner.manifest = {"host_namespaces": {"pid": "host-pid", "user": "host-user"}}
+    monkeypatch.setattr(runner, "_record_members", lambda *_args: None)
+    facts = {
+        "guest_process_observation": None,
+        "guest_process_limits_raw": None,
+        "guest_process_limits_pid": None,
+        "mounts": None,
+    }
+    return SimpleNamespace(
+        runner=runner,
+        pid=pid,
+        proc=proc,
+        name=name,
+        nonce=nonce,
+        cgroup=tmp_path / "inert-cgroup",
+        facts=facts,
+    )
+
+
+@pytest.mark.parametrize("failure", ["wrong_limit", "later_label_gate"])
+def test_failed_independent_guest_gate_retains_limit_bytes_and_never_sends_go(
+    process_observation,
+    monkeypatch,
+    failure,
+):
+    fixture = process_observation
+    raw = _process_limits_text()
+    message = "hard/soft process ceiling"
+    if failure == "wrong_limit":
+        raw = raw.replace("Max open files 64 64 files", "Max open files 64 65 files")
+    else:
+        (fixture.proc / "attr/current").write_text("unconfined\n")
+        message = "lost its selected"
+    (fixture.proc / "limits").write_text(raw)
+    sent = []
+    stdout = SimpleNamespace(fileno=lambda: 11)
+    stderr = SimpleNamespace(fileno=lambda: 12)
+    process = SimpleNamespace(
+        stdout=stdout,
+        stderr=stderr,
+        stdin=SimpleNamespace(write=sent.append, flush=lambda: sent.append("flushed")),
+        poll=lambda: None,
+    )
+    readiness = reference._canonical(
+        {"kind": "restricted_reference_started_v1", "name": fixture.name, "nonce": fixture.nonce}
+    ) + b"\n"
+
+    class Reader:
+        def __init__(self):
+            self.reads = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def register(self, *_args):
+            pass
+
+        def select(self, *, timeout):
+            self.reads += 1
+            if self.reads > 1:
+                pytest.fail("An invalid independent observation did not stop the guest gate")
+            return [(SimpleNamespace(data="stdout", fd=11), None)]
+
+    monkeypatch.setattr(reference.selectors, "DefaultSelector", Reader)
+    monkeypatch.setattr(reference.os, "set_blocking", lambda *_args: None)
+    monkeypatch.setattr(reference.os, "read", lambda *_args: readiness)
+    monkeypatch.setattr(reference.time, "monotonic_ns", lambda: 1000)
+    result = {"payload_started": False, "failure": None}
+    output = {"stdout": bytearray(), "stderr": bytearray()}
+    with pytest.raises(ValueError, match=message):
+        fixture.runner._pump(
+            process,
+            fixture.cgroup,
+            fixture.name,
+            fixture.nonce,
+            2000,
+            output,
+            result,
+            fixture.facts,
+        )
+    assert fixture.facts["guest_process_limits_raw"] == raw
+    assert fixture.facts["guest_process_limits_pid"] == fixture.pid
+    assert fixture.facts["guest_process_observation"] is None
+    assert fixture.facts["mounts"] is None
+    assert result["payload_started"] is False
+    assert sent == []
+
+
 def _unavailable_runner(tmp_path, monkeypatch):
     runner = object.__new__(reference.ReferenceRunner)
     runner.artifact_dir = tmp_path
