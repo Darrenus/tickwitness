@@ -41,6 +41,16 @@ Before any host implementation or Start:
 
 These tests neither amend run0003 nor establish actual AWS qualification.
 
+The installed macOS regression also exposed a harness precondition outside the
+[Job controls contract](../contracts/job-controls-v1.md): a genuine15s deadline
+can stop the worker before native replay completes, or before a later observer
+sees RUNNING. Its correction must retain the same15s Job admission clock,
+60s native ceiling and eight-slot ledger. A deadline-specific adapter-entry
+observation and the actual terminal/control/heartbeat/cleanup evidence establish
+that scenario; missing native completion is recorded as NOT_OBSERVED. Other
+scenarios retain their completed-native requirements. Neither a longer timeout,
+clock rebasing nor another research reservation supplies this evidence.
+
 ## Then: freeze a prospective one-use successor, before implementation
 
 Any future full-catalog attempt needs a separately reviewed contract/ADR,

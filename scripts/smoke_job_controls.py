@@ -99,25 +99,34 @@ def forbidden(*args,**kwargs):
 LocalAttemptLedger.__init__=forbidden
 SqliteJobStore.__init__=forbidden
 actual=NautilusReplayAdapter.run
-def counted(self,replay_input):
-    record({'kind':'actual_native_adapter_invoked_v1','pid':os.getpid(),
-            'parent_pid':os.getppid(),'process_group':os.getpgrp(),'session_id':os.getsid(0),
-            'dataset_id':replay_input.dataset_id,'job_id':request['job_id']})
-    result=actual(self,replay_input)
-    (root/'actual-native-result.json').write_bytes(document(result.document))
+def publish_ready(kind):
     limits={'cpu':list(resource.getrlimit(resource.RLIMIT_CPU)),
             'file':list(resource.getrlimit(resource.RLIMIT_FSIZE)),
             'files':list(resource.getrlimit(resource.RLIMIT_NOFILE))}
     workspace_info=os.stat('.')
-    ready={'kind':'actual_native_completed_while_heartbeat_emitter_live_v1',
+    ready={'kind':kind,
            'pid':os.getpid(),'parent_pid':os.getppid(),'process_group':os.getpgrp(),
            'session_id':os.getsid(0),'job_id':request['job_id'],
            'workspace':str(Path.cwd()),'limits':limits,'mode':mode,
            'workspace_at_ready':{'exists':Path.cwd().exists(),
                'is_symlink':Path.cwd().is_symlink(),
                'device':workspace_info.st_dev,'inode':workspace_info.st_ino}}
+    if mode=='deadline':
+        ready.update({'request_sha256':hashlib.sha256(raw).hexdigest(),
+            'native_completed':False,'native_completion_status':'NOT_OBSERVED'})
     (root/'ready.pending').write_bytes(document(ready))
     os.replace(root/'ready.pending',root/'ready.json')
+def counted(self,replay_input):
+    record({'kind':'actual_native_adapter_invoked_v1','pid':os.getpid(),
+            'parent_pid':os.getppid(),'process_group':os.getpgrp(),'session_id':os.getsid(0),
+            'dataset_id':replay_input.dataset_id,'job_id':request['job_id']})
+    if mode=='deadline':
+        publish_ready('actual_native_adapter_entered_while_heartbeat_emitter_live_v1')
+    result=actual(self,replay_input)
+    (root/'actual-native-result.pending').write_bytes(document(result.document))
+    os.replace(root/'actual-native-result.pending',root/'actual-native-result.json')
+    if mode!='deadline':
+        publish_ready('actual_native_completed_while_heartbeat_emitter_live_v1')
     if mode in ('cancel','deadline'):
         Event().wait(55)
         raise AssertionError('Controlled stop failed to stop the real worker')
@@ -386,6 +395,127 @@ def _workspace_observation(directory, catalog):
     }
     (directory / "workspace-after.json").write_bytes(_canonical(observation))
     return observation
+
+
+def _validate_native_gate(mode, ready, request, native_calls, native_result: bytes | None):
+    """Separate a real adapter entry from independently observed native completion."""
+    assert mode in {"cancel", "deadline", "resource", "cancel_publication", "publication_wins"}
+    assert request["kind"] == "job_native_worker_request_v1"
+    assert len(native_calls) == 1
+    call = native_calls[0]
+    assert call["kind"] == "actual_native_adapter_invoked_v1"
+    assert ready["job_id"] == call["job_id"] == request["job_id"]
+    assert call["dataset_id"] == request["payload"]["dataset_id"]
+    for name in ("pid", "parent_pid", "process_group", "session_id"):
+        assert type(ready[name]) is int and ready[name] > 0
+        assert type(call[name]) is int and call[name] == ready[name]
+    assert ready["pid"] != ready["process_group"]
+    assert ready["parent_pid"] == ready["process_group"] == ready["session_id"]
+    assert ready["mode"] == ("normal" if "publication" in mode else mode)
+    assert isinstance(ready["workspace"], str) and Path(ready["workspace"]).is_absolute()
+    workspace = ready["workspace_at_ready"]
+    assert workspace["exists"] is True and workspace["is_symlink"] is False
+    assert type(workspace["device"]) is int and workspace["device"] >= 0
+    assert type(workspace["inode"]) is int and workspace["inode"] > 0
+    file_bytes = 65536 if mode == "resource" else 8388608
+    assert _canonical(ready["limits"]) == _canonical(
+        {"cpu": [60, 60], "file": [file_bytes, file_bytes], "files": [128, 128]}
+    )
+    if mode == "deadline":
+        assert ready["kind"] == "actual_native_adapter_entered_while_heartbeat_emitter_live_v1"
+        assert ready["request_sha256"] == _sha(_canonical(request) + b"\n")
+        assert ready["native_completed"] is False
+        assert ready["native_completion_status"] == "NOT_OBSERVED"
+    else:
+        assert ready["kind"] == "actual_native_completed_while_heartbeat_emitter_live_v1"
+        assert native_result is not None
+    if native_result is not None:
+        assert type(native_result) is bytes
+        result = json.loads(native_result)
+        assert isinstance(result, dict)
+        assert result["kind"] == "replay_qualification_result_v1"
+        assert type(result["schema_version"]) is int and result["schema_version"] == 1
+        assert result["dataset_id"] == request["payload"]["dataset_id"]
+        assert result["execution_status"] == "completed"
+    return {
+        "kind": "native_control_gate_evidence_v1",
+        "gate_phase": "adapter_entry" if mode == "deadline" else "native_completed",
+        "adapter_entered": True,
+        "native_completed": native_result is not None,
+        "native_completion_status": "OBSERVED" if native_result is not None else "NOT_OBSERVED",
+        "native_result_sha256": None if native_result is None else _sha(native_result),
+    }
+
+
+def _validate_native_deadline_outcome(observed, request, frames):
+    """Check the original deadline and live lease without requiring native completion."""
+    snapshot, control = observed["snapshot"], observed["control"]
+    policy, receipt = control["policy"], control["result"]
+    assert policy["kind"] == "job_control_policy_v1"
+    assert type(policy["schema_version"]) is int and policy["schema_version"] == 1
+    assert policy["job_id"] == snapshot["job_id"] == request["job_id"]
+    assert control["policy_id"] == _sha(_canonical(policy))
+    assert _canonical(policy["limits"]) == _canonical(
+        {
+            "max_wall_ns": 15_000_000_000,
+            "worker_cpu_seconds": 60,
+            "max_file_bytes": 8388608,
+            "max_open_files": 128,
+            "cleanup_grace_ns": 5_000_000_000,
+        }
+    )
+    assert snapshot["state"] == "FAILED"
+    assert snapshot["failure"]["code"] == "job_deadline_exceeded"
+    assert snapshot["result_sha256"] is None and observed["result"] is None
+    attempt = snapshot["attempt"]
+    bindings = ("job_id", "coordinator_id", "job_attempt_id", "lease_token")
+    for name in bindings:
+        assert isinstance(request[name], str) and request[name]
+        assert (snapshot if name == "job_id" else attempt)[name] == request[name]
+    assert type(snapshot["updated_at_ns"]) is int
+    assert type(attempt["lease_expires_at_ns"]) is int
+    assert attempt["lease_expires_at_ns"] > snapshot["updated_at_ns"]
+    assert len(frames) >= 3
+    for sequence, frame in enumerate(frames, 1):
+        assert frame["kind"] == "job_heartbeat_v1"
+        assert type(frame["schema_version"]) is int and frame["schema_version"] == 1
+        assert type(frame["sequence"]) is int and frame["sequence"] == sequence
+        assert all(frame[name] == request[name] for name in bindings)
+    assert type(attempt["heartbeat_sequence"]) is int
+    assert 3 <= attempt["heartbeat_sequence"] <= len(frames)
+    assert receipt["kind"] == "job_control_result_v1"
+    assert type(receipt["schema_version"]) is int and receipt["schema_version"] == 1
+    assert receipt["job_id"] == request["job_id"]
+    assert receipt["job_attempt_id"] == request["job_attempt_id"]
+    assert receipt["policy_id"] == control["policy_id"]
+    assert receipt["cause"] == "job_deadline_exceeded"
+    assert receipt["catalog_state"] == "FAILED"
+    assert receipt["catalog_snapshot_sha256"] == _sha(_canonical(snapshot))
+    assert all(
+        receipt[name] is True
+        for name in (
+            "worker_started",
+            "worker_group_absent",
+            "workspace_removed",
+            "stop_confirmed",
+            "cleanup_confirmed",
+        )
+    )
+    assert receipt["publication_admitted"] is False and control["publication"] is None
+    assert type(receipt["worker_exit_code"]) is int
+    assert type(snapshot["failure"]["worker_exit_code"]) is int
+    assert receipt["worker_exit_code"] == snapshot["failure"]["worker_exit_code"]
+    timing = receipt["timing_ns"]
+    elapsed, reaped, cleaned = (
+        timing["elapsed"],
+        timing["worker_reaped"],
+        timing["cleanup_finished"],
+    )
+    assert all(type(value) is int for value in (elapsed, reaped, cleaned))
+    assert elapsed >= 15_000_000_000 and 0 <= reaped <= cleaned <= elapsed
+    reservation = request["payload"]["research_attempt"]
+    assert type(reservation["attempt_index"]) is int and reservation["attempt_index"] == 5
+    assert type(reservation["max_wall_seconds"]) is int and reservation["max_wall_seconds"] == 60
 
 
 _RESOURCE_METRICS = {
@@ -1111,8 +1241,10 @@ def main():
                     gate = _wait_gate(process, gate_path)
                     before = catalog_only(job_id) if mode == "publication_wins" else actual(job_id)
                     assert before["snapshot"]["state"] in (
-                        {"RUNNING", "FAILED"} if mode == "resource" else {"RUNNING"}
+                        {"RUNNING", "FAILED"} if mode in {"deadline", "resource"} else {"RUNNING"}
                     )
+                    if mode == "deadline" and before["snapshot"]["state"] == "FAILED":
+                        assert before["snapshot"]["failure"]["code"] == "job_deadline_exceeded"
                     if mode in {"cancel", "cancel_publication"}:
                         cancellation_record = cancellation(job_id, f"cancel-slot-{slot}")
                         if mode == "cancel_publication":
@@ -1170,7 +1302,13 @@ def main():
                 )
                 assert request["job_id"] == job_id
                 assert request["payload"]["research_attempt"]["attempt_index"] == slot
-                assert (directory / "actual-native-result.json").exists()
+                native_result_path = directory / "actual-native-result.json"
+                native_result = (
+                    native_result_path.read_bytes() if native_result_path.exists() else None
+                )
+                native_evidence = _validate_native_gate(
+                    mode, worker_ready, request, calls_for_worker, native_result
+                )
                 frames = [
                     json.loads(line)
                     for line in (directory / "delivered-ipc.jsonl").read_bytes().splitlines()
@@ -1190,7 +1328,7 @@ def main():
                     assert finished["stored_state"] == "SUCCEEDED"
                     assert observed["result"]["action"] == "replayed_from_origin"
                     assert observed["result"]["dispatch_job_id"] == job_id
-                    native_result = (directory / "actual-native-result.json").read_bytes()
+                    assert native_result is not None
                     assert observed["result"]["outcome"]["bindings"]["replay_result_sha256"] == (
                         _sha(native_result)
                     )
@@ -1217,10 +1355,7 @@ def main():
                     }[mode]
                     observed = finished_stop(job_id, expected)
                     if mode == "deadline":
-                        assert len(frames) >= 3
-                        assert observed["control"]["result"]["timing_ns"]["elapsed"] >= (
-                            15_000_000_000
-                        )
+                        _validate_native_deadline_outcome(observed, request, frames)
                     if mode == "resource":
                         assert observed["snapshot"]["failure"]["worker_exit_code"] == (
                             -signal.SIGXFSZ
@@ -1270,6 +1405,7 @@ def main():
                         "terminal_rerun": repeated_terminal,
                         "worker_request": request,
                         "native_calls": calls_for_worker,
+                        "native_evidence": native_evidence,
                         "actual_worker_ready": worker_ready,
                         "worker_process_identity": worker_identity,
                         "workspace_observation": workspace_after,
