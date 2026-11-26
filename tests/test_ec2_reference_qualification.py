@@ -436,9 +436,12 @@ def test_recovery_consumes_explicit_plan_before_setup_and_retains_historical_cha
     summary = json.loads(capsys.readouterr().out)
     assert summary["recovery_accounting"] == accounting
     assert summary["terminal_receipt"]["recovery_context"] == result["recovery_context"]
-    assert summary["terminal_receipt"]["final_report_sha256"] == qualification.hashlib.sha256(
-        (driver.path / "qualification-report.json").read_bytes()
-    ).hexdigest()
+    assert (
+        summary["terminal_receipt"]["final_report_sha256"]
+        == qualification.hashlib.sha256(
+            (driver.path / "qualification-report.json").read_bytes()
+        ).hexdigest()
+    )
 
 
 def test_recovery_claim_refusal_never_falls_back_or_claims_zero_charge_authority(

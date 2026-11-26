@@ -127,8 +127,17 @@ _STATE_KEYS = {
     "final_report_sha256",
 }
 _PLAN_KEYS = {
-    "kind", "schema_version", "plan_id", "freeze_revision", "source_revision", "run_id",
-    "expected_identity", "predecessor", "allowance", "stop_observation", "source_lock",
+    "kind",
+    "schema_version",
+    "plan_id",
+    "freeze_revision",
+    "source_revision",
+    "run_id",
+    "expected_identity",
+    "predecessor",
+    "allowance",
+    "stop_observation",
+    "source_lock",
     "provisioner_source",
 }
 
@@ -278,12 +287,14 @@ def _source_records(
     path = ROOT / "sources" / source_revision / "source-lock.json"
     raw, seal = _secure_read(path, 65536)
     document = _mapping(
-        _json(raw), {"kind", "schema_version", "source_revision", "source_root", "files"},
+        _json(raw),
+        {"kind", "schema_version", "source_revision", "source_root", "files"},
         "source-lock",
     )
     kind = (
         "restricted_reference_ec2_recovery_source_lock_v1"
-        if recovery else "restricted_reference_ec2_source_lock_v1"
+        if recovery
+        else "restricted_reference_ec2_source_lock_v1"
     )
     if (
         document["kind"] != kind
@@ -317,8 +328,10 @@ def _recovery_arguments(source_revision: str, run_id: str, plan_id: str) -> None
     if type(source_revision) is not str or not _HEX40.fullmatch(source_revision):
         raise ValueError("Actual lowercase source commit required")
     if (
-        type(run_id) is not str or run_id != RECOVERY_RUN_ID
-        or type(plan_id) is not str or plan_id != RECOVERY_PLAN_ID
+        type(run_id) is not str
+        or run_id != RECOVERY_RUN_ID
+        or type(plan_id) is not str
+        or plan_id != RECOVERY_PLAN_ID
     ):
         raise ValueError("Only the one frozen recovery plan/run is supported")
     if source_revision == RECOVERY_PREDECESSOR["source_revision"]:
@@ -329,6 +342,7 @@ def _recovery_history(
     seals: dict[str, tuple[Row, tuple[int, int, int, int, int]]],
 ) -> Row:
     """Verify pinned predecessor bytes; no old record is written or reopened."""
+    expected: object
     previous = RECOVERY_PREDECESSOR
     old_dir = ROOT / "runs" / str(previous["run_id"])
 
@@ -344,23 +358,36 @@ def _recovery_history(
     host_claim = read(ROOT / "host-admission.json", "host_claim_sha256", 65536)
     claim = read(old_dir / "claim.json", "claim_sha256", 65536)
     _fixed(claim, host_claim, "predecessor host/run claim")
-    state = _mapping(read(old_dir / "state.json", "state_sha256", 262144), _STATE_KEYS, "predecessor state")
+    state = _mapping(
+        read(old_dir / "state.json", "state_sha256", 262144), _STATE_KEYS, "predecessor state"
+    )
     report_value = read(old_dir / "qualification-report.json", "report_sha256", 262144)
     result_value = read(old_dir / "case-01.json", "case_sha256", 2_097_152)
     lock_value = read(
         ROOT / "sources" / str(previous["source_revision"]) / "source-lock.json",
-        "source_lock_sha256", 65536,
+        "source_lock_sha256",
+        65536,
     )
-    if not all(isinstance(value, dict) for value in (claim, report_value, result_value, lock_value)):
+    if not all(
+        isinstance(value, dict) for value in (claim, report_value, result_value, lock_value)
+    ):
         raise ValueError("Predecessor observation must be a JSON object")
-    report, result, old_lock = cast(Row, report_value), cast(Row, result_value), cast(Row, lock_value)
+    report, result, old_lock = (
+        cast(Row, report_value),
+        cast(Row, result_value),
+        cast(Row, lock_value),
+    )
     old_claim = cast(Row, claim)
     for document in (old_claim, state, report):
         for field in ("source_revision", "run_id", "boot_id"):
             _fixed(document.get(field), previous[field], "predecessor " + field)
     for field, expected in (
-        ("phase", "TERMINAL"), ("outcome", "NOT_QUALIFIED"), ("poisoned", True),
-        ("charged", 1), ("backend_confirmed", 1), ("final_report_sha256", None),
+        ("phase", "TERMINAL"),
+        ("outcome", "NOT_QUALIFIED"),
+        ("poisoned", True),
+        ("charged", 1),
+        ("backend_confirmed", 1),
+        ("final_report_sha256", None),
     ):
         _fixed(state[field], expected, "predecessor " + field)
     for field in ("started_ns", "deadline_ns", "setup_deadline_ns"):
@@ -382,20 +409,33 @@ def _recovery_history(
     if not isinstance(outcome, dict):
         raise ValueError("Predecessor outcome remains pending/unknown")
     for field, expected in (
-        ("accepted", True), ("name", "positive"), ("admission_number", 1),
-        ("source_revision", previous["source_revision"]), ("run_id", previous["run_id"]),
+        ("accepted", True),
+        ("name", "positive"),
+        ("admission_number", 1),
+        ("source_revision", previous["source_revision"]),
+        ("run_id", previous["run_id"]),
         ("boot_id", previous["boot_id"]),
     ):
         _fixed(admission.get(field), expected, "predecessor admission " + field)
-    _fixed(outcome, {
-        "result_sha256": previous["case_sha256"], "stop_confirmed": True,
-        "cleanup_confirmed": True, "failure": "setup_refused",
-    }, "predecessor outcome")
+    _fixed(
+        outcome,
+        {
+            "result_sha256": previous["case_sha256"],
+            "stop_confirmed": True,
+            "cleanup_confirmed": True,
+            "failure": "setup_refused",
+        },
+        "predecessor outcome",
+    )
     for field, expected in (
-        ("controls_status", "NOT_QUALIFIED"), ("admissions_charged", 1),
-        ("confirmed_backend_admissions", 1), ("backend_unconfirmed_admissions", 0),
-        ("pending_probe_outcomes", 0), ("observed_payload_starts", 0),
-        ("research_reservations", 0), ("replay_engine_invocations", 0),
+        ("controls_status", "NOT_QUALIFIED"),
+        ("admissions_charged", 1),
+        ("confirmed_backend_admissions", 1),
+        ("backend_unconfirmed_admissions", 0),
+        ("pending_probe_outcomes", 0),
+        ("observed_payload_starts", 0),
+        ("research_reservations", 0),
+        ("replay_engine_invocations", 0),
     ):
         _fixed(report.get(field), expected, "predecessor report " + field)
     cases = report.get("cases")
@@ -408,11 +448,16 @@ def _recovery_history(
         _fixed(case.get("status"), "UNKNOWN", "predecessor case status")
         _fixed(case.get("admission_submitted"), index == 0, "predecessor submission")
     for field, expected in (
-        ("name", "positive"), ("payload_started", False), ("failure", "setup_refused"),
-        ("stop_confirmed", True), ("cleanup_confirmed", True),
+        ("name", "positive"),
+        ("payload_started", False),
+        ("failure", "setup_refused"),
+        ("stop_confirmed", True),
+        ("cleanup_confirmed", True),
     ):
         _fixed(result.get(field), expected, "predecessor case " + field)
-    _fixed(old_lock.get("kind"), "restricted_reference_ec2_source_lock_v1", "predecessor source kind")
+    _fixed(
+        old_lock.get("kind"), "restricted_reference_ec2_source_lock_v1", "predecessor source kind"
+    )
     _fixed(old_lock.get("source_revision"), previous["source_revision"], "predecessor source")
     path = ROOT / "recovery-evidence" / "operator-stop.md"
     raw, seal = _secure_read(path, 65536)
@@ -421,8 +466,10 @@ def _recovery_history(
     stop_record = {"path": str(path), "sha256": _sha(raw), "bytes": len(raw)}
     seals[str(path)] = (stop_record, seal)
     return {
-        "kind": "trusted_owner_aws_stop_observation_v1", "observed_state": "Stopped",
-        "reason": "Client.InstanceInitiatedShutdown", "evidence": stop_record,
+        "kind": "trusted_owner_aws_stop_observation_v1",
+        "observed_state": "Stopped",
+        "reason": "Client.InstanceInitiatedShutdown",
+        "evidence": stop_record,
     }
 
 
@@ -466,7 +513,11 @@ def _host() -> Row:
 
 
 def _recovery_plan(
-    *, source_revision: str, run_id: str, plan_id: str, host: Row,
+    *,
+    source_revision: str,
+    run_id: str,
+    plan_id: str,
+    host: Row,
     seals: dict[str, tuple[Row, tuple[int, int, int, int, int]]],
 ) -> Row:
     _recovery_arguments(source_revision, run_id, plan_id)
@@ -475,12 +526,17 @@ def _recovery_plan(
     source_lock, _provider = _source_records(source_revision, recovery=True, seals=seals)
     stop = _recovery_history(seals)
     return {
-        "kind": "restricted_reference_ec2_recovery_plan_v1", "schema_version": 1,
-        "plan_id": plan_id, "freeze_revision": RECOVERY_FREEZE_REVISION,
-        "source_revision": source_revision, "run_id": run_id,
+        "kind": "restricted_reference_ec2_recovery_plan_v1",
+        "schema_version": 1,
+        "plan_id": plan_id,
+        "freeze_revision": RECOVERY_FREEZE_REVISION,
+        "source_revision": source_revision,
+        "run_id": run_id,
         "expected_identity": dict(EXPECTED_IDENTITY),
-        "predecessor": dict(RECOVERY_PREDECESSOR), "allowance": dict(RECOVERY_ALLOWANCE),
-        "stop_observation": stop, "source_lock": source_lock,
+        "predecessor": dict(RECOVERY_PREDECESSOR),
+        "allowance": dict(RECOVERY_ALLOWANCE),
+        "stop_observation": stop,
+        "source_lock": source_lock,
         "provisioner_source": seals[str(SOURCE_ROOT / RECOVERY_SOURCE_FILES[-1])][0],
     }
 
@@ -492,7 +548,11 @@ def recovery_plan_document(*, source_revision: str, run_id: str, plan_id: str) -
     The fixed helper exclusively persists the returned plan while holding its lock.
     """
     return _recovery_plan(
-        source_revision=source_revision, run_id=run_id, plan_id=plan_id, host=_host(), seals={},
+        source_revision=source_revision,
+        run_id=run_id,
+        plan_id=plan_id,
+        host=_host(),
+        seals={},
     )
 
 
@@ -727,7 +787,8 @@ class Ec2Run:
         _secure_directory(ROOT / "runs")
         lock_path = ROOT / "host-admission.json"
         lock_fd = os.open(
-            lock_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+            lock_path,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
         )
         instance: Ec2Run | None = None
         try:
@@ -747,7 +808,10 @@ class Ec2Run:
             instance.source_revision, instance.run_id = source_revision, run_id
             instance.boot_id = str(host["boot_id"])
             instance.started_ns = started
-            instance.deadline_ns, instance.setup_deadline_ns = started + WINDOW_NS, started + SETUP_NS
+            instance.deadline_ns, instance.setup_deadline_ns = (
+                started + WINDOW_NS,
+                started + SETUP_NS,
+            )
             instance.run_dir = ROOT / "runs" / run_id
             instance.staged_policy = instance.run_dir / "policy.apparmor"
             instance.policy_evidence_dir = instance.run_dir / "policy-evidence"
@@ -758,8 +822,11 @@ class Ec2Run:
             instance._fenced, instance._recovery_mode = False, True
             instance._recovery_raw, instance._seals = None, {}
             expected_plan = _recovery_plan(
-                source_revision=source_revision, run_id=run_id, plan_id=plan_id,
-                host=host, seals=instance._seals,
+                source_revision=source_revision,
+                run_id=run_id,
+                plan_id=plan_id,
+                host=host,
+                seals=instance._seals,
             )
             plan_path = ROOT / "recovery-plan.json"
             plan_raw, plan_seal = _secure_read(plan_path, 65536)
@@ -774,17 +841,25 @@ class Ec2Run:
             if time.monotonic_ns() >= instance.setup_deadline_ns:
                 raise TimeoutError("Original recovery setup deadline exhausted during validation")
             invocation = {
-                "source_revision": source_revision, "run_id": run_id, "boot_id": instance.boot_id,
-                "started_ns": started, "deadline_ns": instance.deadline_ns,
+                "source_revision": source_revision,
+                "run_id": run_id,
+                "boot_id": instance.boot_id,
+                "started_ns": started,
+                "deadline_ns": instance.deadline_ns,
                 "setup_deadline_ns": instance.setup_deadline_ns,
             }
             consumption = {
-                "kind": "restricted_reference_ec2_recovery_consumption_v1", "schema_version": 1,
-                "plan_id": plan_id, "plan_sha256": plan_record["sha256"],
-                "freeze_revision": RECOVERY_FREEZE_REVISION, **invocation,
+                "kind": "restricted_reference_ec2_recovery_consumption_v1",
+                "schema_version": 1,
+                "plan_id": plan_id,
+                "plan_sha256": plan_record["sha256"],
+                "freeze_revision": RECOVERY_FREEZE_REVISION,
+                **invocation,
                 "owner": instance._owner,
                 "predecessor_state_sha256": RECOVERY_PREDECESSOR["state_sha256"],
-                "prior_charged": 1, "max_admissions": 24, "max_cumulative_admissions": 25,
+                "prior_charged": 1,
+                "max_admissions": 24,
+                "max_cumulative_admissions": 25,
             }
             consumption_path = ROOT / "recovery-consumption.json"
             # O_EXCL plus both fsyncs precede any successor run, metadata or policy.
@@ -793,25 +868,44 @@ class Ec2Run:
             consumption_record, consumption_seal = _file_record(consumption_path, 65536)
             instance._seals[str(consumption_path)] = (consumption_record, consumption_seal)
             context = {
-                "kind": "restricted_reference_ec2_recovery_context_v1", "schema_version": 1,
-                "plan_id": plan_id, "plan": plan_record, "predecessor": dict(RECOVERY_PREDECESSOR),
-                "consumption": consumption_record, "invocation": invocation,
+                "kind": "restricted_reference_ec2_recovery_context_v1",
+                "schema_version": 1,
+                "plan_id": plan_id,
+                "plan": plan_record,
+                "predecessor": dict(RECOVERY_PREDECESSOR),
+                "consumption": consumption_record,
+                "invocation": invocation,
                 "allowance": dict(RECOVERY_ALLOWANCE),
             }
             instance._recovery_raw = canonical(context)
             instance.run_dir.mkdir(mode=0o700)
             _fsync_dir(instance.run_dir.parent)
-            claim = canonical({
-                "kind": "restricted_reference_ec2_recovery_claim_v1", "schema_version": 1,
-                **invocation, "owner": instance._owner, "recovery_context": context,
-            })
+            claim = canonical(
+                {
+                    "kind": "restricted_reference_ec2_recovery_claim_v1",
+                    "schema_version": 1,
+                    **invocation,
+                    "owner": instance._owner,
+                    "recovery_context": context,
+                }
+            )
             instance._claim_raw = claim
             instance._state = {
-                "kind": "restricted_reference_ec2_recovery_run_v1", "schema_version": 1,
-                **invocation, "owner": instance._owner, "phase": "CLAIMED",
-                "host_preparation_started": False, "provider_context": None, "policy_receipts": None,
-                "charged": 0, "backend_confirmed": 0, "admissions": [], "poisoned": False,
-                "outcome": None, "reason": None, "final_report_sha256": None,
+                "kind": "restricted_reference_ec2_recovery_run_v1",
+                "schema_version": 1,
+                **invocation,
+                "owner": instance._owner,
+                "phase": "CLAIMED",
+                "host_preparation_started": False,
+                "provider_context": None,
+                "policy_receipts": None,
+                "charged": 0,
+                "backend_confirmed": 0,
+                "admissions": [],
+                "poisoned": False,
+                "outcome": None,
+                "reason": None,
+                "final_report_sha256": None,
                 "recovery_context": _json(instance._recovery_raw),
             }
             write_exclusive(instance.run_dir / "claim.json", claim)
@@ -831,7 +925,9 @@ class Ec2Run:
 
     def _bind_source(self) -> None:
         self._source_lock, self._provider_source = _source_records(
-            self.source_revision, recovery=self._recovery_mode, seals=self._seals,
+            self.source_revision,
+            recovery=self._recovery_mode,
+            seals=self._seals,
         )
 
     def _live(self) -> None:
@@ -888,9 +984,19 @@ class Ec2Run:
             _fixed(own_claim.get("recovery_context"), context, "recovery claim context")
             context_row = cast(Row, context)
             _fixed(
-                {field: state[field] for field in (
-                    "source_revision", "run_id", "boot_id", "started_ns", "deadline_ns", "setup_deadline_ns",
-                )}, context_row["invocation"], "recovery original invocation",
+                {
+                    field: state[field]
+                    for field in (
+                        "source_revision",
+                        "run_id",
+                        "boot_id",
+                        "started_ns",
+                        "deadline_ns",
+                        "setup_deadline_ns",
+                    )
+                },
+                context_row["invocation"],
+                "recovery original invocation",
             )
             _fixed(state["owner"], own_claim["owner"], "recovery state owner")
             _fixed(self._owner, own_claim["owner"], "recovery live owner")
@@ -905,8 +1011,10 @@ class Ec2Run:
         rows = self._state["admissions"]
         charged, confirmed = self._state["charged"], self._state["backend_confirmed"]
         if (
-            type(charged) is not int or type(confirmed) is not int
-            or not isinstance(rows, list) or not 0 <= confirmed <= charged <= MAX_ADMISSIONS
+            type(charged) is not int
+            or type(confirmed) is not int
+            or not isinstance(rows, list)
+            or not 0 <= confirmed <= charged <= MAX_ADMISSIONS
             or charged != len(rows)
         ):
             raise ValueError("Invalid actual recovery admission counters")
@@ -916,8 +1024,10 @@ class Ec2Run:
         for index, value in enumerate(rows):
             row = _mapping(value, ticket_keys | {"accepted", "outcome"}, "recovery admission")
             for field, expected in (
-                ("run_id", self.run_id), ("boot_id", self.boot_id),
-                ("source_revision", self.source_revision), ("admission_number", index + 1),
+                ("run_id", self.run_id),
+                ("boot_id", self.boot_id),
+                ("source_revision", self.source_revision),
+                ("admission_number", index + 1),
                 ("name", FIXED_PROBES[index]),
             ):
                 _fixed(row[field], expected, "recovery ticket " + field)
@@ -926,7 +1036,8 @@ class Ec2Run:
                 raise ValueError("Invalid/duplicate recovery nonce")
             nonces.add(nonce)
             if (
-                type(row["admitted_ns"]) is not int or type(row["deadline_ns"]) is not int
+                type(row["admitted_ns"]) is not int
+                or type(row["deadline_ns"]) is not int
                 or not self.started_ns <= row["admitted_ns"] < self.deadline_ns
                 or row["deadline_ns"] != min(self.deadline_ns, row["admitted_ns"] + PROBE_NS)
                 or type(row["accepted"]) is not bool
@@ -936,12 +1047,15 @@ class Ec2Run:
             outcome = row["outcome"]
             if outcome is not None:
                 outcome_row = _mapping(
-                    outcome, {"result_sha256", "stop_confirmed", "cleanup_confirmed", "failure"},
+                    outcome,
+                    {"result_sha256", "stop_confirmed", "cleanup_confirmed", "failure"},
                     "recovery outcome",
                 )
                 digest, failure = outcome_row["result_sha256"], outcome_row["failure"]
                 if (
-                    row["accepted"] is not True or type(digest) is not str or not _HEX64.fullmatch(digest)
+                    row["accepted"] is not True
+                    or type(digest) is not str
+                    or not _HEX64.fullmatch(digest)
                     or type(outcome_row["stop_confirmed"]) is not bool
                     or type(outcome_row["cleanup_confirmed"]) is not bool
                     or (failure is not None and type(failure) is not str)
@@ -962,16 +1076,26 @@ class Ec2Run:
             return None
         if type(snapshot) is not BudgetSnapshot:
             raise ValueError("Actual live recovery budget snapshot required")
-        _fixed(dataclasses.asdict(snapshot), dataclasses.asdict(self.snapshot()), "live recovery snapshot")
+        _fixed(
+            dataclasses.asdict(snapshot),
+            dataclasses.asdict(self.snapshot()),
+            "live recovery snapshot",
+        )
         return {
-            "kind": "restricted_reference_ec2_recovery_budget_v1", "schema_version": 1,
-            "plan_id": RECOVERY_PLAN_ID, "predecessor_run_id": RECOVERY_PREDECESSOR["run_id"],
-            "prior_charged": 1, "prior_backend_confirmed": 1,
-            "current_charged": snapshot.charged, "current_backend_confirmed": snapshot.backend_confirmed,
-            "current_unconfirmed": snapshot.unconfirmed, "current_pending_outcomes": snapshot.pending_outcomes,
+            "kind": "restricted_reference_ec2_recovery_budget_v1",
+            "schema_version": 1,
+            "plan_id": RECOVERY_PLAN_ID,
+            "predecessor_run_id": RECOVERY_PREDECESSOR["run_id"],
+            "prior_charged": 1,
+            "prior_backend_confirmed": 1,
+            "current_charged": snapshot.charged,
+            "current_backend_confirmed": snapshot.backend_confirmed,
+            "current_unconfirmed": snapshot.unconfirmed,
+            "current_pending_outcomes": snapshot.pending_outcomes,
             "cumulative_charged": 1 + snapshot.charged,
             "cumulative_backend_confirmed": 1 + snapshot.backend_confirmed,
-            "max_current_admissions": 24, "max_cumulative_admissions": 25,
+            "max_current_admissions": 24,
+            "max_cumulative_admissions": 25,
         }
 
     def _persist(self) -> None:
@@ -1003,18 +1127,32 @@ class Ec2Run:
     def provider_record(self) -> Row:
         value = self._state["provider_context"]
         keys = {
-            "kind", "schema_version", "provider", "expected_identity", "observed_identity",
-            "source_revision", "run_id", "boot_id", "host", "gha_metadata", "gha_metadata_reason",
-            "provider_source", "source_lock", "identity_document",
+            "kind",
+            "schema_version",
+            "provider",
+            "expected_identity",
+            "observed_identity",
+            "source_revision",
+            "run_id",
+            "boot_id",
+            "host",
+            "gha_metadata",
+            "gha_metadata_reason",
+            "provider_source",
+            "source_lock",
+            "identity_document",
         }
         if self._recovery_mode:
             keys.add("recovery_context")
         record = _mapping(
-            value, keys, "provider context",
+            value,
+            keys,
+            "provider context",
         )
         kind = (
             "restricted_reference_ec2_recovery_host_v1"
-            if self._recovery_mode else "restricted_reference_ec2_host_v1"
+            if self._recovery_mode
+            else "restricted_reference_ec2_host_v1"
         )
         if (
             record["kind"] != kind
@@ -1113,7 +1251,8 @@ class Ec2Run:
             self._state["provider_context"] = {
                 "kind": (
                     "restricted_reference_ec2_recovery_host_v1"
-                    if self._recovery_mode else "restricted_reference_ec2_host_v1"
+                    if self._recovery_mode
+                    else "restricted_reference_ec2_host_v1"
                 ),
                 "schema_version": 1,
                 "provider": "aws_ec2_dedicated_v1",
@@ -1334,7 +1473,8 @@ class Ec2Run:
         cases = report.get("cases")
         report_kind = (
             "restricted_reference_ec2_recovery_qualification_v1"
-            if self._recovery_mode else "restricted_reference_ec2_qualification_v1"
+            if self._recovery_mode
+            else "restricted_reference_ec2_qualification_v1"
         )
         if (
             report.get("kind") != report_kind
@@ -1369,16 +1509,42 @@ class Ec2Run:
         return cast(Row, report)
 
     def _check_recovery_report(self, report: Row) -> None:
-        _mapping(report, {
-            "kind", "schema_version", "controls_status", "production_m1",
-            "independent_human_security_review", "external_human_reproduction",
-            "research_reservations", "replay_engine_invocations", "source_revision", "run_id",
-            "acceptance_gate", "original_qualification_budget", "cases", "scope", "stop_scope",
-            "recovery_context", "boot_id", "durable_budget_status", "durable_budget",
-            "admissions_charged", "confirmed_backend_admissions", "backend_unconfirmed_admissions",
-            "pending_probe_outcomes", "recovery_accounting", "admission_accounting_scope",
-            "provider_context", "manifest_sha256", "completed_at_monotonic_ns", "observed_payload_starts",
-        }, "successful recovery report")
+        expected: object
+        _mapping(
+            report,
+            {
+                "kind",
+                "schema_version",
+                "controls_status",
+                "production_m1",
+                "independent_human_security_review",
+                "external_human_reproduction",
+                "research_reservations",
+                "replay_engine_invocations",
+                "source_revision",
+                "run_id",
+                "acceptance_gate",
+                "original_qualification_budget",
+                "cases",
+                "scope",
+                "stop_scope",
+                "recovery_context",
+                "boot_id",
+                "durable_budget_status",
+                "durable_budget",
+                "admissions_charged",
+                "confirmed_backend_admissions",
+                "backend_unconfirmed_admissions",
+                "pending_probe_outcomes",
+                "recovery_accounting",
+                "admission_accounting_scope",
+                "provider_context",
+                "manifest_sha256",
+                "completed_at_monotonic_ns",
+                "observed_payload_starts",
+            },
+            "successful recovery report",
+        )
         snapshot = self.snapshot()
         accounting = self.recovery_accounting(snapshot)
         _fixed(report["recovery_context"], self.recovery_context, "report recovery context")
@@ -1386,18 +1552,30 @@ class Ec2Run:
         _fixed(report["durable_budget"], dataclasses.asdict(snapshot), "report original budget")
         _fixed(report["provider_context"], self.provider_record, "report actual provider")
         for field, expected in (
-            ("admissions_charged", 24), ("confirmed_backend_admissions", 24),
-            ("backend_unconfirmed_admissions", 0), ("pending_probe_outcomes", 0),
-            ("observed_payload_starts", 24), ("research_reservations", 0),
-            ("replay_engine_invocations", 0), ("schema_version", 1),
+            ("admissions_charged", 24),
+            ("confirmed_backend_admissions", 24),
+            ("backend_unconfirmed_admissions", 0),
+            ("pending_probe_outcomes", 0),
+            ("observed_payload_starts", 24),
+            ("research_reservations", 0),
+            ("replay_engine_invocations", 0),
+            ("schema_version", 1),
             ("independent_human_security_review", "NOT_PERFORMED"),
             ("external_human_reproduction", "0/0/PENDING"),
         ):
             _fixed(report[field], expected, "recovery report " + field)
-        _fixed(report["original_qualification_budget"], {
-            "max_admissions": 24, "window_ns": WINDOW_NS,
-        }, "recovery original allowance")
-        if type(report["completed_at_monotonic_ns"]) is not int or report["completed_at_monotonic_ns"] < self.started_ns:
+        _fixed(
+            report["original_qualification_budget"],
+            {
+                "max_admissions": 24,
+                "window_ns": WINDOW_NS,
+            },
+            "recovery original allowance",
+        )
+        if (
+            type(report["completed_at_monotonic_ns"]) is not int
+            or report["completed_at_monotonic_ns"] < self.started_ns
+        ):
             raise ValueError("Invalid recovery completion clock")
         manifest_raw, _ = _secure_read(self.artifact_dir / "manifest.json", 262144)
         manifest_value = _json(manifest_raw)
@@ -1405,31 +1583,54 @@ class Ec2Run:
             raise ValueError("Actual recovery manifest bytes differ")
         manifest = cast(Row, manifest_value)
         for field, expected in (
-            ("kind", "restricted_reference_ec2_recovery_manifest_v1"), ("schema_version", 1),
-            ("source_revision", self.source_revision), ("provider_context", self.provider_record),
-            ("recovery_context", self.recovery_context), ("production_m1_enabled", False),
-            ("available_for_probe", True), ("fixed_cases", list(FIXED_PROBES)),
-            ("qualification_started_ns", self.started_ns), ("qualification_deadline_ns", self.deadline_ns),
+            ("kind", "restricted_reference_ec2_recovery_manifest_v1"),
+            ("schema_version", 1),
+            ("source_revision", self.source_revision),
+            ("provider_context", self.provider_record),
+            ("recovery_context", self.recovery_context),
+            ("production_m1_enabled", False),
+            ("available_for_probe", True),
+            ("fixed_cases", list(FIXED_PROBES)),
+            ("qualification_started_ns", self.started_ns),
+            ("qualification_deadline_ns", self.deadline_ns),
             ("recovery_accounting_phase", "pre_probe_manifest"),
         ):
             _fixed(manifest.get(field), expected, "actual recovery manifest " + field)
         initial = cast(Row, accounting).copy()
-        initial.update({
-            "current_charged": 0, "current_backend_confirmed": 0, "current_unconfirmed": 0,
-            "current_pending_outcomes": 0, "cumulative_charged": 1, "cumulative_backend_confirmed": 1,
-        })
+        initial.update(
+            {
+                "current_charged": 0,
+                "current_backend_confirmed": 0,
+                "current_unconfirmed": 0,
+                "current_pending_outcomes": 0,
+                "cumulative_charged": 1,
+                "cumulative_backend_confirmed": 1,
+            }
+        )
         _fixed(manifest.get("recovery_accounting"), initial, "pre-probe recovery accounting")
         ticket_fields = {field.name for field in dataclasses.fields(ProbeAdmission)}
         for index, case_value in enumerate(cast(list[object], report["cases"])):
-            case = _mapping(case_value, {
-                "name", "nonce", "admission_submitted", "admission", "status", "reason",
-                "execution_evidence", "payload_started",
-            }, "successful recovery case")
+            case = _mapping(
+                case_value,
+                {
+                    "name",
+                    "nonce",
+                    "admission_submitted",
+                    "admission",
+                    "status",
+                    "reason",
+                    "execution_evidence",
+                    "payload_started",
+                },
+                "successful recovery case",
+            )
             admission = self._admissions()[index]
             _fixed(case["reason"], "actual_scoped_control_evidence", "current recovery assessment")
-            _fixed(case.get("admission"), {
-                key: admission[key] for key in ticket_fields
-            }, "current recovery case ticket")
+            _fixed(
+                case.get("admission"),
+                {key: admission[key] for key in ticket_fields},
+                "current recovery case ticket",
+            )
             _fixed(case.get("nonce"), admission["nonce"], "current recovery case nonce")
             _fixed(case.get("admission_submitted"), True, "current recovery case charge")
             _fixed(case.get("payload_started"), True, "current recovery payload gate")
@@ -1444,8 +1645,11 @@ class Ec2Run:
                 raise ValueError("Actual recovery result is not a JSON object")
             result = cast(Row, result_value)
             for field, expected in (
-                ("name", FIXED_PROBES[index]), ("nonce", admission["nonce"]),
-                ("payload_started", True), ("stop_confirmed", True), ("cleanup_confirmed", True),
+                ("name", FIXED_PROBES[index]),
+                ("nonce", admission["nonce"]),
+                ("payload_started", True),
+                ("stop_confirmed", True),
+                ("cleanup_confirmed", True),
                 ("failure", outcome["failure"]),
             ):
                 _fixed(result.get(field), expected, "actual recovery result " + field)
@@ -1454,7 +1658,8 @@ class Ec2Run:
                 raise ValueError("Recovery result has no bound host observations")
             for field, expected in (
                 ("manifest_sha256", report["manifest_sha256"]),
-                ("admission_number", index + 1), ("original_admission_ns", admission["admitted_ns"]),
+                ("admission_number", index + 1),
+                ("original_admission_ns", admission["admitted_ns"]),
                 ("original_deadline_ns", admission["deadline_ns"]),
             ):
                 _fixed(facts.get(field), expected, "current recovery host binding " + field)
@@ -1475,7 +1680,8 @@ class Ec2Run:
         return {
             "kind": (
                 "restricted_reference_ec2_recovery_terminal_receipt_v1"
-                if self._recovery_mode else "restricted_reference_ec2_terminal_receipt_v1"
+                if self._recovery_mode
+                else "restricted_reference_ec2_terminal_receipt_v1"
             ),
             "schema_version": 1,
             "run_id": self.run_id,
@@ -1484,8 +1690,12 @@ class Ec2Run:
             "final_report_sha256": digest,
             "controls_status": "QUALIFIED_REFERENCE_ONLY",
             "production_m1": "DISABLED",
-            **({
-                "recovery_context": self.recovery_context,
-                "recovery_accounting": self.recovery_accounting(self.snapshot()),
-            } if self._recovery_mode else {}),
+            **(
+                {
+                    "recovery_context": self.recovery_context,
+                    "recovery_accounting": self.recovery_accounting(self.snapshot()),
+                }
+                if self._recovery_mode
+                else {}
+            ),
         }

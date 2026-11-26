@@ -365,7 +365,7 @@ def test_replaced_host_mutex_refuses_before_plan_publication(prepared_host, monk
         return result
 
     monkeypatch.setattr(ec2, "recovery_plan_document", replaced)
-    with pytest.raises(ValueError, match="identity"):
+    with pytest.raises(ValueError, match=r"Original host mutex.*(?:identity|root file)"):
         prepare()
     assert not (prepared_host.root / "recovery-plan.json").exists()
 
@@ -390,7 +390,9 @@ def test_unbound_source_history_or_stop_bytes_cannot_prepare_plan(prepared_host,
     assert not (prepared_host.root / "recovery-plan.json").exists()
 
 
-@pytest.mark.parametrize("changed", ["old_kind", "unknown_field", "missing_helper", "boolean_schema"])
+@pytest.mark.parametrize(
+    "changed", ["old_kind", "unknown_field", "missing_helper", "boolean_schema"]
+)
 def test_non_recovery_or_ambiguous_source_lock_never_creates_plan(prepared_host, changed) -> None:
     document = json.loads(prepared_host.source_lock.read_bytes())
     if changed == "old_kind":
@@ -418,7 +420,7 @@ def test_pending_predecessor_outcome_is_refused_even_with_matching_fixture_hash(
         "state_sha256": _digest(prepared_host.state_path.read_bytes()),
     }
     monkeypatch.setattr(ec2, "RECOVERY_PREDECESSOR", previous)
-    with pytest.raises(ValueError, match="pending|unknown"):
+    with pytest.raises(ValueError, match=r"pending|unknown"):
         prepare()
     assert not (prepared_host.root / "recovery-plan.json").exists()
 
@@ -507,9 +509,7 @@ def test_unknown_cli_options_never_prepare(arguments, monkeypatch) -> None:
 
 
 def test_successful_cli_reports_preparation_only(prepared_host, capsys) -> None:
-    assert preparation.main(
-        ["--source-revision", REVISION, "--plan-id", ec2.RECOVERY_PLAN_ID]
-    ) == 0
+    assert preparation.main(["--source-revision", REVISION, "--plan-id", ec2.RECOVERY_PLAN_ID]) == 0
     result = json.loads(capsys.readouterr().out)
     assert result["status"] == "PREPARED_ONLY"
     assert result["qualification_started"] is False

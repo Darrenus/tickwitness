@@ -105,7 +105,11 @@ def main(arguments: list[str] | None = None) -> int:
         record = prepare_plan(source_revision=args.source_revision, plan_id=args.plan_id)
     except Exception as error:
         sys.stderr.write(
-            "recovery_preparation_refused: " + type(error).__name__ + ": " + str(error)[:2048] + "\n"
+            "recovery_preparation_refused: "
+            + type(error).__name__
+            + ": "
+            + str(error)[:2048]
+            + "\n"
         )
         return 78
     sys.stdout.write(
