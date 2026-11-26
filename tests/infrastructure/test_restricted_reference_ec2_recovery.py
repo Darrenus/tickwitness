@@ -467,7 +467,35 @@ def complete_catalog(recovery):
         "qualification_deadline_ns": run.deadline_ns,
         "recovery_accounting_phase": "pre_probe_manifest",
         "recovery_accounting": run.recovery_accounting(initial),
-        "fixture_scope": "Synthetic publication decisions, not isolation evidence",
+        "unavailable_reasons": [],
+        "os_release": None,
+        "kernel": None,
+        "architecture": None,
+        "python_version": None,
+        "libc_version": None,
+        "runner_image_os": None,
+        "runner_image_version": None,
+        "controller_uid": None,
+        "controller_gid": None,
+        "reserved_uid_gid": None,
+        "binaries": None,
+        "host_mountinfo": None,
+        "host_namespaces": None,
+        "controllers": None,
+        "apparmor": None,
+        "explicit_userns_authorization": None,
+        "bwrap_actual_version": None,
+        "bwrap_package_version": None,
+        "parent_subtree_control": None,
+        "controller_limits": None,
+        "syscall_mapping": None,
+        "bpf_sha256": None,
+        "bpf_hex": None,
+        "guest_environment": None,
+        "mount_plan": None,
+        "bwrap_argv_template": None,
+        "limits": None,
+        "runtime_closure_scope": "Synthetic publication decisions, not isolation evidence",
     }
     run.artifact_dir.mkdir()
     manifest_raw = ec2.canonical(manifest)
@@ -634,3 +662,45 @@ def test_changed_actual_case_bytes_fail_even_when_report_hash_is_recomputed(reco
     with pytest.raises(ValueError, match="durable current recovery outcome"):
         run.finish(outcome="QUALIFIED_REFERENCE_ONLY", reason=None, final_report_sha256=digest)
     assert recovery.consumption.exists()
+
+
+@pytest.mark.parametrize("change", ["unknown", "missing"])
+def test_final_manifest_shape_refuses_even_with_all_observation_hashes_rebound(recovery, change):
+    run, report = complete_catalog(recovery)
+    manifest_path = run.artifact_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    if change == "unknown":
+        manifest["unknown_manifest_authority"] = True
+    else:
+        del manifest["os_release"]
+    manifest_raw = ec2.canonical(manifest)
+    manifest_path.write_bytes(manifest_raw)
+    report["manifest_sha256"] = ec2._sha(manifest_raw)
+    for index, case in enumerate(report["cases"]):
+        path = run.run_dir / f"case-{index + 1:02d}.json"
+        result = json.loads(path.read_bytes())
+        result["host_facts"]["manifest_sha256"] = report["manifest_sha256"]
+        raw = ec2.canonical(result)
+        path.write_bytes(raw)
+        case["execution_evidence"] = {
+            "path": str(path),
+            "sha256": ec2._sha(raw),
+            "bytes": len(raw),
+        }
+        # Rebind the synthetic durable fixture as well: rejection must be the
+        # manifest's exact shape, not a stale raw-case/outcome/report digest.
+        run._state["admissions"][index]["outcome"]["result_sha256"] = ec2._sha(raw)
+    run._persist()
+    digest = publish_report(run, report)
+    assert ec2._sha(manifest_path.read_bytes()) == report["manifest_sha256"]
+    for index, case in enumerate(report["cases"]):
+        path = run.run_dir / f"case-{index + 1:02d}.json"
+        actual = ec2._sha(path.read_bytes())
+        assert actual == case["execution_evidence"]["sha256"]
+        assert actual == run._state["admissions"][index]["outcome"]["result_sha256"]
+    consumed = recovery.consumption.read_bytes()
+    with pytest.raises(ValueError, match="recovery manifest fields"):
+        run.finish(outcome="QUALIFIED_REFERENCE_ONLY", reason=None, final_report_sha256=digest)
+    assert run._state["final_report_sha256"] is None
+    assert run.recovery_accounting(run.snapshot())["cumulative_charged"] == 25
+    assert recovery.consumption.read_bytes() == consumed

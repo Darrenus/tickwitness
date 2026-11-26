@@ -70,6 +70,51 @@ RECOVERY_ALLOWANCE = {
     "setup_ns": 30_000_000_000,
     "max_cumulative_admissions": 25,
 }
+RECOVERY_MANIFEST_KEYS: frozenset[str] = frozenset(
+    {
+        "kind",
+        "schema_version",
+        "provider_context",
+        "qualification_started_ns",
+        "qualification_deadline_ns",
+        "recovery_context",
+        "recovery_accounting",
+        "recovery_accounting_phase",
+        "production_m1_enabled",
+        "available_for_probe",
+        "unavailable_reasons",
+        "os_release",
+        "kernel",
+        "architecture",
+        "python_version",
+        "libc_version",
+        "runner_image_os",
+        "runner_image_version",
+        "source_revision",
+        "controller_uid",
+        "controller_gid",
+        "reserved_uid_gid",
+        "binaries",
+        "host_mountinfo",
+        "host_namespaces",
+        "controllers",
+        "apparmor",
+        "explicit_userns_authorization",
+        "bwrap_actual_version",
+        "bwrap_package_version",
+        "parent_subtree_control",
+        "controller_limits",
+        "syscall_mapping",
+        "bpf_sha256",
+        "bpf_hex",
+        "guest_environment",
+        "mount_plan",
+        "bwrap_argv_template",
+        "limits",
+        "fixed_cases",
+        "runtime_closure_scope",
+    }
+)
 WINDOW_NS = 600_000_000_000
 SETUP_NS = 30_000_000_000
 PROBE_NS = 10_000_000_000
@@ -159,6 +204,14 @@ def _mapping(value: object, keys: set[str], label: str) -> Row:
     ):
         raise ValueError("Invalid or unknown " + label + " fields")
     return cast(Row, value)
+
+
+def validate_recovery_manifest_shape(value: object) -> Row:
+    """Check the frozen complete top-level shape; nested raw observations stay raw."""
+    manifest = _mapping(value, set(RECOVERY_MANIFEST_KEYS), "recovery manifest")
+    _fixed(manifest["kind"], "restricted_reference_ec2_recovery_manifest_v1", "manifest kind")
+    _fixed(manifest["schema_version"], 1, "manifest schema")
+    return manifest
 
 
 def _fixed(value: object, expected: object, label: str) -> None:
@@ -1581,7 +1634,7 @@ class Ec2Run:
         manifest_value = _json(manifest_raw)
         if not isinstance(manifest_value, dict) or _sha(manifest_raw) != report["manifest_sha256"]:
             raise ValueError("Actual recovery manifest bytes differ")
-        manifest = cast(Row, manifest_value)
+        manifest = validate_recovery_manifest_shape(manifest_value)
         for field, expected in (
             ("kind", "restricted_reference_ec2_recovery_manifest_v1"),
             ("schema_version", 1),

@@ -30,6 +30,7 @@ from tickwitness.infrastructure.restricted_reference_ec2 import (  # noqa: E402
     WINDOW_NS,
     Ec2Run,
     canonical,
+    validate_recovery_manifest_shape,
 )
 
 type Row = dict[str, object]
@@ -116,6 +117,7 @@ def _cancel(_number: int, _frame: object) -> None:
 
 
 def _recovery_manifest(run: Ec2Run, manifest: Row) -> None:
+    manifest = validate_recovery_manifest_shape(manifest)
     context = run.recovery_context
     snapshot = run.snapshot()
     accounting = run.recovery_accounting(snapshot)

@@ -9,7 +9,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from tickwitness.infrastructure.restricted_reference_ec2 import BudgetSnapshot, ProbeAdmission
+from tickwitness.infrastructure.restricted_reference_ec2 import (
+    RECOVERY_MANIFEST_KEYS,
+    BudgetSnapshot,
+    ProbeAdmission,
+)
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "qualify_restricted_reference_ec2.py"
 SPEC = importlib.util.spec_from_file_location("tickwitness_ec2_qualification", SCRIPT)
@@ -49,6 +53,7 @@ def driver(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
     events = []
     mode = ["pass"]
     manifest_changes: dict[str, object] = {}
+    manifest_removals: set[str] = set()
     receipt_changes: dict[str, object] = {}
 
     class Run:
@@ -217,17 +222,22 @@ def driver(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
         def __init__(self, artifact: Path, payload: Path, *, ec2_run: Run) -> None:
             self.manifest = {"fixed_cases": list(qualification.PROBE_NAMES)}
             if run.recovery_context is not None:
+                self.manifest = dict.fromkeys(RECOVERY_MANIFEST_KEYS)
                 self.manifest.update(
                     kind="restricted_reference_ec2_recovery_manifest_v1",
                     schema_version=1,
                     source_revision=run.source_revision,
                     production_m1_enabled=False,
+                    available_for_probe=True,
+                    unavailable_reasons=[],
+                    fixed_cases=list(qualification.PROBE_NAMES),
                     qualification_started_ns=run.started_ns,
                     qualification_deadline_ns=run.deadline_ns,
                     provider_context=run.provider_record,
                     recovery_context=run.recovery_context,
                     recovery_accounting=run.recovery_accounting(run.snapshot()),
                     recovery_accounting_phase="pre_probe_manifest",
+                    runtime_closure_scope="Driver decisions only; no actual isolation evidence",
                 )
                 if mode[0] == "manifest_accounting_boolean":
                     self.manifest["recovery_accounting"] = {
@@ -235,6 +245,8 @@ def driver(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
                         "prior_charged": True,
                     }
                 self.manifest.update(manifest_changes)
+                for field in manifest_removals:
+                    del self.manifest[field]
             assert artifact == run.artifact_dir and ec2_run is run
             assert payload.name == "restricted_reference_payload.py"
             events.append(("runner",))
@@ -280,6 +292,7 @@ def driver(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
         mode=mode,
         path=tmp_path,
         manifest_changes=manifest_changes,
+        manifest_removals=manifest_removals,
         receipt_changes=receipt_changes,
     )
 
@@ -512,6 +525,24 @@ def test_recovery_manifest_lineage_or_initial_accounting_change_prevents_admissi
     assert invoke_recovery() == 1
     result = report(driver)
     assert result["controls_status"] == "NOT_QUALIFIED"
+    assert result["admissions_charged"] == 0
+    assert result["recovery_accounting"]["cumulative_charged"] == 1
+    assert all(event[0] not in {"reserve", "backend"} for event in driver.events)
+
+
+@pytest.mark.parametrize("change", ["unknown_field", "missing_observation"])
+def test_recovery_manifest_full_top_level_shape_is_required_before_probe_charge(
+    driver: SimpleNamespace,
+    change: str,
+) -> None:
+    if change == "unknown_field":
+        driver.manifest_changes["fixture_scope"] = "Unknown top-level metadata is not a schema"
+    else:
+        driver.manifest_removals.add("os_release")
+    assert invoke_recovery() == 1
+    result = report(driver)
+    assert result["controls_status"] == "NOT_QUALIFIED"
+    assert "recovery manifest" in result["failure"]["reason"]
     assert result["admissions_charged"] == 0
     assert result["recovery_accounting"]["cumulative_charged"] == 1
     assert all(event[0] not in {"reserve", "backend"} for event in driver.events)

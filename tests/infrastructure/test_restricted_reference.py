@@ -835,6 +835,51 @@ def test_actual_manifest_context_binds_pre_probe_recovery_counts_without_later_r
         fixture.runner._manifest_context()
 
 
+def test_actual_recovery_manifest_producer_matches_declared_full_top_level_shape(
+    manifest_context,
+    monkeypatch,
+    tmp_path,
+):
+    """Exercise the real producer with unsupported synthetic metadata, never a probe."""
+    fixture = manifest_context
+    fixture.runner.payload = tmp_path / "metadata-only-payload.py"
+    fixture.runner.payload.write_bytes(b"metadata fixture; never executed\n")
+    fixture.runner._ec2_run.source_revision = "a" * 40
+    monkeypatch.setattr(reference.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(reference.sys, "platform", "unsupported-metadata-fixture")
+    monkeypatch.setattr(reference.platform, "machine", lambda: "metadata-fixture-architecture")
+    monkeypatch.setattr(
+        reference.platform,
+        "uname",
+        lambda: SimpleNamespace(_asdict=lambda: {"system": "synthetic-metadata"}),
+    )
+    monkeypatch.setattr(reference.platform, "libc_ver", lambda: ("fixture-libc", "fixture-version"))
+    monkeypatch.setattr(reference, "_BWRAP", tmp_path / "absent-metadata-bwrap")
+    monkeypatch.setattr(reference, "_CGROUP_ROOT", tmp_path / "absent-metadata-cgroup")
+    monkeypatch.setattr(
+        reference,
+        "_identity",
+        lambda path: {"path": str(path), "sha256": "a" * 64, "bytes": 1},
+    )
+    monkeypatch.setattr(
+        fixture.runner,
+        "_capture_policy",
+        lambda: {"fixture_scope": "Readonly producer metadata; no policy or host qualification"},
+    )
+
+    def forbid_process(*_args, **_kwargs):
+        pytest.fail("Manifest schema regression must not execute a process")
+
+    monkeypatch.setattr(reference.subprocess, "run", forbid_process)
+    monkeypatch.setattr(reference.subprocess, "Popen", forbid_process)
+    manifest = fixture.runner._capture_manifest()
+    assert set(manifest) == ec2.RECOVERY_MANIFEST_KEYS
+    assert ec2.validate_recovery_manifest_shape(manifest) == manifest
+    assert manifest["available_for_probe"] is False
+    assert manifest["recovery_accounting"]["current_charged"] == 0
+    assert manifest["recovery_accounting"]["cumulative_charged"] == 1
+
+
 @pytest.mark.parametrize(
     "changes",
     [
