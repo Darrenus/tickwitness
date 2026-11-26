@@ -44,6 +44,7 @@ jobs:
           tests/test_ec2_reference_qualification_v2.py
           tests/infrastructure/test_restricted_reference.py
           tests/infrastructure/test_restricted_reference_process_limits.py
+          tests/infrastructure/test_restricted_reference_members.py
           tests/infrastructure/test_restricted_reference_ec2.py
           tests/infrastructure/test_restricted_reference_ec2_recovery.py
           tests/infrastructure/test_restricted_reference_ec2_recovery_v2.py

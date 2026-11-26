@@ -195,6 +195,162 @@ def _namespace_ids(value: object, label: str) -> list[int]:
     return [int(item) for item in fields]
 
 
+def _positive_pid(value: object, label: str) -> int:
+    pid = _integer(value, label)
+    if pid <= 0:
+        raise ValueError("Invalid positive " + label)
+    return pid
+
+
+def _kernel_pid(value: object, label: str) -> int:
+    if not isinstance(value, str) or not value.isascii() or not value.isdecimal():
+        raise ValueError("Missing actual kernel " + label)
+    return _positive_pid(int(value), label)
+
+
+def _detached_guest_ids(value: object, label: str) -> list[int]:
+    if not isinstance(value, str) or any(
+        not field.isascii() or not field.isdecimal() or int(field) <= 0
+        for field in value.split()
+    ):
+        raise ValueError("Invalid positive ASCII namespace " + label)
+    return _namespace_ids(value, label)
+
+
+def _detached_descendant(
+    host: dict[str, object], sample: dict[str, object], guest_pid: int
+) -> dict[str, object]:
+    """Bind four live roles to independent launcher and pre-GO task observations."""
+    bootstrap = _mapping(host.get("bootstrap_admission"), "bootstrap admission")
+    receipt = _mapping(bootstrap.get("receipt"), "bootstrap receipt")
+    initial = _mapping(bootstrap.get("host_status"), "bootstrap host status")
+    outer_pid = _positive_pid(receipt.get("pid"), "bootstrap PID")
+    controller_pid = _positive_pid(receipt.get("parent_pid"), "bootstrap parent PID")
+    outer_ids = [outer_pid]
+    if (
+        _kernel_pid(initial.get("Pid"), "bootstrap PID") != outer_pid
+        or _kernel_pid(initial.get("PPid"), "bootstrap parent PID") != controller_pid
+        or not isinstance(initial.get("NSpid"), str)
+        or str(initial["NSpid"]).split() != [str(outer_pid)]
+        or not isinstance(initial.get("NSsid"), str)
+        or str(initial["NSsid"]).split() != [str(outer_pid)]
+    ):
+        raise ValueError("Outer monitor lacks independent bootstrap identity")
+    observation = _mapping(host.get("guest_process_observation"), "guest process observation")
+    status = _mapping(observation.get("status"), "guest process status")
+    main_pid = _positive_pid(observation.get("pid"), "observed guest PID")
+    init_pid = _kernel_pid(status.get("PPid"), "guest parent PID")
+    main_ids = _detached_guest_ids(status.get("NSpid"), "observed guest PIDs")
+    init_ids = _detached_guest_ids(status.get("NSsid"), "observed guest SIDs")
+    if (
+        _kernel_pid(status.get("Pid"), "observed guest PID") != main_pid
+        or main_ids[0] != main_pid
+        or init_ids[0] != init_pid
+        or init_ids[-1] != 1
+        or len(main_ids) != len(outer_ids) + 1
+        or len(init_ids) != len(main_ids)
+        or len({outer_pid, init_pid, main_pid}) != 3
+        or main_ids[-1] in {1, guest_pid}
+    ):
+        raise ValueError("Independent monitor/init/main lineage differs")
+    members = sample.get("members")
+    processes = sample.get("cgroup_procs")
+    if not isinstance(members, list) or not isinstance(processes, list):
+        raise ValueError("Missing complete before-kill cgroup membership")
+    # The fixed payload reaps its first fork, then keeps main and descendant alive.
+    # A different topology requires review, rather than skipping unexplained rows.
+    if (
+        len(members) != 4
+        or len(processes) != 4
+        or any(type(pid) is not int or pid <= 0 for pid in processes)
+        or len(set(processes)) != 4
+        or controller_pid in processes
+    ):
+        raise ValueError("Fixed four-role membership is missing or ambiguous")
+    by_pid: dict[int, dict[str, object]] = {}
+    pid_ids: dict[int, list[int]] = {}
+    session_ids: dict[int, list[int]] = {}
+    guest_ids: set[int] = set()
+    for raw in members:
+        member = _mapping(raw, "live task member")
+        if member.get("observation", True) is not True:
+            raise ValueError("Incomplete live task member cannot be ignored")
+        pid = _positive_pid(member.get("pid"), "live member PID")
+        sid = _positive_pid(member.get("sid_host"), "live member SID")
+        _positive_pid(member.get("parent_pid"), "live member parent PID")
+        if pid in by_pid or pid not in processes:
+            raise ValueError("Duplicate or unbound live member PID")
+        ignored = member.get("signal_ignored")
+        state = member.get("state")
+        if (
+            not isinstance(ignored, str)
+            or not ignored.isascii()
+            or len(ignored) > 16
+            or any(character not in "0123456789abcdefABCDEF" for character in ignored)
+            or not ignored
+            or type(member.get("ignores_sigterm")) is not bool
+            or not isinstance(member.get("uid"), str)
+            or not isinstance(state, str)
+            or not state.split()
+            or state.split()[0] not in {"R", "S", "D", "T", "t", "I", "P"}
+        ):
+            raise ValueError("Incomplete or non-live member observation")
+        if pid in {outer_pid, init_pid, main_pid} and member["ignores_sigterm"] != bool(
+            int(ignored, 16) & (1 << 14)
+        ):
+            raise ValueError("Launcher signal-mask observations disagree")
+        if pid == outer_pid:
+            if (
+                member.get("namespace_pids") != initial["NSpid"]
+                or member.get("namespace_session_ids") != initial["NSsid"]
+                or sid != outer_pid
+                or member["parent_pid"] != controller_pid
+                or str(member["uid"]).split() != ["61184"] * 4
+            ):
+                raise ValueError("Unexplained host-only monitor row")
+            pid_ids[pid], session_ids[pid] = outer_ids, outer_ids
+        else:
+            pids = _detached_guest_ids(member.get("namespace_pids"), "live guest PIDs")
+            sids = _detached_guest_ids(member.get("namespace_session_ids"), "live guest SIDs")
+            if (
+                len(pids) != len(main_ids)
+                or len(sids) != len(main_ids)
+                or pids[0] != pid
+                or sids[0] != sid
+                or pids[-1] in guest_ids
+            ):
+                raise ValueError("Guest namespace membership or host mapping differs")
+            guest_ids.add(pids[-1])
+            pid_ids[pid], session_ids[pid] = pids, sids
+        by_pid[pid] = member
+    if set(by_pid) != set(processes) or not {outer_pid, init_pid, main_pid}.issubset(by_pid):
+        raise ValueError("Observed cgroup membership lost a fixed launcher role")
+    for pid, parent, pids in (
+        (init_pid, outer_pid, init_ids),
+        (main_pid, init_pid, main_ids),
+    ):
+        member = by_pid[pid]
+        if (
+            pid_ids[pid] != pids
+            or session_ids[pid] != init_ids
+            or member["parent_pid"] != parent
+            or str(member["uid"]).split() != ["61184"] * 4
+        ):
+            raise ValueError("Independent guest init/main role differs")
+    descendants = set(by_pid) - {outer_pid, init_pid, main_pid}
+    if len(descendants) != 1:
+        raise ValueError("Detached guest PID was not uniquely observed before kill")
+    descendant_pid = descendants.pop()
+    descendant = by_pid[descendant_pid]
+    if pid_ids[descendant_pid][-1] != guest_pid or descendant["parent_pid"] != init_pid:
+        raise ValueError("Unexplained or escaped guest member cannot be ignored")
+    for pid, member in by_pid.items():
+        sid = _positive_pid(member["sid_host"], "live member SID")
+        if sid in by_pid and session_ids[pid] != pid_ids[sid]:
+            raise ValueError("Host/guest session leader mapping differs")
+    return descendant
+
+
 def _detached_proof(host: dict[str, object], facts: dict[str, object], nonce: str) -> bool:
     pid = _integer(facts["descendant_pid"], "detached guest PID")
     sid = _integer(facts["descendant_sid"], "detached guest SID")
@@ -217,17 +373,7 @@ def _detached_proof(host: dict[str, object], facts: dict[str, object], nonce: st
     ]
     if len(last) != 1 or not isinstance(last[0].get("members"), list):
         raise ValueError("Unique before-kill task observation is unavailable")
-    matching = []
-    for raw in last[0]["members"]:
-        member = _mapping(raw, "live task member")
-        if member.get("observation", True) is None:
-            continue
-        namespace_pids = _namespace_ids(member.get("namespace_pids"), "PIDs")
-        if namespace_pids[-1] == pid:
-            matching.append(member)
-    if len(matching) != 1:
-        raise ValueError("Detached guest PID was not uniquely observed before kill")
-    member = matching[0]
+    member = _detached_descendant(host, last[0], pid)
     namespace_pids = _namespace_ids(member["namespace_pids"], "PIDs")
     namespace_sids = _namespace_ids(member.get("namespace_session_ids"), "SIDs")
     ignored = str(member.get("signal_ignored", ""))

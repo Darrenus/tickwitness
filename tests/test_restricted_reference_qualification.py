@@ -226,41 +226,105 @@ def test_cpu_throttle_without_original_deadline_stop_is_insufficient() -> None:
     assert assess(value)["status"] == "PASS"
 
 
-def test_detached_stop_pairs_guest_ids_with_kernel_session_and_stopped_heartbeat() -> None:
+def detached_record(*, guest_pid: int = 7, guest_sid: int = 6) -> dict[str, object]:
+    """Sanitize the real mixed bwrap/init/main/detached shape; no host acceptance.
+
+    The original run0003 artifact remains NOT_QUALIFIED. This independent decision
+    fixture preserves its four roles, namespace columns and adopted parent chain.
+    """
     facts = {
-        "descendant_pid": 7,
-        "descendant_sid": 6,
+        "descendant_pid": guest_pid,
+        "descendant_sid": guest_sid,
         "sigterm_ignored": True,
         "double_fork": True,
         "heartbeat_nonce": NONCE,
     }
     value = record("detached", facts)
     value["failure"] = "deadline_exceeded"
-    value["host_facts"]["cgroup_after"]["pids.peak"] = 100
-    assert assess(value)["status"] == "UNKNOWN"
-    member = {
-        "pid": 207,
-        "sid_host": 206,
-        "namespace_pids": "207 7",
-        "namespace_session_ids": "206 6",
-        "signal_ignored": "0000000000004000",
-        "ignores_sigterm": True,
+    value["actual_exit_code"] = -9
+    host = value["host_facts"]
+    host["cgroup_after"]["pids.peak"] = 5
+    host["bootstrap_admission"].update(
+        receipt={"pid": 200, "parent_pid": 190},
+        host_status={
+            **process_status(),
+            "Pid": "200",
+            "PPid": "190",
+            "NSpid": "200",
+            "NSsid": "200",
+            "Seccomp": "0",
+        },
+    )
+    host["guest_process_observation"].update(
+        pid=202,
+        status={
+            **process_status(),
+            "Pid": "202",
+            "PPid": "201",
+            "NSpid": "202\t2",
+            "NSsid": "201\t1",
+        },
+    )
+    common = {
+        "signal_ignored": "0000000001001000",
+        "ignores_sigterm": False,
         "uid": "61184 61184 61184 61184",
         "state": "S (sleeping)",
     }
-    value["host_facts"]["active_member_observations"] = [
-        {"phase": "before_kill", "members": [member]}
+    members = [
+        {
+            **common,
+            "pid": 200,
+            "parent_pid": 190,
+            "sid_host": 200,
+            "namespace_pids": "200",
+            "namespace_session_ids": "200",
+        },
+        {
+            **common,
+            "pid": 201,
+            "parent_pid": 200,
+            "sid_host": 201,
+            "namespace_pids": "201\t1",
+            "namespace_session_ids": "201\t1",
+        },
+        {
+            **common,
+            "pid": 202,
+            "parent_pid": 201,
+            "sid_host": 201,
+            "namespace_pids": "202\t2",
+            "namespace_session_ids": "201\t1",
+        },
+        {
+            **common,
+            "pid": 200 + guest_pid,
+            "parent_pid": 201,
+            "sid_host": 200 + guest_sid,
+            "namespace_pids": f"{200 + guest_pid}\t{guest_pid}",
+            "namespace_session_ids": f"{200 + guest_sid}\t{guest_sid}",
+            "signal_ignored": "0000000001005000",
+            "ignores_sigterm": True,
+        },
+    ]
+    host["active_member_observations"] = [
+        {"phase": "active", "members": [copy.deepcopy(members[0])], "cgroup_procs": [200]},
+        {
+            "phase": "before_kill",
+            "members": members,
+            "cgroup_procs": [member["pid"] for member in members],
+        },
     ]
     heartbeat = json.dumps(
         {
             "nonce": NONCE,
-            "guest_pid": 7,
-            "guest_sid": 6,
-            "sigign": "0000000000004000",
+            "guest_pid": guest_pid,
+            "guest_sid": guest_sid,
+            "sigign": "0000000001005000",
             "ticks": "00000000000000000020",
         }
     )
-    value["host_facts"]["scratch_after"] = {
+    host["scratch_after"] = {
         "named_files": {
             "heartbeat": {
                 "text": heartbeat,
@@ -270,12 +334,240 @@ def test_detached_stop_pairs_guest_ids_with_kernel_session_and_stopped_heartbeat
             }
         }
     }
+    return value
+
+
+def detached_members(value: dict[str, object]) -> list[dict[str, object]]:
+    return value["host_facts"]["active_member_observations"][-1]["members"]
+
+
+def replace_heartbeat(value: dict[str, object], **changes: object) -> None:
+    heartbeat = value["host_facts"]["scratch_after"]["named_files"]["heartbeat"]
+    raw = json.dumps({**json.loads(heartbeat["text"]), **changes})
+    heartbeat.update(text=raw, size=len(raw.encode()), sha256=qualification._sha(raw.encode()))
+
+
+def test_detached_stop_pairs_guest_ids_with_kernel_session_and_stopped_heartbeat() -> None:
+    missing = detached_record()
+    del missing["host_facts"]["active_member_observations"]
+    missing["host_facts"]["cgroup_after"]["pids.peak"] = 100
+    assert assess(missing)["status"] == "UNKNOWN"
+    value = detached_record()
+    member = detached_members(value)[-1]
     assert assess(value)["status"] == "PASS"
     member["namespace_session_ids"] = "206 207"
     assert assess(value)["status"] == "FAIL"
     member["namespace_session_ids"] = "206 6"
     member["ignores_sigterm"] = False
     assert assess(value)["status"] == "FAIL"
+
+
+def test_real_producer_shaped_mixed_members_keep_outer_host_and_guest_ids_distinct() -> None:
+    value = detached_record(guest_pid=4, guest_sid=3)
+    original = copy.deepcopy(value)
+    assert assess(value)["status"] == "PASS"
+    assert value == original  # Assessment keeps the supplied evidence unchanged.
+    assert detached_members(value)[0]["namespace_pids"] == "200"
+    assert value["host_facts"]["guest_process_observation"]["status"]["NSpid"] == "202\t2"
+
+
+def test_mixed_roles_do_not_depend_on_kernel_member_enumeration_order() -> None:
+    value = detached_record(guest_pid=4, guest_sid=3)
+    sample = value["host_facts"]["active_member_observations"][-1]
+    sample["members"].reverse()
+    sample["cgroup_procs"] = [202, 204, 200, 201]
+    assert assess(value)["status"] == "PASS"
+
+
+@pytest.mark.parametrize("row", [1, 2, 3])
+@pytest.mark.parametrize("field", ["namespace_pids", "namespace_session_ids"])
+@pytest.mark.parametrize(
+    "bad", [None, True, "", "bad IDs", "201", "201 -1", "201 0", "\u0662\u0660\u0661 1"]
+)
+def test_every_guest_row_requires_complete_valid_namespace_ids(row, field, bad) -> None:
+    value = detached_record()
+    detached_members(value)[row][field] = bad
+    assert assess(value)["status"] != "PASS"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "unknown_host_pid",
+        "incomplete_host",
+        "duplicate_host",
+        "duplicate_guest",
+        "missing_pid",
+        "missing_role",
+        "extra_host_row",
+        "missing_cgroup",
+        "different_cgroup",
+        "boolean_cgroup",
+        "duplicate_cgroup",
+        "duplicate_before_kill",
+        "no_before_kill",
+    ],
+)
+def test_unknown_or_ambiguous_members_never_become_ignored_launcher_rows(change) -> None:
+    value = detached_record()
+    samples = value["host_facts"]["active_member_observations"]
+    before_kill = samples[-1]
+    members = before_kill["members"]
+    if change == "unknown_host_pid":
+        members[0].update(pid=199, namespace_pids="199", namespace_session_ids="199", sid_host=199)
+        before_kill["cgroup_procs"][0] = 199
+    elif change == "incomplete_host":
+        members[0] = {"pid": 200, "observation": None, "reason": "exited_or_incomplete"}
+    elif change == "duplicate_host":
+        members.append(copy.deepcopy(members[0]))
+        before_kill["cgroup_procs"].append(200)
+    elif change == "duplicate_guest":
+        members[1]["namespace_pids"] = "201 7"
+    elif change == "missing_pid":
+        del members[0]["pid"]
+    elif change == "missing_role":
+        del members[1]
+        del before_kill["cgroup_procs"][1]
+    elif change == "extra_host_row":
+        members.append(
+            {
+                **members[0],
+                "pid": 299,
+                "namespace_pids": "299",
+                "namespace_session_ids": "299",
+                "sid_host": 299,
+            }
+        )
+        before_kill["cgroup_procs"].append(299)
+    elif change == "missing_cgroup":
+        del before_kill["cgroup_procs"]
+    elif change == "different_cgroup":
+        before_kill["cgroup_procs"][-1] = 299
+    elif change == "boolean_cgroup":
+        before_kill["cgroup_procs"][0] = True
+    elif change == "duplicate_cgroup":
+        before_kill["cgroup_procs"][0] = before_kill["cgroup_procs"][1]
+    elif change == "duplicate_before_kill":
+        samples.append(copy.deepcopy(before_kill))
+    else:
+        before_kill["phase"] = "active"
+    assert assess(value)["status"] != "PASS"
+
+
+@pytest.mark.parametrize("row", range(4))
+@pytest.mark.parametrize(
+    "field,bad",
+    [
+        ("uid", "0 0 0 0"),
+        ("parent_pid", 999),
+        ("pid", True),
+        ("state", "Z (zombie)"),
+        ("state", "not-a-kernel-state"),
+        ("signal_ignored", "not-hex"),
+    ],
+)
+def test_all_roles_need_observed_identity_parent_liveness_and_signal_fields(
+    row, field, bad
+) -> None:
+    value = detached_record()
+    detached_members(value)[row][field] = bad
+    assert assess(value)["status"] != "PASS"
+
+
+@pytest.mark.parametrize("row", range(3))
+@pytest.mark.parametrize("change", ["flag", "mask"])
+def test_launcher_signal_flag_must_match_its_actual_kernel_mask(row, change) -> None:
+    value = detached_record()
+    member = detached_members(value)[row]
+    if change == "flag":
+        member["ignores_sigterm"] = True
+    else:
+        member["signal_ignored"] = "0000000001005000"
+    assert assess(value)["status"] != "PASS"
+
+
+@pytest.mark.parametrize(
+    "anchor,field,bad",
+    [
+        ("bootstrap_receipt", "pid", 199),
+        ("bootstrap_receipt", "pid", None),
+        ("bootstrap_receipt", "pid", True),
+        ("bootstrap_receipt", "parent_pid", 199),
+        ("bootstrap_status", "Pid", "199"),
+        ("bootstrap_status", "PPid", "199"),
+        ("bootstrap_status", "NSpid", "200 2"),
+        ("bootstrap_status", "NSsid", "201"),
+        ("guest", "pid", 203),
+        ("guest_status", "Pid", "203"),
+        ("guest_status", "PPid", "200"),
+        ("guest_status", "NSpid", "202"),
+        ("guest_status", "NSpid", None),
+        ("guest_status", "NSsid", "201 2"),
+    ],
+)
+def test_host_monitor_exemption_requires_both_independent_observation_anchors(anchor, field, bad):
+    value = detached_record()
+    host = value["host_facts"]
+    anchors = {
+        "bootstrap_receipt": host["bootstrap_admission"]["receipt"],
+        "bootstrap_status": host["bootstrap_admission"]["host_status"],
+        "guest": host["guest_process_observation"],
+        "guest_status": host["guest_process_observation"]["status"],
+    }
+    anchors[anchor][field] = bad
+    assert assess(value)["status"] != "PASS"
+
+
+@pytest.mark.parametrize("change", ["mask", "flag", "sid", "host_sid", "payload_nonce"])
+def test_unique_descendant_still_needs_sigterm_sid_and_payload_nonce_proof(change) -> None:
+    value = detached_record()
+    descendant = detached_members(value)[-1]
+    if change == "mask":
+        descendant["signal_ignored"] = "0000000001001000"
+    elif change == "flag":
+        descendant["ignores_sigterm"] = False
+    elif change == "sid":
+        descendant["namespace_session_ids"] = "206 7"
+    elif change == "host_sid":
+        descendant["sid_host"] = 299
+    else:
+        frames = [json.loads(line) for line in value["stdout"].splitlines()]
+        frames[-1]["facts"]["heartbeat_nonce"] = "f" * 32
+        value["stdout"] = "\n".join(json.dumps(frame) for frame in frames) + "\n"
+    assert assess(value)["status"] != "PASS"
+
+
+@pytest.mark.parametrize(
+    "field,bad",
+    [
+        ("nonce", "f" * 32),
+        ("guest_pid", 8),
+        ("guest_sid", 7),
+        ("sigign", "0000000000000000"),
+        ("ticks", "00000000000000000000"),
+        ("unknown", True),
+    ],
+)
+def test_stopped_heartbeat_document_cannot_supply_a_different_identity(field, bad) -> None:
+    value = detached_record()
+    replace_heartbeat(value, **{field: bad})
+    assert assess(value)["status"] != "PASS"
+
+
+@pytest.mark.parametrize("change", ["hash", "size", "regular", "malformed"])
+def test_stopped_heartbeat_bytes_and_regular_file_observation_remain_required(change) -> None:
+    value = detached_record()
+    heartbeat = value["host_facts"]["scratch_after"]["named_files"]["heartbeat"]
+    if change == "hash":
+        heartbeat["sha256"] = "f" * 64
+    elif change == "size":
+        heartbeat["size"] += 1
+    elif change == "regular":
+        heartbeat["is_regular"] = False
+    else:
+        raw = "{incomplete"
+        heartbeat.update(text=raw, size=len(raw), sha256=qualification._sha(raw.encode()))
+    assert assess(value)["status"] != "PASS"
 
 
 def test_output_overflow_needs_actual_truncation_and_stop_reason() -> None:
