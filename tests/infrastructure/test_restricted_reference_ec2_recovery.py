@@ -543,7 +543,7 @@ def complete_catalog(recovery):
         "backend_unconfirmed_admissions": 0,
         "pending_probe_outcomes": 0,
         "recovery_accounting": run.recovery_accounting(snapshot),
-        "admission_accounting_scope": "Submitted slots remain charged; this is a synthetic publication fixture",
+        "admission_accounting_scope": "Synthetic fixture; submitted slots stay charged",
         "provider_context": run.provider_record,
         "manifest_sha256": manifest_sha,
         "completed_at_monotonic_ns": recovery.host.clock[0],
