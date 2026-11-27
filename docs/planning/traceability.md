@@ -13,7 +13,7 @@
 | 缩减不改变原研究条件 Q-07/Q-11 | 搜索 / 回放 | S09-01、S09-02、S09-03 | [S09状态](sprint-09-status.md)：01a准备与01b原预算回放／terminal投影审计已接受；02有限局部缩减与独立false数值保持判定实现中，cooperative取消不扩大原预算；当前不支持checkpoint |
 | 探索和确认有透明账本 Q-09/Q-10 | 实验注册 | S02-03、S07-01、S08-02 | 所有attempt、暴露继承、固定确认窗口和声明范围 |
 | 长任务可控和可恢复 | 作业 / coordinator | S10-01、S10-02、S10-03 | 崩溃、重试、fencing、取消与资源限制演练 |
-| 数据与策略不越过信任边界 | 导入 / 执行 / 入口；infrastructure与运维边界 | S02-01、S04-02、S13-01–S13-03 | [执行信任合同](../contracts/execution-trust-v1.md)／[ADR0044](../adr/0044-explicit-execution-trust-boundaries.md)、[S13状态](sprint-13-status.md)：M0仅现有已资格内置profile；[固定EC2 v3参考](../security/ec2-reference-recovery-v3-evidence-2026-11-27.md)24PASS／累计45、独立只读readback CLOSED，仅QUALIFIED_REFERENCE_ONLY；M1产品未集成／DISABLED，M2托管权限边界不支持。[owner接受](../security/s13-02-owner-review.md)PENDING；T01–T10区分参考实测、产品缺口与未执行门，缺证保持关闭 |
+| 数据与策略不越过信任边界 | 导入 / 执行 / 入口；infrastructure与运维边界 | S02-01、S04-02、S13-01–S13-03 | [执行信任合同](../contracts/execution-trust-v1.md)／[ADR0044](../adr/0044-explicit-execution-trust-boundaries.md)、[S13状态](sprint-13-status.md)：M0仅现有已资格内置profile；[固定EC2 v3参考](../security/ec2-reference-recovery-v3-evidence-2026-11-27.md)24PASS／累计45、独立只读readback CLOSED，仅QUALIFIED_REFERENCE_ONLY；M1产品未集成／DISABLED，M2托管权限边界不支持。[owner接受](../security/s13-02-owner-review.md)已记录并随PR115实际合并；[S13-03审阅／降级](../security/s13-03-review-and-degradation.md)及[采用观察](s13-03-adoption-observation-2026-11-27.md)准备中，独立人类门未完成；T01–T10区分参考实测、产品缺口与未执行门，缺证保持关闭 |
 | 接入现有工作流 | 应用服务 / CLI / SDK | S04-01、S12-01、S12-02 | [已接受SDK与接入状态](sprint-12-status.md)、[自有案例流程](../user-onboarding.md)及[实际招募缺口](s12-02-recruitment-gap.md)；材料与技术成功不冒充真人激活 |
 | SDK兼容与自助接入 | SDK driving adapter / 共享应用服务 / 质量 | S12-03 | [兼容合同](../contracts/sdk-compatibility-v1.md)、具名文档实际安装执行、SDK/CLI未知字段拒绝与开放参数保留、[分层支持矩阵](../support.md)；四档SDK新资格不继承历史绿色 |
 | 长期证据可读、更正可追踪 | 证据 / 运维 | S16-02、S18-01–S18-03、S19-02 | 原件保留、迁移、撤回、依赖影响和备份恢复 |
@@ -23,7 +23,7 @@
 
 S13-01三模式及威胁模型已随PR114实际接受。S13-02先实际推送[参考合同](../contracts/restricted-reference-v1.md)／[ADR0045](../adr/0045-restricted-reference-qualification.md)冻结环境／机制／数值，再实现内部控制后端与固定合成负例；宿主事实、实际负例与M1产品启用分别判定，不新增SDK模式开关或研究权限。原S13专项10+16+8=34h和持续质量容量不变；原协议预算及5／8／11槽、golden／PR94不重置或退款。既有安全解析／Job／SDK测试不构成本轮隔离攻击资格；本候选远端检查、owner接受、独立安全复核与外部真人研究复验分别记录。独立安全复核尚未完成，外部真人0／0／PENDING及实际自有案例空登记保持，不能以文档或CI成功计作采用。
 
-2026-11-27当前追踪：[v3参考与只读收证](../security/ec2-reference-recovery-v3-evidence-2026-11-27.md)
+2026-11-27接受前追踪快照（历史，owner状态由后面的实际接受记录取代）：[v3参考与只读收证](../security/ec2-reference-recovery-v3-evidence-2026-11-27.md)
 把资格源码`908d56db32439f38686346687a5b43239b1b7264`的24PASS／本轮24+历史21=45、
 原handoff过期74／ACK不存在、后续63文件readback CLOSED及独立AWS Stopped分别记录；
 原604文件封存、558项固定pins与10文件资格源码闭包均不改写。
@@ -32,6 +32,8 @@ Engineering16项及Documentation已SUCCESS；旧GHA NOT_QUALIFIED是保留的历
 其作为当前参考状态的表述已由此次记录取代（SUPERSEDED），不改成GHA通过。
 PR115 Draft／#38 OPEN／in-progress、[owner接受](../security/s13-02-owner-review.md)PENDING；
 #39仍Planned，独立安全NOT_PERFORMED与外部真人0/0/PENDING分列，M1产品保持关闭。
+
+2026-11-27接受后：owner已接受源码89e12eb，PR115实际合并为40aede39b4d7b051b00b0dd604738e736d3f4c25；必需Docs／Engineering通过，旧非必需legacy REFUSED–FAILURE及原24/45记录保留，不称全部CI绿色。S13-02已接受，S13-03内部审阅／降级及采用观察准备中，独立安全NOT_PERFORMED、外部真人0/0/PENDING。原S13总34h、#39原8h及共同预算不变，M1仍关闭。
 
 ## 领域建模如何持续演进
 

@@ -1,5 +1,15 @@
 # S13-02 owner review handoff
 
+## Owner接受及实际合并记录
+
+Owner已在本次项目对话中明确回复“接受”，接受精确提交`89e12eb3e2e371ea7a4939f277bab57cd3c7843e`及已披露限制。[PR115](https://github.com/Darrenus/tickwitness/pull/115)按正常matching-head流程实际合并为`40aede39b4d7b051b00b0dd604738e736d3f4c25`，由Darrenus于2026-11-27 17:58:53 Asia/Singapore完成；合并树与接受源码相同。必需documentation／engineering通过；实际18 SUCCESS／1非必需legacy REFUSED–FAILURE／0pending保留。Owner接受这一有界交付及已披露例外，不把失败改称通过，不构成对后续PR的全局豁免。
+
+接受范围是内部固定参考、已有后置证据回传与其文档；原expired74／ACK确实不存在、producer fsync未独立观察及未演示新live AWS receive/ACK仍是限制。此次接受既不是独立人类安全复核，也不启用M1或新增资格许可。后续[S13-03审阅／降级准备](s13-03-review-and-degradation.md)与[采用观察](../planning/s13-03-adoption-observation-2026-11-27.md)分别进行；新材料尚非本次接受的源码修订。
+
+## 原接受前交接快照
+
+以下PENDING清单保留为当时的审阅输入；owner接受当前有界交付不自动填写独立安全结论或真人采用证据，也不代表下列未完成的人类审查已执行。
+
 2026-11-27 Asia/Singapore. **Owner acceptance PENDING.**
 [PR115](https://github.com/Darrenus/tickwitness/pull/115) is Draft, OPEN and
 unmerged; [S13-02 / #38](https://github.com/Darrenus/tickwitness/issues/38) remains

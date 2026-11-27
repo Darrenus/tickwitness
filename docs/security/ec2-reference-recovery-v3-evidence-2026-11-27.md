@@ -1,5 +1,9 @@
 # Fixed EC2 qualification v3 and completed historical readback — 2026-11-27
 
+Owner接受后的补记：Owner已在本次项目对话中明确回复“接受”，接受精确提交`89e12eb3e2e371ea7a4939f277bab57cd3c7843e`及已披露限制。[PR115](https://github.com/Darrenus/tickwitness/pull/115)按正常matching-head流程实际合并为`40aede39b4d7b051b00b0dd604738e736d3f4c25`，由Darrenus于2026-11-27 17:58:53 Asia/Singapore完成；合并树与接受源码相同。必需documentation／engineering通过；实际18 SUCCESS／1非必需legacy REFUSED–FAILURE／0pending保留。Owner接受这一有界交付及已披露例外，不把失败改称通过，不构成对后续PR的全局豁免。
+
+该补记不改变原24项实测、45槽、expired74、缺失ACK或CLOSED63回传。下列owner PENDING／PR115 Draft是接受前的证据快照；产品M1 DISABLED、独立人类安全NOT_PERFORMED及外部真人0/0/PENDING仍为当前限制。
+
 Result: **QUALIFIED_REFERENCE_ONLY** for the one fixed run0004: all24 controls
 actually PASS. Historical evidence readback is **COMPLETE**. The original live
 handoff remains **EXPIRED / exit74 / no ACK**; recovering its records does not
