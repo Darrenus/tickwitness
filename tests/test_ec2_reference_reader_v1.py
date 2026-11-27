@@ -54,32 +54,76 @@ class Host:
 
     def process(self, pid):
         if pid == 500:
-            return {"pid": 500, "start_ticks": 100, "ppid": 1,
-                    "effective_uid": 0 if self.root_sleep else 1000,
-                    "argv": ["/usr/bin/sleep", "300"], "cgroup": "/system.slice/" + reader.UNIT}
+            return {
+                "pid": 500,
+                "start_ticks": 100,
+                "ppid": 1,
+                "effective_uid": 0 if self.root_sleep else 1000,
+                "argv": ["/usr/bin/sleep", "300"],
+                "cgroup": "/system.slice/" + reader.UNIT,
+            }
         if pid == 100:
-            return {"pid": 100, "start_ticks": 200, "ppid": 1, "effective_uid": 0,
-                    "argv": ["/usr/bin/timeout", "--signal=TERM", "--kill-after=2s", "1500s",
-                             *self.process(200)["argv"]], "cgroup": "/system.slice/" + reader.UNIT}
-        return {"pid": pid, "start_ticks": 201 if self.reused_master else 200,
-                "ppid": 100, "effective_uid": 0,
-                "argv": ["/usr/bin/python3", "-I", reader.STAGE + "/ec2_reference_handoff_v3.py",
-                         "run", "--source-revision", reader.SOURCE, "--run-id", reader.RUN_ID],
-                "cgroup": "/system.slice/" + reader.UNIT}
+            return {
+                "pid": 100,
+                "start_ticks": 200,
+                "ppid": 1,
+                "effective_uid": 0,
+                "argv": [
+                    "/usr/bin/timeout",
+                    "--signal=TERM",
+                    "--kill-after=2s",
+                    "1500s",
+                    *self.process(200)["argv"],
+                ],
+                "cgroup": "/system.slice/" + reader.UNIT,
+            }
+        return {
+            "pid": pid,
+            "start_ticks": 201 if self.reused_master else 200,
+            "ppid": 100,
+            "effective_uid": 0,
+            "argv": [
+                "/usr/bin/python3",
+                "-I",
+                reader.STAGE + "/ec2_reference_handoff_v3.py",
+                "run",
+                "--source-revision",
+                reader.SOURCE,
+                "--run-id",
+                reader.RUN_ID,
+            ],
+            "cgroup": "/system.slice/" + reader.UNIT,
+        }
 
     def guard(self):
         live = self.boot_id == reader.ORIGINAL_BOOT
-        command = (["/usr/bin/timeout", "--signal=TERM", "--kill-after=2s", "1500s",
-                    *self.process(200)["argv"]] if live else ["/usr/bin/sleep", "300"])
+        command = (
+            [
+                "/usr/bin/timeout",
+                "--signal=TERM",
+                "--kill-after=2s",
+                "1500s",
+                *self.process(200)["argv"],
+            ]
+            if live
+            else ["/usr/bin/sleep", "300"]
+        )
         return {
             "active_state": "inactive" if self.inactive else "active",
             "sub_state": "dead" if self.inactive else "running",
-            "invocation_id": "9" * 32 if self.changed_invocation else (
-                reader.ORIGINAL_INVOCATION if live else "7" * 32),
-            "main_pid": 100 if live else 500, "main_start_ticks": 200 if live else 100,
-            "main_argv": command, "exec_start": (
-                "{ path=/usr/bin/sleep ; argv[]=/usr/bin/sleep 300 ; }" if not live else "fixed guard"
-            ), "control_group": "/system.slice/" + reader.UNIT, "user": "ubuntu",
+            "invocation_id": "9" * 32
+            if self.changed_invocation
+            else (reader.ORIGINAL_INVOCATION if live else "7" * 32),
+            "main_pid": 100 if live else 500,
+            "main_start_ticks": 200 if live else 100,
+            "main_argv": command,
+            "exec_start": (
+                "{ path=/usr/bin/sleep ; argv[]=/usr/bin/sleep 300 ; }"
+                if not live
+                else "fixed guard"
+            ),
+            "control_group": "/system.slice/" + reader.UNIT,
+            "user": "ubuntu",
         }
 
 
@@ -105,25 +149,46 @@ def case(tmp_path, monkeypatch):
     host.boot_id = reader.ORIGINAL_BOOT
     guard, master = host.guard(), host.process(200)
     ready = {
-        "kind": "restricted_reference_ec2_handoff_ready_v3", "schema_version": 3,
-        "source_revision": reader.SOURCE, "run_id": reader.RUN_ID, "boot_id": reader.ORIGINAL_BOOT,
-        "unit": reader.UNIT, "invocation_id": reader.ORIGINAL_INVOCATION,
-        "main_pid": 100, "main_start_ticks": 200, "main_argv": guard["main_argv"],
-        "guard_exec_start": guard["exec_start"], "guard_control_group": guard["control_group"],
-        "controller_pid": 200, "controller_start_ticks": 200, "controller_argv": master["argv"],
-        "nonce": "3" * 32, "bytes": len(archive), "sha256": reader.sha(archive),
-        "archive_stat": {key: int(value) for key, value in reader.stat_record(
-            files.path(reader.ARCHIVE).stat()).items()},
-        "started_ns": 1, "deadline_ns": 120_000_000_001, "outer_deadline_ns": 1500_000_000_001,
+        "kind": "restricted_reference_ec2_handoff_ready_v3",
+        "schema_version": 3,
+        "source_revision": reader.SOURCE,
+        "run_id": reader.RUN_ID,
+        "boot_id": reader.ORIGINAL_BOOT,
+        "unit": reader.UNIT,
+        "invocation_id": reader.ORIGINAL_INVOCATION,
+        "main_pid": 100,
+        "main_start_ticks": 200,
+        "main_argv": guard["main_argv"],
+        "guard_exec_start": guard["exec_start"],
+        "guard_control_group": guard["control_group"],
+        "controller_pid": 200,
+        "controller_start_ticks": 200,
+        "controller_argv": master["argv"],
+        "nonce": "3" * 32,
+        "bytes": len(archive),
+        "sha256": reader.sha(archive),
+        "archive_stat": {
+            key: int(value)
+            for key, value in reader.stat_record(files.path(reader.ARCHIVE).stat()).items()
+        },
+        "started_ns": 1,
+        "deadline_ns": 120_000_000_001,
+        "outer_deadline_ns": 1500_000_000_001,
     }
     ready_raw = reader.canonical(ready)
     put(reader.READY, ready_raw)
     monkeypatch.setattr(reader, "READY_SHA", reader.sha(ready_raw))
     start = {
-        "kind": "restricted_reference_ec2_controller_start_v3", "schema_version": 3,
-        "source_revision": reader.SOURCE, "run_id": reader.RUN_ID, "boot_id": reader.ORIGINAL_BOOT,
-        "controller_pid": 200, "controller_start_ticks": 200, "controller_argv": master["argv"],
-        "started_ns": 1, "outer_deadline_ns": ready["outer_deadline_ns"],
+        "kind": "restricted_reference_ec2_controller_start_v3",
+        "schema_version": 3,
+        "source_revision": reader.SOURCE,
+        "run_id": reader.RUN_ID,
+        "boot_id": reader.ORIGINAL_BOOT,
+        "controller_pid": 200,
+        "controller_start_ticks": 200,
+        "controller_argv": master["argv"],
+        "started_ns": 1,
+        "outer_deadline_ns": ready["outer_deadline_ns"],
     }
     put(reader.OPERATION + "/controller-start.json", reader.canonical(start))
     for path in reader.STAGE_PATHS:
@@ -134,30 +199,60 @@ def case(tmp_path, monkeypatch):
         put(path, raw)
         source_rows.append({"path": path, "bytes": len(raw), "sha256": reader.sha(raw)})
     pin_rows = []
-    for path in sorted({reader.READY, reader.ARCHIVE,
-                        reader.OPERATION + "/controller-start.json", *reader.STAGE_PATHS}):
+    for path in sorted(
+        {
+            reader.READY,
+            reader.ARCHIVE,
+            reader.OPERATION + "/controller-start.json",
+            *reader.STAGE_PATHS,
+        }
+    ):
         raw = files.path(path).read_bytes()
-        pin_rows.append({"path": path, "bytes": len(raw), "sha256": reader.sha(raw),
-                         "stat": reader.stat_record(files.path(path).stat())})
+        pin_rows.append(
+            {
+                "path": path,
+                "bytes": len(raw),
+                "sha256": reader.sha(raw),
+                "stat": reader.stat_record(files.path(path).stat()),
+            }
+        )
     data = {
-        "kind": "ec2_transport_pin_set_v1", "schema_version": 1,
-        "observation_id": reader.OBSERVATION_ID, "source_revision": reader.SOURCE,
-        "run_id": reader.RUN_ID, "original_boot_id": reader.ORIGINAL_BOOT,
+        "kind": "ec2_transport_pin_set_v1",
+        "schema_version": 1,
+        "observation_id": reader.OBSERVATION_ID,
+        "source_revision": reader.SOURCE,
+        "run_id": reader.RUN_ID,
+        "original_boot_id": reader.ORIGINAL_BOOT,
         "original_invocation_id": reader.ORIGINAL_INVOCATION,
-        "original_archive_sha256": reader.ARCHIVE_SHA, "original_archive_bytes": len(archive),
-        "original_ready_sha256": reader.READY_SHA, "origin_audit_index_sha256": reader.AUDIT_SHA,
-        "files": pin_rows, "source_files": source_rows,
+        "original_archive_sha256": reader.ARCHIVE_SHA,
+        "original_archive_bytes": len(archive),
+        "original_ready_sha256": reader.READY_SHA,
+        "origin_audit_index_sha256": reader.AUDIT_SHA,
+        "files": pin_rows,
+        "source_files": source_rows,
     }
     pins = reader.PinSet(reader.canonical(data), owner=os.getuid())
     host.boot_id = BOOT
-    return SimpleNamespace(root=root, files=files, put=put, data=data, pins=pins, host=host,
-                           clock=clock, ready=ready, archive=archive,
-                           reader=reader.Reader(pins, files, host, clock))
+    return SimpleNamespace(
+        root=root,
+        files=files,
+        put=put,
+        data=data,
+        pins=pins,
+        host=host,
+        clock=clock,
+        ready=ready,
+        archive=archive,
+        reader=reader.Reader(pins, files, host, clock),
+    )
 
 
 def test_real_file_descriptors_source_and_stage_pins_do_not_write_or_recreate_anything(case):
-    before = {path: (path.read_bytes(), path.stat().st_ino)
-              for path in case.root.rglob("*") if path.is_file()}
+    before = {
+        path: (path.read_bytes(), path.stat().st_ino)
+        for path in case.root.rglob("*")
+        if path.is_file()
+    }
     inventory = case.reader.inventory(BOOT)
     assert inventory["files_verified"] == 6 and inventory["source_files_verified"] == 10
     snapshot = case.reader.snapshot(BOOT)
@@ -169,8 +264,11 @@ def test_real_file_descriptors_source_and_stage_pins_do_not_write_or_recreate_an
     records = [reader.decode_frame(line) for line in metadata.getvalue().splitlines()]
     assert [row["phase"] for row in records] == ["before", "after"]
     assert records[0]["stat"] == records[1]["stat"]
-    assert before == {path: (path.read_bytes(), path.stat().st_ino)
-                      for path in case.root.rglob("*") if path.is_file()}
+    assert before == {
+        path: (path.read_bytes(), path.stat().st_ino)
+        for path in case.root.rglob("*")
+        if path.is_file()
+    }
 
 
 @pytest.mark.parametrize("fault", ["extra", "duplicate_path", "bool", "leading_zero", "float_ns"])
@@ -263,7 +361,10 @@ def test_oversized_postrecord_preserves_known_prefix_without_complete_claim(case
     case.put(reader.OPERATION + "/controller-result.json", raw)
     frames = list(case.reader.post_records(BOOT))
     row = frames[1]["record"]
-    assert row["status"] == "TOO_LARGE" and base64.b64decode(row["raw_b64"]) == raw[:reader.JSON_LIMIT]
+    assert (
+        row["status"] == "TOO_LARGE"
+        and base64.b64decode(row["raw_b64"]) == raw[: reader.JSON_LIMIT]
+    )
     assert frames[-1]["complete"] is False
     assert reader.decode_frame(reader.canonical(frames[1])) == frames[1]
 
@@ -326,11 +427,14 @@ def test_wire_field_order_can_vary_without_rewriting_original_payload(case):
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Production waitid/WNOWAIT requires Linux")
-@pytest.mark.parametrize("program,expected,code", [
-    ("print('one raw journal observation')", True, 0),
-    ("pass", False, 0),
-    ("import sys;print('partial');sys.stderr.write('error');sys.exit(7)", False, 7),
-])
+@pytest.mark.parametrize(
+    "program,expected,code",
+    [
+        ("print('one raw journal observation')", True, 0),
+        ("pass", False, 0),
+        ("import sys;print('partial');sys.stderr.write('error');sys.exit(7)", False, 7),
+    ],
+)
 def test_actual_journal_subprocess_is_bounded_and_does_not_accept_empty_or_error(
     case, monkeypatch, program, expected, code
 ):
@@ -356,7 +460,9 @@ def test_actual_journal_flood_is_stopped_without_unbounded_capture(case, monkeyp
     child = []
 
     def producer(_command, **options):
-        process = actual_popen([sys.executable, "-c", "import os;os.write(1,b'x'*10000)"], **options)
+        process = actual_popen(
+            [sys.executable, "-c", "import os;os.write(1,b'x'*10000)"], **options
+        )
         child.append(process)
         return process
 
@@ -368,7 +474,9 @@ def test_actual_journal_flood_is_stopped_without_unbounded_capture(case, monkeyp
     assert len(output.getvalue()) <= 1024 and child[0].poll() is not None
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="Real procfs/fork/group ownership requires Linux")
+@pytest.mark.skipif(
+    sys.platform != "linux", reason="Real procfs/fork/group ownership requires Linux"
+)
 def test_journal_timeout_kills_pipe_holder_even_after_the_owned_leader_exited(case, monkeypatch):
     actual_popen = subprocess.Popen
     children = []
@@ -414,8 +522,9 @@ def test_journal_timeout_kills_pipe_holder_even_after_the_owned_leader_exited(ca
         assert tail[0] in {b"Z", b"X"}
 
 
-@pytest.mark.parametrize("fault", [None, "timer_dropin", "timer_path", "period", "service_dropin",
-                                  "service_path"])
+@pytest.mark.parametrize(
+    "fault", [None, "timer_dropin", "timer_path", "period", "service_dropin", "service_path"]
+)
 def test_real_lifecycle_method_checks_stop_service_and_timer_without_running_systemd(
     case, monkeypatch, fault
 ):
@@ -429,15 +538,23 @@ def test_real_lifecycle_method_checks_stop_service_and_timer_without_running_sys
 
     def show(unit, _names):
         if unit.endswith(".timer"):
-            return {"ActiveState": "active", "UnitFileState": "enabled",
-                    "DropInPaths": "/override" if fault == "timer_dropin" else "",
-                    "FragmentPath": "/other" if fault == "timer_path" else
-                        "/etc/systemd/system/tickwitness-boot-deadline.timer",
-                    "TimersMonotonic": "changed" if fault == "period" else
-                        "{ OnBootUSec=4h ; next_elapse=4h }"}
-        return {"DropInPaths": "/override" if fault == "service_dropin" else "",
-                "FragmentPath": "/other" if fault == "service_path" else
-                    "/etc/systemd/system/tickwitness-boot-deadline.service"}
+            return {
+                "ActiveState": "active",
+                "UnitFileState": "enabled",
+                "DropInPaths": "/override" if fault == "timer_dropin" else "",
+                "FragmentPath": "/other"
+                if fault == "timer_path"
+                else "/etc/systemd/system/tickwitness-boot-deadline.timer",
+                "TimersMonotonic": "changed"
+                if fault == "period"
+                else "{ OnBootUSec=4h ; next_elapse=4h }",
+            }
+        return {
+            "DropInPaths": "/override" if fault == "service_dropin" else "",
+            "FragmentPath": "/other"
+            if fault == "service_path"
+            else "/etc/systemd/system/tickwitness-boot-deadline.service",
+        }
 
     monkeypatch.setattr(host, "show", show)
     if fault is None:
@@ -456,7 +573,7 @@ def test_actual_cli_subprocess_frames_real_reader_and_never_calls_an_old_operati
     pin_path.write_bytes(reader.canonical(case.data))
     # Only constructor ports/observations are substituted, not main, Reader,
     # descriptor reads, record production or stream completeness decisions.
-    program = r'''
+    program = r"""
 import base64,json,os,runpy,sys
 from pathlib import Path
 namespace=runpy.run_path(sys.argv[1])
@@ -477,10 +594,12 @@ module.platform.machine=lambda:'x86_64'
 module.platform.freedesktop_os_release=lambda:{'ID':'ubuntu','VERSION_ID':'24.04'}
 module.sys.platform='linux'
 raise SystemExit(module.main(['post-records',namespace['BOOT']]))
-'''
+"""
     result = subprocess.run(
         [sys.executable, "-c", program, str(Path(__file__)), str(pin_path), str(case.root)],
-        capture_output=True, timeout=10, check=False,
+        capture_output=True,
+        timeout=10,
+        check=False,
     )
     assert result.returncode == (74 if unsafe else 0) and result.stderr == b""
     frames = [reader.decode_frame(line) for line in result.stdout.splitlines()]

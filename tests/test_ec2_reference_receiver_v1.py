@@ -7,7 +7,6 @@ Ec2Run/driver/controller/exporter/ACK producers are used, not a second ledger.
 
 from __future__ import annotations
 
-import base64
 import contextlib
 import importlib
 import importlib.util
@@ -39,7 +38,9 @@ driver = decisions.driver
 
 
 def load(name, filename):
-    spec = importlib.util.spec_from_file_location(name, Path(__file__).parents[1] / "scripts" / filename)
+    spec = importlib.util.spec_from_file_location(
+        name, Path(__file__).parents[1] / "scripts" / filename
+    )
     assert spec is not None and spec.loader is not None
     result = importlib.util.module_from_spec(spec)
     sys.modules[name] = result
@@ -69,17 +70,24 @@ def produced(driver, monkeypatch, tmp_path):
     operation.parent.mkdir(mode=0o700)
     stage = tmp_path / "stage"
     stage.mkdir(mode=0o700)
-    for name in ("run_ec2_reference_recovery_v3.sh", "provision_ec2_reference_source.sh",
-                 "ec2_reference_handoff_v3.py"):
+    for name in (
+        "run_ec2_reference_recovery_v3.sh",
+        "provision_ec2_reference_source.sh",
+        "ec2_reference_handoff_v3.py",
+    ):
         (stage / name).write_bytes(("inert operational fixture: " + name + "\n").encode())
     for module in (client, ops):
         monkeypatch.setattr(module, "ROOT", root)
         monkeypatch.setattr(module, "OPERATION", operation)
         monkeypatch.setattr(module, "STAGE", stage)
     monkeypatch.setattr(client, "ARCHIVE_BASE", tmp_path)
-    monkeypatch.setattr(ops, "OLD_SOURCES", tuple(row["source_revision"] for row in driver.case.history.values()))
+    monkeypatch.setattr(
+        ops, "OLD_SOURCES", tuple(row["source_revision"] for row in driver.case.history.values())
+    )
     store = ops.Store(operation, owner=os.getuid(), trust_root=tmp_path, archive_base=tmp_path)
     release, waiting = threading.Event(), threading.Event()
+    qualifier_requested, qualifier_finished = threading.Event(), threading.Event()
+    qualifier_results = []
 
     class ServerClock:
         value = 1_000_000_000_000
@@ -100,7 +108,8 @@ def produced(driver, monkeypatch, tmp_path):
         guard = ops.GuardIdentity(
             "b" * 32,
             ops.ProcessIdentity(10, 100, ops.main_argv(source), "/system.slice/" + ops.UNIT, 1),
-            "fixture original complete ExecStart", "/system.slice/" + ops.UNIT,
+            "fixture original complete ExecStart",
+            "/system.slice/" + ops.UNIT,
         )
 
         def boot(self):
@@ -111,9 +120,22 @@ def produced(driver, monkeypatch, tmp_path):
             return ops.ProcessIdentity(20, 200, ops.controller_argv(source), self.guard.cgroup, 10)
 
         def process(self, _pid):
-            return ops.ProcessIdentity(30, 300, ["/usr/bin/python3", "-I", str(stage / "ec2_reference_handoff_v3.py"),
-                                       "internal-export", "--source-revision", source, "--run-id", ops.RUN_ID],
-                                       self.guard.cgroup, 20)
+            return ops.ProcessIdentity(
+                30,
+                300,
+                [
+                    "/usr/bin/python3",
+                    "-I",
+                    str(stage / "ec2_reference_handoff_v3.py"),
+                    "internal-export",
+                    "--source-revision",
+                    source,
+                    "--run-id",
+                    ops.RUN_ID,
+                ],
+                self.guard.cgroup,
+                20,
+            )
 
         def live(self, selected, start):
             assert selected == source and start["controller_pid"] == 20
@@ -121,9 +143,11 @@ def produced(driver, monkeypatch, tmp_path):
 
         def before_preparation(self, selected, active):
             assert selected == source
-            for retained, name in (("batch-source.sh", "run_ec2_reference_recovery_v3.sh"),
-                                   ("preparer-source.sh", "provision_ec2_reference_source.sh"),
-                                   ("handoff-source.py", "ec2_reference_handoff_v3.py")):
+            for retained, name in (
+                ("batch-source.sh", "run_ec2_reference_recovery_v3.sh"),
+                ("preparer-source.sh", "provision_ec2_reference_source.sh"),
+                ("handoff-source.py", "ec2_reference_handoff_v3.py"),
+            ):
                 active.write(retained, (stage / name).read_bytes())
             active.write("history-before.log", ops.canonical(ops.history_snapshot(active)))
 
@@ -137,17 +161,31 @@ def produced(driver, monkeypatch, tmp_path):
     def raw_result(run, ticket, manifest_sha256):
         result = original_raw(run, ticket, manifest_sha256)
         out, err = f"retained {ticket.name} {ticket.nonce}\n", ""
-        result.update(actual_exit_code=0, artifact_dir=str(run.artifact_dir), started=True,
-                      stdout=out, stderr=err, stdout_truncated=False, stderr_truncated=False,
-                      stop_reason="natural_exit")
+        result.update(
+            actual_exit_code=0,
+            artifact_dir=str(run.artifact_dir),
+            started=True,
+            stdout=out,
+            stderr=err,
+            stdout_truncated=False,
+            stderr_truncated=False,
+            stop_reason="natural_exit",
+        )
         result["host_facts"].update(
             canaries_before={"protected": "fixture-canary"},
-            canaries_after={"protected": "fixture-canary"}, confirmed_task_absent=True,
-            stop_intent_ns=ticket.admitted_ns + 1, stop_confirmation_deadline_ns=ticket.admitted_ns + 1 + ops.GRACE_NS,
-            stop_elapsed_ns=1, deadline_elapsed_ns=2,
-            bootstrap_admission={"receipt": {"policy_setup_sha256": run._state["policy_receipts"]["report_sha256"]}},
-            stdout_sha256=client.sha(out.encode()), stderr_sha256=client.sha(err.encode()),
-            stdout_retained_bytes=len(out.encode()), stderr_retained_bytes=len(err.encode()),
+            canaries_after={"protected": "fixture-canary"},
+            confirmed_task_absent=True,
+            stop_intent_ns=ticket.admitted_ns + 1,
+            stop_confirmation_deadline_ns=ticket.admitted_ns + 1 + ops.GRACE_NS,
+            stop_elapsed_ns=1,
+            deadline_elapsed_ns=2,
+            bootstrap_admission={
+                "receipt": {"policy_setup_sha256": run._state["policy_receipts"]["report_sha256"]}
+            },
+            stdout_sha256=client.sha(out.encode()),
+            stderr_sha256=client.sha(err.encode()),
+            stdout_retained_bytes=len(out.encode()),
+            stderr_retained_bytes=len(err.encode()),
         )
         stem = run.artifact_dir / f"{ticket.name}-{ticket.nonce}"
         stem.with_suffix(".json").write_bytes(client.canonical(result))
@@ -158,7 +196,8 @@ def produced(driver, monkeypatch, tmp_path):
     monkeypatch.setattr(decisions, "raw_result", raw_result)
 
     class Runner:
-        calls = []
+        def __init__(self):
+            self.calls = []
 
         def run(self, argv, deadline, grace, stdout, stderr):
             name = "qualifier" if stdout.stem == "qualification" else stdout.stem
@@ -166,9 +205,14 @@ def produced(driver, monkeypatch, tmp_path):
             assert deadline < grace <= controller.deadline + ops.GRACE_NS
             stream = io.StringIO()
             if name == "qualifier":
-                driver.case.host.clock[0] = clock.now()
-                with contextlib.redirect_stdout(stream):
-                    assert decisions.invoke() == 0
+                # The actual driver owns signal handlers and must execute in
+                # pytest's main thread, while this original phase waits for it.
+                qualifier_requested.set()
+                if not qualifier_finished.wait(10):
+                    raise RuntimeError("Main thread did not complete the one qualifier call")
+                code, raw = qualifier_results[0]
+                assert code == 0
+                stream.write(raw)
             elif name == "export":
                 with contextlib.redirect_stdout(stream):
                     ops.internal_export(source, store, host_port, clock)
@@ -182,40 +226,95 @@ def produced(driver, monkeypatch, tmp_path):
     outcome = []
     thread = threading.Thread(target=lambda: outcome.append(controller.run()), daemon=True)
     thread.start()
+    assert qualifier_requested.wait(10), "Original Controller did not request its qualifier phase"
+    qualification_output = io.StringIO()
+    driver.case.host.clock[0] = clock.now()
+    try:
+        with contextlib.redirect_stdout(qualification_output):
+            code = decisions.invoke()
+        qualifier_results.append((code, qualification_output.getvalue()))
+    finally:
+        qualifier_finished.set()
+    assert code == 0
+    assert driver.path == driver.runs[0].run_dir
+    assert (driver.path / "state.json").is_file()
     assert waiting.wait(10), "Original Controller did not publish ready"
     ready = store.record_read("handoff-ready", source, boot)
     archive = (operation / "evidence.tar.gz").read_bytes()
     # Pin rows come from the actual exporter, not fabricated filesystem stats.
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tar:
         data = json.load(tar.extractfile("export-inventory.json"))
-    files = [{"path": row["path"], "bytes": row["stat"]["size"], "sha256": row["sha256"],
-              "stat": {key: str(value) for key, value in row["stat"].items()}} for row in data["archived"]]
+    files = [
+        {
+            "path": row["path"],
+            "bytes": row["stat"]["size"],
+            "sha256": row["sha256"],
+            "stat": {key: str(value) for key, value in row["stat"].items()},
+        }
+        for row in data["archived"]
+    ]
     for path in (operation / "handoff-ready.json", operation / "evidence.tar.gz", *stage.iterdir()):
-        files.append({"path": str(path), "bytes": path.stat().st_size, "sha256": client.sha(path.read_bytes()),
-                      "stat": reader.stat_record(path.stat())})
-    source_rows = [{"path": str(path), "bytes": path.stat().st_size, "sha256": client.sha(path.read_bytes())}
-                   for relative in decisions.ec2.RECOVERY_V3_SOURCE_FILES
-                   for path in [driver.case.host.source / relative]]
-    updates = {"ROOT": str(root), "OPERATION": str(operation), "STAGE": str(stage),
-               "SOURCE": source, "ORIGINAL_BOOT": boot, "ORIGINAL_INVOCATION": host_port.guard.invocation_id,
-               "ARCHIVE": str(operation / "evidence.tar.gz"), "READY": str(operation / "handoff-ready.json"),
-               "ARCHIVE_SHA": client.sha(archive), "ARCHIVE_BYTES": len(archive),
-               "READY_SHA": client.sha((operation / "handoff-ready.json").read_bytes()),
-               "SOURCE_PATHS": {row["path"] for row in source_rows},
-               "STAGE_PATHS": {str(path) for path in stage.iterdir()},
-               "OLD_SOURCES": {row["source_revision"] for row in driver.case.history.values()} | {source}}
+        files.append(
+            {
+                "path": str(path),
+                "bytes": path.stat().st_size,
+                "sha256": client.sha(path.read_bytes()),
+                "stat": reader.stat_record(path.stat()),
+            }
+        )
+    source_rows = [
+        {"path": str(path), "bytes": path.stat().st_size, "sha256": client.sha(path.read_bytes())}
+        for relative in decisions.ec2.RECOVERY_V3_SOURCE_FILES
+        for path in [driver.case.host.source / relative]
+    ]
+    updates = {
+        "ROOT": str(root),
+        "OPERATION": str(operation),
+        "STAGE": str(stage),
+        "SOURCE": source,
+        "ORIGINAL_BOOT": boot,
+        "ORIGINAL_INVOCATION": host_port.guard.invocation_id,
+        "ARCHIVE": str(operation / "evidence.tar.gz"),
+        "READY": str(operation / "handoff-ready.json"),
+        "ARCHIVE_SHA": client.sha(archive),
+        "ARCHIVE_BYTES": len(archive),
+        "READY_SHA": client.sha((operation / "handoff-ready.json").read_bytes()),
+        "SOURCE_PATHS": {row["path"] for row in source_rows},
+        "STAGE_PATHS": {str(path) for path in stage.iterdir()},
+        "OLD_SOURCES": {row["source_revision"] for row in driver.case.history.values()} | {source},
+    }
     for key, value in updates.items():
         monkeypatch.setattr(reader, key, value)
-    pins_data = {"kind": "ec2_transport_pin_set_v1", "schema_version": 1,
-                 "observation_id": reader.OBSERVATION_ID, "source_revision": source, "run_id": ops.RUN_ID,
-                 "original_boot_id": boot, "original_invocation_id": host_port.guard.invocation_id,
-                 "original_archive_sha256": client.sha(archive), "original_archive_bytes": len(archive),
-                 "original_ready_sha256": updates["READY_SHA"], "origin_audit_index_sha256": reader.AUDIT_SHA,
-                 "files": files, "source_files": source_rows}
+    pins_data = {
+        "kind": "ec2_transport_pin_set_v1",
+        "schema_version": 1,
+        "observation_id": reader.OBSERVATION_ID,
+        "source_revision": source,
+        "run_id": ops.RUN_ID,
+        "original_boot_id": boot,
+        "original_invocation_id": host_port.guard.invocation_id,
+        "original_archive_sha256": client.sha(archive),
+        "original_archive_bytes": len(archive),
+        "original_ready_sha256": updates["READY_SHA"],
+        "origin_audit_index_sha256": reader.AUDIT_SHA,
+        "files": files,
+        "source_files": source_rows,
+    }
     pins = reader.PinSet(client.canonical(pins_data), owner=os.getuid())
-    result = SimpleNamespace(driver=driver, pins=pins, ready=ready, archive=archive, store=store,
-                             host=host_port, clock=clock, release=release, thread=thread, outcome=outcome,
-                             runner=runner, root=tmp_path)
+    result = SimpleNamespace(
+        driver=driver,
+        pins=pins,
+        ready=ready,
+        archive=archive,
+        store=store,
+        host=host_port,
+        clock=clock,
+        release=release,
+        thread=thread,
+        outcome=outcome,
+        runner=runner,
+        root=tmp_path,
+    )
     yield result
     if thread.is_alive():
         clock.value = ready["deadline_ns"]
@@ -244,6 +343,7 @@ class Immediate:
 
 class DirectReadChannels:
     """Transport port uses actual Reader + ACK, not another receive implementation."""
+
     def __init__(self, env, clock):
         self.env, self.clock, self.calls = env, clock, []
         self.prepared_ns = clock.now() - 10_000_000_000
@@ -263,21 +363,39 @@ class DirectReadChannels:
 
             def guard(self):
                 guard = env.host.guard
-                return {"active_state": "active" if env.thread.is_alive() else "inactive",
-                        "sub_state": "running" if env.thread.is_alive() else "dead",
-                        "invocation_id": guard.invocation_id, "main_pid": guard.main.pid,
-                        "main_start_ticks": guard.main.start_ticks, "main_argv": guard.main.argv,
-                        "exec_start": guard.exec_start, "control_group": guard.cgroup, "user": "ubuntu"}
+                return {
+                    "active_state": "active" if env.thread.is_alive() else "inactive",
+                    "sub_state": "running" if env.thread.is_alive() else "dead",
+                    "invocation_id": guard.invocation_id,
+                    "main_pid": guard.main.pid,
+                    "main_start_ticks": guard.main.start_ticks,
+                    "main_argv": guard.main.argv,
+                    "exec_start": guard.exec_start,
+                    "control_group": guard.cgroup,
+                    "user": "ubuntu",
+                }
 
             def process(self, pid):
                 if pid == env.host.guard.main.pid:
                     main = env.host.guard.main
-                    return {"pid": main.pid, "start_ticks": main.start_ticks, "argv": main.argv,
-                            "cgroup": main.cgroup, "ppid": main.ppid, "effective_uid": 1000}
+                    return {
+                        "pid": main.pid,
+                        "start_ticks": main.start_ticks,
+                        "argv": main.argv,
+                        "cgroup": main.cgroup,
+                        "ppid": main.ppid,
+                        "effective_uid": 1000,
+                    }
                 master = env.host.master(env.pins.data["source_revision"])
                 assert pid == master.pid
-                return {"pid": master.pid, "start_ticks": master.start_ticks, "argv": master.argv,
-                        "cgroup": master.cgroup, "ppid": master.ppid, "effective_uid": 0}
+                return {
+                    "pid": master.pid,
+                    "start_ticks": master.start_ticks,
+                    "argv": master.argv,
+                    "cgroup": master.cgroup,
+                    "ppid": master.ppid,
+                    "effective_uid": 0,
+                }
 
             def validate(self):
                 pass
@@ -285,8 +403,9 @@ class DirectReadChannels:
             def lifecycle(self, _files):
                 pass
 
-        self.reader = reader.Reader(env.pins, files=Files(env.root, owner=os.getuid()), host=Host(),
-                                    clock=env.clock)
+        self.reader = reader.Reader(
+            env.pins, files=Files(env.root, owner=os.getuid()), host=Host(), clock=env.clock
+        )
 
     def start(self, mode, boot, _deadline, *, wait=False):
         self.calls.append((mode, wait))
@@ -328,9 +447,24 @@ class DirectReadChannels:
     def ack(self, ready, source, _deadline):
         self.ack_calls += 1
         assert any(mode == "post-records" and wait for mode, wait in self.calls)
-        ops.acknowledge(source, self.env.store, self.env.host, self.env.clock,
-                        {key: ready[key] for key in ("boot_id", "invocation_id", "main_pid", "controller_pid",
-                                                   "nonce", "bytes", "sha256")})
+        ops.acknowledge(
+            source,
+            self.env.store,
+            self.env.host,
+            self.env.clock,
+            {
+                key: ready[key]
+                for key in (
+                    "boot_id",
+                    "invocation_id",
+                    "main_pid",
+                    "controller_pid",
+                    "nonce",
+                    "bytes",
+                    "sha256",
+                )
+            },
+        )
         self.env.release.set()
         return Immediate(client.Completed(b"", b"", 0), error=self.ack_error)
 
@@ -397,7 +531,9 @@ def test_partial_shared_intent_fsync_failure_is_permanently_used(produced, tmp_p
     _, _, _, permanent = receiver(produced, tmp_path)
     original = client.os.fsync
     with monkeypatch.context() as patch:
-        patch.setattr(client.os, "fsync", lambda _fd: (_ for _ in ()).throw(OSError("fsync unknown")))
+        patch.setattr(
+            client.os, "fsync", lambda _fd: (_ for _ in ()).throw(OSError("fsync unknown"))
+        )
         with pytest.raises(OSError):
             permanent.claim(produced.ready, produced.pins, {"intent": "first"})
     assert client.os.fsync is original
@@ -405,19 +541,41 @@ def test_partial_shared_intent_fsync_failure_is_permanently_used(produced, tmp_p
         permanent.claim(produced.ready, produced.pins, {"intent": "second"})
 
 
-@pytest.mark.parametrize("which", ["report_unknown", "prior_three", "raw_nonce", "raw_unknown",
-                                   "stream_hash", "stream_bytes", "backend_bytes", "stop", "canary",
-                                   "manifest_unknown", "receipt", "plan_unknown", "consumption_unknown"])
+@pytest.mark.parametrize(
+    "which",
+    [
+        "report_unknown",
+        "prior_three",
+        "raw_nonce",
+        "raw_unknown",
+        "stream_hash",
+        "stream_bytes",
+        "backend_bytes",
+        "stop",
+        "canary",
+        "manifest_unknown",
+        "receipt",
+        "plan_unknown",
+        "consumption_unknown",
+    ],
+)
 def test_full_semantics_refuse_rebound_source_bytes(produced, which):
     verifier = client.ArchiveVerifier(produced.pins)
     verifier.parse(produced.archive)
     run = client.ROOT / "runs" / client.RUN
-    mapping = {"report_unknown": run / "qualification-report.json", "prior_three": run / "qualification-report.json",
-               "raw_nonce": run / "case-01.json", "raw_unknown": run / "case-01.json",
-               "stream_hash": run / "case-01.json", "stop": run / "case-01.json", "canary": run / "case-01.json",
-               "manifest_unknown": run / "qualification/manifest.json", "receipt": client.OPERATION / "qualification.stdout",
-               "plan_unknown": client.ROOT / "recovery-v3/plan.json",
-               "consumption_unknown": client.ROOT / "recovery-v3/consumption.json"}
+    mapping = {
+        "report_unknown": run / "qualification-report.json",
+        "prior_three": run / "qualification-report.json",
+        "raw_nonce": run / "case-01.json",
+        "raw_unknown": run / "case-01.json",
+        "stream_hash": run / "case-01.json",
+        "stop": run / "case-01.json",
+        "canary": run / "case-01.json",
+        "manifest_unknown": run / "qualification/manifest.json",
+        "receipt": client.OPERATION / "qualification.stdout",
+        "plan_unknown": client.ROOT / "recovery-v3/plan.json",
+        "consumption_unknown": client.ROOT / "recovery-v3/consumption.json",
+    }
     first = verifier.json(run / "case-01.json")
     stem = run / "qualification" / f"positive-{first['nonce']}"
     if which in {"stream_bytes", "backend_bytes"}:
@@ -450,35 +608,51 @@ def test_full_semantics_refuse_rebound_source_bytes(produced, which):
 
 @pytest.mark.parametrize("missing", ["INVOCATION_ID", "_PID", "UNIT", "CODE_FUNC", "MESSAGE_ID"])
 def test_positive_manager_exit_requires_actual_pid1_original_identity(produced, missing):
-    row = {"_PID": "1", "UNIT": client.UNIT,
-           "_BOOT_ID": produced.pins.data["original_boot_id"].replace("-", ""),
-           "INVOCATION_ID": produced.pins.data["original_invocation_id"],
-           "MESSAGE_ID": "98e322203f7a4ed290d09fe03c09fe15", "CODE_FUNC": "unit_log_process_exit",
-           "EXIT_CODE": "exited", "EXIT_STATUS": "0"}
+    row = {
+        "_PID": "1",
+        "UNIT": client.UNIT,
+        "_BOOT_ID": produced.pins.data["original_boot_id"].replace("-", ""),
+        "INVOCATION_ID": produced.pins.data["original_invocation_id"],
+        "MESSAGE_ID": "98e322203f7a4ed290d09fe03c09fe15",
+        "CODE_FUNC": "unit_log_process_exit",
+        "EXIT_CODE": "exited",
+        "EXIT_STATUS": "0",
+    }
     assert client.manager_exit(client.canonical(row), produced.pins, 0)
     del row[missing]
     assert not client.manager_exit(client.canonical(row), produced.pins, 0)
-    assert not client.manager_exit(client.canonical({"boot_id": produced.pins.data["original_boot_id"],
-                                                    "exit_status": "0"}), produced.pins, 0)
+    assert not client.manager_exit(
+        client.canonical({"boot_id": produced.pins.data["original_boot_id"], "exit_status": "0"}),
+        produced.pins,
+        0,
+    )
 
 
 def test_isolated_actual_cli_loads_only_its_fixed_sibling_reader():
     path = Path(__file__).parents[1] / "scripts/ec2_reference_receiver_v1.py"
-    result = subprocess.run([sys.executable, "-I", str(path), "--help"], capture_output=True, timeout=10)
+    result = subprocess.run(
+        [sys.executable, "-I", str(path), "--help"], capture_output=True, timeout=10
+    )
     assert result.returncode == 0 and b"historical-retrieve" in result.stdout
-    bad = subprocess.run([sys.executable, "-I", str(path), "arbitrary-command"], capture_output=True, timeout=10)
+    bad = subprocess.run(
+        [sys.executable, "-I", str(path), "arbitrary-command"], capture_output=True, timeout=10
+    )
     assert bad.returncode == 2
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Real /proc owned-process-group observation")
 @pytest.mark.parametrize("hold_pipe", [True, False])
-def test_actual_bounded_transport_reaps_exited_leader_and_sigterm_ignoring_child(tmp_path, hold_pipe):
+def test_actual_bounded_transport_reaps_exited_leader_and_sigterm_ignoring_child(
+    tmp_path, hold_pipe
+):
     pid_path = tmp_path / "child.pid"
     code = (
         "import os,signal,time,pathlib; p=os.fork(); "
         "\nif p==0:\n signal.signal(signal.SIGTERM,signal.SIG_IGN); "
         + ("" if hold_pipe else "os.close(1); os.close(2); ")
-        + "pathlib.Path(" + repr(str(pid_path)) + ").write_text(str(os.getpid())); time.sleep(5)"
+        + "pathlib.Path("
+        + repr(str(pid_path))
+        + ").write_text(str(os.getpid())); time.sleep(5)"
         "\nelse:\n time.sleep(.05); os._exit(0)"
     )
     started = time.monotonic_ns()
