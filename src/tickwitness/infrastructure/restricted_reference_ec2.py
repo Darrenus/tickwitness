@@ -101,6 +101,60 @@ RECOVERY_V2_HISTORY = {
     },
 }
 RECOVERY_V2_ALLOWANCE = {**RECOVERY_ALLOWANCE, "max_cumulative_admissions": 26}
+RECOVERY_V3_SOURCE_FILES = (*SOURCE_FILES, "scripts/prepare_ec2_reference_recovery_v3.py")
+RECOVERY_V3_PLAN_ID = "ec2-recovery-20261127-v3"
+RECOVERY_V3_RUN_ID = "ec201aab11254e8bb7cd1573a96a0004"
+RECOVERY_V3_FREEZE_REVISION = "72c83a02d47a403d5f9d33aad2f84ccaba7ec6a4"
+RECOVERY_V3_STOP_SHA256 = "85cf2e0aea083bae7cfacbe6f52c3c2b49c5bcc057b73fed3c7f3491b9be8f07"
+RECOVERY_V3_PRIOR_CHARGED = 21
+RECOVERY_V3_HISTORY: dict[str, Row] = {
+    "original": dict(RECOVERY_V2_HISTORY["original"]),
+    "recovery": dict(RECOVERY_V2_HISTORY["recovery"]),
+    "recovery_v2": {
+        "source_revision": "fae7fad81fe6107f0227fe70a9e9a3feeda52346",
+        "run_id": "ec201aab11254e8bb7cd1573a96a0003",
+        "boot_id": "5fc1dec3-13e7-4d43-b584-314aedc95e6b",
+        "claim_sha256": "c1bc4c14e01393567a254e9b8fe0c159021a2f9036eaa74bd388d3a9ad0e6d3c",
+        "state_sha256": "1b74bd77a9cb055f1cf567f0c6c2f6c5f9a44e28ad1d342ccd0aa4556f8b0236",
+        "report_sha256": "de0d9f217a6507a184715ee693c4a441587d9e7e38b954178dbf059da38d8117",
+        "case_sha256": {
+            "case-01.json": "db855e1563a32f66b6cb62905696719501426cbb0d3418b57c4e0b885fc3a4e8",
+            "case-02.json": "16204c395875e3b043cebf91bff2abf7a6a2a84c2c71bbb90d4c376b2b4cc4b0",
+            "case-03.json": "4b7facc337d759ccf0a617655f8a536004452c239a68be0ed735369d19221eea",
+            "case-04.json": "31f73b908adb03f1d91eb5eee14ccf44590c17a1d465a427ff7b8f1a571407ae",
+            "case-05.json": "5e60aed174a3b7791678133ed0192deb41b2003e9d8f3fb6c15d9cb0ab7eb683",
+            "case-06.json": "d7e6e02dc9d60ee92e239624e1e71a3fe92e743397282351b90819ca6ea5df84",
+            "case-07.json": "3215c11deb98a9c85f16ed3fcaa5916ed883e458a91e28c5049fee9fcc927624",
+            "case-08.json": "94ca893cf90f8920d092ef1db535cebca583b1e510a38cd62665e639320c740a",
+            "case-09.json": "1085c7cfe5f8909965e0e5332c306a7f0e68295df01a2b648b819813cb2d1722",
+            "case-10.json": "aef1b3e106ebef9fecb4568ac5995c7413958ef9ac5ed6132a5d2ef963f842aa",
+            "case-11.json": "bf66c62aae4b210a81c43f85d595f6e583cdb13179ff12fbbaaeda29b2370ef9",
+            "case-12.json": "2eeca5d0a7c0d40b6684aa0e6c18abae64e0a2e67afd9be8d3e13e27a1afc146",
+            "case-13.json": "76845c80e71c6f0c6d96074bc729924c2b62da90358de5b63b78b8c070b5dac8",
+            "case-14.json": "631d90aa20a82b46e10e10106f8821938ec05db32f0c1e42afa5037cfe407cd4",
+            "case-15.json": "a408b13826636a2f2819571208cdeeb33ae5a9d2dd4a465829447bfd3df687b4",
+            "case-16.json": "8c3a5204750a6592d38d7c23a148f2baac223e9f7ce7bb112c08a2c8ab47c4a0",
+            "case-17.json": "33d13d41dd7158700115c5457df558908800eb3dbeb6a825b9b55740d8aa126b",
+            "case-18.json": "eaca929b76ead6c0d9984f621632181a014ef92a8cece8630d6ef48e9e4d2d5f",
+            "case-19.json": "b2c71d475b2090f7fb3a147201a78ba2dfa62ceb7c396bc911c392096e96c311",
+        },
+        "source_lock_sha256": "edb1a957feb47551c2a8b1ddce5d891e24e21d79d3c5ec6664088db6615a5d2d",
+        "manifest_sha256": "15af370090abf1bdbddc5576758afe40832b62155954d11f9b43fe56185ceb7d",
+        "plan_sha256": "de3288e8d1576684368256194e62d587a2ef52ddc7f0d542b043af8e6eafb43e",
+        "consumption_sha256": "e5b3e575fb4f23b7f0776997d50e43a74e9696232a27f5fe707bb25a738cd47b",
+        "policy_setup_sha256": "b6077d84db57d2678d75c44c0cf709d32df184eef64527b3ba558115e3f4df60",
+        "policy_preload_sha256": "02bfe910d218a4cbe6efb8ee63cd79993d61b996a541c71e867056737b01e9dd",
+        "identity_document_sha256": (
+            "c6427f9759c7e7a0a8e29cc4f2320eed55d62fba309aee86900b6ed36a072598"
+        ),
+        "archive_sha256": "61049ada0e503279dc9f08b4109f82f64aa55d21d4fcf9cd950906a6d4e34064",
+        "sealed_index_sha256": "bc394ad153734bc90ced8d4ceee33d08b50cfcc09af8039412f339a8dcfa8479",
+        "charged": 19,
+        "backend_confirmed": 19,
+    },
+}
+RECOVERY_V3_ALLOWANCE = {**RECOVERY_ALLOWANCE, "max_cumulative_admissions": 45}
+RECOVERY_V3_RETRIEVAL_BOOT = "5e83ad22-d623-4ddd-87f8-41a27a599f2d"
 RECOVERY_MANIFEST_KEYS: frozenset[str] = frozenset(
     {
         "kind",
@@ -239,7 +293,7 @@ def _mapping(value: object, keys: set[str], label: str) -> Row:
 
 def validate_recovery_manifest_shape(value: object, *, version: int = 1) -> Row:
     """Check the frozen complete top-level shape; nested raw observations stay raw."""
-    if type(version) is not int or version not in {1, 2}:
+    if type(version) is not int or version not in {1, 2, 3}:
         raise ValueError("Unsupported exact recovery manifest version")
     manifest = _mapping(value, set(RECOVERY_MANIFEST_KEYS), "recovery manifest")
     _fixed(
@@ -373,7 +427,7 @@ def _source_records(
     seals: dict[str, tuple[Row, tuple[int, int, int, int, int]]],
     version: int = 1,
 ) -> tuple[Row, Row]:
-    if type(version) is not int or version not in {1, 2} or (not recovery and version != 1):
+    if type(version) is not int or version not in {1, 2, 3} or (not recovery and version != 1):
         raise ValueError("Unsupported exact source closure version")
     path = ROOT / "sources" / source_revision / "source-lock.json"
     raw, seal = _secure_read(path, 65536)
@@ -382,6 +436,8 @@ def _source_records(
         {"kind", "schema_version", "source_revision", "source_root", "files"},
         "source-lock",
     )
+    if version == 3 and canonical(document) != raw:
+        raise ValueError("V3 source-lock is not exact canonical bytes")
     kind = (
         f"restricted_reference_ec2_recovery_source_lock_v{version}"
         if recovery
@@ -396,7 +452,9 @@ def _source_records(
     ):
         raise ValueError("Trusted actual source-lock identity differs")
     selected = (
-        RECOVERY_V2_SOURCE_FILES
+        RECOVERY_V3_SOURCE_FILES
+        if version == 3
+        else RECOVERY_V2_SOURCE_FILES
         if version == 2
         else RECOVERY_SOURCE_FILES
         if recovery
@@ -884,6 +942,464 @@ def _recovery_v2_history(
     }
 
 
+def _recovery_v3_history(
+    seals: dict[str, tuple[Row, tuple[int, int, int, int, int]]],
+) -> Row:
+    """Read the consumed v2 failure and all nineteen outcomes without live old objects."""
+    expected: object
+    _mapping(RECOVERY_V3_HISTORY, {"original", "recovery", "recovery_v2"}, "v3 fixed history")
+    _fixed(
+        {key: RECOVERY_V3_HISTORY[key] for key in ("original", "recovery")},
+        RECOVERY_V2_HISTORY,
+        "retained first two histories",
+    )
+    _recovery_v2_history(seals)
+    previous = _mapping(
+        RECOVERY_V3_HISTORY["recovery_v2"],
+        set(RECOVERY_V2_HISTORY["recovery"]),
+        "third history pins",
+    )
+    _fixed(previous["charged"], 19, "third historical charge")
+    _fixed(previous["backend_confirmed"], 19, "third historical acceptance")
+    old_dir = ROOT / "runs" / str(previous["run_id"])
+
+    def read(path: Path, digest: object, limit: int, *, encoding: str = "canonical") -> Row:
+        raw, seal = _secure_read(path, limit)
+        if type(digest) is not str or not _HEX64.fullmatch(digest) or _sha(raw) != digest:
+            raise ValueError("Pinned third qualification bytes differ: " + str(path))
+        value = _json(raw)
+        if not isinstance(value, dict):
+            raise ValueError("Third qualification record is not a JSON object")
+        canonical_raw = canonical(value)
+        if encoding == "canonical":
+            valid = raw == canonical_raw
+        elif encoding == "preload":
+            valid = raw == canonical_raw[:-1]
+        elif encoding == "identity":
+            valid = True
+        else:
+            raise ValueError("Unknown historical producer encoding")
+        if not valid:
+            raise ValueError("Third qualification producer encoding differs")
+        seals[str(path)] = ({"path": str(path), "sha256": digest, "bytes": len(raw)}, seal)
+        return cast(Row, value)
+
+    claim = read(old_dir / "claim.json", previous["claim_sha256"], 65536)
+    state = _mapping(
+        read(old_dir / "state.json", previous["state_sha256"], 262144),
+        _STATE_KEYS | {"recovery_context"},
+        "third qualification state",
+    )
+    report = _mapping(
+        read(old_dir / "qualification-report.json", previous["report_sha256"], 262144),
+        {
+            "kind",
+            "schema_version",
+            "controls_status",
+            "production_m1",
+            "independent_human_security_review",
+            "external_human_reproduction",
+            "research_reservations",
+            "replay_engine_invocations",
+            "source_revision",
+            "run_id",
+            "acceptance_gate",
+            "original_qualification_budget",
+            "cases",
+            "scope",
+            "stop_scope",
+            "recovery_context",
+            "boot_id",
+            "durable_budget_status",
+            "durable_budget",
+            "admissions_charged",
+            "confirmed_backend_admissions",
+            "backend_unconfirmed_admissions",
+            "pending_probe_outcomes",
+            "recovery_accounting",
+            "admission_accounting_scope",
+            "provider_context",
+            "manifest_sha256",
+            "completed_at_monotonic_ns",
+            "observed_payload_starts",
+        },
+        "third qualification report",
+    )
+    manifest = validate_recovery_manifest_shape(
+        read(old_dir / "qualification" / "manifest.json", previous["manifest_sha256"], 262144),
+        version=2,
+    )
+    plan_path = ROOT / "recovery-v2" / "plan.json"
+    consumption_path = ROOT / "recovery-v2" / "consumption.json"
+    plan = _mapping(
+        read(plan_path, previous["plan_sha256"], 65536),
+        _PLAN_KEYS - {"predecessor"} | {"history"},
+        "retained v2 plan",
+    )
+    consumption = read(consumption_path, previous["consumption_sha256"], 65536)
+    lock_path = ROOT / "sources" / str(previous["source_revision"]) / "source-lock.json"
+    old_lock = _mapping(
+        read(lock_path, previous["source_lock_sha256"], 65536),
+        {"kind", "schema_version", "source_revision", "source_root", "files"},
+        "third source lock",
+    )
+    preload = read(
+        old_dir / "policy-evidence" / "preload-manifest.json",
+        previous["policy_preload_sha256"],
+        262144,
+        encoding="preload",
+    )
+    setup = read(
+        old_dir / "policy-evidence" / "policy-setup.json", previous["policy_setup_sha256"], 262144
+    )
+    identity = read(
+        old_dir / "instance-identity-document.json",
+        previous["identity_document_sha256"],
+        16384,
+        encoding="identity",
+    )
+    fields = (
+        "source_revision",
+        "run_id",
+        "boot_id",
+        "started_ns",
+        "deadline_ns",
+        "setup_deadline_ns",
+    )
+    _mapping(claim, {"kind", "schema_version", "owner", "recovery_context", *fields}, "v2 claim")
+    invocation = {field: claim[field] for field in fields}
+    for field in fields:
+        if field.endswith("_ns") and (
+            type(invocation[field]) is not int or cast(int, invocation[field]) < 0
+        ):
+            raise ValueError("Third qualification original clock is invalid")
+        _fixed(state[field], invocation[field], "third original " + field)
+    for field in ("source_revision", "run_id", "boot_id"):
+        _fixed(invocation[field], previous[field], "third qualification " + field)
+        _fixed(report.get(field), previous[field], "third report " + field)
+    if (
+        cast(int, invocation["deadline_ns"]) - cast(int, invocation["started_ns"]) != WINDOW_NS
+        or cast(int, invocation["setup_deadline_ns"]) - cast(int, invocation["started_ns"])
+        != SETUP_NS
+    ):
+        raise ValueError("Third qualification original deadlines changed")
+    for field, expected in (
+        ("kind", "restricted_reference_ec2_recovery_run_v2"),
+        ("schema_version", 2),
+        ("phase", "TERMINAL"),
+        ("outcome", "NOT_QUALIFIED"),
+        ("reason", "fixed_catalog_incomplete"),
+        ("poisoned", False),
+        ("charged", 19),
+        ("backend_confirmed", 19),
+        ("host_preparation_started", True),
+        ("final_report_sha256", None),
+    ):
+        _fixed(state[field], expected, "third qualification " + field)
+    _fixed(claim["kind"], "restricted_reference_ec2_recovery_claim_v2", "third claim kind")
+    _fixed(claim["schema_version"], 2, "third claim schema")
+    owner = _mapping(claim["owner"], {"pid", "start_ticks", "uid", "invocation"}, "v2 owner")
+    for field in ("pid", "start_ticks", "uid"):
+        if type(owner[field]) is not int or cast(int, owner[field]) < 0:
+            raise ValueError("Third qualification owner integer is invalid")
+    if type(owner["invocation"]) is not str or not _HEX64.fullmatch(owner["invocation"]):
+        raise ValueError("Third qualification owner invocation is invalid")
+    _fixed(state["owner"], owner, "third state owner")
+    for field, expected in (
+        ("kind", "restricted_reference_ec2_recovery_plan_v2"),
+        ("schema_version", 2),
+        ("plan_id", RECOVERY_V2_PLAN_ID),
+        ("freeze_revision", RECOVERY_V2_FREEZE_REVISION),
+        ("source_revision", previous["source_revision"]),
+        ("run_id", previous["run_id"]),
+        ("expected_identity", EXPECTED_IDENTITY),
+        ("history", RECOVERY_V2_HISTORY),
+        ("allowance", RECOVERY_V2_ALLOWANCE),
+        ("source_lock", seals[str(lock_path)][0]),
+    ):
+        _fixed(plan[field], expected, "retained v2 plan " + field)
+    _fixed(
+        plan["stop_observation"],
+        {
+            "kind": "trusted_owner_aws_stop_observation_v1",
+            "observed_state": "Stopped",
+            "reason": "Client.InstanceInitiatedShutdown",
+            "evidence": seals[str(ROOT / "recovery-v2" / "operator-stop.md")][0],
+        },
+        "retained v2 Stop observation",
+    )
+    _fixed(
+        consumption,
+        {
+            "kind": "restricted_reference_ec2_recovery_consumption_v2",
+            "schema_version": 2,
+            "plan_id": RECOVERY_V2_PLAN_ID,
+            "plan_sha256": previous["plan_sha256"],
+            "freeze_revision": RECOVERY_V2_FREEZE_REVISION,
+            **invocation,
+            "owner": owner,
+            "history_state_sha256": {
+                key: value["state_sha256"] for key, value in RECOVERY_V2_HISTORY.items()
+            },
+            "prior_charged": 2,
+            "max_admissions": 24,
+            "max_cumulative_admissions": 26,
+        },
+        "retained v2 consumption",
+    )
+    context = {
+        "kind": "restricted_reference_ec2_recovery_context_v2",
+        "schema_version": 2,
+        "plan_id": RECOVERY_V2_PLAN_ID,
+        "plan": seals[str(plan_path)][0],
+        "history": _json(canonical(RECOVERY_V2_HISTORY)),
+        "consumption": seals[str(consumption_path)][0],
+        "invocation": invocation,
+        "allowance": dict(RECOVERY_V2_ALLOWANCE),
+    }
+    _fixed(claim["recovery_context"], context, "third claim context")
+    provider = _mapping(
+        state["provider_context"],
+        {
+            "kind",
+            "schema_version",
+            "provider",
+            "expected_identity",
+            "observed_identity",
+            "source_revision",
+            "run_id",
+            "boot_id",
+            "host",
+            "gha_metadata",
+            "gha_metadata_reason",
+            "provider_source",
+            "source_lock",
+            "identity_document",
+            "recovery_context",
+        },
+        "third provider",
+    )
+    for document in (state, report, manifest, provider):
+        _fixed(document.get("recovery_context"), context, "third immutable context")
+    for document in (report, manifest, preload, setup):
+        _fixed(document.get("provider_context"), provider, "third observed provider")
+    for field, expected in (
+        ("kind", "restricted_reference_ec2_recovery_host_v2"),
+        ("schema_version", 2),
+        ("provider", "aws_ec2_dedicated_v1"),
+        ("source_revision", previous["source_revision"]),
+        ("run_id", previous["run_id"]),
+        ("boot_id", previous["boot_id"]),
+        ("source_lock", seals[str(lock_path)][0]),
+        ("identity_document", seals[str(old_dir / "instance-identity-document.json")][0]),
+        ("expected_identity", EXPECTED_IDENTITY),
+        ("observed_identity", EXPECTED_IDENTITY),
+        ("gha_metadata", None),
+        ("gha_metadata_reason", "not_applicable_aws_ec2"),
+    ):
+        _fixed(provider[field], expected, "third provider " + field)
+    for field, expected in EXPECTED_IDENTITY.items():
+        _fixed(identity.get(field), expected, "third identity " + field)
+    _fixed(
+        state["policy_receipts"],
+        {
+            "preload_sha256": previous["policy_preload_sha256"],
+            "report_sha256": previous["policy_setup_sha256"],
+        },
+        "third policy receipts",
+    )
+    _fixed(setup.get("preload_manifest_sha256"), previous["policy_preload_sha256"], "v2 preload")
+    _fixed(old_lock["kind"], "restricted_reference_ec2_recovery_source_lock_v2", "v2 lock")
+    _fixed(old_lock["schema_version"], 2, "v2 lock schema")
+    _fixed(old_lock["source_revision"], previous["source_revision"], "v2 lock source")
+    files = _mapping(old_lock["files"], set(RECOVERY_V2_SOURCE_FILES), "v2 source closure")
+    for field, relative in (
+        ("provider_source", SOURCE_FILES[0]),
+        ("provisioner_source", RECOVERY_V2_SOURCE_FILES[-1]),
+    ):
+        entry = _mapping(files[relative], {"sha256", "bytes"}, "v2 source file")
+        record = {"path": str(Path(str(old_lock["source_root"])) / relative), **entry}
+        _fixed((provider if field == "provider_source" else plan)[field], record, "v2 " + field)
+    initial = {
+        "kind": "restricted_reference_ec2_recovery_budget_v2",
+        "schema_version": 2,
+        "plan_id": RECOVERY_V2_PLAN_ID,
+        "historical_run_ids": [item["run_id"] for item in RECOVERY_V2_HISTORY.values()],
+        "prior_charged": 2,
+        "prior_backend_confirmed": 2,
+        "current_charged": 0,
+        "current_backend_confirmed": 0,
+        "current_unconfirmed": 0,
+        "current_pending_outcomes": 0,
+        "cumulative_charged": 2,
+        "cumulative_backend_confirmed": 2,
+        "max_current_admissions": 24,
+        "max_cumulative_admissions": 26,
+    }
+    for field, expected in (
+        ("source_revision", previous["source_revision"]),
+        ("qualification_started_ns", invocation["started_ns"]),
+        ("qualification_deadline_ns", invocation["deadline_ns"]),
+        ("recovery_accounting", initial),
+        ("recovery_accounting_phase", "pre_probe_manifest"),
+        ("production_m1_enabled", False),
+        ("available_for_probe", True),
+        ("fixed_cases", list(FIXED_PROBES)),
+    ):
+        _fixed(manifest[field], expected, "third manifest " + field)
+    final = {
+        **initial,
+        "current_charged": 19,
+        "current_backend_confirmed": 19,
+        "cumulative_charged": 21,
+        "cumulative_backend_confirmed": 21,
+    }
+    for field, expected in (
+        ("kind", "restricted_reference_ec2_recovery_qualification_v2"),
+        ("schema_version", 2),
+        ("controls_status", "NOT_QUALIFIED"),
+        ("production_m1", "DISABLED"),
+        ("durable_budget_status", "CONFIRMED"),
+        ("recovery_accounting", final),
+        ("admissions_charged", 19),
+        ("confirmed_backend_admissions", 19),
+        ("backend_unconfirmed_admissions", 0),
+        ("pending_probe_outcomes", 0),
+        ("observed_payload_starts", 19),
+        ("research_reservations", 0),
+        ("replay_engine_invocations", 0),
+        ("manifest_sha256", previous["manifest_sha256"]),
+    ):
+        _fixed(report.get(field), expected, "third report " + field)
+    _fixed(
+        report.get("durable_budget"),
+        {
+            "started_ns": invocation["started_ns"],
+            "deadline_ns": invocation["deadline_ns"],
+            "max_admissions": 24,
+            "charged": 19,
+            "backend_confirmed": 19,
+            "unconfirmed": 0,
+            "poisoned": False,
+            "pending_outcomes": 0,
+        },
+        "third durable counters",
+    )
+    rows, cases = state["admissions"], report.get("cases")
+    if (
+        not isinstance(rows, list)
+        or len(rows) != 19
+        or not isinstance(cases, list)
+        or len(cases) != 24
+    ):
+        raise ValueError("Third qualification lost its original partial catalog")
+    case_hashes = _mapping(
+        previous["case_sha256"], {f"case-{index:02d}.json" for index in range(1, 20)}, "v2 cases"
+    )
+    ticket_keys = {field.name for field in dataclasses.fields(ProbeAdmission)}
+    nonces: set[str] = set()
+    for index, value in enumerate(cases):
+        case = _mapping(
+            value,
+            {"name", "status", "admission_submitted", "reason"}
+            | (
+                {"nonce", "admission", "execution_evidence", "payload_started"}
+                if index < 19
+                else set()
+            ),
+            "third report case",
+        )
+        _fixed(case["name"], FIXED_PROBES[index], "third case name")
+        _fixed(case["status"], "PASS" if index < 18 else "UNKNOWN", "third case verdict")
+        _fixed(case["admission_submitted"], index < 19, "third case submission")
+        _fixed(
+            case["reason"],
+            "actual_scoped_control_evidence"
+            if index < 18
+            else "Missing separate host and guest namespace IDs"
+            if index == 18
+            else "not_admitted_after_original_window_or_uncertainty",
+            "third case reason",
+        )
+        if index >= 19:
+            continue
+        admission = _mapping(rows[index], ticket_keys | {"accepted", "outcome"}, "v2 ticket")
+        for field, expected in (
+            ("accepted", True),
+            ("admission_number", index + 1),
+            ("name", FIXED_PROBES[index]),
+            ("source_revision", previous["source_revision"]),
+            ("run_id", previous["run_id"]),
+            ("boot_id", previous["boot_id"]),
+        ):
+            _fixed(admission[field], expected, "third ticket " + field)
+        nonce = admission["nonce"]
+        if (
+            type(nonce) is not str
+            or not _HEX32.fullmatch(nonce)
+            or nonce in nonces
+            or type(admission["admitted_ns"]) is not int
+            or type(admission["deadline_ns"]) is not int
+            or not cast(int, invocation["started_ns"])
+            <= admission["admitted_ns"]
+            < cast(int, invocation["deadline_ns"])
+            or admission["deadline_ns"]
+            != min(cast(int, invocation["deadline_ns"]), admission["admitted_ns"] + PROBE_NS)
+        ):
+            raise ValueError("Third ticket has invalid nonce or original clock")
+        nonces.add(nonce)
+        filename = f"case-{index + 1:02d}.json"
+        result = read(old_dir / filename, case_hashes[filename], 2_097_152)
+        failure = (
+            "deadline_exceeded" if index in (16, 18) else "stdout_limit" if index == 17 else None
+        )
+        _fixed(
+            admission["outcome"],
+            {
+                "result_sha256": case_hashes[filename],
+                "stop_confirmed": True,
+                "cleanup_confirmed": True,
+                "failure": failure,
+            },
+            "third durable outcome",
+        )
+        _fixed(case["admission"], {key: admission[key] for key in ticket_keys}, "third ticket")
+        _fixed(case["nonce"], nonce, "third report nonce")
+        _fixed(case["payload_started"], True, "third report payload start")
+        _fixed(case["execution_evidence"], seals[str(old_dir / filename)][0], "third raw reference")
+        for field, expected in (
+            ("name", FIXED_PROBES[index]),
+            ("nonce", nonce),
+            ("payload_started", True),
+            ("failure", failure),
+            ("stop_confirmed", True),
+            ("cleanup_confirmed", True),
+        ):
+            _fixed(result.get(field), expected, "third raw case " + field)
+        facts = result.get("host_facts")
+        if not isinstance(facts, dict):
+            raise ValueError("Third raw case lacks host bindings")
+        for field, expected in (
+            ("manifest_sha256", previous["manifest_sha256"]),
+            ("admission_number", index + 1),
+            ("original_admission_ns", admission["admitted_ns"]),
+            ("original_deadline_ns", admission["deadline_ns"]),
+        ):
+            _fixed(facts.get(field), expected, "third raw case binding " + field)
+    path = ROOT / "recovery-v3" / "operator-stop.md"
+    raw, seal = _secure_read(path, 65536)
+    if _sha(raw) != RECOVERY_V3_STOP_SHA256:
+        raise ValueError("Pinned third owner Stop observation bytes differ")
+    record = {"path": str(path), "sha256": _sha(raw), "bytes": len(raw)}
+    seals[str(path)] = (record, seal)
+    return {
+        "kind": "trusted_owner_aws_stop_observation_v1",
+        "observed_state": "Stopped",
+        "reason": "Client.InstanceInitiatedShutdown",
+        "evidence": record,
+    }
+
+
 def _boot_id() -> str:
     value = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
     if not _BOOT.fullmatch(value):
@@ -1016,6 +1532,56 @@ def _recovery_v2_plan(
 def recovery_v2_plan_document(*, source_revision: str, run_id: str, plan_id: str) -> Row:
     """Read-only v2 preparation while its caller holds the original host flock."""
     return _recovery_v2_plan(
+        source_revision=source_revision, run_id=run_id, plan_id=plan_id, host=_host(), seals={}
+    )
+
+
+def _recovery_v3_arguments(source_revision: str, run_id: str, plan_id: str) -> None:
+    if (
+        type(source_revision) is not str
+        or not _HEX40.fullmatch(source_revision)
+        or type(run_id) is not str
+        or run_id != RECOVERY_V3_RUN_ID
+        or type(plan_id) is not str
+        or plan_id != RECOVERY_V3_PLAN_ID
+        or source_revision in {item["source_revision"] for item in RECOVERY_V3_HISTORY.values()}
+    ):
+        raise ValueError("Only the fixed v3 plan/run and a new actual source are supported")
+
+
+def _recovery_v3_plan(
+    *,
+    source_revision: str,
+    run_id: str,
+    plan_id: str,
+    host: Row,
+    seals: dict[str, tuple[Row, tuple[int, int, int, int, int]]],
+) -> Row:
+    _recovery_v3_arguments(source_revision, run_id, plan_id)
+    old_boots = {item["boot_id"] for item in RECOVERY_V3_HISTORY.values()}
+    if host["boot_id"] in old_boots | {RECOVERY_V3_RETRIEVAL_BOOT}:
+        raise ValueError("Recovery v3 requires a different actual qualification/retrieval boot")
+    source_lock, _provider = _source_records(source_revision, recovery=True, version=3, seals=seals)
+    stop = _recovery_v3_history(seals)
+    return {
+        "kind": "restricted_reference_ec2_recovery_plan_v3",
+        "schema_version": 3,
+        "plan_id": plan_id,
+        "freeze_revision": RECOVERY_V3_FREEZE_REVISION,
+        "source_revision": source_revision,
+        "run_id": run_id,
+        "expected_identity": dict(EXPECTED_IDENTITY),
+        "history": _json(canonical(RECOVERY_V3_HISTORY)),
+        "allowance": dict(RECOVERY_V3_ALLOWANCE),
+        "stop_observation": stop,
+        "source_lock": source_lock,
+        "provisioner_source": seals[str(SOURCE_ROOT / RECOVERY_V3_SOURCE_FILES[-1])][0],
+    }
+
+
+def recovery_v3_plan_document(*, source_revision: str, run_id: str, plan_id: str) -> Row:
+    """Read-only v3 preparation while its caller holds the original host flock."""
+    return _recovery_v3_plan(
         source_revision=source_revision, run_id=run_id, plan_id=plan_id, host=_host(), seals={}
     )
 
@@ -1254,15 +1820,26 @@ class Ec2Run:
         )
 
     @classmethod
+    def claim_recovery_v3(cls, *, source_revision: str, run_id: str, plan_id: str) -> Ec2Run:
+        """Consume only the fourth fixed invocation, retaining twenty-one charged slots."""
+        return cls._claim_recovery(
+            source_revision=source_revision, run_id=run_id, plan_id=plan_id, version=3
+        )
+
+    @classmethod
     def _claim_recovery(
         cls, *, source_revision: str, run_id: str, plan_id: str, version: int
     ) -> Ec2Run:
         if cls is not Ec2Run:
             raise TypeError("Only the fixed Ec2Run authority can claim this recovery")
         started = time.monotonic_ns()
-        if type(version) is not int or version not in {1, 2}:
-            raise ValueError("Only the two separately frozen recovery selections exist")
-        arguments = _recovery_v2_arguments if version == 2 else _recovery_arguments
+        if type(version) is not int or version not in {1, 2, 3}:
+            raise ValueError("Only the three separately frozen recovery selections exist")
+        arguments = {
+            1: _recovery_arguments,
+            2: _recovery_v2_arguments,
+            3: _recovery_v3_arguments,
+        }[version]
         arguments(source_revision, run_id, plan_id)
         host, owner = _host(), _owner()
         _secure_directory(ROOT)
@@ -1303,7 +1880,7 @@ class Ec2Run:
             instance._host_claim_raw = host_claim
             instance._fenced, instance._recovery_mode = False, True
             instance._recovery_raw, instance._seals = None, {}
-            builder = _recovery_v2_plan if version == 2 else _recovery_plan
+            builder = {1: _recovery_plan, 2: _recovery_v2_plan, 3: _recovery_v3_plan}[version]
             expected_plan = builder(
                 source_revision=source_revision,
                 run_id=run_id,
@@ -1312,10 +1889,12 @@ class Ec2Run:
                 seals=instance._seals,
             )
             plan_path = (
-                ROOT / "recovery-v2" / "plan.json" if version == 2 else ROOT / "recovery-plan.json"
+                ROOT / "recovery-plan.json"
+                if version == 1
+                else ROOT / f"recovery-v{version}" / "plan.json"
             )
             plan_raw, plan_seal = _secure_read(plan_path, 65536)
-            plan_keys = _PLAN_KEYS - {"predecessor"} | {"history"} if version == 2 else _PLAN_KEYS
+            plan_keys = _PLAN_KEYS if version == 1 else _PLAN_KEYS - {"predecessor"} | {"history"}
             plan = _mapping(_json(plan_raw), plan_keys, "recovery plan")
             _fixed(plan, expected_plan, "recovery plan")
             if canonical(plan) != plan_raw:
@@ -1339,36 +1918,41 @@ class Ec2Run:
                 "schema_version": version,
                 "plan_id": plan_id,
                 "plan_sha256": plan_record["sha256"],
-                "freeze_revision": (
-                    RECOVERY_V2_FREEZE_REVISION if version == 2 else RECOVERY_FREEZE_REVISION
-                ),
+                "freeze_revision": {
+                    1: RECOVERY_FREEZE_REVISION,
+                    2: RECOVERY_V2_FREEZE_REVISION,
+                    3: RECOVERY_V3_FREEZE_REVISION,
+                }[version],
                 **invocation,
                 "owner": instance._owner,
                 **(
                     {
                         "history_state_sha256": {
-                            key: value["state_sha256"] for key, value in RECOVERY_V2_HISTORY.items()
+                            key: value["state_sha256"]
+                            for key, value in (
+                                RECOVERY_V3_HISTORY if version == 3 else RECOVERY_V2_HISTORY
+                            ).items()
                         }
                     }
-                    if version == 2
+                    if version in (2, 3)
                     else {"predecessor_state_sha256": RECOVERY_PREDECESSOR["state_sha256"]}
                 ),
-                "prior_charged": version,
+                "prior_charged": RECOVERY_V3_PRIOR_CHARGED if version == 3 else version,
                 "max_admissions": 24,
-                "max_cumulative_admissions": 24 + version,
+                "max_cumulative_admissions": 45 if version == 3 else 24 + version,
             }
             consumption_path = (
-                ROOT / "recovery-v2" / "consumption.json"
-                if version == 2
-                else ROOT / "recovery-consumption.json"
+                ROOT / "recovery-consumption.json"
+                if version == 1
+                else ROOT / f"recovery-v{version}" / "consumption.json"
             )
             # O_EXCL plus both fsyncs precede any successor run, metadata or policy.
             # Partial/empty/uncertain consumption is never removed, even on failure.
             write_exclusive(consumption_path, canonical(consumption))
-            if version == 2:
+            if version in (2, 3):
                 observed, consumption_seal = _secure_read(consumption_path, 65536)
                 if observed != canonical(consumption):
-                    raise ValueError("Durable v2 consumption publication is uncertain")
+                    raise ValueError(f"Durable v{version} consumption publication is uncertain")
                 consumption_record = {
                     "path": str(consumption_path),
                     "sha256": _sha(observed),
@@ -1383,13 +1967,23 @@ class Ec2Run:
                 "plan_id": plan_id,
                 "plan": plan_record,
                 **(
-                    {"history": _json(canonical(RECOVERY_V2_HISTORY))}
-                    if version == 2
+                    {
+                        "history": _json(
+                            canonical(RECOVERY_V3_HISTORY if version == 3 else RECOVERY_V2_HISTORY)
+                        )
+                    }
+                    if version in (2, 3)
                     else {"predecessor": dict(RECOVERY_PREDECESSOR)}
                 ),
                 "consumption": consumption_record,
                 "invocation": invocation,
-                "allowance": dict(RECOVERY_V2_ALLOWANCE if version == 2 else RECOVERY_ALLOWANCE),
+                "allowance": dict(
+                    {
+                        1: RECOVERY_ALLOWANCE,
+                        2: RECOVERY_V2_ALLOWANCE,
+                        3: RECOVERY_V3_ALLOWANCE,
+                    }[version]
+                ),
             }
             instance._recovery_raw = canonical(context)
             instance.run_dir.mkdir(mode=0o700)
@@ -1453,9 +2047,9 @@ class Ec2Run:
         if not isinstance(value, dict):
             raise ValueError("Invalid immutable recovery context")
         version = value.get("schema_version")
-        if type(version) is not int or version not in {1, 2}:
+        if type(version) is not int or version not in {1, 2, 3}:
             raise ValueError("Unknown exact immutable recovery version")
-        key = "history" if version == 2 else "predecessor"
+        key = "predecessor" if version == 1 else "history"
         context = _mapping(
             value,
             {
@@ -1472,7 +2066,9 @@ class Ec2Run:
         )
         _fixed(context["kind"], f"restricted_reference_ec2_recovery_context_v{version}", "context")
         _fixed(
-            context["plan_id"], RECOVERY_V2_PLAN_ID if version == 2 else RECOVERY_PLAN_ID, "plan ID"
+            context["plan_id"],
+            {1: RECOVERY_PLAN_ID, 2: RECOVERY_V2_PLAN_ID, 3: RECOVERY_V3_PLAN_ID}[version],
+            "plan ID",
         )
         return version
 
@@ -1518,6 +2114,8 @@ class Ec2Run:
         state_raw, _ = _secure_read(self.run_dir / "state.json", 262144)
         keys = _STATE_KEYS | {"recovery_context"} if self._recovery_mode else _STATE_KEYS
         state = _mapping(_json(state_raw), keys, "durable run")
+        if self._recovery_mode and version == 3 and canonical(state) != state_raw:
+            raise ValueError("V3 durable state is not exact canonical bytes")
         if claim_raw != self._claim_raw or canonical(state) != canonical(self._state):
             raise ValueError("Durable run identity or counters differ")
         if self._recovery_mode:
@@ -1629,7 +2227,7 @@ class Ec2Run:
         if context is None:
             return None
         version = context.get("schema_version")
-        if type(version) is not int or version not in {1, 2}:
+        if type(version) is not int or version not in {1, 2, 3}:
             raise ValueError("Unknown exact established recovery schema")
         _fixed(
             context.get("kind"), f"restricted_reference_ec2_recovery_context_v{version}", "schema"
@@ -1647,25 +2245,37 @@ class Ec2Run:
             "live recovery snapshot",
         )
         version = self._context_version()
+        prior = RECOVERY_V3_PRIOR_CHARGED if version == 3 else version
         return {
             "kind": f"restricted_reference_ec2_recovery_budget_v{version}",
             "schema_version": version,
-            "plan_id": RECOVERY_V2_PLAN_ID if version == 2 else RECOVERY_PLAN_ID,
+            "plan_id": {
+                1: RECOVERY_PLAN_ID,
+                2: RECOVERY_V2_PLAN_ID,
+                3: RECOVERY_V3_PLAN_ID,
+            }[version],
             **(
-                {"historical_run_ids": [item["run_id"] for item in RECOVERY_V2_HISTORY.values()]}
-                if version == 2
+                {
+                    "historical_run_ids": [
+                        item["run_id"]
+                        for item in (
+                            RECOVERY_V3_HISTORY if version == 3 else RECOVERY_V2_HISTORY
+                        ).values()
+                    ]
+                }
+                if version in (2, 3)
                 else {"predecessor_run_id": RECOVERY_PREDECESSOR["run_id"]}
             ),
-            "prior_charged": version,
-            "prior_backend_confirmed": version,
+            "prior_charged": prior,
+            "prior_backend_confirmed": prior,
             "current_charged": snapshot.charged,
             "current_backend_confirmed": snapshot.backend_confirmed,
             "current_unconfirmed": snapshot.unconfirmed,
             "current_pending_outcomes": snapshot.pending_outcomes,
-            "cumulative_charged": version + snapshot.charged,
-            "cumulative_backend_confirmed": version + snapshot.backend_confirmed,
+            "cumulative_charged": prior + snapshot.charged,
+            "cumulative_backend_confirmed": prior + snapshot.backend_confirmed,
             "max_current_admissions": 24,
-            "max_cumulative_admissions": 24 + version,
+            "max_cumulative_admissions": 24 + prior,
         }
 
     def _persist(self) -> None:
@@ -2040,6 +2650,8 @@ class Ec2Run:
         report = _json(raw)
         if not isinstance(report, dict) or _sha(raw) != digest:
             raise ValueError("Final report and durable terminal digest differ")
+        if self._recovery_mode and self._context_version() == 3 and canonical(report) != raw:
+            raise ValueError("V3 final report is not exact canonical bytes")
         cases = report.get("cases")
         report_kind = (
             f"restricted_reference_ec2_recovery_qualification_v{self._context_version()}"
@@ -2153,6 +2765,8 @@ class Ec2Run:
         manifest_value = _json(manifest_raw)
         if not isinstance(manifest_value, dict) or _sha(manifest_raw) != report["manifest_sha256"]:
             raise ValueError("Actual recovery manifest bytes differ")
+        if version == 3 and canonical(manifest_value) != manifest_raw:
+            raise ValueError("V3 manifest is not exact canonical bytes")
         manifest = validate_recovery_manifest_shape(manifest_value, version=version)
         for field, expected in (
             ("kind", f"restricted_reference_ec2_recovery_manifest_v{version}"),
@@ -2169,14 +2783,15 @@ class Ec2Run:
         ):
             _fixed(manifest.get(field), expected, "actual recovery manifest " + field)
         initial = cast(Row, accounting).copy()
+        prior = RECOVERY_V3_PRIOR_CHARGED if version == 3 else version
         initial.update(
             {
                 "current_charged": 0,
                 "current_backend_confirmed": 0,
                 "current_unconfirmed": 0,
                 "current_pending_outcomes": 0,
-                "cumulative_charged": version,
-                "cumulative_backend_confirmed": version,
+                "cumulative_charged": prior,
+                "cumulative_backend_confirmed": prior,
             }
         )
         _fixed(manifest.get("recovery_accounting"), initial, "pre-probe recovery accounting")

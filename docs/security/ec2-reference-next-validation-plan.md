@@ -1,5 +1,17 @@
 # Next EC2 validation — proposed plan
 
+Current status: this proposal is **SUPERSEDED_BY_FROZEN_V3**. The owner explicitly
+requested actual AWS execution after the detached-member source repair. The
+[v3 contract](../contracts/restricted-reference-ec2-recovery-v3.md) and
+[ADR0050](../adr/0050-one-use-detached-ec2-qualification.md) were reviewed, committed
+and pushed as `72c83a02d47a403d5f9d33aad2f84ccaba7ec6a4`, with the actual remote
+revision read back before implementation. They govern one fixed run0004,
+historical21 plus at most24 new technical admissions and cumulative ceiling45;
+the original research budget is unchanged. Implementation and fresh remote
+source checks precede the reviewed actual-host package and Start. No new host
+result is claimed here. The original proposal below is retained as history;
+its NOT_AUTHORIZED status is not the current v3 authority.
+
 Status: **PROPOSED / NOT_AUTHORIZED for host execution**. The current work
 authorizes the control19 source correction, remote regressions and this plan.
 It does not start an instance, implement a successor authority or run a fourth

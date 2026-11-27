@@ -28,6 +28,7 @@ from tickwitness.infrastructure.restricted_reference_ec2 import (  # noqa: E402
     MAX_ADMISSIONS,
     RECOVERY_PLAN_ID,
     RECOVERY_V2_PLAN_ID,
+    RECOVERY_V3_PLAN_ID,
     WINDOW_NS,
     Ec2Run,
     canonical,
@@ -68,9 +69,21 @@ def _write(path: Path, document: Row, *, first: bool = False, limit: int = 26214
 
 
 def _recovery_kind(role: str, version: int) -> str:
-    if type(version) is not int or version not in (1, 2):
+    if type(version) is not int or version not in (1, 2, 3):
         raise ValueError("Unsupported fixed recovery schema")
     return f"restricted_reference_ec2_recovery_{role}_v{version}"
+
+
+def _recovery_plan_id(version: int) -> str:
+    if type(version) is not int:
+        raise ValueError("Unsupported fixed recovery schema")
+    if version == 1:
+        return RECOVERY_PLAN_ID
+    if version == 2:
+        return RECOVERY_V2_PLAN_ID
+    if version == 3:
+        return RECOVERY_V3_PLAN_ID
+    raise ValueError("Unsupported fixed recovery schema")
 
 
 def _recovery_version(run: Ec2Run) -> int | None:
@@ -80,15 +93,15 @@ def _recovery_version(run: Ec2Run) -> int | None:
         if context is not None:
             raise ValueError("Default authority cannot carry recovery context")
         return None
-    if type(version) is not int or version not in (1, 2):
+    if type(version) is not int or version not in (1, 2, 3):
         raise ValueError("Recovery authority has an unsupported schema version")
-    selected = 1 if version == 1 else 2
+    selected = version
     if (
         not isinstance(context, dict)
         or context.get("kind") != _recovery_kind("context", selected)
         or type(context.get("schema_version")) is not int
         or context.get("schema_version") != selected
-        or context.get("plan_id") != (RECOVERY_PLAN_ID if selected == 1 else RECOVERY_V2_PLAN_ID)
+        or context.get("plan_id") != _recovery_plan_id(selected)
     ):
         raise ValueError("Recovery authority differs from its verified schema context")
     return selected
@@ -102,7 +115,7 @@ def _report_recovery_version(report: Row) -> int | None:
         and report["schema_version"] == 1
     ):
         return None
-    for version in (1, 2):
+    for version in (1, 2, 3):
         if (
             report.get("kind") == _recovery_kind("qualification", version)
             and report["schema_version"] == version
@@ -124,33 +137,38 @@ def _budget(run: Ec2Run, report: Row) -> None:
                 or accounting.get("kind") != _recovery_kind("budget", version)
                 or type(accounting.get("schema_version")) is not int
                 or accounting.get("schema_version") != version
-                or accounting.get("plan_id")
-                != (RECOVERY_PLAN_ID if version == 1 else RECOVERY_V2_PLAN_ID)
+                or accounting.get("plan_id") != _recovery_plan_id(version)
                 or canonical(run.recovery_context) != canonical(report.get("recovery_context"))
             ):
                 raise ValueError("Recovery counters lack their established immutable context")
-            if version == 2 and canonical(accounting) != canonical(
+            prior = 21 if version == 3 else 2
+            historical_runs = [
+                "ec201aab11254e8bb7cd1573a96a0001",
+                "ec201aab11254e8bb7cd1573a96a0002",
+            ]
+            if version == 3:
+                historical_runs.append("ec201aab11254e8bb7cd1573a96a0003")
+            if version in (2, 3) and canonical(accounting) != canonical(
                 {
-                    "kind": _recovery_kind("budget", 2),
-                    "schema_version": 2,
-                    "plan_id": RECOVERY_V2_PLAN_ID,
-                    "historical_run_ids": [
-                        "ec201aab11254e8bb7cd1573a96a0001",
-                        "ec201aab11254e8bb7cd1573a96a0002",
-                    ],
-                    "prior_charged": 2,
-                    "prior_backend_confirmed": 2,
+                    "kind": _recovery_kind("budget", version),
+                    "schema_version": version,
+                    "plan_id": _recovery_plan_id(version),
+                    "historical_run_ids": historical_runs,
+                    "prior_charged": prior,
+                    "prior_backend_confirmed": prior,
                     "current_charged": snapshot.charged,
                     "current_backend_confirmed": snapshot.backend_confirmed,
                     "current_unconfirmed": snapshot.unconfirmed,
                     "current_pending_outcomes": snapshot.pending_outcomes,
-                    "cumulative_charged": 2 + snapshot.charged,
-                    "cumulative_backend_confirmed": 2 + snapshot.backend_confirmed,
+                    "cumulative_charged": prior + snapshot.charged,
+                    "cumulative_backend_confirmed": prior + snapshot.backend_confirmed,
                     "max_current_admissions": 24,
-                    "max_cumulative_admissions": 26,
+                    "max_cumulative_admissions": prior + 24,
                 }
             ):
-                raise ValueError("Recovery v2 counters differ from the fixed two-run history")
+                if version == 2:
+                    raise ValueError("Recovery v2 counters differ from the fixed two-run history")
+                raise ValueError("Recovery v3 counters differ from the fixed twenty-one charges")
         elif accounting is not None:
             raise ValueError("Default qualification cannot acquire recovery accounting")
     except Exception:
@@ -248,7 +266,9 @@ def main(arguments: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--run-id", required=True)
-    parser.add_argument("--recovery-plan", choices=(RECOVERY_PLAN_ID, RECOVERY_V2_PLAN_ID))
+    parser.add_argument(
+        "--recovery-plan", choices=(RECOVERY_PLAN_ID, RECOVERY_V2_PLAN_ID, RECOVERY_V3_PLAN_ID)
+    )
     args = parser.parse_args(arguments)
     if args.recovery_plan is None:
         selected_version = None
@@ -256,6 +276,8 @@ def main(arguments: list[str] | None = None) -> int:
         selected_version = 1
     elif args.recovery_plan == RECOVERY_V2_PLAN_ID:
         selected_version = 2
+    elif args.recovery_plan == RECOVERY_V3_PLAN_ID:
+        selected_version = 3
     else:
         parser.error("Unsupported fixed recovery selection")
     run: Ec2Run | None = None
@@ -287,6 +309,7 @@ def main(arguments: list[str] | None = None) -> int:
     previous_term = signal.getsignal(signal.SIGTERM)
     signal.signal(signal.SIGTERM, _cancel)
     terminal = False
+    terminal_submission_started = False
     report_created = False
     try:
         # Either factory captures this invocation's anchors before any setup;
@@ -299,12 +322,20 @@ def main(arguments: list[str] | None = None) -> int:
                 run_id=args.run_id,
                 plan_id=args.recovery_plan,
             )
-        else:
+        elif selected_version == 2:
             run = Ec2Run.claim_recovery_v2(
                 source_revision=args.source_revision,
                 run_id=args.run_id,
                 plan_id=args.recovery_plan,
             )
+        elif selected_version == 3:
+            run = Ec2Run.claim_recovery_v3(
+                source_revision=args.source_revision,
+                run_id=args.run_id,
+                plan_id=args.recovery_plan,
+            )
+        else:
+            raise ValueError("Unsupported fixed recovery dispatch")
         if selected_version is not None:
             context = run.recovery_context
             if context is None or _recovery_version(run) != selected_version:
@@ -386,6 +417,9 @@ def main(arguments: list[str] | None = None) -> int:
         )
         _budget(run, report)
         final_report_hash = _write(report_path, report)
+        # Once submitted, persistence may have succeeded even if its reply did not.
+        # A later observation failure must not replace a potentially committed report.
+        terminal_submission_started = selected_version == 3
         run.finish(
             outcome=outcome,
             reason=None if all_passed else "fixed_catalog_incomplete",
@@ -414,6 +448,13 @@ def main(arguments: list[str] | None = None) -> int:
         sys.stdout.write(json.dumps(summary) + "\n")
         return 0 if all_passed else 1
     except BaseException as error:
+        if selected_version == 3 and (terminal or terminal_submission_started):
+            sys.stderr.write(
+                "restricted_reference_ec2_terminal_observation_uncertain: "
+                + type(error).__name__
+                + "\n"
+            )
+            return 1
         report["controls_status"] = "NOT_QUALIFIED"
         report["failure"] = {"type": type(error).__name__, "reason": str(error)[:2048]}
         represented = {case["name"] for case in cases}
@@ -433,6 +474,13 @@ def main(arguments: list[str] | None = None) -> int:
                     run.finish(outcome="NOT_QUALIFIED", reason=type(error).__name__)
                     terminal = True
                 except Exception as finish_error:
+                    if selected_version == 3:
+                        sys.stderr.write(
+                            "restricted_reference_ec2_terminal_observation_uncertain: "
+                            + type(finish_error).__name__
+                            + "\n"
+                        )
+                        return 1
                     report["durable_finalization"] = {
                         "status": "UNKNOWN",
                         "type": type(finish_error).__name__,

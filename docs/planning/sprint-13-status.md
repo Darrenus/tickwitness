@@ -1,5 +1,14 @@
 # Sprint 13 执行信任与隔离状态
 
+2026-11-27续作：owner明确要求继续实际AWS验证。[v3合同](../contracts/restricted-reference-ec2-recovery-v3.md)
+和[ADR0050](../adr/0050-one-use-detached-ec2-qualification.md)经独立静态审阅，以提交
+`72c83a02d47a403d5f9d33aad2f84ccaba7ec6a4`实际推送、读回后才开始实现。
+固定第四次资格保留历史21槽，新完整24项／累计上限45，原研究共同预算不变。
+新增收证控制器在原期限内等待独立下载校验及绑定当前boot／unit／进程的ACK，
+随后由原hook自动Stop；断连、坏ACK和期限耗尽不授重跑。当前源码实现及远端回归
+进行中，尚未获得v3实机结果；M1关闭、PR115 Draft、真人PENDING均不变。
+下列此前“仅计划／未授权第四窗口”的记录是已被此冻结取代的历史快照。
+
 2026-11-27实测续作：[修复版v2实机证据](../security/ec2-reference-recovery-v2-evidence-2026-11-27.md)
 已完整取回并封存：第1–18项PASS，第19项detached已准入UNKNOWN，后5项未准入；
 本轮19charged／19confirmed，历史2，累计21／21，pending及ACK不确定均0。

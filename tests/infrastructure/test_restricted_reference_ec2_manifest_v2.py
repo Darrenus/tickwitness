@@ -96,7 +96,7 @@ def test_checked_recovery_version_selects_only_its_manifest_envelope(monkeypatch
     assert case.runner._manifest_context() == {"kind": "restricted_reference_manifest_v1"}
 
 
-@pytest.mark.parametrize("version", [True, False, 0, 3, "2", 2.0])
+@pytest.mark.parametrize("version", [True, False, 0, 4, "2", 2.0])
 def test_unknown_or_boolean_version_cannot_select_a_recovery_manifest(monkeypatch, version):
     case = _manifest_case(monkeypatch)
     case.version = version

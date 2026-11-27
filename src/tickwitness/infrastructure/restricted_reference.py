@@ -1275,7 +1275,7 @@ class ReferenceRunner:
             if context is not None:
                 raise ValueError("Default EC2 manifest cannot discard recovery authority")
         else:
-            if type(version) is not int or version not in (1, 2):
+            if type(version) is not int or version not in (1, 2, 3):
                 raise ValueError("Unknown exact recovery manifest version")
             if (
                 context is None

@@ -264,7 +264,7 @@ def test_fixed_selection_and_closure_do_not_extend_old_v1_authority():
     assert ec2.RECOVERY_V2_ALLOWANCE["max_cumulative_admissions"] == 26
 
 
-@pytest.mark.parametrize("version", [True, 2.0, 0, 3])
+@pytest.mark.parametrize("version", [True, 2.0, 0, 4])
 def test_manifest_version_argument_is_exact_and_never_coerced(version):
     with pytest.raises(ValueError, match="version"):
         ec2.validate_recovery_manifest_shape({}, version=version)
