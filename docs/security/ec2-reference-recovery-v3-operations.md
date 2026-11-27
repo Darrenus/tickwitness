@@ -192,3 +192,22 @@ gate retains its uncertainty; no old PASS or unadmitted subset fills it.
 Even reference success keeps M1 DISABLED, PR115 Draft/#38 incomplete, independent
 human security review NOT_PERFORMED and external-human reproduction0/0/PENDING.
 It is not a merge, release or automatic fifth qualification.
+
+## Existing-run transport recovery
+
+The separately frozen [transport/readback contract](../contracts/restricted-reference-ec2-transport-v1.md)
+and [ADR0051](../adr/0051-ec2-evidence-receive-and-readback.md) govern the existing
+run0004 handoff repair. Its original120s window is over: never send its ACK again,
+repeat its export/qualification, renew a guard or reset consumption. Preserve the
+qualified908 source and its ten-file closure plus three original operations.
+The new reader and receiver are operational tools outside that closure.
+
+Prepare and remotely regress the complete readback packet before a necessary
+manual Start. Preserve the original shared last-result before the original
+wrapper's sole sleep300 guard, then read only fixed old records/archive/pins and
+the three exact original journal streams. Systemd PID1 exit records can use
+`INVOCATION_ID` rather than `_SYSTEMD_INVOCATION_ID`; retain the full original
+boot/unit streams so the invocation-only subset cannot hide manager exit.
+Independently require cloud Stopped. A new successful readback receipt records
+collection success without backdating the old ACK or claiming missing fsync/exit
+evidence. External-human reproduction remains PENDING and M1 remains DISABLED.

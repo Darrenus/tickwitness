@@ -1,0 +1,57 @@
+name: EC2 evidence transport
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ec2-transport-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  transport:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Check standalone transport formatting
+        run: |
+          uv run --locked ruff check scripts/ec2_reference_reader_v1.py scripts/ec2_reference_receiver_v1.py tests/test_ec2_reference_reader_v1.py tests/test_ec2_reference_receiver_v1.py
+          uv run --locked ruff format --check scripts/ec2_reference_reader_v1.py scripts/ec2_reference_receiver_v1.py tests/test_ec2_reference_reader_v1.py tests/test_ec2_reference_receiver_v1.py
+      - name: Regress production transport on remote synthetic fixtures (no AWS run)
+        if: always()
+        env:
+          PYTHONPATH: tests:tests/application:tests/domain:tests/infrastructure:tests/integration
+        run: >-
+          uv run --locked pytest -q
+          tests/test_ec2_reference_reader_v1.py
+          tests/test_ec2_reference_receiver_v1.py
+          --maxfail=3
+          --junitxml=/tmp/ec2-transport.xml
+      - name: Prepare remote formatting corrections for static review
+        if: failure()
+        run: |
+          uv run --locked ruff check --fix scripts/ec2_reference_reader_v1.py scripts/ec2_reference_receiver_v1.py tests/test_ec2_reference_reader_v1.py tests/test_ec2_reference_receiver_v1.py || true
+          uv run --locked ruff format scripts/ec2_reference_reader_v1.py scripts/ec2_reference_receiver_v1.py tests/test_ec2_reference_reader_v1.py tests/test_ec2_reference_receiver_v1.py
+          git diff --binary > /tmp/ec2-transport-quality.patch
+      - name: Preserve bounded regression evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ec2-transport-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            /tmp/ec2-transport.xml
+            /tmp/ec2-transport-quality.patch
+          if-no-files-found: warn
+          retention-days: 30

@@ -58,6 +58,8 @@ jobs:
           tests/test_ec2_reference_recovery_v3_preparation.py
           tests/test_ec2_reference_controller_v3.py
           tests/test_ec2_reference_handoff_v3.py
+          tests/test_ec2_reference_reader_v1.py
+          tests/test_ec2_reference_receiver_v1.py
           tests/test_control_observation_refusals.py
       - if: always()
         run: make lint
