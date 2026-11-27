@@ -28,8 +28,9 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamesp
     monkeypatch.setattr(ops, "ROOT", tmp_path / "reference")
     parent = tmp_path / "operations"
     parent.mkdir(mode=0o700)
-    store = ops.Store(parent / ops.RUN_ID, owner=os.getuid(), trust_root=tmp_path,
-                      archive_base=tmp_path)
+    store = ops.Store(
+        parent / ops.RUN_ID, owner=os.getuid(), trust_root=tmp_path, archive_base=tmp_path
+    )
     report = ops.ROOT / "runs" / ops.RUN_ID / "qualification-report.json"
     report.parent.mkdir(parents=True, mode=0o700)
 
@@ -47,10 +48,18 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamesp
                 self.callback()
             elif self.acknowledge and store.exists("handoff-ready.json"):
                 ready = store.record_read("handoff-ready", SOURCE, BOOT)
-                supplied = {key: ready[key] for key in (
-                    "boot_id", "invocation_id", "main_pid", "controller_pid", "nonce",
-                    "bytes", "sha256",
-                )}
+                supplied = {
+                    key: ready[key]
+                    for key in (
+                        "boot_id",
+                        "invocation_id",
+                        "main_pid",
+                        "controller_pid",
+                        "nonce",
+                        "bytes",
+                        "sha256",
+                    )
+                }
                 ops.acknowledge(SOURCE, store, host, self, supplied)
                 self.acknowledge = False
 
@@ -61,17 +70,17 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamesp
         before_failure = False
         stop_calls = 0
         guard = ops.GuardIdentity(
-            "b" * 32, ops.ProcessIdentity(10, 100, ops.main_argv(SOURCE),
-                                         "/system.slice/" + ops.UNIT, 1),
-            "actual trusted ExecStart", "/system.slice/" + ops.UNIT,
+            "b" * 32,
+            ops.ProcessIdentity(10, 100, ops.main_argv(SOURCE), "/system.slice/" + ops.UNIT, 1),
+            "actual trusted ExecStart",
+            "/system.slice/" + ops.UNIT,
         )
 
         def boot(self):
             return BOOT
 
         def master(self, source):
-            return ops.ProcessIdentity(20, 200, ops.controller_argv(source),
-                                       self.guard.cgroup, 10)
+            return ops.ProcessIdentity(20, 200, ops.controller_argv(source), self.guard.cgroup, 10)
 
         def live(self, source, start):
             assert source == SOURCE and start["controller_pid"] == 20
@@ -95,9 +104,14 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamesp
     class Runner:
         def __init__(self):
             self.calls = []
-            self.results = {name: ops.PhaseResult(0) for name in (
-                "preparation", "qualifier", "export",
-            )}
+            self.results = {
+                name: ops.PhaseResult(0)
+                for name in (
+                    "preparation",
+                    "qualifier",
+                    "export",
+                )
+            }
             self.costs = {name: 1_000_000_000 for name in self.results}
             self.spawn_failure = None
             self.before = None
@@ -121,18 +135,25 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamesp
                 report.write_bytes(b'{"actual":"retained original report"}\n')
             if name == "export" and self.results[name].returncode == 0:
                 start = store.record_read("controller-start", SOURCE, BOOT)
-                store.record("export-consumption", controller.base("export-consumption") | {
-                    "controller_pid": start["controller_pid"],
-                    "controller_start_ticks": start["controller_start_ticks"],
-                    "started_ns": clock.now(),
-                }, SOURCE, BOOT)
+                store.record(
+                    "export-consumption",
+                    controller.base("export-consumption")
+                    | {
+                        "controller_pid": start["controller_pid"],
+                        "controller_start_ticks": start["controller_start_ticks"],
+                        "started_ns": clock.now(),
+                    },
+                    SOURCE,
+                    BOOT,
+                )
                 store.write("evidence.tar.gz", b"the actual child archive bytes")
             return self.results[name]
 
     runner = Runner()
     controller = ops.Controller(SOURCE, store, host, runner, clock)
-    return SimpleNamespace(store=store, host=host, clock=clock, runner=runner,
-                           controller=controller, report=report)
+    return SimpleNamespace(
+        store=store, host=host, clock=clock, runner=runner, controller=controller, report=report
+    )
 
 
 @pytest.mark.parametrize("original", [0, 1, 74, 255])
@@ -158,8 +179,9 @@ def test_unknown_signal_or_non_normal_code_never_becomes_a_success(environment, 
     env.runner.results["qualifier"] = ops.PhaseResult(original)
     assert env.controller.run() == 74
     assert env.store.record_read("qualifier-exit", SOURCE, BOOT)["returncode"] == original
-    assert env.store.record_read("controller-result", SOURCE, BOOT)[
-        "qualifier_returncode"] == original
+    assert (
+        env.store.record_read("controller-result", SOURCE, BOOT)["qualifier_returncode"] == original
+    )
     assert len(env.runner.calls) == 3
 
 
@@ -186,8 +208,7 @@ def test_phase_timeout_retains_signed_code_and_original_ceiling(environment, pha
     assert env.controller.results[phase].returncode == -9
     expected = {"preparation": 480, "qualifier": 612, "export": 25}
     for name, _, deadline, grace, started in env.runner.calls:
-        assert deadline == min(started + expected[name] * 1_000_000_000,
-                               env.controller.deadline)
+        assert deadline == min(started + expected[name] * 1_000_000_000, env.controller.deadline)
         assert grace == min(deadline + ops.GRACE_NS, env.controller.deadline + ops.GRACE_NS)
     assert env.controller.deadline == env.controller.started + ops.OUTER_NS
 
@@ -195,8 +216,11 @@ def test_phase_timeout_retains_signed_code_and_original_ceiling(environment, pha
 def test_shortened_outer_remaining_time_is_not_renewed(environment, monkeypatch):
     env = environment
     env.clock.acknowledge = False
-    monkeypatch.setattr(env.host, "before_preparation", lambda *args: setattr(
-        env.clock, "value", env.clock.now() + 1490_000_000_000))
+    monkeypatch.setattr(
+        env.host,
+        "before_preparation",
+        lambda *args: setattr(env.clock, "value", env.clock.now() + 1490_000_000_000),
+    )
     assert env.controller.run() == 74
     assert [call[0] for call in env.runner.calls] == ["export"]
     assert env.runner.calls[0][2] == env.controller.deadline
@@ -207,8 +231,11 @@ def test_shortened_outer_remaining_time_is_not_renewed(environment, monkeypatch)
 
 def test_preparation_observation_consumes_the_same_480_second_phase(environment, monkeypatch):
     env = environment
-    monkeypatch.setattr(env.host, "before_preparation", lambda *args: setattr(
-        env.clock, "value", env.clock.now() + 479_000_000_000))
+    monkeypatch.setattr(
+        env.host,
+        "before_preparation",
+        lambda *args: setattr(env.clock, "value", env.clock.now() + 479_000_000_000),
+    )
     assert env.controller.run() == 74
     preparation = env.runner.calls[0]
     assert preparation[0] == "preparation"
@@ -240,8 +267,11 @@ def test_existing_operation_permanently_prevents_even_preparation(environment):
 
 def test_failed_operation_directory_fsync_remains_consumed(environment, monkeypatch):
     env = environment
-    monkeypatch.setattr(env.store, "fsync_directory", lambda _: (_ for _ in ()).throw(
-        OSError("uncertain directory fsync")))
+    monkeypatch.setattr(
+        env.store,
+        "fsync_directory",
+        lambda _: (_ for _ in ()).throw(OSError("uncertain directory fsync")),
+    )
     with pytest.raises(OSError, match="uncertain"):
         env.controller.run()
     with pytest.raises(FileExistsError):
@@ -302,9 +332,13 @@ def test_real_child_term_or_kill_has_one_parent_owned_original_deadline(tmp_path
         + "print(os.getpid(),os.getppid(),flush=True); time.sleep(30)"
     )
     started = clock.now()
-    result = runner.run([sys.executable, "-I", "-u", "-c", child],
-                        started + 1_000_000_000, started + 2_000_000_000,
-                        tmp_path / "child.stdout", tmp_path / "child.stderr")
+    result = runner.run(
+        [sys.executable, "-I", "-u", "-c", child],
+        started + 1_000_000_000,
+        started + 2_000_000_000,
+        tmp_path / "child.stdout",
+        tmp_path / "child.stderr",
+    )
     assert result.timed_out is True
     assert result.returncode == (-signal.SIGKILL if ignore_term else -signal.SIGTERM)
     pid, parent = map(int, (tmp_path / "child.stdout").read_text().split())
@@ -322,7 +356,7 @@ def test_independent_parent_records_stop_after_controller_normal_or_signal(tmp_p
     # This harmless parent substitutes for systemd/the existing Stop hook. It is
     # explicitly not a claim that a controller's finally block survives SIGKILL.
     record = tmp_path / "independent-stop.json"
-    parent = r'''
+    parent = r"""
 import json, os, select, signal, subprocess, sys
 from pathlib import Path
 delay = '0.05' if sys.argv[2] == 'normal' else '30'
@@ -340,10 +374,12 @@ finally:
         child.kill()
         child.wait(timeout=3)
 Path(sys.argv[1]).write_text(json.dumps({'stop_observed_by_parent': True, 'returncode': code}))
-'''
+"""
     supervisor = subprocess.Popen(
         [sys.executable, "-I", "-c", parent, str(record), death],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
     )
     try:
         _, stderr = supervisor.communicate(timeout=10)
@@ -359,7 +395,8 @@ Path(sys.argv[1]).write_text(json.dumps({'stop_observed_by_parent': True, 'retur
 
 def test_no_public_wait_test_mode_or_alternate_run_is_accepted():
     for arguments in (
-        ["wait"], ["run", "--test-mode"],
+        ["wait"],
+        ["run", "--test-mode"],
         ["run", "--source-revision", SOURCE, "--run-id", ops.OLD_RUNS[-1]],
         ["run", "--source-rev", SOURCE, "--run-id", ops.RUN_ID],
     ):

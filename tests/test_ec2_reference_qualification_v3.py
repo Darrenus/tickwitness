@@ -187,7 +187,11 @@ def driver(v3, monkeypatch):
         assert result["host_facts"]["manifest_sha256"] == manifest
         return {
             "status": "UNKNOWN" if fault.mode == "unknown_case" else "PASS",
-            "reason": "synthetic execution decision; never host isolation evidence",
+            "reason": (
+                "synthetic unavailable execution evidence"
+                if fault.mode == "unknown_case"
+                else "actual_scoped_control_evidence"
+            ),
         }
 
     monkeypatch.setattr(

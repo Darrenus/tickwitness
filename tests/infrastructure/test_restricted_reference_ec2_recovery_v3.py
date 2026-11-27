@@ -14,7 +14,6 @@ from types import SimpleNamespace
 import pytest
 import test_restricted_reference_ec2 as host_records
 import test_restricted_reference_ec2_recovery as first_recovery
-from test_restricted_reference_ec2 import host as base_host
 from test_restricted_reference_ec2_recovery_v2 import CURRENT as PREVIOUS
 from test_restricted_reference_ec2_recovery_v2 import manifest_for, publish, record
 from test_restricted_reference_ec2_recovery_v2 import recovery as recovery
@@ -26,6 +25,7 @@ from tickwitness.infrastructure import restricted_reference_ec2 as ec2
 CURRENT = "f" * 40
 BOOT = "44444444-4444-4444-4444-444444444444"
 RETRIEVAL_BOOT = "5e83ad22-d623-4ddd-87f8-41a27a599f2d"
+base_host = host_records.host
 
 
 @pytest.fixture

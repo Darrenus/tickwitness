@@ -23,9 +23,11 @@ import subprocess
 import sys
 import tarfile
 import time
+from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, BinaryIO, Callable, Protocol
+from typing import Any, BinaryIO, Protocol
 
 RUN_ID = "ec201aab11254e8bb7cd1573a96a0004"
 PLAN_ID = "ec2-recovery-20261127-v3"
@@ -52,45 +54,88 @@ OLD_BOOTS = (
     "5fc1dec3-13e7-4d43-b584-314aedc95e6b",
     "5e83ad22-d623-4ddd-87f8-41a27a599f2d",
 )
+_LAUNCHER_SHA256 = "3ffa94999948a32c2efdd5f5999f8a410d91c4b56ff32390489e7acaf9c37b32"
+_STOP_HOOK_SHA256 = "8814afcb2172781e4f8b53b772205fa0a9498712dc235f87e63dfb1e3f86176c"
+_BOOT_TIMER_SHA256 = "16320eba4e809a6bcf2fd47a1670d39b95f500b3275fd2fc7bdcc67ec6b820d6"
+_BOOT_SERVICE_SHA256 = "5ac5d11c5f09e748636913fe76ab3202a681077ce6f221f298750f05ebb49fa4"
 LIFECYCLE_SHA = {
-    "/usr/local/sbin/tickwitness-run-tests":
-        "3ffa94999948a32c2efdd5f5999f8a410d91c4b56ff32390489e7acaf9c37b32",
-    "/usr/local/libexec/tickwitness-stop-after-test":
-        "8814afcb2172781e4f8b53b772205fa0a9498712dc235f87e63dfb1e3f86176c",
-    "/etc/systemd/system/tickwitness-boot-deadline.timer":
-        "16320eba4e809a6bcf2fd47a1670d39b95f500b3275fd2fc7bdcc67ec6b820d6",
-    "/etc/systemd/system/tickwitness-boot-deadline.service":
-        "5ac5d11c5f09e748636913fe76ab3202a681077ce6f221f298750f05ebb49fa4",
+    "/usr/local/sbin/tickwitness-run-tests": _LAUNCHER_SHA256,
+    "/usr/local/libexec/tickwitness-stop-after-test": _STOP_HOOK_SHA256,
+    "/etc/systemd/system/tickwitness-boot-deadline.timer": _BOOT_TIMER_SHA256,
+    "/etc/systemd/system/tickwitness-boot-deadline.service": _BOOT_SERVICE_SHA256,
 }
 BASE = {"kind", "schema_version", "source_revision", "run_id", "boot_id"}
 KEYS = {
-    "controller-start": BASE | {
-        "controller_pid", "controller_start_ticks", "controller_argv", "started_ns",
+    "controller-start": BASE
+    | {
+        "controller_pid",
+        "controller_start_ticks",
+        "controller_argv",
+        "started_ns",
         "outer_deadline_ns",
     },
     "qualifier-exit": BASE | {"invoked", "returncode", "report"},
     "export-call": BASE | {"controller_pid", "controller_start_ticks", "started_ns"},
     "export-consumption": BASE | {"controller_pid", "controller_start_ticks", "started_ns"},
-    "handoff-ready": BASE | {
-        "unit", "invocation_id", "main_pid", "main_start_ticks", "main_argv",
-        "guard_exec_start", "guard_control_group", "controller_pid",
-        "controller_start_ticks", "controller_argv", "nonce", "bytes", "sha256",
-        "archive_stat", "started_ns", "deadline_ns", "outer_deadline_ns",
+    "handoff-ready": BASE
+    | {
+        "unit",
+        "invocation_id",
+        "main_pid",
+        "main_start_ticks",
+        "main_argv",
+        "guard_exec_start",
+        "guard_control_group",
+        "controller_pid",
+        "controller_start_ticks",
+        "controller_argv",
+        "nonce",
+        "bytes",
+        "sha256",
+        "archive_stat",
+        "started_ns",
+        "deadline_ns",
+        "outer_deadline_ns",
     },
-    "handoff-ack": BASE | {
-        "invocation_id", "main_pid", "controller_pid", "nonce", "bytes", "sha256",
+    "handoff-ack": BASE
+    | {
+        "invocation_id",
+        "main_pid",
+        "controller_pid",
+        "nonce",
+        "bytes",
+        "sha256",
     },
-    "controller-cancel": BASE | {
-        "invocation_id", "main_pid", "controller_pid", "controller_start_ticks", "requested_ns",
+    "controller-cancel": BASE
+    | {
+        "invocation_id",
+        "main_pid",
+        "controller_pid",
+        "controller_start_ticks",
+        "requested_ns",
     },
-    "controller-result": BASE | {
-        "preparation_invoked", "preparation_returncode", "qualifier_invoked",
-        "qualifier_returncode", "export_invoked", "export_returncode", "handoff_status",
+    "controller-result": BASE
+    | {
+        "preparation_invoked",
+        "preparation_returncode",
+        "qualifier_invoked",
+        "qualifier_returncode",
+        "export_invoked",
+        "export_returncode",
+        "handoff_status",
         "returncode",
     },
 }
 STAT_KEYS = {
-    "device", "inode", "mode", "uid", "gid", "nlink", "size", "mtime_ns", "ctime_ns",
+    "device",
+    "inode",
+    "mode",
+    "uid",
+    "gid",
+    "nlink",
+    "size",
+    "mtime_ns",
+    "ctime_ns",
 }
 Row = dict[str, Any]
 
@@ -108,13 +153,16 @@ def hex_string(value: object, size: int) -> bool:
 
 
 def uuid_string(value: object) -> bool:
-    return isinstance(value, str) and re.fullmatch(
-        r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", value
-    ) is not None
+    return (
+        isinstance(value, str)
+        and re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", value) is not None
+    )
 
 
 def canonical(value: object) -> bytes:
-    return (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n").encode()
+    return (
+        json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n"
+    ).encode()
 
 
 def _pairs(pairs: list[tuple[str, Any]]) -> Row:
@@ -144,36 +192,66 @@ def _bad_constant(value: str) -> Any:
 
 def controller_argv(source: str) -> list[str]:
     return [
-        "/usr/bin/python3", "-I", str(STAGE / "ec2_reference_handoff_v3.py"), "run",
-        "--source-revision", source, "--run-id", RUN_ID,
+        "/usr/bin/python3",
+        "-I",
+        str(STAGE / "ec2_reference_handoff_v3.py"),
+        "run",
+        "--source-revision",
+        source,
+        "--run-id",
+        RUN_ID,
     ]
 
 
 def main_argv(source: str) -> list[str]:
-    return ["/usr/bin/sudo", "/bin/bash", str(STAGE / "run_ec2_reference_recovery_v3.sh"),
-            source, RUN_ID]
+    return [
+        "/usr/bin/sudo",
+        "/bin/bash",
+        str(STAGE / "run_ec2_reference_recovery_v3.sh"),
+        source,
+        RUN_ID,
+    ]
 
 
 def guard_commands(source: str) -> tuple[list[str], ...]:
     # sudo may remain as systemd's monitor or exec the exact thin-shell timeout.
     # These are complete commands, never substring/source-only qualification.
-    return (main_argv(source), [
-        "/usr/bin/timeout", "--signal=TERM", "--kill-after=2s", "1500s",
-        *controller_argv(source),
-    ])
+    return (
+        main_argv(source),
+        [
+            "/usr/bin/timeout",
+            "--signal=TERM",
+            "--kill-after=2s",
+            "1500s",
+            *controller_argv(source),
+        ],
+    )
 
 
 def validate_record(value: Row, name: str, source: str, boot: str) -> None:
     if name not in KEYS or set(value) != KEYS[name]:
         raise Refused("Operational record exact fields")
-    if (value["kind"] != "restricted_reference_ec2_" + name.replace("-", "_") + "_v3"
-            or type(value["schema_version"]) is not int or value["schema_version"] != 3
-            or value["source_revision"] != source or value["run_id"] != RUN_ID
-            or value["boot_id"] != boot or not hex_string(source, 40) or not uuid_string(boot)):
+    if (
+        value["kind"] != "restricted_reference_ec2_" + name.replace("-", "_") + "_v3"
+        or type(value["schema_version"]) is not int
+        or value["schema_version"] != 3
+        or value["source_revision"] != source
+        or value["run_id"] != RUN_ID
+        or value["boot_id"] != boot
+        or not hex_string(source, 40)
+        or not uuid_string(boot)
+    ):
         raise Refused("Operational record identity")
     for key in (
-        "controller_pid", "controller_start_ticks", "main_pid", "main_start_ticks",
-        "started_ns", "deadline_ns", "outer_deadline_ns", "requested_ns", "bytes",
+        "controller_pid",
+        "controller_start_ticks",
+        "main_pid",
+        "main_start_ticks",
+        "started_ns",
+        "deadline_ns",
+        "outer_deadline_ns",
+        "requested_ns",
+        "bytes",
     ):
         if key in value and not integer(value[key], 1):
             raise Refused("Operational integer field")
@@ -184,22 +262,27 @@ def validate_record(value: Row, name: str, source: str, boot: str) -> None:
         raise Refused("Controller exact command")
     if "main_argv" in value and value["main_argv"] not in guard_commands(source):
         raise Refused("Guard exact command")
-    if name == "controller-start":
-        if value["outer_deadline_ns"] != value["started_ns"] + OUTER_NS:
-            raise Refused("Original outer anchor")
+    if name == "controller-start" and value["outer_deadline_ns"] != value["started_ns"] + OUTER_NS:
+        raise Refused("Original outer anchor")
     if name == "handoff-ready":
         seal = value["archive_stat"]
-        if (value["unit"] != UNIT or type(seal) is not dict or set(seal) != STAT_KEYS
-                or any(not integer(item) for item in seal.values())
-                or seal["nlink"] != 1 or not stat.S_ISREG(seal["mode"])
-                or seal["size"] != value["bytes"] or not 0 < value["bytes"] <= ARCHIVE_LIMIT
-                or value["deadline_ns"] != min(
-                    value["started_ns"] + HANDOFF_NS, value["outer_deadline_ns"])
-                or value["deadline_ns"] <= value["started_ns"]
-                or not isinstance(value["guard_exec_start"], str)
-                or not 0 < len(value["guard_exec_start"]) < 16384
-                or not isinstance(value["guard_control_group"], str)
-                or not value["guard_control_group"].startswith("/")):
+        if (
+            value["unit"] != UNIT
+            or type(seal) is not dict
+            or set(seal) != STAT_KEYS
+            or any(not integer(item) for item in seal.values())
+            or seal["nlink"] != 1
+            or not stat.S_ISREG(seal["mode"])
+            or seal["size"] != value["bytes"]
+            or not 0 < value["bytes"] <= ARCHIVE_LIMIT
+            or value["deadline_ns"]
+            != min(value["started_ns"] + HANDOFF_NS, value["outer_deadline_ns"])
+            or value["deadline_ns"] <= value["started_ns"]
+            or not isinstance(value["guard_exec_start"], str)
+            or not 0 < len(value["guard_exec_start"]) < 16384
+            or not isinstance(value["guard_control_group"], str)
+            or not value["guard_control_group"].startswith("/")
+        ):
             raise Refused("Ready archive/guard/deadline fields")
     if name == "handoff-ack" and value["bytes"] > ARCHIVE_LIMIT:
         raise Refused("ACK archive bound")
@@ -207,41 +290,73 @@ def validate_record(value: Row, name: str, source: str, boot: str) -> None:
         _phase_fields(value, "invoked", "returncode")
         report = value["report"]
         if report is not None and (
-            type(report) is not dict or set(report) != {"path", "bytes", "sha256"}
+            type(report) is not dict
+            or set(report) != {"path", "bytes", "sha256"}
             or report["path"] != str(ROOT / "runs" / RUN_ID / "qualification-report.json")
-            or not integer(report["bytes"], 1) or report["bytes"] > ARCHIVE_LIMIT
+            or not integer(report["bytes"], 1)
+            or report["bytes"] > ARCHIVE_LIMIT
             or not hex_string(report["sha256"], 64)
         ):
             raise Refused("Retained qualifier report fields")
     if name == "controller-result":
         for phase in ("preparation", "qualifier", "export"):
             _phase_fields(value, phase + "_invoked", phase + "_returncode")
-        if (value["handoff_status"] not in {
-            "not_started", "acknowledged", "expired", "cancelled", "failed", "unknown",
-        } or not integer(value["returncode"]) or value["returncode"] > 255):
+        if (
+            value["handoff_status"]
+            not in {
+                "not_started",
+                "acknowledged",
+                "expired",
+                "cancelled",
+                "failed",
+                "unknown",
+            }
+            or not integer(value["returncode"])
+            or value["returncode"] > 255
+        ):
             raise Refused("Final controller outcome fields")
 
 
 def _phase_fields(value: Row, invoked: str, code: str) -> None:
-    if (type(value[invoked]) is not bool
-            or value[code] is not None and type(value[code]) is not int
-            or not value[invoked] and value[code] is not None):
+    if (
+        type(value[invoked]) is not bool
+        or (value[code] is not None and type(value[code]) is not int)
+        or (not value[invoked] and value[code] is not None)
+    ):
         raise Refused("Original phase invocation/returncode")
 
 
 def stat_record(info: os.stat_result) -> Row:
-    return dict(zip(
-        ("device", "inode", "mode", "uid", "gid", "nlink", "size", "mtime_ns", "ctime_ns"),
-        (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid, info.st_nlink,
-         info.st_size, info.st_mtime_ns, info.st_ctime_ns), strict=True,
-    ))
+    return dict(
+        zip(
+            ("device", "inode", "mode", "uid", "gid", "nlink", "size", "mtime_ns", "ctime_ns"),
+            (
+                info.st_dev,
+                info.st_ino,
+                info.st_mode,
+                info.st_uid,
+                info.st_gid,
+                info.st_nlink,
+                info.st_size,
+                info.st_mtime_ns,
+                info.st_ctime_ns,
+            ),
+            strict=True,
+        )
+    )
 
 
 class Store:
     """No-follow filesystem port. Test constructors may use a private temp trust root."""
 
-    def __init__(self, operation: Path = OPERATION, *, owner: int = 0,
-                 trust_root: Path = Path("/"), archive_base: Path = Path("/var/lib")) -> None:
+    def __init__(
+        self,
+        operation: Path = OPERATION,
+        *,
+        owner: int = 0,
+        trust_root: Path = Path("/"),
+        archive_base: Path = Path("/var/lib"),
+    ) -> None:
         self.operation = operation
         self.owner = owner
         self.trust_root = trust_root
@@ -255,8 +370,7 @@ class Store:
             if part:
                 current /= part
             info = current.lstat()
-            if (not stat.S_ISDIR(info.st_mode) or info.st_uid != self.owner
-                    or info.st_mode & 0o022):
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != self.owner or info.st_mode & 0o022:
                 raise Refused("Unsafe root directory ancestry")
 
     def fsync_directory(self, directory: Path) -> None:
@@ -277,8 +391,13 @@ class Store:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:
             info = os.fstat(fd)
-            if (not stat.S_ISREG(info.st_mode) or info.st_uid != self.owner
-                    or info.st_nlink != 1 or info.st_mode & 0o022 or info.st_size > limit):
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_uid != self.owner
+                or info.st_nlink != 1
+                or info.st_mode & 0o022
+                or info.st_size > limit
+            ):
                 raise Refused("Unsafe bounded single-link regular file")
             before = stat_record(info)
             if before != stat_record(path.lstat()):
@@ -292,21 +411,31 @@ class Store:
         stream, before = self.open_file(path, limit)
         with stream:
             raw = stream.read(limit + 1)
-            if (len(raw) > limit or len(raw) != before["size"]
-                    or before != stat_record(os.fstat(stream.fileno()))
-                    or before != stat_record(path.lstat())):
+            if (
+                len(raw) > limit
+                or len(raw) != before["size"]
+                or before != stat_record(os.fstat(stream.fileno()))
+                or before != stat_record(path.lstat())
+            ):
                 raise Refused("File changed during bounded read")
         return raw, before
 
-    def write(self, name: str, raw: bytes, mode: int = 0o400,
-              *, before_create: Callable[[], None] | None = None) -> None:
+    def write(
+        self,
+        name: str,
+        raw: bytes,
+        mode: int = 0o400,
+        *,
+        before_create: Callable[[], None] | None = None,
+    ) -> None:
         if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,80}", name):
             raise Refused("Fixed operation filename")
         self.ancestry(self.operation)
         if before_create is not None:
             before_create()
-        fd = os.open(self.operation / name,
-                     os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+        fd = os.open(
+            self.operation / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode
+        )
         try:
             with os.fdopen(fd, "wb", closefd=False) as stream:
                 stream.write(raw)
@@ -316,8 +445,15 @@ class Store:
             os.close(fd)
         self.fsync_directory(self.operation)
 
-    def record(self, name: str, value: Row, source: str, boot: str,
-               *, before_create: Callable[[], None] | None = None) -> None:
+    def record(
+        self,
+        name: str,
+        value: Row,
+        source: str,
+        boot: str,
+        *,
+        before_create: Callable[[], None] | None = None,
+    ) -> None:
         validate_record(value, name, source, boot)
         raw = canonical(value)
         if len(raw) > JSON_LIMIT:
@@ -344,20 +480,30 @@ class Store:
         return seal, hashlib.sha256(raw).hexdigest()
 
 
-def copy_stop_observation(source: Path = STAGE / "operator-stop.md",
-                          target: Path = ROOT / "recovery-v3/operator-stop.md",
-                          *, store: Store | None = None) -> None:
+def copy_stop_observation(
+    source: Path = STAGE / "operator-stop.md",
+    target: Path = ROOT / "recovery-v3/operator-stop.md",
+    *,
+    store: Store | None = None,
+) -> None:
     """The preparation child calls this same no-follow producer, not a copy of it."""
     store = Store() if store is None else store
     raw, seal = store.read(source, 1222)
-    if (len(raw) != 1222 or hashlib.sha256(raw).hexdigest() != STOP_SHA
-            or stat_record(source.lstat()) != seal):
+    if (
+        len(raw) != 1222
+        or hashlib.sha256(raw).hexdigest() != STOP_SHA
+        or stat_record(source.lstat()) != seal
+    ):
         raise Refused("Wrong or unstable original Stop observation")
     store.ancestry(target.parent.parent)
     target.parent.mkdir(mode=0o700)
     store.fsync_directory(target.parent.parent)
-    target_store = Store(target.parent, owner=store.owner, trust_root=store.trust_root,
-                         archive_base=store.archive_base)
+    target_store = Store(
+        target.parent,
+        owner=store.owner,
+        trust_root=store.trust_root,
+        archive_base=store.archive_base,
+    )
     target_store.write("operator-stop.md", raw)
     if stat_record(source.lstat()) != seal:
         raise Refused("Stop source changed during exclusive copy; retained uncertain target")
@@ -418,7 +564,7 @@ class Host:
             raise Refused("Invalid process identity")
         root = Path("/proc") / str(pid)
         raw = (root / "stat").read_bytes()
-        fields = raw[raw.rfind(b")") + 2:].split()
+        fields = raw[raw.rfind(b")") + 2 :].split()
         if len(fields) < 20 or fields[0] in (b"Z", b"X", b"x"):
             raise Refused("Process is not live")
         ticks, ppid = int(fields[19]), int(fields[1])
@@ -429,13 +575,16 @@ class Host:
         cgroups = (root / "cgroup").read_text().splitlines()
         if len(cgroups) != 1 or not cgroups[0].startswith("0::/"):
             raise Refused("Unified actual process cgroup")
-        uid_lines = [line.split()[1:] for line in (root / "status").read_text().splitlines()
-                     if line.startswith("Uid:")]
+        uid_lines = [
+            line.split()[1:]
+            for line in (root / "status").read_text().splitlines()
+            if line.startswith("Uid:")
+        ]
         if len(uid_lines) != 1 or len(uid_lines[0]) != 4:
             raise Refused("Actual process effective identity")
         effective_uid = int(uid_lines[0][1])
         again = (root / "stat").read_bytes()
-        tail = again[again.rfind(b")") + 2:].split()
+        tail = again[again.rfind(b")") + 2 :].split()
         if len(tail) < 20 or int(tail[19]) != ticks or tail[0] in (b"Z", b"X", b"x"):
             raise Refused("Process identity changed")
         return ProcessIdentity(pid, ticks, argv, cgroups[0][3:], ppid, effective_uid)
@@ -448,8 +597,10 @@ class Host:
 
     def show(self, unit: str, fields: tuple[str, ...]) -> Row:
         result = subprocess.run(
-            ["/usr/bin/systemctl", "show", unit, "--no-pager",
-             "--property=" + ",".join(fields)], capture_output=True, timeout=3, check=True,
+            ["/usr/bin/systemctl", "show", unit, "--no-pager", "--property=" + ",".join(fields)],
+            capture_output=True,
+            timeout=3,
+            check=True,
         )
         if len(result.stdout) > JSON_LIMIT or len(result.stderr) > JSON_LIMIT:
             raise Refused("Bounded systemctl observation")
@@ -466,34 +617,55 @@ class Host:
     def live(self, source: str, start: Row) -> GuardIdentity:
         validate_record(start, "controller-start", source, self.boot())
         master = self.process(start["controller_pid"])
-        if (master.effective_uid != 0 or master.start_ticks != start["controller_start_ticks"]
-                or master.argv != start["controller_argv"]):
+        if (
+            master.effective_uid != 0
+            or master.start_ticks != start["controller_start_ticks"]
+            or master.argv != start["controller_argv"]
+        ):
             raise Refused("Master PID/start/command changed")
-        fields = ("ActiveState", "SubState", "InvocationID", "MainPID", "ExecStart",
-                  "ControlGroup", "DropInPaths", "User")
+        fields = (
+            "ActiveState",
+            "SubState",
+            "InvocationID",
+            "MainPID",
+            "ExecStart",
+            "ControlGroup",
+            "DropInPaths",
+            "User",
+        )
         first = self.show(UNIT, fields)
-        if (first["ActiveState"] != "active" or first["SubState"] != "running"
-                or not hex_string(first["InvocationID"], 32) or first["DropInPaths"]
-                or not first["MainPID"].isdigit() or first["User"] != "ubuntu"):
+        if (
+            first["ActiveState"] != "active"
+            or first["SubState"] != "running"
+            or not hex_string(first["InvocationID"], 32)
+            or first["DropInPaths"]
+            or not first["MainPID"].isdigit()
+            or first["User"] != "ubuntu"
+        ):
             raise Refused("Original lifecycle guard is not active/running")
         main = self.process(int(first["MainPID"]))
         owner_uid = pwd.getpwnam("ubuntu").pw_uid
         if owner_uid != 1000:
             raise Refused("Fixed lifecycle owner identity changed")
-        allowed_uid = ({0, owner_uid} if main.argv == main_argv(source) else {0})
-        if (main.effective_uid not in allowed_uid or main.argv not in guard_commands(source)
-                or main.cgroup != first["ControlGroup"]
-                or master.cgroup != first["ControlGroup"]
-                or first["ControlGroup"] != "/system.slice/" + UNIT
-                or "path=/usr/bin/sudo ;" not in first["ExecStart"]
-                or "argv[]=" + " ".join(main_argv(source)) + " ;" not in first["ExecStart"]
-                or first != self.show(UNIT, fields)):
+        allowed_uid = {0, owner_uid} if main.argv == main_argv(source) else {0}
+        if (
+            main.effective_uid not in allowed_uid
+            or main.argv not in guard_commands(source)
+            or main.cgroup != first["ControlGroup"]
+            or master.cgroup != first["ControlGroup"]
+            or first["ControlGroup"] != "/system.slice/" + UNIT
+            or "path=/usr/bin/sudo ;" not in first["ExecStart"]
+            or "argv[]=" + " ".join(main_argv(source)) + " ;" not in first["ExecStart"]
+            or first != self.show(UNIT, fields)
+        ):
             raise Refused("Complete live guard/master identity mismatch")
         return GuardIdentity(first["InvocationID"], main, first["ExecStart"], main.cgroup)
 
     def _controls(self) -> None:
-        if (Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns").read_text().strip()
-                != "1"):
+        if (
+            Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns").read_text().strip()
+            != "1"
+        ):
             raise Refused("Original AppArmor restriction changed")
         clone = Path("/proc/sys/kernel/unprivileged_userns_clone")
         if clone.exists() and clone.read_text().strip() != "1":
@@ -505,13 +677,23 @@ class Host:
             raw, _ = store.read(Path(path), 1048576)
             if hashlib.sha256(raw).hexdigest() != expected:
                 raise Refused("Original lifecycle file changed")
-        timer = self.show("tickwitness-boot-deadline.timer", (
-            "ActiveState", "UnitFileState", "DropInPaths", "FragmentPath", "TimersMonotonic",
-        ))
-        if (timer["ActiveState"] != "active" or timer["UnitFileState"] != "enabled"
-                or timer["DropInPaths"] or timer["FragmentPath"]
-                != "/etc/systemd/system/tickwitness-boot-deadline.timer"
-                or "OnBootUSec=4h" not in timer["TimersMonotonic"]):
+        timer = self.show(
+            "tickwitness-boot-deadline.timer",
+            (
+                "ActiveState",
+                "UnitFileState",
+                "DropInPaths",
+                "FragmentPath",
+                "TimersMonotonic",
+            ),
+        )
+        if (
+            timer["ActiveState"] != "active"
+            or timer["UnitFileState"] != "enabled"
+            or timer["DropInPaths"]
+            or timer["FragmentPath"] != "/etc/systemd/system/tickwitness-boot-deadline.timer"
+            or "OnBootUSec=4h" not in timer["TimersMonotonic"]
+        ):
             raise Refused("Original independent boot timer changed")
         for filename, copy in (
             ("run_ec2_reference_recovery_v3.sh", "batch-source.sh"),
@@ -537,8 +719,9 @@ class Host:
             retained, _ = store.read(store.operation / copy, 1048576)
             if staged != selected or retained != selected:
                 raise Refused("Stage/operation script does not match selected Git source")
-            records.append({"path": filename, "sha256": hashlib.sha256(staged).hexdigest(),
-                            "stat": seal})
+            records.append(
+                {"path": filename, "sha256": hashlib.sha256(staged).hexdigest(), "stat": seal}
+            )
         store.write("source-check.log", canonical(records))
         before, _ = store.read(store.operation / "history-before.log", RAW_LIMIT)
         after = canonical(history_snapshot(store))
@@ -558,8 +741,9 @@ class PhaseResult:
 
 
 class RunnerPort(Protocol):
-    def run(self, argv: list[str], deadline: int, grace_deadline: int,
-            stdout: Path, stderr: Path) -> PhaseResult: ...
+    def run(
+        self, argv: list[str], deadline: int, grace_deadline: int, stdout: Path, stderr: Path
+    ) -> PhaseResult: ...
 
 
 class ProcessRunner:
@@ -569,8 +753,9 @@ class ProcessRunner:
         self.clock = clock
         self.store = store
 
-    def run(self, argv: list[str], deadline: int, grace_deadline: int,
-            stdout: Path, stderr: Path) -> PhaseResult:
+    def run(
+        self, argv: list[str], deadline: int, grace_deadline: int, stdout: Path, stderr: Path
+    ) -> PhaseResult:
         self.store.ancestry(stdout.parent)
         self.store.ancestry(stderr.parent)
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
@@ -590,24 +775,20 @@ class ProcessRunner:
                     code = process.wait(timeout=max(0, deadline - self.clock.now()) / 1e9)
                 except subprocess.TimeoutExpired:
                     timed_out = True
-                    try:
+                    with suppress(ProcessLookupError):
                         os.killpg(process.pid, signal.SIGTERM)
-                    except ProcessLookupError:
-                        pass
                     try:
                         grace_started = self.clock.now()
                         remaining = max(0, grace_deadline - grace_started)
                         term_deadline = grace_started + remaining // 2
-                        code = process.wait(
-                            timeout=max(0, term_deadline - self.clock.now()) / 1e9)
+                        code = process.wait(timeout=max(0, term_deadline - self.clock.now()) / 1e9)
                     except subprocess.TimeoutExpired:
-                        try:
+                        with suppress(ProcessLookupError):
                             os.killpg(process.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
                         try:
                             code = process.wait(
-                                timeout=max(0, grace_deadline - self.clock.now()) / 1e9)
+                                timeout=max(0, grace_deadline - self.clock.now()) / 1e9
+                            )
                         except subprocess.TimeoutExpired:
                             code = None
                 out.flush()
@@ -619,7 +800,7 @@ class ProcessRunner:
             self.store.fsync_directory(stdout.parent)
 
 
-PREPARATION = r'''set -euo pipefail
+PREPARATION = r"""set -euo pipefail
 source_revision=$1
 stage=/var/lib/tickwitness-lifecycle/ec2-recovery-batch-v3
 /bin/bash "$stage/provision_ec2_reference_source.sh" --recovery-v3 "$source_revision"
@@ -630,13 +811,16 @@ runpy.run_path(
     run_name='tickwitness_stop_copy_v3',
 )['copy_stop_observation']()
 PY
-/usr/bin/python3 -I "/opt/tickwitness-reference/$source_revision/scripts/prepare_ec2_reference_recovery_v3.py" --source-revision "$source_revision" --plan-id ec2-recovery-20261127-v3
-'''
+selected_source=/opt/tickwitness-reference/$source_revision
+/usr/bin/python3 -I "$selected_source/scripts/prepare_ec2_reference_recovery_v3.py" \
+    --source-revision "$source_revision" --plan-id ec2-recovery-20261127-v3
+"""
 
 
 class Controller:
-    def __init__(self, source: str, store: Store, host: HostPort,
-                 runner: RunnerPort, clock: ClockPort) -> None:
+    def __init__(
+        self, source: str, store: Store, host: HostPort, runner: RunnerPort, clock: ClockPort
+    ) -> None:
         if not hex_string(source, 40):
             raise Refused("Exact source revision required")
         self.source, self.store, self.host = source, store, host
@@ -650,12 +834,17 @@ class Controller:
         self.status = "not_started"
 
     def base(self, name: str) -> Row:
-        return {"kind": "restricted_reference_ec2_" + name.replace("-", "_") + "_v3",
-                "schema_version": 3, "source_revision": self.source,
-                "run_id": RUN_ID, "boot_id": self.boot}
+        return {
+            "kind": "restricted_reference_ec2_" + name.replace("-", "_") + "_v3",
+            "schema_version": 3,
+            "source_revision": self.source,
+            "run_id": RUN_ID,
+            "boot_id": self.boot,
+        }
 
-    def phase(self, name: str, argv: list[str], seconds: int,
-              *, anchor: int | None = None) -> PhaseResult:
+    def phase(
+        self, name: str, argv: list[str], seconds: int, *, anchor: int | None = None
+    ) -> PhaseResult:
         if self.invoked[name]:
             raise Refused("Phase already invoked")
         started = self.clock.now() if anchor is None else anchor
@@ -667,9 +856,13 @@ class Controller:
         self.invoked[name] = True  # Before Popen; uncertain submission remains invoked.
         filename = "qualification" if name == "qualifier" else name
         try:
-            result = self.runner.run(argv, deadline, grace,
-                                     self.store.operation / (filename + ".stdout"),
-                                     self.store.operation / (filename + ".stderr"))
+            result = self.runner.run(
+                argv,
+                deadline,
+                grace,
+                self.store.operation / (filename + ".stdout"),
+                self.store.operation / (filename + ".stderr"),
+            )
         except Exception:
             result = PhaseResult(None)
         self.results[name] = result
@@ -680,8 +873,10 @@ class Controller:
         self.store.create_operation()
         master = self.host.master(self.source)
         self.start = self.base("controller-start") | {
-            "controller_pid": master.pid, "controller_start_ticks": master.start_ticks,
-            "controller_argv": master.argv, "started_ns": self.started,
+            "controller_pid": master.pid,
+            "controller_start_ticks": master.start_ticks,
+            "controller_argv": master.argv,
+            "started_ns": self.started,
             "outer_deadline_ns": self.deadline,
         }
         self.store.record("controller-start", self.start, self.source, self.boot)
@@ -691,8 +886,10 @@ class Controller:
             self.host.live(self.source, self.start)
             self.host.before_preparation(self.source, self.store)
             preparation = self.phase(
-                "preparation", ["/bin/bash", "-c", PREPARATION, "v3-preparation", self.source],
-                480, anchor=preparation_started,
+                "preparation",
+                ["/bin/bash", "-c", PREPARATION, "v3-preparation", self.source],
+                480,
+                anchor=preparation_started,
             )
             if preparation.returncode == 0 and not preparation.timed_out:
                 self.host.after_preparation(self.source, self.store)
@@ -700,30 +897,67 @@ class Controller:
                 if self.clock.now() >= preparation_deadline:
                     self.results["preparation"] = PhaseResult(preparation.returncode, True)
                     raise Refused("Preparation observation exhausted its original phase clock")
-                self.phase("qualifier", [
-                    "/usr/bin/python3", "-I", str(Path("/opt/tickwitness-reference")
-                    / self.source / "scripts/qualify_restricted_reference_ec2.py"),
-                    "--source-revision", self.source, "--run-id", RUN_ID,
-                    "--recovery-plan", PLAN_ID,
-                ], 612)
+                self.phase(
+                    "qualifier",
+                    [
+                        "/usr/bin/python3",
+                        "-I",
+                        str(
+                            Path("/opt/tickwitness-reference")
+                            / self.source
+                            / "scripts/qualify_restricted_reference_ec2.py"
+                        ),
+                        "--source-revision",
+                        self.source,
+                        "--run-id",
+                        RUN_ID,
+                        "--recovery-plan",
+                        PLAN_ID,
+                    ],
+                    612,
+                )
         except Exception:
             self.status = "failed"
         try:
             report = self._report_record()
-            self.store.record("qualifier-exit", self.base("qualifier-exit") | {
-                "invoked": self.invoked["qualifier"],
-                "returncode": self.results["qualifier"].returncode, "report": report,
-            }, self.source, self.boot)
+            self.store.record(
+                "qualifier-exit",
+                self.base("qualifier-exit")
+                | {
+                    "invoked": self.invoked["qualifier"],
+                    "returncode": self.results["qualifier"].returncode,
+                    "report": report,
+                },
+                self.source,
+                self.boot,
+            )
             if self.clock.now() < self.deadline:
                 self.host.live(self.source, self.start)
-                self.store.record("export-call", self.base("export-call") | {
-                    "controller_pid": master.pid, "controller_start_ticks": master.start_ticks,
-                    "started_ns": self.clock.now(),
-                }, self.source, self.boot)
-                exported = self.phase("export", [
-                    "/usr/bin/python3", "-I", str(STAGE / "ec2_reference_handoff_v3.py"),
-                    "internal-export", "--source-revision", self.source, "--run-id", RUN_ID,
-                ], 25)
+                self.store.record(
+                    "export-call",
+                    self.base("export-call")
+                    | {
+                        "controller_pid": master.pid,
+                        "controller_start_ticks": master.start_ticks,
+                        "started_ns": self.clock.now(),
+                    },
+                    self.source,
+                    self.boot,
+                )
+                exported = self.phase(
+                    "export",
+                    [
+                        "/usr/bin/python3",
+                        "-I",
+                        str(STAGE / "ec2_reference_handoff_v3.py"),
+                        "internal-export",
+                        "--source-revision",
+                        self.source,
+                        "--run-id",
+                        RUN_ID,
+                    ],
+                    25,
+                )
                 if exported.returncode == 0 and not exported.timed_out:
                     self.status = self.wait()
                 else:
@@ -734,15 +968,24 @@ class Controller:
             self.status = "failed"
         qualifier = self.results["qualifier"]
         original = qualifier.returncode
-        code = original if (
-            self.status == "acknowledged" and self.results["export"].returncode == 0
-            and self.invoked["qualifier"] and type(original) is int and 0 <= original <= 255
-            and not any(result.timed_out for result in self.results.values())
-            and self.results["preparation"].returncode == 0
-        ) else 74
+        code = (
+            original
+            if (
+                self.status == "acknowledged"
+                and self.results["export"].returncode == 0
+                and self.invoked["qualifier"]
+                and type(original) is int
+                and 0 <= original <= 255
+                and not any(result.timed_out for result in self.results.values())
+                and self.results["preparation"].returncode == 0
+            )
+            else 74
+        )
         if self.clock.now() < self.deadline:
-            result = self.base("controller-result") | {"handoff_status": self.status,
-                                                       "returncode": code}
+            result = self.base("controller-result") | {
+                "handoff_status": self.status,
+                "returncode": code,
+            }
             for phase in self.invoked:
                 result[phase + "_invoked"] = self.invoked[phase]
                 result[phase + "_returncode"] = self.results[phase].returncode
@@ -772,15 +1015,23 @@ class Controller:
         guard = self.host.live(self.source, self.start)
         seal, digest = self.store.archive()
         ready = self.base("handoff-ready") | {
-            "unit": UNIT, "invocation_id": guard.invocation_id,
-            "main_pid": guard.main.pid, "main_start_ticks": guard.main.start_ticks,
-            "main_argv": guard.main.argv, "guard_exec_start": guard.exec_start,
+            "unit": UNIT,
+            "invocation_id": guard.invocation_id,
+            "main_pid": guard.main.pid,
+            "main_start_ticks": guard.main.start_ticks,
+            "main_argv": guard.main.argv,
+            "guard_exec_start": guard.exec_start,
             "guard_control_group": guard.cgroup,
             "controller_pid": self.start["controller_pid"],
             "controller_start_ticks": self.start["controller_start_ticks"],
-            "controller_argv": self.start["controller_argv"], "nonce": secrets.token_hex(16),
-            "bytes": seal["size"], "sha256": digest, "archive_stat": seal,
-            "started_ns": started, "deadline_ns": deadline, "outer_deadline_ns": self.deadline,
+            "controller_argv": self.start["controller_argv"],
+            "nonce": secrets.token_hex(16),
+            "bytes": seal["size"],
+            "sha256": digest,
+            "archive_stat": seal,
+            "started_ns": started,
+            "deadline_ns": deadline,
+            "outer_deadline_ns": self.deadline,
         }
         if self.clock.now() >= deadline:
             return "expired"
@@ -789,11 +1040,13 @@ class Controller:
         while self.clock.now() < deadline:
             if self.store.exists("controller-cancel.json"):
                 cancelled = self.store.record_read("controller-cancel", self.source, self.boot)
-                if (cancelled["controller_pid"] != self.start["controller_pid"]
-                        or cancelled["controller_start_ticks"] != self.start["controller_start_ticks"]
-                        or cancelled["invocation_id"] != guard.invocation_id
-                        or cancelled["main_pid"] != guard.main.pid
-                        or not self.started <= cancelled["requested_ns"] <= self.clock.now()):
+                if (
+                    cancelled["controller_pid"] != self.start["controller_pid"]
+                    or cancelled["controller_start_ticks"] != self.start["controller_start_ticks"]
+                    or cancelled["invocation_id"] != guard.invocation_id
+                    or cancelled["main_pid"] != guard.main.pid
+                    or not self.started <= cancelled["requested_ns"] <= self.clock.now()
+                ):
                     raise Refused("Cancel is not bound to the original live controller")
                 return "cancelled"
             if self.store.exists("handoff-ack.json"):
@@ -808,16 +1061,21 @@ class Controller:
 
 def _history_roots() -> tuple[Path, ...]:
     return (
-        ROOT / "host-admission.json", ROOT / "recovery-plan.json",
-        ROOT / "recovery-consumption.json", ROOT / "recovery-evidence",
+        ROOT / "host-admission.json",
+        ROOT / "recovery-plan.json",
+        ROOT / "recovery-consumption.json",
+        ROOT / "recovery-evidence",
         ROOT / "recovery-v2",
         *(ROOT / "runs" / run for run in OLD_RUNS),
         *(ROOT / "sources" / source for source in OLD_SOURCES),
     )
 
 
-def bounded_files(store: Store, roots: tuple[Path, ...], *, required: bool) -> tuple[
-    list[Path], list[str],
+def bounded_files(
+    store: Store, roots: tuple[Path, ...], *, required: bool
+) -> tuple[
+    list[Path],
+    list[str],
 ]:
     """Enumerate fixed trees, rejecting links, special files and mounted subtrees."""
     files: list[Path] = []
@@ -860,8 +1118,7 @@ def history_snapshot(store: Store) -> list[Row]:
     result = []
     for path in files:
         raw, seal = store.read(path, RAW_LIMIT)
-        result.append({"path": str(path), "stat": seal,
-                       "sha256": hashlib.sha256(raw).hexdigest()})
+        result.append({"path": str(path), "stat": seal, "sha256": hashlib.sha256(raw).hexdigest()})
     return result
 
 
@@ -870,22 +1127,25 @@ def _start(store: Store, host: HostPort, source: str) -> Row:
 
 
 def _same_guard(ready: Row, guard: GuardIdentity, start: Row) -> None:
-    if (ready["invocation_id"] != guard.invocation_id
-            or ready["main_pid"] != guard.main.pid
-            or ready["main_start_ticks"] != guard.main.start_ticks
-            or ready["main_argv"] != guard.main.argv
-            or ready["guard_exec_start"] != guard.exec_start
-            or ready["guard_control_group"] != guard.cgroup
-            or ready["controller_pid"] != start["controller_pid"]
-            or ready["controller_start_ticks"] != start["controller_start_ticks"]
-            or ready["controller_argv"] != start["controller_argv"]
-            or ready["outer_deadline_ns"] != start["outer_deadline_ns"]
-            or ready["started_ns"] < start["started_ns"]):
+    if (
+        ready["invocation_id"] != guard.invocation_id
+        or ready["main_pid"] != guard.main.pid
+        or ready["main_start_ticks"] != guard.main.start_ticks
+        or ready["main_argv"] != guard.main.argv
+        or ready["guard_exec_start"] != guard.exec_start
+        or ready["guard_control_group"] != guard.cgroup
+        or ready["controller_pid"] != start["controller_pid"]
+        or ready["controller_start_ticks"] != start["controller_start_ticks"]
+        or ready["controller_argv"] != start["controller_argv"]
+        or ready["outer_deadline_ns"] != start["outer_deadline_ns"]
+        or ready["started_ns"] < start["started_ns"]
+    ):
         raise Refused("Ready is not the same original guard/master/clock")
 
 
-def validate_handoff(source: str, store: Store, host: HostPort, clock: ClockPort,
-                     ready: Row, ack: Row) -> None:
+def validate_handoff(
+    source: str, store: Store, host: HostPort, clock: ClockPort, ready: Row, ack: Row
+) -> None:
     boot = host.boot()
     validate_record(ready, "handoff-ready", source, boot)
     validate_record(ack, "handoff-ack", source, boot)
@@ -904,39 +1164,57 @@ def validate_handoff(source: str, store: Store, host: HostPort, clock: ClockPort
         raise Refused("Handoff identity changed or expired during verification")
 
 
-def acknowledge(source: str, store: Store, host: HostPort, clock: ClockPort,
-                supplied: Row) -> None:
+def acknowledge(source: str, store: Store, host: HostPort, clock: ClockPort, supplied: Row) -> None:
     boot = host.boot()
     ready = store.record_read("handoff-ready", source, boot)
-    ack = {"kind": "restricted_reference_ec2_handoff_ack_v3", "schema_version": 3,
-           "source_revision": source, "run_id": RUN_ID, **supplied}
+    ack = {
+        "kind": "restricted_reference_ec2_handoff_ack_v3",
+        "schema_version": 3,
+        "source_revision": source,
+        "run_id": RUN_ID,
+        **supplied,
+    }
     validate_handoff(source, store, host, clock, ready, ack)
     # No writes have occurred before all the checks above, including the last clock.
-    store.record("handoff-ack", ack, source, boot,
-                 before_create=lambda: validate_handoff(source, store, host, clock, ready, ack))
+    store.record(
+        "handoff-ack",
+        ack,
+        source,
+        boot,
+        before_create=lambda: validate_handoff(source, store, host, clock, ready, ack),
+    )
 
 
-def cancel(source: str, store: Store, host: HostPort, clock: ClockPort,
-           supplied: Row) -> None:
+def cancel(source: str, store: Store, host: HostPort, clock: ClockPort, supplied: Row) -> None:
     expected = {"boot_id", "invocation_id", "main_pid", "controller_pid"}
-    if (set(supplied) != expected or not uuid_string(supplied["boot_id"])
-            or not hex_string(supplied["invocation_id"], 32)
-            or not integer(supplied["main_pid"], 1)
-            or not integer(supplied["controller_pid"], 1)):
+    if (
+        set(supplied) != expected
+        or not uuid_string(supplied["boot_id"])
+        or not hex_string(supplied["invocation_id"], 32)
+        or not integer(supplied["main_pid"], 1)
+        or not integer(supplied["controller_pid"], 1)
+    ):
         raise Refused("Cancel exact caller identity fields")
     start = _start(store, host, source)
     guard = host.live(source, start)
     requested = clock.now()
-    if (supplied["boot_id"] != start["boot_id"]
-            or supplied["invocation_id"] != guard.invocation_id
-            or supplied["main_pid"] != guard.main.pid
-            or supplied["controller_pid"] != start["controller_pid"]
-            or not start["started_ns"] <= requested < start["outer_deadline_ns"]):
+    if (
+        supplied["boot_id"] != start["boot_id"]
+        or supplied["invocation_id"] != guard.invocation_id
+        or supplied["main_pid"] != guard.main.pid
+        or supplied["controller_pid"] != start["controller_pid"]
+        or not start["started_ns"] <= requested < start["outer_deadline_ns"]
+    ):
         raise Refused("Cancel stale/wrong original guard identity")
-    value = {"kind": "restricted_reference_ec2_controller_cancel_v3", "schema_version": 3,
-             "source_revision": source, "run_id": RUN_ID, **supplied,
-             "controller_start_ticks": start["controller_start_ticks"],
-             "requested_ns": requested}
+    value = {
+        "kind": "restricted_reference_ec2_controller_cancel_v3",
+        "schema_version": 3,
+        "source_revision": source,
+        "run_id": RUN_ID,
+        **supplied,
+        "controller_start_ticks": start["controller_start_ticks"],
+        "requested_ns": requested,
+    }
 
     def before_create() -> None:
         if host.live(source, start) != guard:
@@ -945,8 +1223,7 @@ def cancel(source: str, store: Store, host: HostPort, clock: ClockPort,
         if not requested <= now < start["outer_deadline_ns"]:
             raise Refused("Cancel expired during publication verification")
 
-    store.record("controller-cancel", value, source, start["boot_id"],
-                 before_create=before_create)
+    store.record("controller-cancel", value, source, start["boot_id"], before_create=before_create)
     if host.live(source, start) != guard or clock.now() >= start["outer_deadline_ns"]:
         raise Refused("Guard changed after cancel record; no signal sent")
     host.stop(guard)
@@ -976,23 +1253,50 @@ def export_archive(source: str, store: Store) -> None:
     if before != after:
         raise Refused("Historical bytes/inodes changed before export")
     operation_names = (
-        "controller-start.json", "qualifier-exit.json", "export-call.json",
-        "export-consumption.json", "batch-source.sh", "preparer-source.sh", "handoff-source.py",
-        "preparation.stdout", "preparation.stderr", "qualification.stdout",
-        "qualification.stderr", "source-check.log", "history-before.log", "history-prepared.log",
+        "controller-start.json",
+        "qualifier-exit.json",
+        "export-call.json",
+        "export-consumption.json",
+        "batch-source.sh",
+        "preparer-source.sh",
+        "handoff-source.py",
+        "preparation.stdout",
+        "preparation.stderr",
+        "qualification.stdout",
+        "qualification.stderr",
+        "source-check.log",
+        "history-before.log",
+        "history-prepared.log",
         "history-after.log",
     )
-    roots = (*_history_roots(), ROOT / "recovery-v3", ROOT / "runs" / RUN_ID,
-             ROOT / "sources" / source,
-             *(store.operation / name for name in operation_names))
+    roots = (
+        *_history_roots(),
+        ROOT / "recovery-v3",
+        ROOT / "runs" / RUN_ID,
+        ROOT / "sources" / source,
+        *(store.operation / name for name in operation_names),
+    )
     files, absent = bounded_files(store, roots, required=False)
-    inventory: Row = {"absent": absent, "inventory_only": [
-        str(store.operation / name) for name in (
-            "export.stdout", "export.stderr", "handoff-ready.json", "handoff-ack.json",
-            "controller-cancel.json", "controller-result.json",
-        )], "archived": []}
-    fd = os.open(store.operation / "archive.pending",
-                 os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o400)
+    inventory: Row = {
+        "absent": absent,
+        "inventory_only": [
+            str(store.operation / name)
+            for name in (
+                "export.stdout",
+                "export.stderr",
+                "handoff-ready.json",
+                "handoff-ack.json",
+                "controller-cancel.json",
+                "controller-result.json",
+            )
+        ],
+        "archived": [],
+    }
+    fd = os.open(
+        store.operation / "archive.pending",
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+        0o400,
+    )
     try:
         with os.fdopen(fd, "wb", closefd=False) as stream:
             limited = LimitedWriter(stream)
@@ -1006,8 +1310,9 @@ def export_archive(source: str, store: Store) -> None:
                     item.size = len(raw)
                     item.mtime = seal["mtime_ns"] // 1_000_000_000
                     archive.addfile(item, io.BytesIO(raw))
-                    inventory["archived"].append({"path": str(path), "stat": seal,
-                                                  "sha256": hashlib.sha256(raw).hexdigest()})
+                    inventory["archived"].append(
+                        {"path": str(path), "stat": seal, "sha256": hashlib.sha256(raw).hexdigest()}
+                    )
                 raw = canonical(inventory)
                 item = tarfile.TarInfo("export-inventory.json")
                 item.size, item.mode = len(raw), 0o400
@@ -1018,14 +1323,19 @@ def export_archive(source: str, store: Store) -> None:
         os.close(fd)
     # Hard-link is an exclusive publication, never replacement. Crash at nlink=2
     # remains uncertain/USED; only this successful publication unlinks pending.
-    os.link(store.operation / "archive.pending", store.operation / "evidence.tar.gz",
-            follow_symlinks=False)
+    os.link(
+        store.operation / "archive.pending",
+        store.operation / "evidence.tar.gz",
+        follow_symlinks=False,
+    )
     store.fsync_directory(store.operation)
     os.unlink(store.operation / "archive.pending")
     store.fsync_directory(store.operation)
     seal, digest = store.archive()
-    print(f"TICKWITNESS_EC2_ARCHIVE_PUBLISHED run={RUN_ID} "
-          f"bytes={seal['size']} sha256={digest}", flush=True)
+    print(
+        f"TICKWITNESS_EC2_ARCHIVE_PUBLISHED run={RUN_ID} bytes={seal['size']} sha256={digest}",
+        flush=True,
+    )
 
 
 def internal_export(source: str, store: Store, host: Host, clock: ClockPort) -> None:
@@ -1033,18 +1343,36 @@ def internal_export(source: str, store: Store, host: Host, clock: ClockPort) -> 
     guard = host.live(source, start)
     call = store.record_read("export-call", source, host.boot())
     child = host.process(os.getpid())
-    expected = ["/usr/bin/python3", "-I", str(STAGE / "ec2_reference_handoff_v3.py"),
-                "internal-export", "--source-revision", source, "--run-id", RUN_ID]
-    if (call["controller_pid"] != start["controller_pid"]
-            or call["controller_start_ticks"] != start["controller_start_ticks"]
-            or not start["started_ns"] <= call["started_ns"] <= clock.now()
-            or child.ppid != start["controller_pid"] or child.cgroup != guard.cgroup
-            or child.argv != expected or clock.now() >= start["outer_deadline_ns"]):
+    expected = [
+        "/usr/bin/python3",
+        "-I",
+        str(STAGE / "ec2_reference_handoff_v3.py"),
+        "internal-export",
+        "--source-revision",
+        source,
+        "--run-id",
+        RUN_ID,
+    ]
+    if (
+        call["controller_pid"] != start["controller_pid"]
+        or call["controller_start_ticks"] != start["controller_start_ticks"]
+        or not start["started_ns"] <= call["started_ns"] <= clock.now()
+        or child.ppid != start["controller_pid"]
+        or child.cgroup != guard.cgroup
+        or child.argv != expected
+        or clock.now() >= start["outer_deadline_ns"]
+    ):
         raise Refused("Exporter must be the original master's direct live child")
-    value = {"kind": "restricted_reference_ec2_export_consumption_v3", "schema_version": 3,
-             "source_revision": source, "run_id": RUN_ID, "boot_id": host.boot(),
-             "controller_pid": start["controller_pid"],
-             "controller_start_ticks": start["controller_start_ticks"], "started_ns": clock.now()}
+    value = {
+        "kind": "restricted_reference_ec2_export_consumption_v3",
+        "schema_version": 3,
+        "source_revision": source,
+        "run_id": RUN_ID,
+        "boot_id": host.boot(),
+        "controller_pid": start["controller_pid"],
+        "controller_start_ticks": start["controller_start_ticks"],
+        "started_ns": clock.now(),
+    }
     store.record("export-consumption", value, source, start["boot_id"])
     export_archive(source, store)
 
@@ -1076,21 +1404,29 @@ def main(argv: list[str] | None = None) -> int:
     if os.geteuid() != 0 or sys.platform != "linux" or platform.machine() != "x86_64":
         raise Refused("Only the fixed root Linux x86_64 reference is supported")
     release = Path("/etc/os-release").read_text()
-    if not re.search(r'^ID=ubuntu$', release, re.MULTILINE) or not re.search(
-            r'^VERSION_ID="24\.04"$', release, re.MULTILINE):
+    if not re.search(r"^ID=ubuntu$", release, re.MULTILINE) or not re.search(
+        r'^VERSION_ID="24\.04"$', release, re.MULTILINE
+    ):
         raise Refused("Only the fixed Ubuntu 24.04 reference is supported")
     os.umask(0o077)
     store, clock = Store(), Clock()
     host = Host(store)
     if args.command == "run":
-        return Controller(args.source_revision, store, host,
-                          ProcessRunner(clock, store), clock).run()
+        return Controller(
+            args.source_revision, store, host, ProcessRunner(clock, store), clock
+        ).run()
     if args.command == "internal-export":
         internal_export(args.source_revision, store, host, clock)
         return 0
-    supplied = {key: getattr(args, key) for key in (
-        "boot_id", "invocation_id", "main_pid", "controller_pid",
-    )}
+    supplied = {
+        key: getattr(args, key)
+        for key in (
+            "boot_id",
+            "invocation_id",
+            "main_pid",
+            "controller_pid",
+        )
+    }
     if args.command == "ack":
         supplied.update({key: getattr(args, key) for key in ("nonce", "bytes", "sha256")})
         acknowledge(args.source_revision, store, host, clock, supplied)

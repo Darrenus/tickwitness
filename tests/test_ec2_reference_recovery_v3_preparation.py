@@ -178,9 +178,9 @@ def test_preparer_cli_has_no_abbreviations_and_reports_prepared_only(prepared_ho
         preparation.main(["--source", CURRENT, "--plan-id", ec2.RECOVERY_V3_PLAN_ID])
     assert exited.value.code == 2 and not prepared_host.plan_path.exists()
     capsys.readouterr()
-    assert preparation.main(
-        ["--source-revision", CURRENT, "--plan-id", ec2.RECOVERY_V3_PLAN_ID]
-    ) == 0
+    assert (
+        preparation.main(["--source-revision", CURRENT, "--plan-id", ec2.RECOVERY_V3_PLAN_ID]) == 0
+    )
     result = json.loads(capsys.readouterr().out)
     assert result["status"] == "PREPARED_ONLY" and result["qualification_started"] is False
     assert result["production_m1"] == "DISABLED" and not prepared_host.consumption.exists()

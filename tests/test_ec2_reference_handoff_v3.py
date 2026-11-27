@@ -34,8 +34,9 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamesp
     monkeypatch.setattr(ops, "ROOT", tmp_path / "reference")
     parent = tmp_path / "operations"
     parent.mkdir(mode=0o700)
-    store = ops.Store(parent / ops.RUN_ID, owner=os.getuid(), trust_root=tmp_path,
-                      archive_base=tmp_path)
+    store = ops.Store(
+        parent / ops.RUN_ID, owner=os.getuid(), trust_root=tmp_path, archive_base=tmp_path
+    )
 
     class Clock:
         value = 1_000_000_000
@@ -51,9 +52,10 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamesp
 
     class Host:
         guard = ops.GuardIdentity(
-            "b" * 32, ops.ProcessIdentity(10, 100, ops.main_argv(SOURCE),
-                                         "/system.slice/" + ops.UNIT, 1),
-            "actual trusted ExecStart", "/system.slice/" + ops.UNIT,
+            "b" * 32,
+            ops.ProcessIdentity(10, 100, ops.main_argv(SOURCE), "/system.slice/" + ops.UNIT, 1),
+            "actual trusted ExecStart",
+            "/system.slice/" + ops.UNIT,
         )
         stop_calls = 0
         live_calls = 0
@@ -63,8 +65,7 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamesp
             return BOOT
 
         def master(self, source):
-            return ops.ProcessIdentity(20, 200, ops.controller_argv(source),
-                                       self.guard.cgroup, 10)
+            return ops.ProcessIdentity(20, 200, ops.controller_argv(source), self.guard.cgroup, 10)
 
         def live(self, source, start):
             self.live_calls += 1
@@ -82,8 +83,10 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamesp
     store.create_operation()
     master = host.master(SOURCE)
     controller.start = controller.base("controller-start") | {
-        "controller_pid": master.pid, "controller_start_ticks": master.start_ticks,
-        "controller_argv": master.argv, "started_ns": controller.started,
+        "controller_pid": master.pid,
+        "controller_start_ticks": master.start_ticks,
+        "controller_argv": master.argv,
+        "started_ns": controller.started,
         "outer_deadline_ns": controller.deadline,
     }
     store.record("controller-start", controller.start, SOURCE, BOOT)
@@ -94,25 +97,40 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamesp
             controller.wait()
         return store.record_read("handoff-ready", SOURCE, BOOT)
 
-    return SimpleNamespace(store=store, host=host, clock=clock, controller=controller,
-                           ready=ready, root=tmp_path)
+    return SimpleNamespace(
+        store=store, host=host, clock=clock, controller=controller, ready=ready, root=tmp_path
+    )
 
 
 def ack_input(ready):
-    return {key: ready[key] for key in (
-        "boot_id", "invocation_id", "main_pid", "controller_pid", "nonce", "bytes", "sha256",
-    )}
+    return {
+        key: ready[key]
+        for key in (
+            "boot_id",
+            "invocation_id",
+            "main_pid",
+            "controller_pid",
+            "nonce",
+            "bytes",
+            "sha256",
+        )
+    }
 
 
 def cancel_input(env):
-    return {"boot_id": BOOT, "invocation_id": env.host.guard.invocation_id,
-            "main_pid": env.host.guard.main.pid,
-            "controller_pid": env.controller.start["controller_pid"]}
+    return {
+        "boot_id": BOOT,
+        "invocation_id": env.host.guard.invocation_id,
+        "main_pid": env.host.guard.main.pid,
+        "controller_pid": env.controller.start["controller_pid"],
+    }
 
 
 def original_files(store):
-    return {path.name: (path.read_bytes(), ops.stat_record(path.stat()))
-            for path in store.operation.iterdir()}
+    return {
+        path.name: (path.read_bytes(), ops.stat_record(path.stat()))
+        for path in store.operation.iterdir()
+    }
 
 
 def overwrite(path, raw):
@@ -129,8 +147,9 @@ def test_real_ready_producer_has_exact_fixed_shape_and_single_original_window(en
     assert ready["controller_pid"] != ready["main_pid"]
     assert ready["controller_argv"] == ops.controller_argv(SOURCE)
     assert ready["main_argv"] == ops.main_argv(SOURCE)
-    assert ready["deadline_ns"] == min(ready["started_ns"] + ops.HANDOFF_NS,
-                                        env.controller.deadline)
+    assert ready["deadline_ns"] == min(
+        ready["started_ns"] + ops.HANDOFF_NS, env.controller.deadline
+    )
     assert ready["sha256"] == hashlib.sha256(b"actual already-published archive bytes").hexdigest()
     assert ops.hex_string(ready["nonce"], 32)
     with pytest.raises(FileExistsError):
@@ -154,13 +173,23 @@ def test_independent_ack_uses_target_cgroup_without_requiring_callers_membership
     assert (env.store.operation / "handoff-ack.json").read_bytes() == original
 
 
-@pytest.mark.parametrize(("field", "wrong"), [
-    ("boot_id", "99999999-2222-3333-4444-555555555555"),
-    ("invocation_id", "c" * 32), ("main_pid", 11), ("controller_pid", 21),
-    ("nonce", "d" * 32), ("bytes", 1), ("sha256", "e" * 64),
-    ("main_pid", True), ("controller_pid", 20.0), ("bytes", True),
-    ("nonce", "D" * 32), ("sha256", "E" * 64),
-])
+@pytest.mark.parametrize(
+    ("field", "wrong"),
+    [
+        ("boot_id", "99999999-2222-3333-4444-555555555555"),
+        ("invocation_id", "c" * 32),
+        ("main_pid", 11),
+        ("controller_pid", 21),
+        ("nonce", "d" * 32),
+        ("bytes", 1),
+        ("sha256", "e" * 64),
+        ("main_pid", True),
+        ("controller_pid", 20.0),
+        ("bytes", True),
+        ("nonce", "D" * 32),
+        ("sha256", "E" * 64),
+    ],
+)
 def test_wrong_ack_is_zero_protocol_writes_and_zero_signals(environment, field, wrong):
     env = environment
     supplied = ack_input(env.ready())
@@ -172,14 +201,25 @@ def test_wrong_ack_is_zero_protocol_writes_and_zero_signals(environment, field, 
     assert env.host.stop_calls == 0
 
 
-@pytest.mark.parametrize(("field", "wrong"), [
-    ("schema_version", True), ("schema_version", 3.0), ("controller_start_ticks", 201),
-    ("main_start_ticks", 101), ("guard_exec_start", "different command"),
-    ("guard_control_group", "/another-session"), ("source_revision", "c" * 40),
-    ("run_id", ops.OLD_RUNS[-1]), ("controller_argv", ["wrong"]),
-    ("main_argv", ["wrong"]), ("outer_deadline_ns", 1), ("deadline_ns", 2),
-    ("unit", "another.service"), ("extra", "unknown"),
-])
+@pytest.mark.parametrize(
+    ("field", "wrong"),
+    [
+        ("schema_version", True),
+        ("schema_version", 3.0),
+        ("controller_start_ticks", 201),
+        ("main_start_ticks", 101),
+        ("guard_exec_start", "different command"),
+        ("guard_control_group", "/another-session"),
+        ("source_revision", "c" * 40),
+        ("run_id", ops.OLD_RUNS[-1]),
+        ("controller_argv", ["wrong"]),
+        ("main_argv", ["wrong"]),
+        ("outer_deadline_ns", 1),
+        ("deadline_ns", 2),
+        ("unit", "another.service"),
+        ("extra", "unknown"),
+    ],
+)
 def test_tampered_ready_is_zero_ack_writes_and_zero_signals(environment, field, wrong):
     env = environment
     ready = env.ready()
@@ -232,9 +272,10 @@ def test_clock_exhaustion_during_hash_verification_has_zero_ack_writes(environme
     assert env.host.stop_calls == 0
 
 
-@pytest.mark.parametrize("raw", [b"{", b"{}", b"{}\n", b'{"x":NaN}\n',
-                                  b'{"x":Infinity}\n', b'{"x":1,"x":1}\n',
-                                  b"x" * 65537])
+@pytest.mark.parametrize(
+    "raw",
+    [b"{", b"{}", b"{}\n", b'{"x":NaN}\n', b'{"x":Infinity}\n', b'{"x":1,"x":1}\n', b"x" * 65537],
+)
 def test_strict_decoder_refuses_partial_noncanonical_duplicate_or_oversize(raw):
     if raw == b"{}\n":
         value = ops.decode(raw)
@@ -253,8 +294,11 @@ def test_partial_or_uncertain_ack_never_gets_overwritten(environment, monkeypatc
         env.store.write("handoff-ack.json", b"{")
         expected = FileExistsError
     else:
-        monkeypatch.setattr(env.store, "fsync_directory", lambda _: (_ for _ in ()).throw(
-            OSError("uncertain ACK directory fsync")))
+        monkeypatch.setattr(
+            env.store,
+            "fsync_directory",
+            lambda _: (_ for _ in ()).throw(OSError("uncertain ACK directory fsync")),
+        )
         expected = OSError
     with pytest.raises(expected):
         ops.acknowledge(SOURCE, env.store, env.host, env.clock, ack_input(ready))
@@ -277,11 +321,18 @@ def test_cancel_before_ready_records_once_rechecks_guard_and_stops_original_unit
     assert env.host.stop_calls == 1
 
 
-@pytest.mark.parametrize(("field", "wrong"), [
-    ("boot_id", "99999999-2222-3333-4444-555555555555"),
-    ("invocation_id", "c" * 32), ("main_pid", 11), ("controller_pid", 21),
-    ("main_pid", True), ("controller_pid", 20.0), ("extra", 0),
-])
+@pytest.mark.parametrize(
+    ("field", "wrong"),
+    [
+        ("boot_id", "99999999-2222-3333-4444-555555555555"),
+        ("invocation_id", "c" * 32),
+        ("main_pid", 11),
+        ("controller_pid", 21),
+        ("main_pid", True),
+        ("controller_pid", 20.0),
+        ("extra", 0),
+    ],
+)
 def test_bad_cancel_before_ready_is_zero_write_zero_signal(environment, field, wrong):
     env = environment
     supplied = cancel_input(env)
@@ -304,13 +355,16 @@ def test_pid_reuse_after_cancel_record_keeps_record_but_never_stops_new_guard(en
 
 @pytest.mark.parametrize("action", ["ack", "cancel"])
 @pytest.mark.parametrize("fault", ["expiry", "identity"])
-def test_actual_store_metadata_consumes_original_deadline_before_exclusive_open(environment,
-                                                                              monkeypatch,
-                                                                              action, fault):
+def test_actual_store_metadata_consumes_original_deadline_before_exclusive_open(
+    environment, monkeypatch, action, fault
+):
     env = environment
     supplied = ack_input(env.ready()) if action == "ack" else cancel_input(env)
-    deadline = (env.store.record_read("handoff-ready", SOURCE, BOOT)["deadline_ns"]
-                if action == "ack" else env.controller.deadline)
+    deadline = (
+        env.store.record_read("handoff-ready", SOURCE, BOOT)["deadline_ns"]
+        if action == "ack"
+        else env.controller.deadline
+    )
     state = {"publishing": False}
     original_write = env.store.write
     original_ancestry = env.store.ancestry
@@ -351,18 +405,29 @@ def protocol_record(env, name):
         return env.controller.base(name) | {"invoked": False, "returncode": None, "report": None}
     if name in ("export-call", "export-consumption"):
         return env.controller.base(name) | {
-            "controller_pid": 20, "controller_start_ticks": 200, "started_ns": env.clock.now(),
+            "controller_pid": 20,
+            "controller_start_ticks": 200,
+            "started_ns": env.clock.now(),
         }
     if name == "controller-cancel":
-        return env.controller.base(name) | cancel_input(env) | {
-            "controller_start_ticks": 200, "requested_ns": env.clock.now(),
-        }
+        return (
+            env.controller.base(name)
+            | cancel_input(env)
+            | {
+                "controller_start_ticks": 200,
+                "requested_ns": env.clock.now(),
+            }
+        )
     if name == "controller-result":
         return env.controller.base(name) | {
-            "preparation_invoked": True, "preparation_returncode": 1,
-            "qualifier_invoked": False, "qualifier_returncode": None,
-            "export_invoked": True, "export_returncode": 0,
-            "handoff_status": "acknowledged", "returncode": 74,
+            "preparation_invoked": True,
+            "preparation_returncode": 1,
+            "qualifier_invoked": False,
+            "qualifier_returncode": None,
+            "export_invoked": True,
+            "export_returncode": 0,
+            "handoff_status": "acknowledged",
+            "returncode": 74,
         }
     ready = env.ready()
     if name == "handoff-ready":
@@ -377,16 +442,26 @@ def test_every_operational_record_rejects_extra_missing_and_boolean_schema(envir
     ops.validate_record(valid, name, SOURCE, BOOT)
     missing = copy.deepcopy(valid)
     missing.pop("kind")
-    for value in (valid | {"unexpected": 1}, valid | {"schema_version": True},
-                  valid | {"schema_version": 3.0}, missing):
+    for value in (
+        valid | {"unexpected": 1},
+        valid | {"schema_version": True},
+        valid | {"schema_version": 3.0},
+        missing,
+    ):
         with pytest.raises(ops.Refused):
             ops.validate_record(value, name, SOURCE, BOOT)
 
 
-@pytest.mark.parametrize(("field", "wrong"), [
-    ("invoked", 1), ("invoked", "false"), ("returncode", False), ("returncode", 0.0),
-    ("returncode", 0),
-])
+@pytest.mark.parametrize(
+    ("field", "wrong"),
+    [
+        ("invoked", 1),
+        ("invoked", "false"),
+        ("returncode", False),
+        ("returncode", 0.0),
+        ("returncode", 0),
+    ],
+)
 def test_phase_record_rejects_false_zero_and_boolean_integer_ambiguity(environment, field, wrong):
     env = environment
     value = protocol_record(env, "qualifier-exit")
@@ -396,18 +471,28 @@ def test_phase_record_rejects_false_zero_and_boolean_integer_ambiguity(environme
 
 
 @pytest.mark.parametrize("fault", ["wrong_parent", "wrong_cgroup", "wrong_argv", "future_call"])
-def test_internal_export_rejects_non_child_or_wrong_identity_before_consumption(environment,
-                                                                               monkeypatch,
-                                                                               fault):
+def test_internal_export_rejects_non_child_or_wrong_identity_before_consumption(
+    environment, monkeypatch, fault
+):
     env = environment
     call = protocol_record(env, "export-call")
     if fault == "future_call":
         call["started_ns"] += 1
     env.store.record("export-call", call, SOURCE, BOOT)
-    command = ["/usr/bin/python3", "-I", str(ops.STAGE / "ec2_reference_handoff_v3.py"),
-               "internal-export", "--source-revision", SOURCE, "--run-id", ops.RUN_ID]
+    command = [
+        "/usr/bin/python3",
+        "-I",
+        str(ops.STAGE / "ec2_reference_handoff_v3.py"),
+        "internal-export",
+        "--source-revision",
+        SOURCE,
+        "--run-id",
+        ops.RUN_ID,
+    ]
     identity = ops.ProcessIdentity(
-        os.getpid(), 300, ["wrong"] if fault == "wrong_argv" else command,
+        os.getpid(),
+        300,
+        ["wrong"] if fault == "wrong_argv" else command,
         "/another-session" if fault == "wrong_cgroup" else env.host.guard.cgroup,
         99 if fault == "wrong_parent" else 20,
     )
@@ -420,12 +505,21 @@ def test_internal_export_rejects_non_child_or_wrong_identity_before_consumption(
     assert calls == []
 
 
-def test_internal_export_persists_consumption_before_one_export_and_never_retries(environment,
-                                                                               monkeypatch):
+def test_internal_export_persists_consumption_before_one_export_and_never_retries(
+    environment, monkeypatch
+):
     env = environment
     env.store.record("export-call", protocol_record(env, "export-call"), SOURCE, BOOT)
-    command = ["/usr/bin/python3", "-I", str(ops.STAGE / "ec2_reference_handoff_v3.py"),
-               "internal-export", "--source-revision", SOURCE, "--run-id", ops.RUN_ID]
+    command = [
+        "/usr/bin/python3",
+        "-I",
+        str(ops.STAGE / "ec2_reference_handoff_v3.py"),
+        "internal-export",
+        "--source-revision",
+        SOURCE,
+        "--run-id",
+        ops.RUN_ID,
+    ]
     identity = ops.ProcessIdentity(os.getpid(), 300, command, env.host.guard.cgroup, 20)
     monkeypatch.setattr(env.host, "process", lambda _: identity, raising=False)
     calls = []
@@ -454,9 +548,9 @@ def test_ready_accepts_only_reviewed_complete_sudo_or_execed_timeout_guard(envir
 
 
 @pytest.mark.parametrize("change", ["atime", "mtime", "inode"])
-def test_actual_stop_copy_ignores_only_atime_and_refuses_changed_mtime_or_inode(environment,
-                                                                            monkeypatch,
-                                                                            change):
+def test_actual_stop_copy_ignores_only_atime_and_refuses_changed_mtime_or_inode(
+    environment, monkeypatch, change
+):
     env = environment
     source = env.root / "operator-stop.md"
     raw = b"owner Stop observation\n".ljust(1222, b" ")
@@ -474,15 +568,15 @@ def test_actual_stop_copy_ignores_only_atime_and_refuses_changed_mtime_or_inode(
             if path == source:
                 current = source.stat()
                 if change == "mtime":
-                    os.utime(source, ns=(current.st_atime_ns,
-                                         current.st_mtime_ns + 1_000_000_000))
+                    os.utime(source, ns=(current.st_atime_ns, current.st_mtime_ns + 1_000_000_000))
                 elif change == "inode":
                     source.rename(env.root / "original-stop-inode")
                     source.write_bytes(value)
             return value, seal
 
-    store = ObservedStore(env.store.operation, owner=os.getuid(), trust_root=env.root,
-                          archive_base=env.root)
+    store = ObservedStore(
+        env.store.operation, owner=os.getuid(), trust_root=env.root, archive_base=env.root
+    )
     if change == "atime":
         original_atime = source.stat().st_atime_ns
         before = ops.stat_record(source.stat())
@@ -503,24 +597,38 @@ def test_actual_stop_copy_ignores_only_atime_and_refuses_changed_mtime_or_inode(
         assert not target.exists()
 
 
-@pytest.mark.parametrize(("form", "main_uid", "master_uid", "accepted"), [
-    (0, 0, 0, True), (0, 1000, 0, True), (0, 61184, 0, False),
-    (1, 0, 0, True), (1, 1000, 0, False), (1, 61184, 0, False),
-    (0, 1000, 1000, False), (1, 0, 1000, False),
-])
-def test_actual_host_live_binds_sudo_monitor_owner_and_root_timeout_master(environment, monkeypatch,
-                                                                         form, main_uid,
-                                                                         master_uid, accepted):
+@pytest.mark.parametrize(
+    ("form", "main_uid", "master_uid", "accepted"),
+    [
+        (0, 0, 0, True),
+        (0, 1000, 0, True),
+        (0, 61184, 0, False),
+        (1, 0, 0, True),
+        (1, 1000, 0, False),
+        (1, 61184, 0, False),
+        (0, 1000, 1000, False),
+        (1, 0, 1000, False),
+    ],
+)
+def test_actual_host_live_binds_sudo_monitor_owner_and_root_timeout_master(
+    environment, monkeypatch, form, main_uid, master_uid, accepted
+):
     env = environment
     host = ops.Host(env.store)
     cgroup = "/system.slice/" + ops.UNIT
     main = ops.ProcessIdentity(10, 100, ops.guard_commands(SOURCE)[form], cgroup, 1, main_uid)
     master = ops.ProcessIdentity(20, 200, ops.controller_argv(SOURCE), cgroup, 10, master_uid)
     record = {
-        "ActiveState": "active", "SubState": "running", "InvocationID": "b" * 32,
-        "MainPID": "10", "ExecStart": "{ path=/usr/bin/sudo ; argv[]="
-        + " ".join(ops.main_argv(SOURCE)) + " ; ignore_errors=no ; }",
-        "ControlGroup": cgroup, "DropInPaths": "", "User": "ubuntu",
+        "ActiveState": "active",
+        "SubState": "running",
+        "InvocationID": "b" * 32,
+        "MainPID": "10",
+        "ExecStart": "{ path=/usr/bin/sudo ; argv[]="
+        + " ".join(ops.main_argv(SOURCE))
+        + " ; ignore_errors=no ; }",
+        "ControlGroup": cgroup,
+        "DropInPaths": "",
+        "User": "ubuntu",
     }
     monkeypatch.setattr(host, "boot", lambda: BOOT)
     monkeypatch.setattr(host, "process", lambda pid: {10: main, 20: master}[pid])
@@ -534,11 +642,12 @@ def test_actual_host_live_binds_sudo_monitor_owner_and_root_timeout_master(envir
             host.live(SOURCE, env.controller.start)
 
 
-@pytest.mark.parametrize("tampered", [None, "batch-source.sh", "preparer-source.sh",
-                                      "handoff-source.py"])
-def test_actual_source_binding_checks_retained_operation_copy_as_well_as_live_stage(environment,
-                                                                                  monkeypatch,
-                                                                                  tampered):
+@pytest.mark.parametrize(
+    "tampered", [None, "batch-source.sh", "preparer-source.sh", "handoff-source.py"]
+)
+def test_actual_source_binding_checks_retained_operation_copy_as_well_as_live_stage(
+    environment, monkeypatch, tampered
+):
     env = environment
     seed_history(env)
     stage = env.root / "stage"
@@ -554,8 +663,9 @@ def test_actual_source_binding_checks_retained_operation_copy_as_well_as_live_st
         raw = ("selected Git bytes: " + filename + "\n").encode()
         (stage / filename).write_bytes(raw)
         (selected / filename).write_bytes(raw)
-        env.store.write(retained, b"different previously retained bytes" if retained == tampered
-                        else raw)
+        env.store.write(
+            retained, b"different previously retained bytes" if retained == tampered else raw
+        )
     original_read = env.store.read
 
     def read(path, limit=ops.JSON_LIMIT):
@@ -590,8 +700,9 @@ def seed_history(env):
         if name == "qualifier-exit":
             value.update({"invoked": False, "returncode": None, "report": None})
         else:
-            value.update({"controller_pid": 20, "controller_start_ticks": 200,
-                          "started_ns": env.clock.now()})
+            value.update(
+                {"controller_pid": 20, "controller_start_ticks": 200, "started_ns": env.clock.now()}
+            )
         env.store.record(name, value, SOURCE, BOOT)
 
 
@@ -623,7 +734,9 @@ def test_single_real_archive_contains_actual_history_and_marks_late_records_outs
 
 
 @pytest.mark.parametrize("fault", ["changed_history", "symlink", "hardlink", "partial_pending"])
-def test_real_export_refuses_mutated_history_and_never_replaces_uncertain_pending(environment, fault):
+def test_real_export_refuses_mutated_history_and_never_replaces_uncertain_pending(
+    environment, fault
+):
     env = environment
     seed_history(env)
     old = ops.ROOT / "host-admission.json"
@@ -641,17 +754,22 @@ def test_real_export_refuses_mutated_history_and_never_replaces_uncertain_pendin
     assert not env.store.exists("evidence.tar.gz")
     if fault == "partial_pending":
         assert (env.store.operation / "archive.pending").read_bytes() == (
-            b"uncertain original pending bytes")
+            b"uncertain original pending bytes"
+        )
 
 
 @pytest.mark.parametrize("failure", ["fsync", "link"])
-def test_export_publication_failure_retains_single_pending_without_retry(environment, monkeypatch,
-                                                                         failure):
+def test_export_publication_failure_retains_single_pending_without_retry(
+    environment, monkeypatch, failure
+):
     env = environment
     seed_history(env)
     if failure == "link":
-        monkeypatch.setattr(ops.os, "link", lambda *args, **kwargs: (_ for _ in ()).throw(
-            OSError("exclusive publication failed")))
+        monkeypatch.setattr(
+            ops.os,
+            "link",
+            lambda *args, **kwargs: (_ for _ in ()).throw(OSError("exclusive publication failed")),
+        )
     else:
         original = env.store.fsync_directory
 
