@@ -1,5 +1,29 @@
 # Sprint 13 执行信任与隔离状态
 
+当前状态，2026-11-27 Asia/Singapore：[v3实机与后续只读收证](../security/ec2-reference-recovery-v3-evidence-2026-11-27.md)
+已记录固定run0004在资格源码`908d56db32439f38686346687a5b43239b1b7264`上的完整24项PASS，
+本轮24／历史21／累计45；实际成功report、持久终态和原boot receipt相符，
+仅为 **QUALIFIED_REFERENCE_ONLY**。原handoff已过期，controller实际退出74，
+qualifier／export各退出0、ACK不存在；后续收证不把该失败改写为已确认ACK。
+
+独立只读readback已CLOSED，63文件索引SHA256
+`24172392588984a1c56fa314f029c630d7ba92bb29a8f60a29d39440c0cf1788`；
+它链接而不改写原CLOSED604文件审计。固定558项pins及10文件资格源码闭包不变，
+实际reader来自`e9ff318efc9ea2c333dcb241d0871150c3d30446`，与资格源码分开记录。
+2026-11-27 15:08:26 Asia/Singapore的独立AWS读回确认Stopped／无公网IPv4或DNS。
+本次文档修订前基线`b5ee94808861ed6eff085f71073bb703bfd7d6f9`的远端专用91项、
+Engineering全部16项及Documentation已SUCCESS；旧GHA参考拒绝另列，不能洗成通过。
+
+[S13-02 owner审阅材料](../security/s13-02-owner-review.md)已整理当前交付与独立门槛；
+owner接受仍PENDING，PR115保持Draft，#38仍OPEN／in-progress，不记Done。
+M1产品未集成且DISABLED，M2不支持；独立真人安全复核NOT_PERFORMED，
+外部真人研究复验0 attempts／0 successes／PENDING。S13-03／#39仍Planned，
+HTTP／MCP仍为有需求证据后的条件性S14或以后工作，本轮没有实际推进。
+
+以下2026-11-19至2026-11-27的冻结／失败／实施中记录为历史快照；其中“当前”及
+“后续仅计划”的状态已由上述2026-11-27实测与只读收证记录取代（SUPERSEDED），
+原始结果、扣额、许可与审计字节均不回写。
+
 2026-11-27续作：owner明确要求继续实际AWS验证。[v3合同](../contracts/restricted-reference-ec2-recovery-v3.md)
 和[ADR0050](../adr/0050-one-use-detached-ec2-qualification.md)经独立静态审阅，以提交
 `72c83a02d47a403d5f9d33aad2f84ccaba7ec6a4`实际推送、读回后才开始实现。
@@ -44,8 +68,8 @@ EC2接入完成静态实现及交叉审阅；源版本ae3d8e7的远端Engineerin
 | 故事 | 原容量 | 当前状态 |
 | --- | ---: | --- |
 | S13-01 / [#37](https://github.com/Darrenus/tickwitness/issues/37) | 10h | [执行信任与威胁模型](../contracts/execution-trust-v1.md)／[ADR0044](../adr/0044-explicit-execution-trust-boundaries.md)已随PR114实际接受；M0／M1／M2是信任文档标签，不是SDK模式开关 |
-| S13-02 / [#38](https://github.com/Darrenus/tickwitness/issues/38) | 16h | 第三次v2为18PASS／1已准入UNKNOWN／5未准入，累计21槽、NOT_QUALIFIED；许可已消费且AWS已Stopped。成员筛选修复／远端回归进行中，后续完整24项仅计划；PR115 Draft、完整资格及owner接受未完成 |
-| S13-03 / [#39](https://github.com/Darrenus/tickwitness/issues/39) | 8h | 独立安全复核准备／能力降级与真实采用观察尚未完成；不能用安全准备替代真人激活／复用 |
+| S13-02 / [#38](https://github.com/Darrenus/tickwitness/issues/38) | 16h | 固定v3实机24PASS／本轮24+历史21=累计45，QUALIFIED_REFERENCE_ONLY；独立只读readback63文件已CLOSED，原handoff过期74／ACK不存在分别保留，AWS已Stopped。见[证据](../security/ec2-reference-recovery-v3-evidence-2026-11-27.md)及[owner审阅](../security/s13-02-owner-review.md)；PR115 Draft、owner接受PENDING，#38仍OPEN／in-progress，M1产品未集成／DISABLED，不记Done |
+| S13-03 / [#39](https://github.com/Darrenus/tickwitness/issues/39) | 8h | Planned；独立安全复核准备／能力降级与真实采用观察尚未完成，尚未开展实际故事工作；不能用安全准备替代真人激活／复用 |
 
 原S13专项容量仍10+16+8=34h，持续质量容量不变，不补造实际工时。本轮属于infrastructure／operations边界，不新增领域聚合、SDK方法、CLI模式、Job/Catalog schema、研究结果或远程服务。
 
@@ -58,6 +82,10 @@ EC2接入完成静态实现及交叉审阅；源版本ae3d8e7的远端Engineerin
 缺控制器、AppArmor/userns/NNP启动失败、挂载／身份／FD／filter或停止事实不明时拒绝／UNKNOWN／NOT_QUALIFIED，不能移除NNP、关闭全局AppArmor/sysctl、用optional unshare、静默跳过负例或回退M0运行不可信代码。root/proc只读不是递归口号，实际每个mount和可写面均需核查。
 
 ## 已观察的参考环境阻塞
+
+本节保留2026-11-19 GHA环境的历史拒绝，作为“当前环境仍未获资格”的结论已于
+2026-11-27由上述专用EC2 v3参考结果取代（SUPERSEDED）；它不变成GHA通过，
+也不授予任何M1产品支持。
 
 兼容政策及具体setup上限已在独立提交`0860658`／`aceda2c`实际推送后才实现loader／pre-NNP transition。具名unconfined是userns授权例外，不是额外MAC隔离；仍不得关闭全局AppArmor/sysctl、卸载宿主政策或移除NNP。参见[兼容合同](../contracts/restricted-reference-apparmor-v1.md)／[ADR0046](../adr/0046-explicit-reference-userns-authorization.md)。
 

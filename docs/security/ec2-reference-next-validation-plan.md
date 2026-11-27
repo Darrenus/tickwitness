@@ -1,5 +1,12 @@
 # Next EC2 validation — proposed plan
 
+2026-11-27 outcome: the fixed v3 run and subsequent historical readback are
+[complete and recorded separately](ec2-reference-recovery-v3-evidence-2026-11-27.md):
+24 actual PASS / cumulative45, original handoff expired74 with ACK absent,
+closed63-file readback and independently observed AWS Stop. This document
+remains the superseded proposal, not permission to rerun the consumed v3
+authority. See the [owner review packet](s13-02-owner-review.md); M1 remains off.
+
 Current status: this proposal is **SUPERSEDED_BY_FROZEN_V3**. The owner explicitly
 requested actual AWS execution after the detached-member source repair. The
 [v3 contract](../contracts/restricted-reference-ec2-recovery-v3.md) and
