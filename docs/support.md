@@ -1,5 +1,11 @@
 # 分版本支持范围与恢复政策
 
+当前状态，2026-11-27接受后：Owner已在本次项目对话中明确回复“接受”，接受精确提交`89e12eb3e2e371ea7a4939f277bab57cd3c7843e`及已披露限制。[PR115](https://github.com/Darrenus/tickwitness/pull/115)按正常matching-head流程实际合并为`40aede39b4d7b051b00b0dd604738e736d3f4c25`，由Darrenus于2026-11-27 17:58:53 Asia/Singapore完成；合并树与接受源码相同。必需documentation／engineering通过；实际18 SUCCESS／1非必需legacy REFUSED–FAILURE／0pending保留。Owner接受这一有界交付及已披露例外，不把失败改称通过，不构成对后续PR的全局豁免。
+
+当前软件支持边界仍是既有M0可信owner及已资格内置profile。参考24PASS和已接受交付不启用SDK／CLI／Job的M1，也不支持任意Python策略、M2或HTTP／MCP listener。[S13-03审阅／降级准备](security/s13-03-review-and-degradation.md)仅整理已证实控制、未知和关闭决定；独立真人安全NOT_PERFORMED、外部真人0/0/PENDING。[采用快照](planning/s13-03-adoption-observation-2026-11-27.md)不提供新的激活日期或观察窗口。
+
+以下2026-11-27资格／收证记录保留其发生时的owner PENDING／Draft状态；它们不是当前owner接受状态。没有新的发行或新增运行模式。
+
 更新：2026-11-27，Asia/Singapore。先根据安装包的版本、来源和接口合同选择入口；相同包版本号不代表相同构建字节。SDK v1 已随 [PR110](https://github.com/Darrenus/tickwitness/pull/110) 接受；S12-03 的文档执行与兼容回归按 [独立合同](contracts/sdk-compatibility-v1.md) 完成，并由 owner 合并 [PR113](https://github.com/Darrenus/tickwitness/pull/113) 接受，真实 merge 为 `df10923663a3d3c09b5b917995fbb554da60ea40`。S13-01 的[执行信任与威胁模型](contracts/execution-trust-v1.md)已随[PR114](https://github.com/Darrenus/tickwitness/pull/114)由owner实际接受，真实merge `6c350b9fe32dfed96392edd2b856e937f767e342`。S13-02先冻结[受限参考资格合同](contracts/restricted-reference-v1.md)，仅内部参考后端与固定合成探针；产品M1未开放、任意策略不支持、M2托管不支持，不能把普通CI或参考控制结果当作产品隔离／新平台认证。当前候选自己的远端结果另行记录，历史绿色不代替本轮验收。这里没有新的发行。
 
 2026-11-27的[固定EC2 v3参考及后续只读收证](security/ec2-reference-recovery-v3-evidence-2026-11-27.md)

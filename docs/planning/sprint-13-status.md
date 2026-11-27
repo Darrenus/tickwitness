@@ -1,5 +1,24 @@
 # Sprint 13 执行信任与隔离状态
 
+## 当前接受与S13-03准备：2026-11-27
+
+Owner已在本次项目对话中明确回复“接受”，接受精确提交`89e12eb3e2e371ea7a4939f277bab57cd3c7843e`及已披露限制。[PR115](https://github.com/Darrenus/tickwitness/pull/115)按正常matching-head流程实际合并为`40aede39b4d7b051b00b0dd604738e736d3f4c25`，由Darrenus于2026-11-27 17:58:53 Asia/Singapore完成；合并树与接受源码相同。必需documentation／engineering通过；实际18 SUCCESS／1非必需legacy REFUSED–FAILURE／0pending保留。Owner接受这一有界交付及已披露例外，不把失败改称通过，不构成对后续PR的全局豁免。
+
+S13-02／#38的软件交付已接受；参考资格仍仅QUALIFIED_REFERENCE_ONLY，固定24PASS／本轮24+历史21=45及CLOSED63回传不变。产品M1未集成且DISABLED，M2不支持。独立真人安全复核NOT_PERFORMED，reviewer UNASSIGNED；外部真人复验0/0/PENDING、#24 OPEN。
+
+S13-03／#39开始内部准备切片：[安全审阅与能力降级包](../security/s13-03-review-and-degradation.md)及[采用观察快照](s13-03-adoption-observation-2026-11-27.md)。候选材料不等于真人审阅或采用；整体故事仍OPEN／in-progress，依赖参与者的工作不记Ready／Done。原8h暂分6h内部准备及远端检查、2h有真实输入后响应，均为计划分配而非实际工时；S13仍10+16+8=34h，持续质量容量不变。
+
+本轮只整理既有证据和关闭规则，没有运行探针、研究、replay、旧ACK/export或AWS启动；原协议预算、5/8/11、golden、PR94与全部封存记录不改。新文档提交的检查须单独记录，不能继承89或合并提交的绿灯。
+
+随验证发现的[核心CI超时与修正](s13-03-ci-runtime-2026-11-27.md)单独计入既有持续质量容量：
+358候选的Ubuntu3.12在pytest输出5603PASS／112skip后触发20分钟外层CI上限，
+job／step仍CANCELLED。只将六档core的CI编排上限调整为有界30分钟，测试及失败门不减，
+不改变研究／Job／资格的期限或任何原预算；修正后的实际远端终态须另行记录。
+
+## 接受之前的状态快照（历史）
+
+下列Draft、owner PENDING、#38 in-progress和#39 Planned均为接受前记录，已由上面的真实接受／合并及当前切片取代；旧实测结果、失败和未知不回写。
+
 当前状态，2026-11-27 Asia/Singapore：[v3实机与后续只读收证](../security/ec2-reference-recovery-v3-evidence-2026-11-27.md)
 已记录固定run0004在资格源码`908d56db32439f38686346687a5b43239b1b7264`上的完整24项PASS，
 本轮24／历史21／累计45；实际成功report、持久终态和原boot receipt相符，
