@@ -634,6 +634,46 @@ def test_missing_transient_guard_requires_positive_exact_empty_identity(
             reader.Host().guard()
 
 
+@pytest.mark.parametrize(
+    "omitted,code",
+    [("ExecStart", 0), ("ExecStart", 4), ("MainPID", 0), ("User", 0), ("InvocationID", 0)],
+)
+def test_unloaded_guard_preserves_observed_eight_fields_without_filling_other_missing_fields(
+    monkeypatch, omitted, code
+):
+    data = {key: value for key, value in reader.MISSING_GUARD.items() if key != omitted}
+
+    def show(command, **_options):
+        raw = "".join(key + "=" + item + "\n" for key, item in data.items()).encode()
+        return subprocess.CompletedProcess(command, code, raw, b"")
+
+    monkeypatch.setattr(reader.subprocess, "run", show)
+    host = reader.Host()
+    if omitted == "ExecStart":
+        observed = host.show(reader.UNIT, tuple(reader.MISSING_GUARD))
+        assert observed == data and "ExecStart" not in observed
+        guard = host.guard()
+        assert guard["exec_start"] == reader.UNOBSERVED_EXEC_START
+        assert guard["active_state"] == "inactive" and guard["main_pid"] == 0
+    else:
+        with pytest.raises(reader.Refused, match="Missing manager identity"):
+            host.guard()
+    with pytest.raises(reader.Refused, match="Missing manager identity"):
+        host.show("tickwitness-boot-deadline.service", tuple(reader.MISSING_GUARD))
+
+
+def test_active_manager_cannot_use_the_unloaded_guard_missing_property_exception(monkeypatch):
+    data = reader.UNLOADED_GUARD | {"LoadState": "loaded", "ActiveState": "active"}
+
+    def show(command, **_options):
+        raw = "".join(key + "=" + item + "\n" for key, item in data.items()).encode()
+        return subprocess.CompletedProcess(command, 0, raw, b"")
+
+    monkeypatch.setattr(reader.subprocess, "run", show)
+    with pytest.raises(reader.Refused, match="Missing manager identity"):
+        reader.Host().guard()
+
+
 @pytest.mark.skipif(sys.platform != "linux", reason="Actual systemd observation requires Linux")
 def test_actual_remote_systemctl_missing_transient_guard_is_only_an_inactive_observation():
     if not Path("/run/systemd/system").exists():
@@ -654,10 +694,17 @@ def test_actual_remote_systemctl_missing_transient_guard_is_only_an_inactive_obs
         result.stdout,
         result.stderr,
     )
-    assert result.returncode in {0, 1, 4}
-    assert reader.Host().show(reader.UNIT, names) == reader.MISSING_GUARD
+    details = (result.returncode, result.stdout, result.stderr)
+    assert result.returncode in {0, 1, 4}, details
+    observed = reader.Host().show(reader.UNIT, names)
+    raw_values = dict(line.split("=", 1) for line in result.stdout.decode().splitlines())
+    assert observed == raw_values, details
+    assert observed in (reader.MISSING_GUARD, reader.UNLOADED_GUARD), details
     guard = reader.Host().guard()
-    assert guard["active_state"] == "inactive" and guard["main_pid"] == 0
+    assert guard["active_state"] == "inactive" and guard["main_pid"] == 0, details
+    assert guard["exec_start"] == (
+        "" if "ExecStart" in observed else reader.UNOBSERVED_EXEC_START
+    ), details
 
 
 @pytest.mark.parametrize(

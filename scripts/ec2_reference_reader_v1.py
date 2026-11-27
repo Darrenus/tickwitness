@@ -55,6 +55,8 @@ MISSING_GUARD = {
     "DropInPaths": "",
     "LoadState": "not-found",
 }
+UNLOADED_GUARD = {key: value for key, value in MISSING_GUARD.items() if key != "ExecStart"}
+UNOBSERVED_EXEC_START = "NOT_OBSERVED_UNLOADED_UNIT"
 LAST_ENV = "/var/lib/tickwitness-lifecycle/last-test-result.env"
 ARCHIVE = OPERATION + "/evidence.tar.gz"
 READY = OPERATION + "/handoff-ready.json"
@@ -828,10 +830,15 @@ class Host:
             if not separator or key in values:
                 raise Refused("Invalid manager observation")
             values[key] = value
-        if set(values) != set(names):
+        missing_guard = (
+            unit == UNIT
+            and set(names) == set(MISSING_GUARD)
+            and values in (MISSING_GUARD, UNLOADED_GUARD)
+        )
+        if set(values) != set(names) and not missing_guard:
             raise Refused("Missing manager identity field")
         if result.returncode != 0 and not (
-            unit == UNIT and result.returncode in {1, 4} and values == MISSING_GUARD
+            result.returncode in {1, 4} and missing_guard
         ):
             raise Refused("Manager observation failed")
         return values
@@ -849,8 +856,24 @@ class Host:
             "LoadState",
         )
         first = self.show(UNIT, names)
-        if first["LoadState"] == "not-found" and first != MISSING_GUARD:
-            raise Refused("Absent transient guard identity was not positively observed")
+        if first["LoadState"] == "not-found":
+            if first not in (MISSING_GUARD, UNLOADED_GUARD) or first != self.show(UNIT, names):
+                raise Refused("Absent transient guard identity was not positively observed")
+            return {
+                "active_state": first["ActiveState"],
+                "sub_state": first["SubState"],
+                "invocation_id": first["InvocationID"],
+                "main_pid": 0,
+                "main_start_ticks": 0,
+                "main_argv": [],
+                # Do not turn an omitted service property into an observed
+                # empty ExecStart. This marker can never authorize a live guard.
+                "exec_start": first["ExecStart"]
+                if "ExecStart" in first
+                else UNOBSERVED_EXEC_START,
+                "control_group": first["ControlGroup"],
+                "user": first["User"],
+            }
         if (
             first["DropInPaths"]
             or not first["MainPID"].isascii()

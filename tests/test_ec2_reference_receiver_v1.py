@@ -609,7 +609,20 @@ def test_historical_retrieval_on_new_boot_never_upgrades_expired_run_or_submits_
     assert result["manager_exit"] == "NOT_OBSERVED"
     assert result["cloud_stop"] == "NOT_OBSERVED"
     assert result["post_reconciliation"] == "UNKNOWN_ORIGINAL_POST_RECORDS_OR_JOURNALS"
-    assert b"expired" in (local.directory / "post-records.stdout").read_bytes()
+    retained = (local.directory / "post-records.stdout").read_bytes()
+    post = client.PostRecords(
+        produced.pins,
+        retrieval_boot,
+        produced.ready,
+        retained.splitlines(keepends=True)[0],
+        live=False,
+    )
+    post.finish(client.Completed(retained, b"", 0))
+    decoded = post.original("controller-result.json")
+    assert decoded == original_result
+    assert decoded["handoff_status"] == "expired" and decoded["returncode"] == 74
+    row = post.rows[str(produced.store.operation / "controller-result.json")]
+    assert client.raw_file(row) == (produced.store.operation / "controller-result.json").read_bytes()
     assert (local.directory / "journal-boot.exit.json").is_file()
     assert all(not wait for _, wait in channels.calls)
     assert channels.ack_calls == 0 and not list(permanent.directory.iterdir())
