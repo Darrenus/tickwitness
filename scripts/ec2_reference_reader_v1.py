@@ -868,9 +868,7 @@ class Host:
                 "main_argv": [],
                 # Do not turn an omitted service property into an observed
                 # empty ExecStart. This marker can never authorize a live guard.
-                "exec_start": first["ExecStart"]
-                if "ExecStart" in first
-                else UNOBSERVED_EXEC_START,
+                "exec_start": first.get("ExecStart", UNOBSERVED_EXEC_START),
                 "control_group": first["ControlGroup"],
                 "user": first["User"],
             }

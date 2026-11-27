@@ -622,7 +622,8 @@ def test_historical_retrieval_on_new_boot_never_upgrades_expired_run_or_submits_
     assert decoded == original_result
     assert decoded["handoff_status"] == "expired" and decoded["returncode"] == 74
     row = post.rows[str(produced.store.operation / "controller-result.json")]
-    assert client.raw_file(row) == (produced.store.operation / "controller-result.json").read_bytes()
+    result_path = produced.store.operation / "controller-result.json"
+    assert client.raw_file(row) == result_path.read_bytes()
     assert (local.directory / "journal-boot.exit.json").is_file()
     assert all(not wait for _, wait in channels.calls)
     assert channels.ack_calls == 0 and not list(permanent.directory.iterdir())
