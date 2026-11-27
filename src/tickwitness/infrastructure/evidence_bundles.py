@@ -44,6 +44,18 @@ class BundleNotFoundError(BundleError):
     """The requested root does not exist; no directory was created."""
 
 
+class BundleMissingObjectError(BundleError):
+    """A validated baseline manifest declares an object observed to be absent."""
+
+    reason = "bundle_object_missing"
+
+    def __init__(self, roles: tuple[str, ...], sha256: str) -> None:
+        self.role, self.roles, self.sha256 = roles[0], roles, sha256
+        super().__init__(
+            "Missing baseline evidence object for role(s) " + ", ".join(roles) + ": " + sha256
+        )
+
+
 class BundleDestinationExistsError(BundleError):
     """Publication refused an existing destination without changing it."""
 
@@ -223,8 +235,20 @@ def _directory(parent: int, name: str) -> int:
     return os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
 
 
-def _read_file(directory: int, name: str, limit: int, *, size: int | None = None) -> bytes:
-    descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+def _read_file(
+    directory: int,
+    name: str,
+    limit: int,
+    *,
+    size: int | None = None,
+    missing_object: BundleMissingObjectError | None = None,
+) -> bytes:
+    try:
+        descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+    except FileNotFoundError as error:
+        if missing_object is None or error.errno != errno.ENOENT:
+            raise
+        raise missing_object from error
     try:
         before = os.fstat(descriptor)
         if not stat.S_ISREG(before.st_mode):
@@ -264,6 +288,38 @@ def _tree_entries(directory: int, expected: Mapping[str, bool]) -> None:
             seen.add(entry.name)
     if seen != set(expected):
         raise BundleError("Bundle is missing a required entry")
+
+
+def _missing_object(
+    sha256: str, roles: Mapping[str, dict[str, object]]
+) -> BundleMissingObjectError:
+    aliases = tuple(sorted(role for role, ref in roles.items() if ref["sha256"] == sha256))
+    return BundleMissingObjectError(aliases, sha256)
+
+
+def _baseline_object_tree(content: int, roles: Mapping[str, dict[str, object]]) -> None:
+    expected = {cast("str", ref["sha256"]) for ref in roles.values()}
+    seen: set[str] = set()
+    missing: set[str] = set()
+    with os.scandir(content) as entries:
+        for entry in entries:
+            try:
+                info = entry.stat(follow_symlinks=False)
+            except FileNotFoundError as error:
+                if error.errno != errno.ENOENT or entry.name not in expected:
+                    raise
+                missing.add(entry.name)
+                continue
+            if stat.S_ISLNK(info.st_mode):
+                raise BundleError("Bundle symlink entries are forbidden, including hidden extras")
+            if entry.name not in expected:
+                raise BundleError("Bundle contains an unknown or extra entry")
+            if not stat.S_ISREG(info.st_mode):
+                raise BundleError("Bundle entry has an invalid file type")
+            seen.add(entry.name)
+    missing.update(expected - seen)
+    if missing:
+        raise _missing_object(min(missing), roles)
 
 
 class _RenameOperation(Protocol):
@@ -411,10 +467,12 @@ def read_bundle(root: Path, *, limits: BundleLimits = _DEFAULT_LIMITS) -> Artifa
             _tree_entries(objects, {"sha256": True})
             content = _directory(objects, "sha256")
             stack.callback(os.close, content)
-            _tree_entries(content, {digest: False for digest in object_sizes})
+            _baseline_object_tree(content, roles)
             verified: dict[str, bytes] = {}
             for digest, size in sorted(object_sizes.items()):
-                data = _read_file(content, digest, size, size=size)
+                data = _read_file(
+                    content, digest, size, size=size, missing_object=_missing_object(digest, roles)
+                )
                 if _digest(data) != digest:
                     raise BundleError("Bundle object hash does not match its identity")
                 verified[digest] = data

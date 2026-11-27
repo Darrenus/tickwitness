@@ -108,6 +108,14 @@ parent/root 祖先是可信 owner 配置边界；root 本身及其下条目拒�
 | `BundleDurabilityError` | 完整目标已发布，但 parent fsync 未确认断电持久性 |
 | 其他 `BundleError` | schema、预算、hash、树结构、安全打开、平台或普通 IO 失败 |
 
+2026-11-27 的兼容增量见 [Baseline diagnostics v1](baseline-evidence-diagnostics-v1.md)／
+[ADR0052](../adr/0052-baseline-evidence-missing-object-diagnostics.md)：在有效manifest声明的
+对象叶确实缺失时，`BundleMissingObjectError`仍属于`BundleError`，提供确定的角色别名和SHA。
+CLI继续使用原`research_store_integrity_or_io_failure`／exit3，仅该缺件情形增加
+`reason=bundle_object_missing`、`role`、`roles`、`sha256`字段。
+缺root仍exit4；缺manifest／容器和其他完整性／权限／安全打开错误不编造对象身份。
+这不是目录格式或schema升级，也不提供自动修复、重跑或预算权限；旧已记录失败不回写。
+
 ## 6. 离线语义验证仍由应用完成
 
 应用必须加载并重建 executable protocol、dataset manifest、normalized events/report、ReplayResult、账务评价和 RunReceipt，逐项校验内容身份与来源账务。IO 层的 `ArtifactBundle` 只证明本次读取到的字节闭包，不替应用签发账务 verified 或 claim observation。

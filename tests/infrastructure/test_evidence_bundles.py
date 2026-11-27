@@ -6,7 +6,9 @@ import json
 import os
 import shutil
 import stat
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 from threading import Barrier
@@ -21,6 +23,7 @@ from tickwitness.infrastructure.evidence_bundles import (
     BundleDurabilityError,
     BundleError,
     BundleLimits,
+    BundleMissingObjectError,
     BundleNotFoundError,
     export_bundle,
     read_bundle,
@@ -49,6 +52,41 @@ def canonical(value: object) -> bytes:
 
 def rewrite_manifest(root: Path, document: dict[str, object]) -> None:
     (root / "manifest.json").write_bytes(canonical(document))
+
+
+def bundle_bytes(root: Path) -> dict[str, bytes]:
+    """Snapshot the regular files of these owned synthetic fixtures only."""
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if not path.is_symlink() and path.is_file()
+    }
+
+
+def disappear_first_during_scan(
+    monkeypatch: pytest.MonkeyPatch, content: Path, sha256: str
+) -> None:
+    original_scandir = os.scandir
+    identity = content.stat()
+    disappeared = False
+
+    @contextmanager
+    def scan(directory: int | str | os.PathLike[str]) -> Iterator[Iterator[os.DirEntry[str]]]:
+        nonlocal disappeared
+        with original_scandir(directory) as entries:
+            observed = list(entries)
+            current = os.fstat(directory) if isinstance(directory, int) else None
+            if current is not None and (current.st_dev, current.st_ino) == (
+                identity.st_dev,
+                identity.st_ino,
+            ):
+                observed.sort(key=lambda entry: (entry.name != sha256, entry.name))
+                if not disappeared:
+                    (content / sha256).unlink()
+                    disappeared = True
+            yield iter(observed)
+
+    monkeypatch.setattr(bundles.os, "scandir", scan)
 
 
 def test_round_trip_determinism_and_detached_immutable_payload(tmp_path: Path) -> None:
@@ -283,8 +321,9 @@ def test_missing_no_replace_libc_entry_does_not_fall_back(
 
 def test_read_missing_root_has_no_side_effect(tmp_path: Path) -> None:
     destination = tmp_path / "absent" / "bundle"
-    with pytest.raises(BundleNotFoundError):
+    with pytest.raises(BundleNotFoundError) as failure:
         read_bundle(destination)
+    assert not isinstance(failure.value, BundleMissingObjectError)
     assert list(tmp_path.iterdir()) == []
 
 
@@ -299,6 +338,259 @@ def test_missing_required_entry_is_corruption_not_missing_root(tmp_path: Path, e
     with pytest.raises(BundleError) as failure:
         read_bundle(destination)
     assert not isinstance(failure.value, BundleNotFoundError)
+    assert isinstance(failure.value, BundleMissingObjectError) == (entry == "object")
+
+
+@pytest.mark.parametrize("role", ROLES)
+def test_missing_declared_object_reports_manifest_role_and_preserves_fixture_copies(
+    tmp_path: Path, role: str
+) -> None:
+    original = tmp_path / "original"
+    package = export_bundle(original, artifacts())
+    destination = tmp_path / "copy"
+    shutil.copytree(original, destination)
+    reference = package.manifest["roles"][role]
+    (destination / reference["ref"]).unlink()
+    original_before, copy_before = bundle_bytes(original), bundle_bytes(destination)
+
+    with pytest.raises(BundleMissingObjectError) as failure:
+        read_bundle(destination)
+
+    assert failure.value.reason == "bundle_object_missing"
+    assert failure.value.role == role
+    assert failure.value.roles == (role,)
+    assert failure.value.sha256 == reference["sha256"]
+    assert str(destination) not in str(failure.value)
+    assert bundle_bytes(original) == original_before
+    assert bundle_bytes(destination) == copy_before
+
+
+def test_missing_shared_object_keeps_all_fixed_aliases_sorted(tmp_path: Path) -> None:
+    destination = tmp_path / "bundle"
+    package = export_bundle(destination, dict.fromkeys(ROLES, b"same immutable bytes"))
+    reference = package.manifest["roles"]["raw"]
+    (destination / reference["ref"]).unlink()
+
+    with pytest.raises(BundleMissingObjectError) as failure:
+        read_bundle(destination)
+
+    assert failure.value.roles == tuple(sorted(ROLES))
+    assert failure.value.role == sorted(ROLES)[0]
+    assert failure.value.sha256 == reference["sha256"]
+
+
+def test_multiple_missing_objects_report_first_sha_not_first_role(tmp_path: Path) -> None:
+    destination = tmp_path / "bundle"
+    package = export_bundle(destination, artifacts())
+    roles = package.manifest["roles"]
+    missing = {roles[role]["sha256"] for role in ("protocol", "raw", "evaluation")}
+    for sha256 in sorted(missing, reverse=True):
+        (destination / "objects" / "sha256" / sha256).unlink()
+
+    with pytest.raises(BundleMissingObjectError) as failure:
+        read_bundle(destination)
+
+    first = min(missing)
+    aliases = tuple(sorted(role for role, ref in roles.items() if ref["sha256"] == first))
+    assert failure.value.sha256 == first
+    assert failure.value.roles == aliases
+    assert failure.value.role == aliases[0]
+
+
+def test_declared_leaf_disappearing_before_stat_is_observed_absence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    destination = tmp_path / "bundle"
+    package = export_bundle(destination, artifacts())
+    reference = package.manifest["roles"]["raw"]
+    disappear_first_during_scan(monkeypatch, destination / "objects" / "sha256", reference["sha256"])
+
+    with pytest.raises(BundleMissingObjectError) as failure:
+        read_bundle(destination)
+
+    assert failure.value.sha256 == reference["sha256"]
+    assert failure.value.roles == ("raw",)
+
+
+@pytest.mark.parametrize("unsafe", ["extra", "directory", "symlink", "fifo", "declared-directory"])
+def test_scan_disappearance_cannot_hide_later_structural_fault(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, unsafe: str
+) -> None:
+    destination = tmp_path / "bundle"
+    package = export_bundle(destination, artifacts())
+    content = destination / "objects" / "sha256"
+    outside = tmp_path / "outside"
+    outside.write_bytes(b"outside unchanged")
+    bad = content / ".unexpected"
+    if unsafe == "extra":
+        bad.write_bytes(b"extra")
+    elif unsafe == "directory":
+        bad.mkdir()
+    elif unsafe == "symlink":
+        bad.symlink_to(outside)
+    elif unsafe == "fifo":
+        os.mkfifo(bad)
+    else:
+        bad = destination / package.manifest["roles"]["protocol"]["ref"]
+        bad.unlink()
+        bad.mkdir()
+    reference = package.manifest["roles"]["raw"]
+    disappear_first_during_scan(monkeypatch, content, reference["sha256"])
+
+    with pytest.raises(BundleError) as failure:
+        read_bundle(destination)
+
+    assert not isinstance(failure.value, BundleMissingObjectError)
+    assert outside.read_bytes() == b"outside unchanged"
+
+
+def test_real_unlink_between_completed_scan_and_open_reports_that_leaf(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    destination = tmp_path / "bundle"
+    package = export_bundle(destination, artifacts())
+    reference = package.manifest["roles"]["raw"]
+    original_open = os.open
+    removed = False
+
+    def open_after_unlink(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal removed
+        if path == reference["sha256"] and dir_fd is not None and not removed:
+            (destination / reference["ref"]).unlink()
+            removed = True
+        return original_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(bundles.os, "open", open_after_unlink)
+    with pytest.raises(BundleMissingObjectError) as failure:
+        read_bundle(destination)
+
+    assert removed
+    assert isinstance(failure.value.__cause__, FileNotFoundError)
+    assert failure.value.sha256 == reference["sha256"]
+    assert failure.value.roles == ("raw",)
+
+
+@pytest.mark.parametrize("error_number", [errno.EACCES, errno.EPERM, errno.ELOOP, errno.ENOTDIR])
+def test_declared_object_open_errors_are_not_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error_number: int
+) -> None:
+    destination = tmp_path / "bundle"
+    package = export_bundle(destination, artifacts())
+    reference = package.manifest["roles"]["raw"]
+    before = bundle_bytes(destination)
+    original_open = os.open
+
+    def refused_open(path, flags, mode=0o777, *, dir_fd=None):
+        if path == reference["sha256"] and dir_fd is not None:
+            raise OSError(error_number, "injected object-open refusal")
+        return original_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(bundles.os, "open", refused_open)
+    with pytest.raises(BundleError) as failure:
+        read_bundle(destination)
+
+    assert not isinstance(failure.value, BundleMissingObjectError)
+    assert isinstance(failure.value.__cause__, OSError)
+    assert failure.value.__cause__.errno == error_number
+    assert bundle_bytes(destination) == before
+
+
+def test_post_open_enoent_is_not_a_missing_leaf_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    destination = tmp_path / "bundle"
+    package = export_bundle(destination, artifacts())
+    reference = package.manifest["roles"]["raw"]
+    identity = (destination / reference["ref"]).stat()
+    original_fstat = os.fstat
+
+    def failed_fstat(descriptor):
+        observed = original_fstat(descriptor)
+        if (observed.st_dev, observed.st_ino) == (identity.st_dev, identity.st_ino):
+            raise FileNotFoundError(errno.ENOENT, "injected failure after successful open")
+        return observed
+
+    monkeypatch.setattr(bundles.os, "fstat", failed_fstat)
+    with pytest.raises(BundleError) as failure:
+        read_bundle(destination)
+
+    assert not isinstance(failure.value, BundleMissingObjectError)
+    assert isinstance(failure.value.__cause__, FileNotFoundError)
+
+
+def test_declared_object_changing_after_open_remains_generic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    destination = tmp_path / "bundle"
+    package = export_bundle(destination, artifacts())
+    target = destination / package.manifest["roles"]["raw"]["ref"]
+    identity = target.stat()
+    original_fstat = os.fstat
+    changed = False
+
+    def change_after_first_stat(descriptor):
+        nonlocal changed
+        observed = original_fstat(descriptor)
+        if not changed and (observed.st_dev, observed.st_ino) == (
+            identity.st_dev,
+            identity.st_ino,
+        ):
+            target.write_bytes(b"changed during the read")
+            os.utime(target, ns=(identity.st_atime_ns, identity.st_mtime_ns + 1_000_000))
+            changed = True
+        return observed
+
+    monkeypatch.setattr(bundles.os, "fstat", change_after_first_stat)
+    with pytest.raises(BundleError) as failure:
+        read_bundle(destination)
+
+    assert changed
+    assert not isinstance(failure.value, BundleMissingObjectError)
+
+
+@pytest.mark.parametrize("missing", ["manifest.json", "objects", "objects/sha256"])
+def test_missing_manifest_or_container_never_supplies_a_declared_role(
+    tmp_path: Path, missing: str
+) -> None:
+    destination = tmp_path / "bundle"
+    export_bundle(destination, artifacts())
+    target = destination / missing
+    if target.is_dir():
+        shutil.rmtree(target)
+    else:
+        target.unlink()
+    before = bundle_bytes(destination)
+
+    with pytest.raises(BundleError) as failure:
+        read_bundle(destination)
+
+    assert not isinstance(failure.value, (BundleMissingObjectError, BundleNotFoundError))
+    assert bundle_bytes(destination) == before
+
+
+def test_invalid_manifest_cannot_authorize_missing_object_details(tmp_path: Path) -> None:
+    destination = tmp_path / "bundle"
+    package = export_bundle(destination, artifacts())
+    (destination / package.manifest["roles"]["raw"]["ref"]).unlink()
+    manifest = package.manifest
+    manifest["schema_version"] = 2
+    rewrite_manifest(destination, manifest)
+
+    with pytest.raises(BundleError) as failure:
+        read_bundle(destination)
+
+    assert not isinstance(failure.value, BundleMissingObjectError)
+
+
+def test_generic_tree_checker_keeps_its_existing_missing_entry_failure(tmp_path: Path) -> None:
+    descriptor = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        with pytest.raises(BundleError, match="missing a required entry") as failure:
+            bundles._tree_entries(descriptor, {"missing": False})
+    finally:
+        os.close(descriptor)
+
+    assert not isinstance(failure.value, BundleMissingObjectError)
 
 
 @pytest.mark.parametrize("level", ["root", "objects", "sha256"])
@@ -325,8 +617,9 @@ def test_unknown_entries_of_every_type_are_rejected_without_following(
     else:
         os.mkfifo(path)
 
-    with pytest.raises(BundleError):
+    with pytest.raises(BundleError) as failure:
         read_bundle(destination)
+    assert not isinstance(failure.value, BundleMissingObjectError)
     assert outside.read_bytes() == b"unchanged"
 
 
@@ -346,8 +639,9 @@ def test_required_symlinks_are_rejected(tmp_path: Path, entry: str) -> None:
     shutil.move(str(target), outside)
     target.symlink_to(outside, target_is_directory=outside.is_dir())
 
-    with pytest.raises(BundleError):
+    with pytest.raises(BundleError) as failure:
         read_bundle(destination)
+    assert not isinstance(failure.value, BundleMissingObjectError)
 
 
 @pytest.mark.parametrize("entry", ["manifest", "object"])
@@ -359,8 +653,9 @@ def test_required_fifo_is_rejected_without_waiting_for_writer(tmp_path: Path, en
     )
     path.unlink()
     os.mkfifo(path)
-    with pytest.raises(BundleError):
+    with pytest.raises(BundleError) as failure:
         read_bundle(destination)
+    assert not isinstance(failure.value, BundleMissingObjectError)
 
 
 @pytest.mark.parametrize("role", ROLES)
@@ -370,8 +665,9 @@ def test_tampered_role_bytes_fail_complete_closure(tmp_path: Path, role: str) ->
     path = destination / bundle.manifest["roles"][role]["ref"]
     data = path.read_bytes()
     path.write_bytes(b"!" + data[1:])
-    with pytest.raises(BundleError, match="hash does not match"):
+    with pytest.raises(BundleError, match="hash does not match") as failure:
         read_bundle(destination)
+    assert not isinstance(failure.value, BundleMissingObjectError)
 
 
 @pytest.mark.parametrize(

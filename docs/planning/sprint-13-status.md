@@ -1,5 +1,33 @@
 # Sprint 13 执行信任与隔离状态
 
+## 当前接受与后续计划：2026-11-27
+
+Owner已明确接受S13-03的有界准备交付及CI维护，接受源码
+`9901edd16450d65c8a483f91912cd6108475932e`。[PR116](https://github.com/Darrenus/tickwitness/pull/116)
+按正常流程由Darrenus于2026-11-27T15:06:02Z（23:06:02 Asia/Singapore）实际合并为
+`4189fbe126d9447b39ba8f5981a5f5eeebb2e2eb`。#39已按“已接受的审阅／降级与采用记录准备”范围实际关闭，
+不把真正的独立人类评审、参与者研究或复用观察记为完成；后续依赖继续分别登记。
+
+准备材料、原CI超时及有界维护均保留：[审阅与降级包](../security/s13-03-review-and-degradation.md)、
+[采用快照](s13-03-adoption-observation-2026-11-27.md)、[CI事件](s13-03-ci-runtime-2026-11-27.md)。
+358候选的真实20分钟超时／CANCELLED及后续并发取消不回写；990源码的实际远端检查属于其自身记录，
+不是后续修订的通过证据。原S13专项10+16+8=34h和质量容量不变，6h准备＋2h条件响应仍是预测，
+不补记未发生的人类工作或实际工时。
+
+当前产品M1仍未集成／DISABLED，M2不支持；独立安全reviewer UNASSIGNED／NOT_PERFORMED，
+外部真人复验0 attempts／0 successes／PENDING、#24 OPEN。实际自有案例表为空，
+联系、回复、意向、协助量及研究决定UNKNOWN，没有激活日期、30天窗口或可计算复用率。
+这不是beta、release、新资格、旧ACK／export、AWS启动或新研究预算授权。
+
+后续选择[S14核心补强](sprint-14-status.md)：MCP／HTTP需求仍UNKNOWN并DEFER，原32h中
+只选择S14-01a／#40基线离线缺件诊断8h，其余24h未承诺；不叠加入口开发。
+新分支的候选尚未接受，当前head远端验收及owner接受PENDING，不继承990或上述merge的CI结果。
+
+## PR116接受前的准备记录（历史）
+
+以下“S13-03进行中／整体未Done”等是PR116接受前的状态；由上述有界准备接受取代，
+独立人类安全及采用依赖仍保持真实未完成状态。
+
 ## 当前接受与S13-03准备：2026-11-27
 
 Owner已在本次项目对话中明确回复“接受”，接受精确提交`89e12eb3e2e371ea7a4939f277bab57cd3c7843e`及已披露限制。[PR115](https://github.com/Darrenus/tickwitness/pull/115)按正常matching-head流程实际合并为`40aede39b4d7b051b00b0dd604738e736d3f4c25`，由Darrenus于2026-11-27 17:58:53 Asia/Singapore完成；合并树与接受源码相同。必需documentation／engineering通过；实际18 SUCCESS／1非必需legacy REFUSED–FAILURE／0pending保留。Owner接受这一有界交付及已披露例外，不把失败改称通过，不构成对后续PR的全局豁免。

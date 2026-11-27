@@ -115,6 +115,7 @@ from tickwitness.infrastructure.evidence_bundles import (
     BundleDestinationExistsError,
     BundleDurabilityError,
     BundleError,
+    BundleMissingObjectError,
     BundleNotFoundError,
 )
 from tickwitness.infrastructure.executable_registry import (
@@ -542,6 +543,23 @@ def main(argv: list[str] | None = None) -> int:
                     "error": {
                         "code": "search_evidence_object_missing",
                         "message": str(error),
+                        "role": error.role,
+                        "roles": list(error.roles),
+                        "sha256": error.sha256,
+                    }
+                }
+            ),
+            file=sys.stderr,
+        )
+        return 3
+    except BundleMissingObjectError as error:
+        print(
+            json.dumps(
+                {
+                    "error": {
+                        "code": "research_store_integrity_or_io_failure",
+                        "message": str(error),
+                        "reason": error.reason,
                         "role": error.role,
                         "roles": list(error.roles),
                         "sha256": error.sha256,
