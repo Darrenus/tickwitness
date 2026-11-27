@@ -837,9 +837,7 @@ class Host:
         )
         if set(values) != set(names) and not missing_guard:
             raise Refused("Missing manager identity field")
-        if result.returncode != 0 and not (
-            result.returncode in {1, 4} and missing_guard
-        ):
+        if result.returncode != 0 and not (result.returncode in {1, 4} and missing_guard):
             raise Refused("Manager observation failed")
         return values
 
