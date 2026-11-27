@@ -29,13 +29,21 @@ def forbidden(*args, **kwargs):
     attempted.append('database/network/worker')
     raise AssertionError('Offline baseline verification cannot use database, network or worker')
 
+class NoWorker(subprocess.Popen):
+    def __new__(cls, *args, **kwargs):
+        return forbidden(*args, **kwargs)
+
+class NoSocket(socket.socket):
+    def __new__(cls, *args, **kwargs):
+        return forbidden(*args, **kwargs)
+
 sys.meta_path.insert(0, NoNative())
 sqlite3.connect = forbidden
 sqlite3.dbapi2.connect = forbidden
-socket.socket = forbidden
+socket.socket = NoSocket
 socket.create_connection = forbidden
 socket.socketpair = forbidden
-subprocess.Popen = forbidden
+subprocess.Popen = NoWorker
 try:
     from tickwitness.cli import main
     status = main(sys.argv[1:])

@@ -403,7 +403,9 @@ def test_declared_leaf_disappearing_before_stat_is_observed_absence(
     destination = tmp_path / "bundle"
     package = export_bundle(destination, artifacts())
     reference = package.manifest["roles"]["raw"]
-    disappear_first_during_scan(monkeypatch, destination / "objects" / "sha256", reference["sha256"])
+    disappear_first_during_scan(
+        monkeypatch, destination / "objects" / "sha256", reference["sha256"]
+    )
 
     with pytest.raises(BundleMissingObjectError) as failure:
         read_bundle(destination)
