@@ -11,6 +11,7 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -517,15 +518,18 @@ def test_journal_timeout_kills_pipe_holder_even_after_the_owned_leader_exited(
     monkeypatch.setattr(reader.subprocess, "Popen", producer)
     actual_killpg = os.killpg
     actual_stopped = reader.owned_group_stopped
-    pending = []
+    pending, before_kill, sent = [], [], []
 
     def killpg(pgid, signum):
+        if signum == signal.SIGKILL:
+            before_kill.append(cleanup_signal in signal.sigpending())
         actual_killpg(pgid, signum)
-        if signum == signal.SIGTERM:
-            if cleanup_signal == signal.SIGALRM:
-                signal.setitimer(signal.ITIMER_REAL, 0.02)
-            elif cleanup_signal == signal.SIGTERM:
-                os.kill(os.getpid(), signal.SIGTERM)
+        if signum == signal.SIGTERM and cleanup_signal is not None and not sent:
+            # Native libraries may leave other unblocked threads alive. Target
+            # this real signal at the protected main thread rather than rely
+            # on process-directed timer delivery choosing the same recipient.
+            sent.append(cleanup_signal)
+            signal.pthread_kill(threading.get_ident(), cleanup_signal)
 
     def stopped(pgid, deadline):
         pending.append(cleanup_signal in signal.sigpending())
@@ -546,6 +550,8 @@ def test_journal_timeout_kills_pipe_holder_even_after_the_owned_leader_exited(
         signal.signal(signal.SIGTERM, previous_term)
     assert time.monotonic() - started < 2.5
     if cleanup_signal is not None:
+        assert sent == [cleanup_signal]
+        assert any(before_kill), "The real deadline signal must be pending before KILL"
         assert any(pending), "The real deadline signal must arrive between TERM and KILL"
     pid = int(output.getvalue().strip())
     assert children[0].poll() == 0
