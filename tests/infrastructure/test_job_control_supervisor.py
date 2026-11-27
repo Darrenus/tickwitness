@@ -8,7 +8,7 @@ import time
 from threading import Thread, current_thread
 
 import pytest
-from test_job_supervisor import _command, _queued, _wait_for
+from test_job_supervisor import _command, _queued
 from test_native_job_supervisor import native_job_root as native_job_root
 from test_native_job_supervisor import queued, saved_worker
 from test_reduction_execution import forbidden
@@ -121,8 +121,9 @@ def test_total_deadline_stops_genuine_heartbeats_and_cleans_owned_scratch(tmp_pa
 
 
 @pytest.mark.parametrize("inject_read_conflict", [False, True])
+@pytest.mark.parametrize("inject_gate_conflict", [False, True])
 def test_durable_cancel_from_another_controller_stops_live_owned_process(
-    tmp_path, monkeypatch, inject_read_conflict
+    tmp_path, monkeypatch, inject_read_conflict, inject_gate_conflict
 ):
     store, row = _queued(tmp_path)
     controls, _policy = configure(store, row, max_wall_ns=10_000_000_000)
@@ -134,6 +135,7 @@ def test_durable_cancel_from_another_controller_stops_live_owned_process(
     )
     observations, failures = [], []
     injected_conflicts = []
+    injected_gate_conflicts = []
     original_get = store.get
 
     def observed_get(job_id):
@@ -151,11 +153,47 @@ def test_durable_cancel_from_another_controller_stops_live_owned_process(
 
     def request():
         try:
-            current = _wait_for(ready, timeout=5)
+            deadline = time.monotonic() + 5
+            current = None
+            while time.monotonic() < deadline:
+                current = ready()
+                if current is not None:
+                    break
+                time.sleep(min(0.02, max(0, deadline - time.monotonic())))
+            assert current is not None, "Heartbeat was not observed within the original window"
             peer = JobControlStore(store.root, row["job_id"])
-            observations.append(
-                peer.request_cancel("live-controller", now_ns=time.time_ns(), snapshot=current)
-            )
+            blocker = JobControlStore(store.root, row["job_id"])
+            requested_at = time.time_ns()
+
+            def cancel_once():
+                return peer.request_cancel("live-controller", now_ns=requested_at, snapshot=current)
+
+            def gate_busy(error):
+                return str(error) == "Another writer owns the Job control gate" and isinstance(
+                    error.__cause__, BlockingIOError
+                )
+
+            while time.monotonic() < deadline:
+                try:
+                    if inject_gate_conflict and not injected_gate_conflicts:
+                        with blocker.gate():
+                            try:
+                                cancel_once()
+                            except JobConflictError as error:
+                                if not gate_busy(error):
+                                    raise
+                                injected_gate_conflicts.append(error)
+                            else:
+                                raise AssertionError("A separately owned gate accepted a cancel")
+                        continue
+                    observations.append(cancel_once())
+                    break
+                except JobConflictError as error:
+                    if not gate_busy(error):
+                        raise
+                time.sleep(min(0.02, max(0, deadline - time.monotonic())))
+            else:
+                raise AssertionError("Cancellation was not accepted within the original window")
         except Exception as error:
             failures.append(error)
 
@@ -168,6 +206,8 @@ def test_durable_cancel_from_another_controller_stops_live_owned_process(
         controller.join(timeout=6)
     assert not controller.is_alive() and not failures
     assert injected_conflicts == ([row["job_id"]] if inject_read_conflict else [])
+    assert len(injected_gate_conflicts) == int(inject_gate_conflict)
+    assert len(observations) == 1
     assert observations[0]["status"] == "accepted"
     assert terminal["state"] == "FAILED" and terminal["failure"]["code"] == "job_cancelled"
     proof = controls.result()

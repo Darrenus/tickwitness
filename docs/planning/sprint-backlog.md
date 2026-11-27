@@ -1,5 +1,16 @@
 # Sprint backlog
 
+当前维护记录：2026-11-27 Asia/Singapore。S13-02固定v3实机24项PASS，
+本轮24／历史21／累计45，仅QUALIFIED_REFERENCE_ONLY；独立只读readback63文件
+已CLOSED，原handoff过期74／ACK不存在不回写，AWS已Stopped。
+详见[实机与收证证据](../security/ec2-reference-recovery-v3-evidence-2026-11-27.md)及
+[owner审阅材料](../security/s13-02-owner-review.md)。PR115仍Draft，owner接受PENDING，
+#38 OPEN／in-progress；M1产品未集成／DISABLED。S13-03／#39仍Planned，独立安全
+NOT_PERFORMED与外部真人0/0/PENDING分别保留；本轮未推进条件性S14入口。
+
+以下开篇为2026-10-25规划基线的历史表述；实际交付与接受状态以有日期的维护记录、
+各Sprint状态及真实owner merge为准。
+
 状态：Proposed（拟议 backlog，尚未实现）。版本：2026-10-25。项目：TickWitness；目标仓库：`Darrenus/tickwitness`。当前交付是 planning baseline，S4 才计划交付 0.1 技术预览。
 
 配套阅读：[路线图与验收门](roadmap.md)。以下故事是未来工作，不表示功能已经存在。S1–S4 可进入近期排程；S5 以后是依赖明确的规划 backlog，每两次 Sprint 按实际发现滚动细化。
@@ -375,3 +386,19 @@
 2026-11-18，owner于14:37:31Z合并#111，真实merge `d7696ba01f92a58a3bb26f6b58e421a30698c93a`，接受S12-02缺口路径及伴随#112；#35/#112完成，真人仍0/0/PENDING。S12-03先冻结[SDK兼容与可执行文档](../contracts/sdk-compatibility-v1.md)：封闭schema拒绝、开放参数保留、未知时间不填造；具名文档片段由实际安装wheel运行，复用原32调用/180秒资格预算与原17checks，不新造SDK验证器或HTTP/MCP入口。原8h／S12总34h及持续质量容量不变，无实际工时声明；#36在owner接受前OPEN，原5/8/11研究槽和既有封存不重置。
 
 2026-11-19 Asia/Singapore，owner于2026-11-18T16:03:09Z合并#113，真实merge `df10923663a3d3c09b5b917995fbb554da60ea40`，接受S12-03，#36完成。S13-01先提交推送[执行信任与威胁模型v1](../contracts/execution-trust-v1.md)／[ADR0044](../adr/0044-explicit-execution-trust-boundaries.md)，再对齐现有支持与运维入口：M0仅既有已资格内置profile，M1受限单机隔离未实现／未资格／关闭，M2需独立用户／租户权限边界的托管／协作服务不支持；文件、环境、网络、资源、同UID与哈希来源缺口逐项列明。原10h／S13总10+16+8=34h与持续质量容量不变，无实际工时声明；#37在owner接受前OPEN，02／03未提前实现。原协议共同预算、5/8/11、golden、PR94与历史封存不重置／退款／重跑，项目执行继续仅远端CPU。真人0/0/PENDING与独立安全复核未完成分别记录，不以模型文档、CI、AI或owner接受代替；HTTP/MCP仍条件性S14或以后。
+
+
+2026-11-19 Asia/Singapore，owner实际merge `6c350b9fe32dfed96392edd2b856e937f767e342` 于13:09:12Z接受PR114／S13-01，#37完成。S13-02原16h先实际推送[参考合同](../contracts/restricted-reference-v1.md)与[ADR0045](../adr/0045-restricted-reference-qualification.md)，再推进内部OS控制后端与固定合成负例；当前候选远端证据及owner接受分别记录，M1产品入口保持关闭，M2不支持，不把普通绿色或参考资格等同产品隔离支持。原S13共34h／持续质量及原协议预算不变；所有项目执行仅远端CPU，外部真人0/0/PENDING与独立安全复核NOT_PERFORMED分别保留。详见[S13状态](sprint-13-status.md)。
+
+历史快照，2026-11-19（其“当前候选”状态由2026-11-27记录取代，SUPERSEDED）：S13-02当前候选的[实际参考证据](../security/restricted-reference-evidence-2026-11-19.md)显示环境预检NOT_QUALIFIED：已加载AppArmor attachment闭包不可完整观察，政策未加载，完整负例未运行。PR115保持Draft，#38仍OPEN／in-progress，不计交付完成或产品M1支持；源码回归与环境资格分别报告。原容量、研究共同预算及真人PENDING不变。
+
+2026-11-27 Asia/Singapore，[固定v3实机及后续只读收证](../security/ec2-reference-recovery-v3-evidence-2026-11-27.md)
+完成：资格源码`908d56db32439f38686346687a5b43239b1b7264`的完整24项PASS，
+当前24+历史21=累计45；原handoff实际过期74／ACK不存在，成功只读收证另封63文件，
+固定558项pins及10文件资格源码闭包不变，最后AWS独立确认Stopped／无公网IPv4或DNS。
+文档修订前基线`b5ee94808861ed6eff085f71073bb703bfd7d6f9`远端专用91项、
+Engineering16项及Documentation已SUCCESS，旧GHA参考拒绝另存。
+[owner审阅材料](../security/s13-02-owner-review.md)供具体交付审阅，接受仍PENDING；
+PR115 Draft／#38 OPEN／in-progress，不计Done或M1产品支持。S13-03／#39仍Planned，
+独立安全NOT_PERFORMED及外部真人0/0/PENDING不变；原16h／8h、S13总34h与持续质量容量
+不变，不补造实际工时，不新增资格、研究槽、产品入口或S14实际工作。
