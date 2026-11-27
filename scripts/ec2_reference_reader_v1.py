@@ -44,6 +44,17 @@ ROOT = "/var/lib/tickwitness-reference-ec2"
 OPERATION = "/var/lib/tickwitness-lifecycle/reference-batches/" + RUN_ID
 STAGE = "/var/lib/tickwitness-lifecycle/ec2-recovery-batch-v3"
 UNIT = "tickwitness-test-session.service"
+MISSING_GUARD = {
+    "ActiveState": "inactive",
+    "SubState": "dead",
+    "InvocationID": "",
+    "MainPID": "0",
+    "ExecStart": "",
+    "ControlGroup": "",
+    "User": "",
+    "DropInPaths": "",
+    "LoadState": "not-found",
+}
 LAST_ENV = "/var/lib/tickwitness-lifecycle/last-test-result.env"
 ARCHIVE = OPERATION + "/evidence.tar.gz"
 READY = OPERATION + "/handoff-ready.json"
@@ -115,10 +126,18 @@ OPERATION_NAMES = set(POST_NAMES) | {
     "evidence.tar.gz",
 }
 LIFECYCLE_SHA = {
-    "/usr/local/sbin/tickwitness-run-tests": "3ffa94999948a32c2efdd5f5999f8a410d91c4b56ff32390489e7acaf9c37b32",
-    "/usr/local/libexec/tickwitness-stop-after-test": "8814afcb2172781e4f8b53b772205fa0a9498712dc235f87e63dfb1e3f86176c",
-    "/etc/systemd/system/tickwitness-boot-deadline.timer": "16320eba4e809a6bcf2fd47a1670d39b95f500b3275fd2fc7bdcc67ec6b820d6",
-    "/etc/systemd/system/tickwitness-boot-deadline.service": "5ac5d11c5f09e748636913fe76ab3202a681077ce6f221f298750f05ebb49fa4",
+    "/usr/local/sbin/tickwitness-run-tests": (
+        "3ffa94999948a32c2efdd5f5999f8a410d91c4b56ff32390489e7acaf9c37b32"
+    ),
+    "/usr/local/libexec/tickwitness-stop-after-test": (
+        "8814afcb2172781e4f8b53b772205fa0a9498712dc235f87e63dfb1e3f86176c"
+    ),
+    "/etc/systemd/system/tickwitness-boot-deadline.timer": (
+        "16320eba4e809a6bcf2fd47a1670d39b95f500b3275fd2fc7bdcc67ec6b820d6"
+    ),
+    "/etc/systemd/system/tickwitness-boot-deadline.service": (
+        "5ac5d11c5f09e748636913fe76ab3202a681077ce6f221f298750f05ebb49fa4"
+    ),
 }
 STAT_KEYS = {
     "device",
@@ -211,6 +230,10 @@ STAGE_PATHS = {
 
 class Refused(RuntimeError):
     """No observation failure grants a write, acknowledgement or renewed clock."""
+
+
+class ReaderAlarm(Refused):
+    """The original command/watchdog deadline requests bounded cleanup."""
 
 
 class ReadError(Refused):
@@ -785,7 +808,14 @@ class Host:
 
     def show(self, unit: str, names: tuple[str, ...]) -> Row:
         result = subprocess.run(
-            ["/usr/bin/systemctl", "show", unit, "--no-pager", "--property=" + ",".join(names)],
+            [
+                "/usr/bin/systemctl",
+                "show",
+                unit,
+                "--all",
+                "--no-pager",
+                "--property=" + ",".join(names),
+            ],
             capture_output=True,
             timeout=3,
             check=False,
@@ -801,7 +831,7 @@ class Host:
         if set(values) != set(names):
             raise Refused("Missing manager identity field")
         if result.returncode != 0 and not (
-            unit == UNIT and result.returncode == 1 and values.get("LoadState") == "not-found"
+            unit == UNIT and result.returncode in {1, 4} and values == MISSING_GUARD
         ):
             raise Refused("Manager observation failed")
         return values
@@ -819,6 +849,8 @@ class Host:
             "LoadState",
         )
         first = self.show(UNIT, names)
+        if first["LoadState"] == "not-found" and first != MISSING_GUARD:
+            raise Refused("Absent transient guard identity was not positively observed")
         if (
             first["DropInPaths"]
             or not first["MainPID"].isascii()
@@ -934,6 +966,7 @@ class Reader:
         self.clock = Clock() if clock is None else clock
         self.source_seals: dict[str, Row] = {}
         self.current_guard: Row | None = None
+        self.command_deadline_ns: int | None = None
 
     def base(self, kind: str, boot: str) -> Row:
         return {
@@ -1207,6 +1240,12 @@ class Reader:
         if wait_existing_terminal:
             self.live(ready, guard)
             deadline = min(ready["deadline_ns"], ready["outer_deadline_ns"])
+            if self.command_deadline_ns is not None:
+                self.command_deadline_ns = min(self.command_deadline_ns, deadline)
+                remaining = (self.command_deadline_ns - self.clock.now()) / 1e9
+                if remaining <= 0:
+                    raise ReaderAlarm("Original waiter command deadline expired before output")
+                signal.setitimer(signal.ITIMER_REAL, remaining)
         yield self.base("ec2_reader_post_begin_v1", boot) | {
             "mode": "post-records",
             "wait_existing_terminal": wait_existing_terminal,
@@ -1311,10 +1350,16 @@ class Reader:
             command += ["_SYSTEMD_INVOCATION_ID=" + ORIGINAL_INVOCATION]
         elif mode != "journal-boot":
             raise Refused("Unknown fixed journal query")
+        deadline = self.clock.now() + 25_000_000_000
+        if self.command_deadline_ns is not None:
+            deadline = min(deadline, self.command_deadline_ns)
+        if self.clock.now() >= deadline:
+            raise Refused("Original journal deadline exhausted before spawn")
+        original_mask = signal.pthread_sigmask(signal.SIG_BLOCK, set())
+        cleanup: Row = {}
         process = subprocess.Popen(
             command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True
         )
-        deadline = self.clock.now() + 25_000_000_000
         count, errors, digest, complete = 0, bytearray(), hashlib.sha256(), False
         code = None
         try:
@@ -1365,27 +1410,18 @@ class Reader:
                     raise Refused("Journal leader exit unconfirmed inside original deadline")
                 complete = code == 0 and count > 0 and not errors
         finally:
-            grace = time.monotonic() + 2
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGTERM)
-            time.sleep(max(0, (grace - time.monotonic()) / 2))
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGKILL)
-            stopped = False
-            while time.monotonic() < grace:
-                if owned_group_stopped(process.pid, grace):
-                    stopped = True
+            interrupted: ReaderAlarm | None = None
+            while True:
+                try:
+                    stop_journal(process, cleanup, self.command_deadline_ns, original_mask)
                     break
-                time.sleep(min(0.02, max(0, grace - time.monotonic())))
-            try:
-                process.wait(timeout=max(0, grace - time.monotonic()))
-            except subprocess.TimeoutExpired:
-                stopped = False
-            for stream in (process.stdout, process.stderr):
-                if stream is not None:
-                    stream.close()
-            if not stopped:
-                raise Refused("Journal owned group stop unconfirmed within deadline grace")
+                except ReaderAlarm as error:
+                    # Either deadline signal may arrive before the mask is
+                    # established. Resume the same grace, without signalling
+                    # a group again after its reserved leader was reaped.
+                    interrupted = error
+            if interrupted is not None:
+                raise interrupted
         self.current(expected_boot)
         return self.base("ec2_reader_journal_v1", boot) | {
             "mode": mode,
@@ -1396,6 +1432,55 @@ class Reader:
             "query": command,
             "producer_stderr_b64": base64.b64encode(errors).decode(),
         }
+
+
+def stop_journal(
+    process: subprocess.Popen[bytes],
+    state: Row,
+    command_deadline_ns: int | None,
+    original_mask: set[signal.Signals],
+) -> None:
+    if state.get("done"):
+        return
+    if "grace" not in state:
+        now = time.monotonic()
+        cap = now + 2 if command_deadline_ns is None else command_deadline_ns / 1e9 + 2
+        state["grace"] = min(now + 2, cap)
+        state["kill_at"] = min(now + 1, state["grace"])
+    signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGALRM, signal.SIGTERM})
+    signal.setitimer(signal.ITIMER_REAL, 0)
+    stopped = False
+    try:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGTERM)
+        time.sleep(max(0, state["kill_at"] - time.monotonic()))
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+        while time.monotonic() < state["grace"]:
+            if owned_group_stopped(process.pid, state["grace"]):
+                stopped = True
+                break
+            time.sleep(min(0.02, max(0, state["grace"] - time.monotonic())))
+        # No subsequent attempt may signal this PGID after leader reaping.
+        state["done"] = True
+        try:
+            process.wait(timeout=max(0, state["grace"] - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            stopped = False
+    finally:
+        for stream in (process.stdout, process.stderr):
+            if stream is not None:
+                stream.close()
+        for signum in (signal.SIGALRM, signal.SIGTERM):
+            if signum in signal.sigpending():
+                signal.sigtimedwait({signum}, 0)
+        if command_deadline_ns is not None:
+            remaining = (command_deadline_ns - time.monotonic_ns()) / 1e9
+            if remaining > 0:
+                signal.setitimer(signal.ITIMER_REAL, remaining)
+        signal.pthread_sigmask(signal.SIG_SETMASK, original_mask)
+    if not stopped:
+        raise Refused("Journal owned group stop unconfirmed within deadline grace")
 
 
 def owned_group_stopped(pgid: int, deadline: float) -> bool:
@@ -1419,10 +1504,11 @@ def owned_group_stopped(pgid: int, deadline: float) -> bool:
 
 
 def _alarm(_signum, _frame) -> None:
-    raise Refused("Original reader command deadline expired")
+    raise ReaderAlarm("Original reader command deadline expired")
 
 
 def main(arguments: list[str] | None = None) -> int:
+    started_ns = time.monotonic_ns()
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("mode", choices=MODES)
     parser.add_argument("expected_current_boot")
@@ -1445,8 +1531,15 @@ def main(arguments: list[str] | None = None) -> int:
     except (ValueError, binascii.Error) as error:
         raise Refused("The reviewed private packet must embed its pin data") from error
     reader = Reader(pins)
+    reader.command_deadline_ns = started_ns + (
+        120_000_000_000 if args.wait_existing_terminal else 25_000_000_000
+    )
     signal.signal(signal.SIGALRM, _alarm)
-    signal.setitimer(signal.ITIMER_REAL, 120 if args.wait_existing_terminal else 25)
+    signal.signal(signal.SIGTERM, _alarm)
+    remaining = (reader.command_deadline_ns - time.monotonic_ns()) / 1e9
+    if remaining <= 0:
+        raise ReaderAlarm("Original reader command deadline expired during prelude")
+    signal.setitimer(signal.ITIMER_REAL, remaining)
     output, metadata = sys.stdout.buffer, sys.stderr.buffer
     if args.mode == "snapshot":
         output.write(canonical(reader.snapshot(args.expected_current_boot)))

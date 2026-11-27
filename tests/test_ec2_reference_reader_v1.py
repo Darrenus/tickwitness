@@ -8,6 +8,7 @@ import importlib.util
 import io
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -477,7 +478,10 @@ def test_actual_journal_flood_is_stopped_without_unbounded_capture(case, monkeyp
 @pytest.mark.skipif(
     sys.platform != "linux", reason="Real procfs/fork/group ownership requires Linux"
 )
-def test_journal_timeout_kills_pipe_holder_even_after_the_owned_leader_exited(case, monkeypatch):
+@pytest.mark.parametrize("cleanup_signal", [None, signal.SIGALRM, signal.SIGTERM])
+def test_journal_timeout_kills_pipe_holder_even_after_the_owned_leader_exited(
+    case, monkeypatch, cleanup_signal
+):
     actual_popen = subprocess.Popen
     children = []
     marker = case.root.parent / "pipe-holder-ready"
@@ -511,15 +515,149 @@ def test_journal_timeout_kills_pipe_holder_even_after_the_owned_leader_exited(ca
 
     case.reader.clock = AdvancingClock()
     monkeypatch.setattr(reader.subprocess, "Popen", producer)
+    actual_killpg = os.killpg
+    actual_stopped = reader.owned_group_stopped
+    pending = []
+
+    def killpg(pgid, signum):
+        actual_killpg(pgid, signum)
+        if signum == signal.SIGTERM:
+            if cleanup_signal == signal.SIGALRM:
+                signal.setitimer(signal.ITIMER_REAL, 0.02)
+            elif cleanup_signal == signal.SIGTERM:
+                os.kill(os.getpid(), signal.SIGTERM)
+
+    def stopped(pgid, deadline):
+        pending.append(cleanup_signal in signal.sigpending())
+        return actual_stopped(pgid, deadline)
+
+    monkeypatch.setattr(reader.os, "killpg", killpg)
+    monkeypatch.setattr(reader, "owned_group_stopped", stopped)
+    previous = signal.signal(signal.SIGALRM, reader._alarm)
+    previous_term = signal.signal(signal.SIGTERM, reader._alarm)
     output = io.BytesIO()
-    with pytest.raises(reader.Refused, match="deadline"):
-        case.reader.journal("journal-boot", BOOT, output)
+    started = time.monotonic()
+    try:
+        with pytest.raises(reader.Refused, match="deadline"):
+            case.reader.journal("journal-boot", BOOT, output)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+        signal.signal(signal.SIGTERM, previous_term)
+    assert time.monotonic() - started < 2.5
+    if cleanup_signal is not None:
+        assert any(pending), "The real deadline signal must arrive between TERM and KILL"
     pid = int(output.getvalue().strip())
     assert children[0].poll() == 0
     state = Path(f"/proc/{pid}/stat")
     if state.exists():
         tail = state.read_bytes().rsplit(b")", 1)[1].split()
         assert tail[0] in {b"Z", b"X"}
+
+
+def test_journal_cannot_renew_the_original_cli_deadline_after_its_prelude(case, monkeypatch):
+    case.reader.command_deadline_ns = case.reader.clock.now()
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("An exhausted command deadline must refuse before spawning journalctl")
+
+    monkeypatch.setattr(reader.subprocess, "Popen", forbidden)
+    with pytest.raises(reader.Refused, match="before spawn"):
+        case.reader.journal("journal-boot", BOOT, io.BytesIO())
+
+
+@pytest.mark.parametrize("command_seconds_left", [3, 120])
+def test_live_waiter_clips_output_alarm_to_original_window_without_extending_cli_deadline(
+    case, monkeypatch, command_seconds_left
+):
+    case.host.boot_id = reader.ORIGINAL_BOOT
+    case.clock.value = case.ready["deadline_ns"] - 10_000_000_000
+    initial = case.clock.now() + command_seconds_left * 1_000_000_000
+    case.reader.command_deadline_ns = initial
+    armed = []
+    monkeypatch.setattr(reader.signal, "setitimer", lambda *args: armed.append(args))
+    stream = case.reader.post_records(reader.ORIGINAL_BOOT, wait_existing_terminal=True)
+    first = next(stream)
+    expected = min(initial, case.ready["deadline_ns"], case.ready["outer_deadline_ns"])
+    assert first["kind"] == "ec2_reader_post_begin_v1"
+    assert case.reader.command_deadline_ns == expected
+    assert armed == [(signal.ITIMER_REAL, (expected - case.clock.now()) / 1e9)]
+    next(stream)
+    assert len(armed) == 1, "Data frames must not renew the original output alarm"
+    stream.close()
+
+
+def test_expired_live_waiter_cli_deadline_cannot_emit_a_positive_header(case, monkeypatch):
+    case.host.boot_id = reader.ORIGINAL_BOOT
+    case.reader.command_deadline_ns = case.clock.now()
+    armed = []
+    monkeypatch.setattr(reader.signal, "setitimer", lambda *args: armed.append(args))
+    stream = case.reader.post_records(reader.ORIGINAL_BOOT, wait_existing_terminal=True)
+    with pytest.raises(reader.ReaderAlarm, match="before output"):
+        next(stream)
+    assert armed == []
+
+
+@pytest.mark.parametrize(
+    "code,field,value",
+    [
+        (0, None, None),
+        (1, None, None),
+        (4, None, None),
+        (4, "InvocationID", "1" * 32),
+        (4, "User", "ubuntu"),
+        (4, "ActiveState", "active"),
+        (4, "ExecStart", "/usr/bin/sleep 300"),
+        (5, None, None),
+    ],
+)
+def test_missing_transient_guard_requires_positive_exact_empty_identity(
+    monkeypatch, code, field, value
+):
+    data = dict(reader.MISSING_GUARD)
+    if field is not None:
+        data[field] = value
+
+    def show(command, **_options):
+        assert command[:4] == ["/usr/bin/systemctl", "show", reader.UNIT, "--all"]
+        raw = "".join(key + "=" + item + "\n" for key, item in data.items()).encode()
+        return subprocess.CompletedProcess(command, code, raw, b"")
+
+    monkeypatch.setattr(reader.subprocess, "run", show)
+    if field is None and code in {0, 1, 4}:
+        guard = reader.Host().guard()
+        assert guard["active_state"] == "inactive" and guard["sub_state"] == "dead"
+        assert guard["main_pid"] == 0 and guard["main_argv"] == []
+        assert guard["invocation_id"] == "" and guard["exec_start"] == ""
+    else:
+        with pytest.raises(reader.Refused):
+            reader.Host().guard()
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Actual systemd observation requires Linux")
+def test_actual_remote_systemctl_missing_transient_guard_is_only_an_inactive_observation():
+    if not Path("/run/systemd/system").exists():
+        pytest.skip("This remote fixture is not booted with a systemd system manager")
+    names = tuple(reader.MISSING_GUARD)
+    command = [
+        "/usr/bin/systemctl",
+        "show",
+        reader.UNIT,
+        "--all",
+        "--no-pager",
+        "--property=" + ",".join(names),
+    ]
+    result = subprocess.run(command, capture_output=True, timeout=3, check=False)
+    print(
+        "Actual readonly missing-unit observation:",
+        result.returncode,
+        result.stdout,
+        result.stderr,
+    )
+    assert result.returncode in {0, 1, 4}
+    assert reader.Host().show(reader.UNIT, names) == reader.MISSING_GUARD
+    guard = reader.Host().guard()
+    assert guard["active_state"] == "inactive" and guard["main_pid"] == 0
 
 
 @pytest.mark.parametrize(
@@ -588,7 +726,8 @@ actual_pins,actual_reader=module.PinSet,module.Reader
 module.PinSet=lambda value:actual_pins(value,owner=os.getuid())
 clock=namespace['Clock']()
 host=namespace['Host'](clock)
-module.Reader=lambda value:actual_reader(value,module.SafeFiles(Path(sys.argv[3]),owner=os.getuid()),host,clock)
+module.Reader=lambda value:actual_reader(
+ value,module.SafeFiles(Path(sys.argv[3]),owner=os.getuid()),host,clock)
 module.os.geteuid=lambda:0
 module.platform.machine=lambda:'x86_64'
 module.platform.freedesktop_os_release=lambda:{'ID':'ubuntu','VERSION_ID':'24.04'}

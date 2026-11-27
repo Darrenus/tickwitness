@@ -599,10 +599,8 @@ class IntentStore(LocalStore):
             current = current.parent
         self._ancestry(current)
         for path in reversed(missing):
-            try:
+            with suppress(FileExistsError):
                 path.mkdir(mode=0o700)
-            except FileExistsError:
-                pass
             self._ancestry(path)
             self._fsync(path.parent)
         self._ancestry(self.directory)

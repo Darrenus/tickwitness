@@ -502,7 +502,7 @@ def test_original_clock_and_authenticated_post_gate_allow_zero_ack(produced, tmp
     if mode == "late":
         produced.clock.value = produced.ready["deadline_ns"]
     elif mode == "late_preparation":
-        channels.prepared_ns = actual.clock.now()
+        channels.prepared_ns = actual.clock.now() + 1
     elif mode == "download_cost":
         channels.cost = 40_000_000_000
     else:
@@ -510,6 +510,111 @@ def test_original_clock_and_authenticated_post_gate_allow_zero_ack(produced, tmp
     with pytest.raises((client.Refused, reader.Refused)):
         actual.live_receive(produced.pins.data["original_boot_id"])
     assert channels.ack_calls == 0
+
+
+@pytest.mark.parametrize("filename", ["archive.stdout", "ack-intent.json"])
+def test_real_local_fsync_cost_cannot_escape_the_original_ack_clock(
+    produced, tmp_path, monkeypatch, filename
+):
+    actual, channels, local, permanent = receiver(produced, tmp_path)
+    original = local._fsync
+    charged = []
+
+    def fsync(directory):
+        original(directory)
+        if not charged and (local.directory / filename).is_file():
+            charged.append(filename)
+            actual.clock.value += 120_000_000_000
+
+    monkeypatch.setattr(local, "_fsync", fsync)
+    with pytest.raises(client.Refused, match="insufficient remaining"):
+        actual.live_receive(produced.pins.data["original_boot_id"])
+    assert charged == [filename]
+    assert channels.ack_calls == 0
+    assert not (produced.store.operation / "handoff-ack.json").exists()
+    if filename == "ack-intent.json":
+        assert len(list(permanent.directory.iterdir())) == 1
+        with pytest.raises(FileExistsError):
+            permanent.claim(produced.ready, produced.pins, {"retry": "must remain USED"})
+    else:
+        assert not list(permanent.directory.iterdir())
+
+
+def test_historical_retrieval_on_new_boot_never_upgrades_expired_run_or_submits_ack(
+    produced, tmp_path, monkeypatch
+):
+    produced.clock.value = produced.ready["deadline_ns"]
+    produced.release.set()
+    produced.thread.join(3)
+    assert produced.outcome == [74]
+    original_result = produced.store.record_read(
+        "controller-result",
+        produced.pins.data["source_revision"],
+        produced.pins.data["original_boot_id"],
+    )
+    assert original_result["handoff_status"] == "expired"
+    before = (produced.driver.path / "state.json").read_bytes()
+    actual, channels, local, permanent = receiver(produced, tmp_path)
+    retrieval_boot = "99999999-9999-4999-8999-999999999999"
+
+    class HistoricalHost:
+        def boot(self):
+            return retrieval_boot
+
+        def lifecycle(self, _files):
+            pass
+
+        def guard(self):
+            return {
+                "active_state": "active",
+                "sub_state": "running",
+                "invocation_id": "c" * 32,
+                "main_pid": 50,
+                "main_start_ticks": 500,
+                "main_argv": ["/usr/bin/sleep", "300"],
+                "exec_start": "path=/usr/bin/sleep ; argv[]=/usr/bin/sleep 300 ;",
+                "control_group": "/system.slice/" + client.UNIT,
+                "user": "ubuntu",
+            }
+
+        def process(self, pid):
+            assert pid == 50
+            return {
+                "pid": 50,
+                "start_ticks": 500,
+                "argv": ["/usr/bin/sleep", "300"],
+                "cgroup": "/system.slice/" + client.UNIT,
+                "ppid": 1,
+                "effective_uid": 1000,
+            }
+
+    channels.reader.host = HistoricalHost()
+    original_start = channels.start
+
+    def read_only(mode, boot, deadline, *, wait=False):
+        if mode.startswith("journal-"):
+            channels.calls.append((mode, wait))
+            # This fixture has no retained original kernel journal. Preserve an
+            # explicit incomplete stream rather than fabricate manager evidence.
+            return Immediate(
+                client.Completed(b"", b"original journal unavailable in fixture\n", 74)
+            )
+        return original_start(mode, boot, deadline, wait=wait)
+
+    monkeypatch.setattr(channels, "start", read_only)
+    monkeypatch.setattr(channels, "ack", lambda *_args: pytest.fail("Historical mode called ACK"))
+    channels.prepared_ns = actual.clock.now() + 10**20
+    result = actual.historical_retrieve(retrieval_boot)
+    assert result["ack_submitted"] is False and actual.deadline is None
+    assert result["manager_exit"] == "NOT_OBSERVED"
+    assert result["cloud_stop"] == "NOT_OBSERVED"
+    assert result["post_reconciliation"] == "UNKNOWN_ORIGINAL_POST_RECORDS_OR_JOURNALS"
+    assert b"expired" in (local.directory / "post-records.stdout").read_bytes()
+    assert (local.directory / "journal-boot.exit.json").is_file()
+    assert all(not wait for _, wait in channels.calls)
+    assert channels.ack_calls == 0 and not list(permanent.directory.iterdir())
+    assert not (produced.store.operation / "handoff-ack.json").exists()
+    assert before == (produced.driver.path / "state.json").read_bytes()
 
 
 def test_new_audit_destination_cannot_retransmit_after_lost_ack_reply(produced, tmp_path):
