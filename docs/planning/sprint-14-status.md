@@ -51,7 +51,8 @@ Owner接受这一有界源码与已披露例外，不构成后续PR全局豁免�
 新CLI适配层仅包装已知NotFound：固定reason=inspection_evidence_not_found、command、requested_id、
 六种lookup及实际已知时的resource_id。保持research_evidence_not_found或dataset_not_found各自原code／exit4，
 构造registry→store→应用inspect的顺序不变；引用dataset ID只取验证后实际get入参，不解析message。
-应用服务、infra分类、领域聚合、持久格式及SDK五方法／七导出不改，不复制领域验证。
+F02本身的应用服务、infra分类、领域聚合、持久格式及SDK五方法／七导出不改，不复制领域验证。
+本PR另有下述持续质量companion，单独窄改Job journal只读竞态分类，不混入F02功能范围。
 
 | 验收类别 | 需要实际验证的结果 | 当前状态 |
 | --- | --- | --- |
@@ -64,6 +65,18 @@ Owner接受这一有界源码与已披露例外，不构成后续PR全局豁免�
 允许既有SQLite mode=ro，只对目标catalog.sqlite3-wal/shm正常运行活动作明确例外；
 持续证据catalog/CAS/protocol/slot/outcome名字及字节保持，不宣称目录元数据完全不变，不删live sidecar。
 这不是恶意代码sandbox，也不是OS级不存在、预算可用、语义成功、repair/retry或确认访问许可。
+
+## 单独的持续质量companion：Job journal读取
+
+[真实失败与RED记录](s14-02a-job-journal-2026-11-28.md)记录4ce源码的原macOS3.14取消控制测试真实FAILURE，
+不是超时或新inspect测试，后来自动取消另记。原异常没有inner文件／inode trace，不宣称根因已确认。
+先实际冻结6239889的[窄合同](../contracts/job-journal-unlinked-read-conflict-v1.md)及ADR0054，
+再在产品未改的2fd源码取得34tests=31PASS/3FAIL的确定性远端RED，才实现候选修复。
+
+这项[#119](https://github.com/Darrenus/tickwitness/issues/119)属于既有持续质量容量，不增加S14专项32h或挪用余16h，
+与唯一活动02a功能切片分列。只允许固定optional journal的readonly预检在REG/nlink0且named实际ENOENT时给原conflict9；
+writer、mandatory、替换、alias／type和其他IO仍strict3。不放宽取消等待，不重启Job或研究。
+当前修正head完整GREEN／owner接受仍PENDING，早期4ce/2fd不能充当通过；原测试仅加失败traceback，不改断言。
 
 ## 原容量与未承诺工作
 

@@ -114,18 +114,17 @@ def test_real_commit_journal_disappearance_is_an_explicit_read_conflict(
     original = queued(value)
     history = value.store.events(value.spec.spec_id)
     reader = SqliteJobStore(value.root, create=False)
-    with real_journal(value.root) as writer:
-        with monkeypatch.context() as patch:
-            observed = commit_at_boundary(patch, value.root, writer, phase)
-            try:
-                with pytest.raises(JobConflictError, match="read is busy; retry read") as caught:
-                    getattr(reader, method)(value.spec.spec_id)
-            finally:
-                assert_preflight_closed(observed)
-                assert observed["commits"] == 1 and not writer.in_transaction
-                assert tree(value.root) == observed["after_commit"]
-                if phase == "fstat":
-                    assert observed["zero_link_verified"]
+    with real_journal(value.root) as writer, monkeypatch.context() as patch:
+        observed = commit_at_boundary(patch, value.root, writer, phase)
+        try:
+            with pytest.raises(JobConflictError, match="read is busy; retry read") as caught:
+                getattr(reader, method)(value.spec.spec_id)
+        finally:
+            assert_preflight_closed(observed)
+            assert observed["commits"] == 1 and not writer.in_transaction
+            assert tree(value.root) == observed["after_commit"]
+            if phase == "fstat":
+                assert observed["zero_link_verified"]
     cause = caught.value.__cause__
     assert isinstance(cause, FileNotFoundError)
     assert cause.errno == errno.ENOENT and cause.filename == JOURNAL

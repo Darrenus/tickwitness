@@ -140,11 +140,21 @@ S14-02a／#41按[检查合同](contracts/inspection-absence-context-v1.md)及
 增加reason=inspection_evidence_not_found、command、requested_id和固定lookup；实际已知时才有resource_id。
 缺依赖dataset的resource_id来自已验证protocol的真实get入参，构造失败不猜ID，不解析message。
 
-这两个命令不是SDK v1的新方法，不改变infra或领域语义。检查有效reservation但没有outcome仍成功
+F02这两个命令不是SDK v1的新方法，本身不改变infra或领域语义；下述Job质量companion单独记录。检查有效reservation但没有outcome仍成功
 reserved_unfinalized、budget_consumed=true；CAS orphan不能证明未执行或预算可用，outcome CAS缺失仍完整性拒绝。
 其他权限、IO、不安全或损坏按既有分类拒绝，没有新增repair、retry、退款、确认访问或重跑许可。
 inspect-experiment允许已有SQLite mode=ro访问；其catalog WAL/SHM正常活动不等于绝无文件系统写入。
 不要把baseline无SQLite profile套到这个命令，也不要删除live sidecar。原协议、用户ledger及已提交结果保持。
+
+### Job journal只读竞态的质量companion
+
+[实际失败／确定性RED](planning/s14-02a-job-journal-2026-11-28.md)与
+[先冻结的修正合同](contracts/job-journal-unlinked-read-conflict-v1.md)单独追踪#119。
+原macOS取消测试的inner异常信息缺失，不能宣称已确认其具体文件；真实COMMIT-after-open回归已证明可复现缺口。
+候选只在fixed optional journal的readonly预检发现REG/nlink0且named实际ENOENT时返回原job_conflict／exit9，
+不给SQLite观察或自动重试。原有限窗口内可以重新读取并完整校验；writer、mandatory、替换／alias／类型及其他IO仍拒绝。
+不删journal、不重建catalog、不扩大期限或发起Job／研究重跑。修正head的完整GREEN／owner接受仍PENDING，
+不能把原31PASS/3FAIL或其他source绿色当当前验收；M1及外部真人门保持关闭／PENDING。
 
 ## HTTP/MCP 入口需求与当前决定
 
