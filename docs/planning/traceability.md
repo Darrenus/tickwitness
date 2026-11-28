@@ -25,7 +25,7 @@
 
 S13-01三模式及威胁模型已随PR114实际接受。S13-02先实际推送[参考合同](../contracts/restricted-reference-v1.md)／[ADR0045](../adr/0045-restricted-reference-qualification.md)冻结环境／机制／数值，再实现内部控制后端与固定合成负例；宿主事实、实际负例与M1产品启用分别判定，不新增SDK模式开关或研究权限。原S13专项10+16+8=34h和持续质量容量不变；原协议预算及5／8／11槽、golden／PR94不重置或退款。既有安全解析／Job／SDK测试不构成本轮隔离攻击资格；本候选远端检查、owner接受、独立安全复核与外部真人研究复验分别记录。独立安全复核尚未完成，外部真人0／0／PENDING及实际自有案例空登记保持，不能以文档或CI成功计作采用。
 
-2026-11-27 PR116接受后：owner已接受源码`9901edd16450d65c8a483f91912cd6108475932e`的有界准备及CI维护，
+2026-11-27 PR116接受后历史快照（其首8h／余24h状态已由上方S14当前记录取代）：owner已接受源码`9901edd16450d65c8a483f91912cd6108475932e`的有界准备及CI维护，
 由Darrenus于23:06:02 Asia/Singapore正常合并为`4189fbe126d9447b39ba8f5981a5f5eeebb2e2eb`。
 #39已按已接受准备范围实际关闭，reviewer UNASSIGNED／独立安全NOT_PERFORMED、#24真人0/0/PENDING、
 空案例／无激活窗口仍是继续依赖。[S14](sprint-14-status.md)选原32h核心fallback中的首8h，余24h未承诺；

@@ -1,13 +1,16 @@
 # 分版本支持范围与恢复政策
 
-当前接受，2026-11-27：owner已接受源码`9901edd16450d65c8a483f91912cd6108475932e`的有界S13-03准备及CI维护；
-[PR116](https://github.com/Darrenus/tickwitness/pull/116)由Darrenus于2026-11-27T15:06:02Z
-（23:06:02 Asia/Singapore）正常合并为`4189fbe126d9447b39ba8f5981a5f5eeebb2e2eb`。
-#39已按准备交付范围实际关闭；独立安全reviewer UNASSIGNED／NOT_PERFORMED、#24外部真人0/0/PENDING、
-空自有案例及没有激活／复用窗口继续保留。接受不提供beta、M1产品启用或新执行权限。
+当前接受，2026-11-28：owner已接受S14-01a基线离线诊断源码`09dc19e0696359a18cbb1c7e930871f9b35a133e`，
+[PR117](https://github.com/Darrenus/tickwitness/pull/117)由Darrenus于2026-11-28T03:52:43Z
+（11:52:43 Asia/Singapore）正常合并为`484fab84f78c55ed7ac1bdfd3cb14af93cf8d1b6`。
+#40仅首8h预测范围接受，父项仍OPEN，余4h未承诺且不并行开发。上游PR116／#39已按准备范围接受，
+独立安全reviewerUNASSIGNED／NOT_PERFORMED、#24外部真人0/0/PENDING、空案例和无激活／复用窗口保留。
+软件接受不提供beta、M1产品启用或新执行权限。
 
-[S14](planning/sprint-14-status.md)选择原32h中的8h基线离线缺件诊断，其余24h未承诺，MCP／HTTP仍DEFER。
-本轮候选尚未接受，新head检查PENDING，不借用已接受990／4189的结果；当前可用行为仍以已接受源码及原合同为准。
+[S14](planning/sprint-14-status.md)原32h=首8h已接受＋S14-02a／#41的8h已选择＋16h未承诺
+（父项01余4＋02余4＋03原8）；MCP／HTTP仍DEFER、已核验需求UNKNOWN。
+仅[PR118](https://github.com/Darrenus/tickwitness/pull/118)新切片的当前head远端验收／owner接受PENDING，
+不借用09／484或其他旧头结果；已接受baseline与候选inspect上下文分开，不宣称新发行。
 
 以下PR115接受及S13-03准备进行中表述为PR116接受前的历史快照；其产品关闭／人类未完成限制仍然成立。
 
@@ -147,8 +150,9 @@ inspect-experiment允许已有SQLite mode=ro访问；其catalog WAL/SHM正常活
 
 项目路线图中已有 HTTP/MCP 的规划兴趣；它与可核验的“现有 CLI/SDK 阻塞了某个真实任务”是两类证据。截至本页更新，未提供这样的已核验案例记录，阻塞任务、替代成本和参与者确认仍为 **UNKNOWN / 证据不足**，不是已证明没有需求。当前决定是 **DEFER**，保留 S14 或以后条件性入口，本轮不实现。
 
-本轮因此执行原S14的核心fallback：仅首8h已选择，余24h（父项01余4h＋02预测12h＋03预测8h）
-未承诺，不与MCP／HTTP叠加32h或虚构新功能填满容量。重新选择transport前仍需真实需求证据、独立范围和验收。
+本轮执行原S14的核心fallback：首8h已接受、S14-02a的8h已选择，原32h中余16h
+（父项01余4h＋02余4h＋03原8h）未承诺，不叠加transport或虚构功能填满容量。
+这些都是预测，不是实际工时；重新选择transport前仍需真实需求证据、独立范围和验收。
 
 真实请求到来时，分别记录匿名请求者/角色、日期、具体任务及合法案例、当前工作流、CLI/SDK 替代及其实际阻碍、所需最小入口、原始来源/证据、参与和公开记录同意、投入/限制、评审决定及理由。无记录时不填虚构请求或成功数；规划偏好和维护者推测不改写成外部用户需求。普通文档更新也不授权自动向他人联系。
 
