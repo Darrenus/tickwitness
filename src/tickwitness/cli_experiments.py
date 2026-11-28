@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
+from tickwitness.application.data_access import MAX_DATA_BYTES
+from tickwitness.application.datasets import DatasetRecord
 from tickwitness.application.experiments import (
     export_run,
     freeze_experiment,
@@ -18,10 +21,14 @@ from tickwitness.application.experiments import (
 )
 from tickwitness.domain.evidence.run_records import EvidenceValidationError, identity, parse
 from tickwitness.domain.evidence.verification import verify_artifacts
-from tickwitness.infrastructure.attempt_ledger import LocalAttemptLedger
+from tickwitness.infrastructure.attempt_ledger import AttemptNotFoundError, LocalAttemptLedger
 from tickwitness.infrastructure.evidence_bundles import export_bundle, read_bundle
-from tickwitness.infrastructure.executable_registry import LocalExecutableProtocolRegistry
-from tickwitness.infrastructure.local_dataset_store import LocalDatasetStore
+from tickwitness.infrastructure.executable_registry import (
+    ExecutableProtocolNotFoundError,
+    ExecutableProtocolRecord,
+    LocalExecutableProtocolRegistry,
+)
+from tickwitness.infrastructure.local_dataset_store import DatasetNotFoundError, LocalDatasetStore
 from tickwitness.infrastructure.safe_input import read_regular_file
 from tickwitness.infrastructure.subprocess_replay import SubprocessReplayAdapter
 
@@ -36,6 +43,105 @@ COMMANDS = frozenset(
         "verify-evidence",
     }
 )
+
+
+InspectionCommand = Literal["inspect-experiment", "inspect-attempt"]
+InspectionLookup = Literal[
+    "executable_registry",
+    "dataset_store",
+    "executable_protocol",
+    "referenced_dataset",
+    "attempt_ledger",
+    "committed_attempt",
+]
+InspectionCode = Literal["research_evidence_not_found", "dataset_not_found"]
+
+
+class InspectionNotFoundError(ValueError):
+    """Add actual lookup context without upgrading a backend's absence claim."""
+
+    reason = "inspection_evidence_not_found"
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: InspectionCode,
+        command: InspectionCommand,
+        requested_id: str,
+        lookup: InspectionLookup,
+        resource_id: str | None,
+    ) -> None:
+        self.code = code
+        self.command = command
+        self.requested_id = requested_id
+        self.lookup = lookup
+        self.resource_id = resource_id
+        super().__init__(message)
+
+
+def _inspection_lookup[T](
+    operation: Callable[[], T],
+    *,
+    not_found: (
+        type[ExecutableProtocolNotFoundError]
+        | type[DatasetNotFoundError]
+        | type[AttemptNotFoundError]
+    ),
+    code: InspectionCode,
+    command: InspectionCommand,
+    requested_id: str,
+    lookup: InspectionLookup,
+    resource_id: str | None = None,
+) -> T:
+    try:
+        return operation()
+    except not_found as error:
+        raise InspectionNotFoundError(
+            str(error),
+            code=code,
+            command=command,
+            requested_id=requested_id,
+            lookup=lookup,
+            resource_id=resource_id,
+        ) from error
+
+
+@dataclass(frozen=True, slots=True)
+class _InspectionRegistry:
+    source: LocalExecutableProtocolRegistry
+    requested_id: str
+
+    def get(self, protocol_id: str) -> ExecutableProtocolRecord:
+        return _inspection_lookup(
+            lambda: self.source.get(protocol_id),
+            not_found=ExecutableProtocolNotFoundError,
+            code="research_evidence_not_found",
+            command="inspect-experiment",
+            requested_id=self.requested_id,
+            lookup="executable_protocol",
+            resource_id=protocol_id,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _InspectionDatasets:
+    source: LocalDatasetStore
+    requested_id: str
+
+    def get(self, dataset_id: str) -> DatasetRecord:
+        return _inspection_lookup(
+            lambda: self.source.get(dataset_id),
+            not_found=DatasetNotFoundError,
+            code="dataset_not_found",
+            command="inspect-experiment",
+            requested_id=self.requested_id,
+            lookup="referenced_dataset",
+            resource_id=dataset_id,
+        )
+
+    def read_normalized(self, dataset_id: str, *, max_bytes: int = MAX_DATA_BYTES) -> bytes:
+        return self.source.read_normalized(dataset_id, max_bytes=max_bytes)
 
 
 def _content_identity(value: str) -> str:
@@ -103,10 +209,26 @@ def execute(arguments: argparse.Namespace) -> tuple[dict[str, object], str]:
         )
         return asdict(receipt), receipt.protocol_id
     if arguments.command == "inspect-experiment":
+        registry = _inspection_lookup(
+            lambda: LocalExecutableProtocolRegistry(arguments.registry, create=False),
+            not_found=ExecutableProtocolNotFoundError,
+            code="research_evidence_not_found",
+            command="inspect-experiment",
+            requested_id=arguments.protocol_id,
+            lookup="executable_registry",
+        )
+        datasets = _inspection_lookup(
+            lambda: LocalDatasetStore(arguments.store, create=False),
+            not_found=DatasetNotFoundError,
+            code="dataset_not_found",
+            command="inspect-experiment",
+            requested_id=arguments.protocol_id,
+            lookup="dataset_store",
+        )
         receipt = inspect_experiment(
             arguments.protocol_id,
-            LocalExecutableProtocolRegistry(arguments.registry, create=False),
-            LocalDatasetStore(arguments.store, create=False),
+            _InspectionRegistry(registry, arguments.protocol_id),
+            _InspectionDatasets(datasets, arguments.protocol_id),
         )
         return asdict(receipt), receipt.protocol_id
     if arguments.command == "replay-protocol":
@@ -124,9 +246,24 @@ def execute(arguments: argparse.Namespace) -> tuple[dict[str, object], str]:
         )
         return asdict(submission), submission.run_id
     if arguments.command == "inspect-attempt":
-        return inspect_attempt(
-            arguments.attempt_id, LocalAttemptLedger(arguments.runs, create=False)
-        ), arguments.attempt_id
+        ledger = _inspection_lookup(
+            lambda: LocalAttemptLedger(arguments.runs, create=False),
+            not_found=AttemptNotFoundError,
+            code="research_evidence_not_found",
+            command="inspect-attempt",
+            requested_id=arguments.attempt_id,
+            lookup="attempt_ledger",
+        )
+        inspected = _inspection_lookup(
+            lambda: inspect_attempt(arguments.attempt_id, ledger),
+            not_found=AttemptNotFoundError,
+            code="research_evidence_not_found",
+            command="inspect-attempt",
+            requested_id=arguments.attempt_id,
+            lookup="committed_attempt",
+            resource_id=arguments.attempt_id,
+        )
+        return inspected, arguments.attempt_id
     if arguments.command == "verify-evidence":
         result = verify_package(read_bundle(arguments.directory))
         return result, cast("str", result["bundle_id"])

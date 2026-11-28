@@ -120,16 +120,28 @@ SDK contract v1 的五方法、七名称、类型和错误按 [SDK 合同](contr
 
 维护 BLOCKED、Job read conflict、研究 `reserved_unfinalized` 和普通 SDK 存储错误不是同一种状态。只读检查不会替你发起研究重试；维护 apply 的 PARTIAL/IO_UNCONFIRMED 不能报告 APPLIED。相关操作按各自 CLI 合同处理，不能从一个错误码推断另一个子系统的恢复权限。
 
-### 计划中的baseline离线缺件诊断
+### 已接受的baseline离线缺件诊断
 
-S14-01a／#40按[诊断合同](contracts/baseline-evidence-diagnostics-v1.md)及
-[ADR0052](adr/0052-baseline-evidence-missing-object-diagnostics.md)准备改进现有`verify-evidence`，
-尚未获得新候选验收／发行资格。目标保留`research_store_integrity_or_io_failure`和exit3，
-仅在有效manifest已声明的CAS leaf真实ENOENT时增加`reason=bundle_object_missing`、`role`、排序的`roles`及`sha256`。
-有效回执、bundle格式及SDK不改；缺root仍exit4，缺manifest／容器、权限、不安全路径、额外项或损坏仍为原拒绝，
-不补造角色、摘要或成功。实际来源见[baseline reader](../src/tickwitness/infrastructure/evidence_bundles.py)。
-它不修复／下载／搜索其他store，也不调用engine、SQLite、reservation、replay或确认访问。
-typed inspect-experiment／attempt缺失上下文仅是后续候选证据，未Ready／未实现，不是此切片已提供能力。
+S14-01a首切片已随[PR117](https://github.com/Darrenus/tickwitness/pull/117)接受：source09正常合并484，
+其当前源码实际16/16 Engineering、focused128、transport91及Docs162/984通过，legacy REFUSED单独保留。
+[baseline合同](contracts/baseline-evidence-diagnostics-v1.md)／[ADR0052](adr/0052-baseline-evidence-missing-object-diagnostics.md)
+保留research_store_integrity_or_io_failure和exit3，仅对有效manifest声明CAS leaf真实ENOENT增加
+reason=bundle_object_missing、role、排序roles及sha256。有效回执、格式、SDK及其他拒绝不变。
+它不补件、下载、搜索其他store、engine、SQLite、reservation、replay或确认访问；不代表新release。
+
+### 当前候选的inspect缺失上下文
+
+S14-02a／#41按[检查合同](contracts/inspection-absence-context-v1.md)及
+[ADR0053](adr/0053-inspection-absence-context.md)先实际冻结64cca6f，再实现已有两个inspect命令的诊断。
+新head远端验收及owner接受仍PENDING。错误保留原research_evidence_not_found或dataset_not_found／exit4，
+增加reason=inspection_evidence_not_found、command、requested_id和固定lookup；实际已知时才有resource_id。
+缺依赖dataset的resource_id来自已验证protocol的真实get入参，构造失败不猜ID，不解析message。
+
+这两个命令不是SDK v1的新方法，不改变infra或领域语义。检查有效reservation但没有outcome仍成功
+reserved_unfinalized、budget_consumed=true；CAS orphan不能证明未执行或预算可用，outcome CAS缺失仍完整性拒绝。
+其他权限、IO、不安全或损坏按既有分类拒绝，没有新增repair、retry、退款、确认访问或重跑许可。
+inspect-experiment允许已有SQLite mode=ro访问；其catalog WAL/SHM正常活动不等于绝无文件系统写入。
+不要把baseline无SQLite profile套到这个命令，也不要删除live sidecar。原协议、用户ledger及已提交结果保持。
 
 ## HTTP/MCP 入口需求与当前决定
 

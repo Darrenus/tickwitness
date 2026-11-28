@@ -1,13 +1,14 @@
 # TickWitness 需求与验收追踪
 
-状态：滚动维护，2026-11-27 Asia/Singapore。以下是产品目标、领域规则、故事与目标验收证据的映射，不表示整行能力已实现。实际工程状态见各Sprint记录、[已接受SDK与接入状态](sprint-12-status.md)、[执行信任与隔离状态](sprint-13-status.md)及GitHub Issues。规则定义以[领域模型](../architecture/domain-model.md)及[质量策略](../quality/quality-strategy.md)为准。
+状态：滚动维护，2026-11-28 Asia/Singapore。以下是产品目标、领域规则、故事与目标验收证据的映射，不表示整行能力已实现。实际工程状态见各Sprint记录、[已接受SDK与接入状态](sprint-12-status.md)、[执行信任与隔离状态](sprint-13-status.md)及GitHub Issues。规则定义以[领域模型](../architecture/domain-model.md)及[质量策略](../quality/quality-strategy.md)为准。
 
 | 用户目标或质量规则 | 领域责任 | 首批故事 | 发布证据 |
 | --- | --- | --- | --- |
 | 对研究问题形成统一语言 | 研究契约 / 实验注册 | S01-03、S02-03 | 真实问题记录、命题/协议边界、正反及未知案例 |
 | 不伪造接收时点和缺失历史 Q-01/Q-02 | 数据证据 | S02-01、S03-01 | snapshot/delta/缺口/未知时间夹具和拒绝路径 |
 | 不覆盖原始证据 Q-08 | 数据证据 / 证据包 | S02-02、S04-02 | 幂等导入、崩溃边界、哈希和完整性验证 |
-| 离线缺件可定位且不改变原件 | 证据 / infrastructure reader / CLI | S14-01 | [baseline诊断合同](../contracts/baseline-evidence-diagnostics-v1.md)／[ADR0052](../adr/0052-baseline-evidence-missing-object-diagnostics.md)、[S14状态](sprint-14-status.md)：首8h目标是对真实缺失的manifest声明CAS leaf增加role(s)／SHA；原code／exit3及有效回执不变，缺manifest／权限／不安全／损坏仍拒绝；新head远端验收及owner接受PENDING |
+| 离线缺件可定位且不改变原件 | 证据 / infrastructure reader / CLI | S14-01 | [baseline合同](../contracts/baseline-evidence-diagnostics-v1.md)／ADR0052、[S14状态](sprint-14-status.md)：首8h随PR117/source09→merge484实际接受；原code/exit3/回执及拒绝保留，#40父项余4h未承诺；不继承到后续head |
+| 检查错误可关联真实请求与依赖 | CLI driving adapter / 既有应用读取服务 | S14-02 | [检查上下文合同](../contracts/inspection-absence-context-v1.md)／[ADR0053](../adr/0053-inspection-absence-context.md)：先实际冻结64cca6f；六lookup原code/exit4、真实引用ID、原读取顺序、unfinalized预算true及非NotFound拒绝；新head远端／owner接受PENDING，SDK不扩展 |
 | L2解释与新增压力分开 Q-03/Q-04 | 研究契约 / 反例搜索 | S05-01、S05-02、S06-01 | 场景类别合法性、同观测解释配对与未知边界 |
 | 不把失败当反例或未发现 Q-05/Q-12 | 判定 / 作业 | S06-02、S07-02、S07-03、S10-03 | execution_status / scoped findings / completeness 三字段与负例 |
 | 反例可以定位和复验 Q-06 | 回放 / 证据 | S03-02、S05-03、S08-01 | 首次分歧、输入订单账本、独立 verifier receipt |
