@@ -48,6 +48,25 @@ jobs:
           path: /tmp/job-journal-unlink.xml
           if-no-files-found: warn
           retention-days: 30
+      - name: Regress Job result refusal context before the full runtime matrix
+        env:
+          PYTHONPATH: tests:tests/application:tests/domain:tests/infrastructure:tests/integration
+        run: >-
+          uv run --locked pytest -q
+          tests/test_job_result_diagnostics_cli.py
+          tests/test_jobs_cli.py
+          tests/infrastructure/test_sqlite_job_store.py
+          tests/domain/test_job_contracts.py
+          tests/infrastructure/test_job_journal_races.py
+          --junitxml=/tmp/job-result-refusal-context.xml
+      - name: Preserve actual Job result refusal regression results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: job-result-refusal-context-${{ github.sha }}-${{ github.run_attempt }}
+          path: /tmp/job-result-refusal-context.xml
+          if-no-files-found: warn
+          retention-days: 30
       - name: Regress baseline offline diagnostics before the full runtime matrix
         env:
           PYTHONPATH: tests:tests/application:tests/domain:tests/infrastructure:tests/integration

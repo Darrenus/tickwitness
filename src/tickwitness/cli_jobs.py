@@ -55,6 +55,18 @@ COMMANDS = frozenset(
 type Row = dict[str, object]
 
 
+class JobResultNotSucceededError(JobConflictError):
+    """Attribute only the existing refusal after a fully validated Job read."""
+
+    reason = "job_result_not_succeeded"
+    command = "read-job-result"
+
+    def __init__(self, requested_job_id: str, *, stored_state: str) -> None:
+        super().__init__("Only a succeeded Job has a readable result")
+        self.requested_job_id = requested_job_id
+        self.stored_state = stored_state
+
+
 def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     submit = commands.add_parser(
         "submit-comparison-job", help="Queue one pinned read-only comparison"
@@ -254,7 +266,9 @@ def execute(arguments: argparse.Namespace) -> Row | str:
     if arguments.command == "read-job-result":
         row = store.get(arguments.job_id)
         if row["state"] != "SUCCEEDED":
-            raise JobConflictError("Only a succeeded Job has a readable result")
+            raise JobResultNotSucceededError(
+                arguments.job_id, stored_state=cast("str", row["state"])
+            )
         raw = store.result(arguments.job_id)
         if raw is None:
             raise JobConflictError("Job result is unavailable")

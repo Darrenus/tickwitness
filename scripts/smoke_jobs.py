@@ -8,7 +8,9 @@ workers are declared trusted transport fixtures; they never invent native result
 import argparse
 import hashlib
 import json
+import os
 import shutil
+import stat
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -80,6 +82,45 @@ def guard_catalog(catalog):
             forbidden()
         return original_sqlite_connect(database, *args, **kwargs)
     sqlite3.connect = connect
+"""
+_RESULT_GUARD = """
+import subprocess
+from urllib.parse import quote
+from tickwitness import cli_jobs
+from tickwitness.infrastructure import job_supervisor
+from tickwitness.infrastructure.sqlite_job_store import SqliteJobStore
+result_read_attempts = []
+def result_read_forbidden(*args, **kwargs):
+    result_read_attempts.append('Job/research mutation, worker, network or non-readonly SQLite')
+    raise AssertionError('Result inspection must remain read-only')
+class NoResultWorker(subprocess.Popen):
+    def __new__(cls, *args, **kwargs):
+        return result_read_forbidden(*args, **kwargs)
+subprocess.Popen = NoResultWorker
+socket.socket = result_read_forbidden
+socket.create_connection = result_read_forbidden
+socket.socketpair = result_read_forbidden
+for name in ('coordinator', 'submit', 'claim', 'assert_active', 'heartbeat', 'complete',
+             'fail', 'mark_lost', 'reconcile_orphans', '_ownership', '_change',
+             '_transaction', '_commit'):
+    setattr(SqliteJobStore, name, result_read_forbidden)
+original_job_init = SqliteJobStore.__init__
+def readonly_job_init(self, *args, **kwargs):
+    if kwargs.get('create', True) is not False:
+        result_read_forbidden()
+    return original_job_init(self, *args, **kwargs)
+SqliteJobStore.__init__ = readonly_job_init
+cli_jobs.run_job = result_read_forbidden
+job_supervisor.run_job = result_read_forbidden
+def guard_result_catalog(catalog):
+    allowed = 'file:' + quote(os.path.abspath(str(Path(catalog) / 'catalog.sqlite3')),
+                              safe='/') + '?mode=ro'
+    def connect(database, *args, **kwargs):
+        if database != allowed or kwargs.get('uri') is not True:
+            result_read_forbidden()
+        return original_sqlite_connect(database, *args, **kwargs)
+    sqlite3.connect = connect
+    sqlite3.dbapi2.connect = connect
 """
 _RUNTIME = """
 import json, sys
@@ -314,6 +355,89 @@ def _tree(root: Path) -> dict[str, str]:
     return result
 
 
+def _catalog_inventory(root: Path) -> dict:
+    """Read the known flat Catalog without following links or omitting any sidecar."""
+    entries, errors = {}, []
+    directory = None
+    try:
+        directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        entries["."] = {"type": stat.S_IFDIR}
+        with os.scandir(directory) as children:
+            names = sorted(child.name for child in children)
+        for name in names:
+            descriptor = None
+            try:
+                info = os.stat(name, dir_fd=directory, follow_symlinks=False)
+                entry = {"type": stat.S_IFMT(info.st_mode)}
+                entries[name] = entry
+                if not stat.S_ISREG(info.st_mode):
+                    errors.append({"path": name, "operation": "type", "actual": entry["type"]})
+                    continue
+                descriptor = os.open(
+                    name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory
+                )
+                opened = os.fstat(descriptor)
+                if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (
+                    info.st_dev,
+                    info.st_ino,
+                ):
+                    errors.append({"path": name, "operation": "opened_identity_or_type"})
+                    continue
+                with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                    data = stream.read()
+                entry.update(size=info.st_size, sha256=_sha(data))
+                if len(data) != info.st_size:
+                    errors.append({"path": name, "operation": "changed_size"})
+            except OSError as error:
+                errors.append({"path": name, "errno": error.errno, "message": str(error)})
+            finally:
+                if descriptor is not None:
+                    try:
+                        os.close(descriptor)
+                    except OSError as error:
+                        errors.append({"path": name, "operation": "close", "errno": error.errno})
+    except OSError as error:
+        errors.append({"path": ".", "operation": "enumerate", "errno": error.errno})
+    finally:
+        if directory is not None:
+            try:
+                os.close(directory)
+            except OSError as error:
+                errors.append({"path": ".", "operation": "close", "errno": error.errno})
+    return {"entries": entries, "errors": errors}
+
+
+def _catalog_comparison(before: dict, after: dict) -> dict:
+    initial, final = before["entries"], after["entries"]
+    return {
+        "unchanged": initial == final and not before["errors"] and not after["errors"],
+        "before": before,
+        "after": after,
+        "added": sorted(final.keys() - initial.keys()),
+        "removed": sorted(initial.keys() - final.keys()),
+        "changed": [
+            name for name in sorted(initial.keys() & final.keys()) if initial[name] != final[name]
+        ],
+    }
+
+
+def _captured_text(value: str | bytes | None) -> str:
+    return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value or ""
+
+
+def _result_refusal(job_id: str, state: str) -> dict:
+    return {
+        "error": {
+            "code": "job_conflict",
+            "message": "Only a succeeded Job has a readable result",
+            "reason": "job_result_not_succeeded",
+            "command": "read-job-result",
+            "requested_job_id": job_id,
+            "stored_state": state,
+        }
+    }
+
+
 @contextmanager
 def _workspace(records: Path, report: Path) -> Iterator[Path]:
     with TemporaryDirectory(prefix="tickwitness-jobs-") as temporary:
@@ -392,6 +516,7 @@ def main() -> None:
         assert protected == original_tree
         catalog = root / "job-catalog"
         calls = []
+        result_read_checks = []
 
         def invoke(entry, command, *, expected=0):
             completed = subprocess.run(
@@ -425,7 +550,135 @@ def main() -> None:
             assert _tree(upstream) == protected
             return json.loads(completed.stdout if expected == 0 else completed.stderr)
 
-        def run(*command, expected=0):
+        def invoke_result(entry, command, *, expected, expected_receipt):
+            initial = _catalog_inventory(catalog)
+            transport_error = None
+            try:
+                completed = subprocess.run(
+                    [verifier, "-I", "-B", *entry, *command],
+                    cwd=cwd,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=120,
+                )
+                exit_code, stdout, stderr = (
+                    completed.returncode,
+                    completed.stdout,
+                    completed.stderr,
+                )
+            except subprocess.TimeoutExpired as error:
+                exit_code = None
+                stdout, stderr = _captured_text(error.stdout), _captured_text(error.stderr)
+                transport_error = {"type": type(error).__name__, "timeout": error.timeout}
+            except OSError as error:
+                exit_code, stdout, stderr = None, "", ""
+                transport_error = {
+                    "type": type(error).__name__,
+                    "errno": error.errno,
+                    "message": str(error),
+                }
+            record = {
+                "executable": verifier,
+                "entry": entry,
+                "command": list(command),
+                "exit_code": exit_code,
+                "expected_exit_code": expected,
+                "stdout": stdout,
+                "stderr": stderr,
+                "transport_error": transport_error,
+            }
+            calls.append(record)
+            transcript = transcripts / f"{len(calls):04d}.json"
+            transcript.write_bytes(_canonical(record))
+            # Preserve the actual child transcript first; collect all observations
+            # before deciding whether the call or its persistent inventory failed.
+            comparison = _catalog_comparison(initial, _catalog_inventory(catalog))
+            upstream_error = None
+            try:
+                upstream_unchanged = _tree(upstream) == protected
+            except (AssertionError, OSError) as error:
+                upstream_unchanged = False
+                upstream_error = {"type": type(error).__name__, "message": str(error)}
+            record["result_read_only"] = {
+                "catalog": comparison,
+                "upstream_unchanged": upstream_unchanged,
+                "upstream_error": upstream_error,
+                "sqlite_target_mode_ro_only": True,
+                "job_mutation_coordinator_and_worker_guarded": True,
+                "no_catalog_sidecars_excluded": True,
+            }
+            transcript.write_bytes(_canonical(record))
+            failures = []
+            if transport_error is not None or exit_code != expected:
+                failures.append("child_did_not_complete_with_expected_exit")
+            unexpected_stream = stderr if expected == 0 else stdout
+            if unexpected_stream:
+                failures.append("unexpected_output_stream")
+            if len(stdout.encode()) > 32 * 1024 * 1024 or len(stderr.encode()) > 64 * 1024:
+                failures.append("existing_transcript_limit_exceeded")
+            if not comparison["unchanged"]:
+                failures.append("catalog_inventory_changed_or_unreadable")
+            if not upstream_unchanged:
+                failures.append("upstream_changed_or_unreadable")
+            payload = None
+            try:
+                payload = json.loads(stdout if expected == 0 else stderr)
+            except ValueError as error:
+                failures.append({"payload_error": type(error).__name__, "message": str(error)})
+            if expected_receipt is not None and payload != expected_receipt:
+                failures.append("job_result_refusal_context_differed")
+            if failures:
+                raise RuntimeError(
+                    "Installed Job result read failed: "
+                    + json.dumps(
+                        {
+                            "call_index": len(calls),
+                            "exit_code": exit_code,
+                            "expected_exit_code": expected,
+                            "transport_error": transport_error,
+                            "failures": failures,
+                            "read_only": record["result_read_only"],
+                            "stdout_prefix": stdout[:4096],
+                            "stdout_sha256": _sha(stdout.encode()),
+                            "stderr_prefix": stderr[:4096],
+                            "stderr_sha256": _sha(stderr.encode()),
+                            "full_transcript": str(transcript.relative_to(root)),
+                        },
+                        sort_keys=True,
+                    )
+                )
+            observation = {
+                "kind": "installed_job_result_read_observation_v1",
+                "call_index": len(calls),
+                "job_id": command[1],
+                "exit_code": exit_code,
+                "expected_exit_code": expected,
+                "stored_state": None
+                if expected_receipt is None
+                else expected_receipt["error"]["stored_state"],
+                "refusal": payload if expected else None,
+                "result_sha256": None if expected else _sha(stdout.encode()),
+                "catalog_and_upstream_unchanged": True,
+            }
+            result_read_checks.append(observation)
+            print(json.dumps(observation, sort_keys=True))
+            return payload
+
+        def run(*command, expected=0, stored_state=None):
+            if command[0] == "read-job-result":
+                entry = _GUARD + _RESULT_GUARD + (
+                    "\nguard_result_catalog(Path(sys.argv[sys.argv.index('--jobs')+1]))\n"
+                    "try:\n    status = main(sys.argv[1:])\n"
+                    "finally:\n    assert not result_read_attempts, result_read_attempts\n"
+                    "raise SystemExit(status)\n"
+                )
+                expected_receipt = (
+                    None if stored_state is None else _result_refusal(command[1], stored_state)
+                )
+                return invoke_result(
+                    ["-c", entry], command, expected=expected, expected_receipt=expected_receipt
+                )
             entry = _GUARD + (
                 "\nguard_catalog(Path(sys.argv[sys.argv.index('--jobs')+1])); "
                 "raise SystemExit(main(sys.argv[1:]))\n"
@@ -525,8 +778,10 @@ def main() -> None:
             return queued["job_id"]
 
         main_job = submit("main", 30)
-        no_result = run("read-job-result", main_job, "--jobs", str(catalog), expected=9)
-        assert no_result["error"]["code"] == "job_conflict"
+        no_result = run(
+            "read-job-result", main_job, "--jobs", str(catalog), expected=9, stored_state="QUEUED"
+        )
+        assert no_result == _result_refusal(main_job, "QUEUED")
         finished = run("run-job", main_job, "--jobs", str(catalog))
         _view(finished, state="FAILED" if arguments.core_only else "SUCCEEDED")
         assert finished["attempt"]["heartbeat_sequence"] >= 2
@@ -560,8 +815,15 @@ def main() -> None:
         positives = None
         if arguments.core_only:
             assert finished["result_sha256"] is None and finished["failure"] is not None
-            absent = run("read-job-result", main_job, "--jobs", str(catalog), expected=9)
-            assert absent["error"]["code"] == "job_conflict"
+            absent = run(
+                "read-job-result",
+                main_job,
+                "--jobs",
+                str(catalog),
+                expected=9,
+                stored_state="FAILED",
+            )
+            assert absent == _result_refusal(main_job, "FAILED")
         else:
             result = run("read-job-result", main_job, "--jobs", str(catalog))
             assert result == source["lifecycle"]["repeated_best"]
@@ -575,6 +837,7 @@ def main() -> None:
             _view(unknown, state="SUCCEEDED")
             unknown_result = run("read-job-result", unknown_job, "--jobs", str(catalog))
             assert unknown_result == unknown_export
+            assert calls[-1]["stdout"] == _canonical(unknown_result).decode()
             assert unknown_result["report"]["both_false_witnesses"] is None
             assert unknown_result["report"]["reduced_assessment"]["outcome"] == "NOT_EVALUABLE"
             unknown_assessment = unknown_result["report"]["reduced_assessment"]
@@ -692,10 +955,12 @@ def main() -> None:
             _view(resolved, state="SUCCEEDED")
             ack_result = run("read-job-result", ack_job, "--jobs", str(catalog))
             assert ack_result == positives["best"]
+            assert calls[-1]["stdout"] == _canonical(ack_result).decode()
             assert run("run-job", ack_job, "--jobs", str(catalog)) == resolved
             jobs["postcommit_acknowledgement_loss"]["uncertainty"] = uncertain
             jobs["postcommit_acknowledgement_loss"]["resolved"] = resolved
 
+        assert len(result_read_checks) == (2 if arguments.core_only else 4)
         catalog_state = helper(
             _CATALOG,
             str(catalog),
@@ -745,6 +1010,7 @@ def main() -> None:
             "research_before": before,
             "research_after": after,
             "comparison_positive_results": positives,
+            "job_result_read_only_checks": result_read_checks,
             "native_execution": False,
             "native_replayed": False,
             "research_attempts_added": 0,

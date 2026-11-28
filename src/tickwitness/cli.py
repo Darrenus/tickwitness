@@ -35,6 +35,7 @@ from tickwitness.cli_experiments import InspectionNotFoundError
 from tickwitness.cli_experiments import add_commands as add_experiment_commands
 from tickwitness.cli_experiments import execute as execute_experiment_command
 from tickwitness.cli_jobs import COMMANDS as JOB_COMMANDS
+from tickwitness.cli_jobs import JobResultNotSucceededError
 from tickwitness.cli_jobs import add_commands as add_job_commands
 from tickwitness.cli_jobs import execute as execute_job_command
 from tickwitness.cli_queue_execution import COMMANDS as QUEUE_EXECUTION_COMMANDS
@@ -419,6 +420,24 @@ def main(argv: list[str] | None = None) -> int:
             identity = ""
     except JobValidationError as error:
         return _write_error("invalid_job", error, 2)
+    except JobResultNotSucceededError as error:
+        print(
+            json.dumps(
+                {
+                    "error": {
+                        "code": error.code,
+                        "message": str(error),
+                        "reason": error.reason,
+                        "command": error.command,
+                        "requested_job_id": error.requested_job_id,
+                        "stored_state": error.stored_state,
+                    }
+                },
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+        return error.exit_code
     except JobStoreError as error:
         return _write_error(error.code, error, error.exit_code)
     except AlphaValidationError as error:
