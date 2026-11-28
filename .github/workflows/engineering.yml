@@ -33,6 +33,21 @@ jobs:
           bash -n scripts/run_ec2_reference_recovery.sh
           bash -n scripts/run_ec2_reference_recovery_v2.sh
           bash -n scripts/run_ec2_reference_recovery_v3.sh
+      - name: Regress optional Job journal unlink boundaries before runtime checks
+        env:
+          PYTHONPATH: tests:tests/application:tests/domain:tests/infrastructure:tests/integration
+        run: >-
+          uv run --locked pytest -q
+          tests/infrastructure/test_job_journal_races.py
+          --junitxml=/tmp/job-journal-unlink.xml
+      - name: Preserve actual Job journal regression results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: job-journal-unlink-${{ github.sha }}-${{ github.run_attempt }}
+          path: /tmp/job-journal-unlink.xml
+          if-no-files-found: warn
+          retention-days: 30
       - name: Regress baseline offline diagnostics before the full runtime matrix
         env:
           PYTHONPATH: tests:tests/application:tests/domain:tests/infrastructure:tests/integration

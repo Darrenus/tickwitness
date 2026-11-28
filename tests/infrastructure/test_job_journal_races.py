@@ -3,6 +3,7 @@
 import errno
 import os
 import sqlite3
+import stat
 from contextlib import contextmanager
 
 import pytest
@@ -38,10 +39,10 @@ def real_journal(root):
         connection.close()
 
 
-def commit_at_boundary(patch, root, connection, phase):
+def commit_at_boundary(patch, root, connection, phase, *, after_unlink=None, stat_errno=None):
     """Commit at one preflight boundary, then delegate the actual failing syscall."""
-    actual_open, actual_stat = os.open, os.stat
-    observed = {"opened": False, "commits": 0}
+    actual_open, actual_stat, actual_fstat = os.open, os.stat, os.fstat
+    observed = {"opened": False, "commits": 0, "sqlite_connects": 0, "named_failures": []}
 
     def commit():
         assert observed["commits"] == 0
@@ -57,16 +58,37 @@ def commit_at_boundary(patch, root, connection, phase):
                 commit()
             descriptor = actual_open(path, flags, *args, **kwargs)
             observed["opened"] = True
+            observed["descriptor"] = descriptor
+            if phase == "fstat":
+                before = actual_fstat(descriptor)
+                assert stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+                commit()
+                after = actual_fstat(descriptor)
+                assert stat.S_ISREG(after.st_mode) and after.st_nlink == 0
+                assert (before.st_dev, before.st_ino) == (after.st_dev, after.st_ino)
+                with pytest.raises(FileNotFoundError) as missing:
+                    actual_stat(path, dir_fd=kwargs["dir_fd"], follow_symlinks=False)
+                assert missing.value.errno == errno.ENOENT and missing.value.filename == JOURNAL
+                observed["zero_link_verified"] = True
+                if after_unlink is not None:
+                    after_unlink()
+                observed["after_boundary"] = tree(root)
             return descriptor
         return actual_open(path, flags, *args, **kwargs)
 
     def statted(path, *args, **kwargs):
         if path == JOURNAL and kwargs.get("dir_fd") is not None and observed["opened"]:
-            assert phase == "restat"
-            commit()
+            if phase == "restat":
+                commit()
+            elif stat_errno is not None:
+                assert phase == "fstat" and kwargs.get("follow_symlinks") is False
+                error = OSError(stat_errno, "Declared named zero-link journal IO failure", JOURNAL)
+                observed["named_failures"].append(error)
+                raise error
         return actual_stat(path, *args, **kwargs)
 
     def no_sqlite_observation(*args, **kwargs):
+        observed["sqlite_connects"] += 1
         raise AssertionError("A conflicted preflight must not open or yield a SQLite observation")
 
     patch.setattr(os, "open", opened)
@@ -75,7 +97,15 @@ def commit_at_boundary(patch, root, connection, phase):
     return observed
 
 
-@pytest.mark.parametrize("phase", ["open", "restat"])
+def assert_preflight_closed(observed):
+    assert observed["sqlite_connects"] == 0
+    if "descriptor" in observed:
+        with pytest.raises(OSError) as closed:
+            os.fstat(observed["descriptor"])
+        assert closed.value.errno == errno.EBADF
+
+
+@pytest.mark.parametrize("phase", ["open", "restat", "fstat"])
 @pytest.mark.parametrize("method", ["get", "events", "result"])
 def test_real_commit_journal_disappearance_is_an_explicit_read_conflict(
     job_case, monkeypatch, phase, method
@@ -87,10 +117,15 @@ def test_real_commit_journal_disappearance_is_an_explicit_read_conflict(
     with real_journal(value.root) as writer:
         with monkeypatch.context() as patch:
             observed = commit_at_boundary(patch, value.root, writer, phase)
-            with pytest.raises(JobConflictError, match="read is busy; retry read") as caught:
-                getattr(reader, method)(value.spec.spec_id)
-        assert observed["commits"] == 1 and not writer.in_transaction
-        assert tree(value.root) == observed["after_commit"]
+            try:
+                with pytest.raises(JobConflictError, match="read is busy; retry read") as caught:
+                    getattr(reader, method)(value.spec.spec_id)
+            finally:
+                assert_preflight_closed(observed)
+                assert observed["commits"] == 1 and not writer.in_transaction
+                assert tree(value.root) == observed["after_commit"]
+                if phase == "fstat":
+                    assert observed["zero_link_verified"]
     cause = caught.value.__cause__
     assert isinstance(cause, FileNotFoundError)
     assert cause.errno == errno.ENOENT and cause.filename == JOURNAL
@@ -101,7 +136,7 @@ def test_real_commit_journal_disappearance_is_an_explicit_read_conflict(
     assert tree(value.root) == observed["after_commit"]
 
 
-@pytest.mark.parametrize("phase", ["open", "restat"])
+@pytest.mark.parametrize("phase", ["open", "restat", "fstat"])
 def test_real_commit_journal_disappearance_keeps_writer_io_unconfirmed(
     job_case, monkeypatch, phase
 ):
@@ -111,14 +146,24 @@ def test_real_commit_journal_disappearance_keeps_writer_io_unconfirmed(
         with real_journal(value.root) as writer:
             with monkeypatch.context() as patch:
                 observed = commit_at_boundary(patch, value.root, writer, phase)
-                with pytest.raises(JobStoreError) as caught, value.store._connection(write=True):
-                    pytest.fail("A failed writer preflight must not yield a connection")
+                try:
+                    with (
+                        pytest.raises(JobStoreError) as caught,
+                        value.store._connection(write=True),
+                    ):
+                        pytest.fail("A failed writer preflight must not yield a connection")
+                finally:
+                    assert_preflight_closed(observed)
             assert observed["commits"] == 1
             assert tree(value.root) == observed["after_commit"]
         assert not isinstance(caught.value, JobConflictError)
         assert caught.value.exit_code == 3
         cause = caught.value.__cause__
-        assert isinstance(cause, FileNotFoundError) and cause.errno == errno.ENOENT
+        if phase == "fstat":
+            assert observed["zero_link_verified"] and cause is None
+            assert str(caught.value) == "Job catalog files must be unaliased regular files"
+        else:
+            assert isinstance(cause, FileNotFoundError) and cause.errno == errno.ENOENT
         assert value.store.get(value.spec.spec_id) == original
 
 
@@ -242,3 +287,159 @@ def test_replaced_optional_journal_identity_is_not_a_disappearance_conflict(job_
     assert not isinstance(caught.value, JobConflictError) and caught.value.exit_code == 3
     assert observed["replaced"] and tree(value.root) == observed["after_replace"]
     assert journal.read_bytes() == b"replacement journal must remain visible"
+
+
+@pytest.mark.parametrize("entry", ["regular", "symlink", "fifo", "directory"])
+def test_zero_link_open_journal_with_a_current_replacement_remains_strict(
+    job_case, monkeypatch, entry
+):
+    value = job_case
+    queued(value)
+    reader = SqliteJobStore(value.root, create=False)
+    journal = value.root / JOURNAL
+    outside = value.root.parent / "protected-replacement-target"
+    outside.write_bytes(b"protected replacement target")
+
+    def replace():
+        if entry == "regular":
+            journal.write_bytes(b"current replacement must remain visible")
+        elif entry == "symlink":
+            journal.symlink_to(outside)
+        elif entry == "fifo":
+            os.mkfifo(journal)
+        else:
+            journal.mkdir()
+
+    with real_journal(value.root) as writer:
+        with monkeypatch.context() as patch:
+            observed = commit_at_boundary(patch, value.root, writer, "fstat", after_unlink=replace)
+            try:
+                with pytest.raises(JobStoreError) as caught:
+                    reader.get(value.spec.spec_id)
+            finally:
+                assert_preflight_closed(observed)
+            replacement_stat = journal.lstat()
+        assert observed["commits"] == 1 and observed["zero_link_verified"]
+        assert not writer.in_transaction
+        assert not isinstance(caught.value, JobConflictError) and caught.value.exit_code == 3
+        assert tree(value.root) == observed["after_boundary"]
+    retained = journal.lstat()
+    assert (retained.st_dev, retained.st_ino, retained.st_mode, retained.st_nlink) == (
+        replacement_stat.st_dev,
+        replacement_stat.st_ino,
+        replacement_stat.st_mode,
+        replacement_stat.st_nlink,
+    )
+    assert outside.read_bytes() == b"protected replacement target"
+    if entry == "regular":
+        assert journal.read_bytes() == b"current replacement must remain visible"
+    elif entry == "symlink":
+        assert journal.readlink() == outside
+
+
+@pytest.mark.parametrize(
+    "failure_errno", [errno.EACCES, errno.EPERM, errno.EIO, errno.ELOOP, errno.ENOTDIR]
+)
+def test_zero_link_open_journal_other_named_stat_errno_never_becomes_a_conflict(
+    job_case, monkeypatch, failure_errno
+):
+    value = job_case
+    original = queued(value)
+    reader = SqliteJobStore(value.root, create=False)
+    with real_journal(value.root) as writer:
+        with monkeypatch.context() as patch:
+            observed = commit_at_boundary(
+                patch, value.root, writer, "fstat", stat_errno=failure_errno
+            )
+            try:
+                with pytest.raises(JobStoreError) as caught:
+                    reader.get(value.spec.spec_id)
+            finally:
+                assert_preflight_closed(observed)
+        assert observed["commits"] == 1 and observed["zero_link_verified"]
+        assert not writer.in_transaction
+        assert not isinstance(caught.value, JobConflictError) and caught.value.exit_code == 3
+        # The old product refuses before named stat; the corrected branch must retain
+        # the actual non-ENOENT cause if it reaches this additional validation.
+        assert len(observed["named_failures"]) <= 1
+        if observed["named_failures"]:
+            assert caught.value.__cause__ is observed["named_failures"][0]
+            assert caught.value.__cause__.errno == failure_errno
+        assert tree(value.root) == observed["after_commit"]
+    assert reader.get(value.spec.spec_id) == original
+    assert tree(value.root) == observed["after_commit"]
+
+
+def unlink_at_open(patch, root, name, *, regular):
+    """Remove an actually opened fixture without inventing an fstat observation."""
+    actual_open, actual_stat, actual_fstat = os.open, os.stat, os.fstat
+    observed = {"opened": False, "sqlite_connects": 0}
+
+    def opened(path, flags, *args, **kwargs):
+        descriptor = actual_open(path, flags, *args, **kwargs)
+        if path == name and kwargs.get("dir_fd") is not None:
+            assert not observed["opened"]
+            observed["opened"] = True
+            observed["descriptor"] = descriptor
+            before = actual_fstat(descriptor)
+            assert stat.S_ISREG(before.st_mode) is regular and before.st_nlink == 1
+            os.unlink(path, dir_fd=kwargs["dir_fd"])
+            after = actual_fstat(descriptor)
+            assert stat.S_ISREG(after.st_mode) is regular and after.st_nlink == 0
+            assert (before.st_dev, before.st_ino) == (after.st_dev, after.st_ino)
+            with pytest.raises(FileNotFoundError) as missing:
+                actual_stat(path, dir_fd=kwargs["dir_fd"], follow_symlinks=False)
+            assert missing.value.errno == errno.ENOENT and missing.value.filename == name
+            observed["after_unlink"] = tree(root)
+        return descriptor
+
+    def no_sqlite_observation(*args, **kwargs):
+        observed["sqlite_connects"] += 1
+        raise AssertionError("Unsafe zero-link preflight must not connect to SQLite")
+
+    patch.setattr(os, "open", opened)
+    patch.setattr(sqlite3, "connect", no_sqlite_observation)
+    return observed
+
+
+@pytest.mark.parametrize("name", [CATALOG, "coordinator.lock"])
+def test_zero_link_open_mandatory_file_is_never_an_optional_journal_conflict(
+    job_case, monkeypatch, name
+):
+    value = job_case
+    queued(value)
+    reader = SqliteJobStore(value.root, create=False)
+    with monkeypatch.context() as patch:
+        observed = unlink_at_open(patch, value.root, name, regular=True)
+        try:
+            with pytest.raises(JobStoreError) as caught:
+                if name == CATALOG:
+                    reader.get(value.spec.spec_id)
+                else:
+                    reader.coordinator_active()
+        finally:
+            assert_preflight_closed(observed)
+    assert observed["opened"]
+    assert not isinstance(caught.value, JobConflictError) and caught.value.exit_code == 3
+    assert str(caught.value) == "Job catalog files must be unaliased regular files"
+    assert tree(value.root) == observed["after_unlink"]
+    assert not (value.root / name).exists()
+
+
+def test_zero_link_open_nonregular_journal_is_never_an_absence_conflict(job_case, monkeypatch):
+    value = job_case
+    queued(value)
+    reader = SqliteJobStore(value.root, create=False)
+    os.mkfifo(value.root / JOURNAL)
+    with monkeypatch.context() as patch:
+        observed = unlink_at_open(patch, value.root, JOURNAL, regular=False)
+        try:
+            with pytest.raises(JobStoreError) as caught:
+                reader.get(value.spec.spec_id)
+        finally:
+            assert_preflight_closed(observed)
+    assert observed["opened"]
+    assert not isinstance(caught.value, JobConflictError) and caught.value.exit_code == 3
+    assert str(caught.value) == "Job catalog files must be unaliased regular files"
+    assert tree(value.root) == observed["after_unlink"]
+    assert not (value.root / JOURNAL).exists()
