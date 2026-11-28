@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import shutil
 import sqlite3
 import stat
@@ -82,40 +83,147 @@ raise SystemExit(status)
 """
 
 
-def _inventory(root: Path, *, runtime_store: Path | None = None) -> dict[str, tuple[object, ...]]:
-    """Exclude atime; copies also permit only known SQLite sidecars/directory clocks."""
+def _inventory(root: Path, *, runtime_store: Path | None = None) -> dict[str, object]:
+    """Retain full non-atime metadata; report unsafe/unreadable entries without hiding peers."""
     sidecars = (
         set()
         if runtime_store is None
         else {runtime_store / "catalog.sqlite3-wal", runtime_store / "catalog.sqlite3-shm"}
     )
-    result: dict[str, tuple[object, ...]] = {}
-    for path in (root, *sorted(root.rglob("*"))):
-        info = path.lstat()
-        if path in sidecars:
-            assert stat.S_ISREG(info.st_mode), "SQLite runtime sidecars must remain regular files"
-            continue
-        metadata: tuple[object, ...] = (
-            info.st_dev,
-            info.st_ino,
-            info.st_mode,
-            info.st_uid,
-            info.st_gid,
-            info.st_nlink,
-        )
-        if stat.S_ISREG(info.st_mode):
-            metadata += (
-                info.st_size,
-                info.st_mtime_ns,
-                info.st_ctime_ns,
-                hashlib.sha256(path.read_bytes()).hexdigest(),
-            )
-        else:
-            assert stat.S_ISDIR(info.st_mode), "Inspection fixtures require files/directories"
-            if runtime_store is None:
-                metadata += (info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-        result[str(path.relative_to(root))] = metadata
-    return result
+    entries, errors = {}, []
+
+    def visit(path, parent_fd=None):
+        name = str(path.relative_to(root))
+        target = path if parent_fd is None else path.name
+        try:
+            info = os.stat(target, dir_fd=parent_fd, follow_symlinks=False)
+        except OSError as error:
+            errors.append({"path": name, "operation": "lstat", **_exception(error)})
+            return
+        regular, directory = stat.S_ISREG(info.st_mode), stat.S_ISDIR(info.st_mode)
+        if path in sidecars and regular:
+            return
+        entry = {
+            "type": stat.S_IFMT(info.st_mode),
+            "dev": info.st_dev,
+            "ino": info.st_ino,
+            "mode": info.st_mode,
+            "uid": info.st_uid,
+            "gid": info.st_gid,
+            "nlink": info.st_nlink,
+            "size": info.st_size,
+            "mtime_ns": info.st_mtime_ns,
+            "ctime_ns": info.st_ctime_ns,
+            "sha256": None,
+        }
+        if path in sidecars or not (regular or directory):
+            errors.append({"path": name, "operation": "type", "actual_type": entry["type"]})
+        elif regular:
+            try:
+                entry["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+            except OSError as error:
+                errors.append({"path": name, "operation": "read", **_exception(error)})
+        entries[name] = entry
+        if directory and path not in sidecars:
+            descriptor = None
+            try:
+                descriptor = os.open(
+                    target, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd
+                )
+                with os.scandir(descriptor) as children:
+                    child_names = sorted(child.name for child in children)
+                for child_name in child_names:
+                    visit(path / child_name, descriptor)
+            except OSError as error:
+                errors.append({"path": name, "operation": "enumerate", **_exception(error)})
+            finally:
+                if descriptor is not None:
+                    try:
+                        os.close(descriptor)
+                    except OSError as error:
+                        errors.append({"path": name, "operation": "close", **_exception(error)})
+
+    visit(root)
+    return {"entries": entries, "errors": errors}
+
+
+def _exception(error: OSError) -> dict[str, object]:
+    return {"type": type(error).__name__, "errno": error.errno, "message": str(error)[:1024]}
+
+
+def _persistent(snapshot):
+    """Copied evidence binds names/types and regular-file size/hash, not inode metadata."""
+    return {
+        name: {"type": entry["type"], "size": entry["size"], "sha256": entry["sha256"]}
+        if entry["type"] == stat.S_IFREG
+        else {"type": entry["type"]}
+        for name, entry in snapshot["entries"].items()
+    }
+
+
+def _old_copy_metadata(snapshot):
+    """Reproduce the 5a copy comparison, whose directories omitted size and clocks."""
+    common = ("dev", "ino", "mode", "uid", "gid", "nlink")
+    regular = (*common, "size", "mtime_ns", "ctime_ns", "sha256")
+    return {
+        name: {key: entry[key] for key in (regular if entry["type"] == stat.S_IFREG else common)}
+        for name, entry in snapshot["entries"].items()
+    }
+
+
+def _difference(before, after):
+    return {
+        "unchanged": before == after,
+        "before_keys": sorted(before),
+        "after_keys": sorted(after),
+        "added": [
+            {"path": name, "value": after[name]} for name in sorted(after.keys() - before.keys())
+        ],
+        "removed": [
+            {"path": name, "value": before[name]} for name in sorted(before.keys() - after.keys())
+        ],
+        "changed": [
+            {
+                "path": name,
+                "fields": {
+                    key: {"before": before[name].get(key), "after": after[name].get(key)}
+                    for key in sorted(before[name].keys() | after[name].keys())
+                    if before[name].get(key) != after[name].get(key)
+                },
+            }
+            for name in sorted(before.keys() & after.keys())
+            if before[name] != after[name]
+        ],
+    }
+
+
+def _diff_summary(difference):
+    """Bound log size while retaining actual field deltas, full counts and a full-diff hash."""
+    limit = 32
+    summary = {"unchanged": difference["unchanged"]}
+    for key in ("before_keys", "after_keys", "added", "removed", "changed"):
+        summary[key] = difference[key][:limit]
+        summary[key + "_count"] = len(difference[key])
+    summary["actual_changed_fields"] = sorted(
+        {key for entry in difference["changed"] for key in entry["fields"]}
+    )
+    summary["details_complete"] = all(
+        len(difference[key]) <= limit
+        for key in ("before_keys", "after_keys", "added", "removed", "changed")
+    )
+    summary["full_diff_sha256"] = hashlib.sha256(
+        json.dumps(difference, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return summary
+
+
+def _stream(value: bytes) -> dict[str, object]:
+    return {
+        "bytes": len(value),
+        "sha256": hashlib.sha256(value).hexdigest(),
+        "preview": value[:4096].decode("utf-8", errors="replace"),
+        "preview_truncated": len(value) > 4096,
+    }
 
 
 def _stdout(document: dict[str, object]) -> str:
@@ -167,8 +275,34 @@ def inspection_diagnostics(
     directory.mkdir()
     calls = 0
 
+    def source_observation():
+        observations = []
+        for name, path, baseline in zip(
+            ("data", "registry", "runs"), sources, original, strict=True
+        ):
+            current = _inventory(path)
+            difference = _difference(baseline["entries"], current["entries"])
+            observations.append(
+                {
+                    "tree": name,
+                    "strict_unchanged": difference["unchanged"]
+                    and not baseline["errors"]
+                    and not current["errors"],
+                    "baseline_errors": baseline["errors"][:32],
+                    "current_errors": current["errors"][:32],
+                    "baseline_error_count": len(baseline["errors"]),
+                    "current_error_count": len(current["errors"]),
+                    "difference": _diff_summary(difference),
+                }
+            )
+        return observations
+
     def unchanged_source() -> None:
-        assert tuple(_inventory(path) for path in sources) == original, "Source smoke state changed"
+        observed = source_observation()
+        if not all(item["strict_unchanged"] for item in observed):
+            raise RuntimeError(
+                "Source smoke state changed: " + json.dumps(observed, sort_keys=True)
+            )
 
     def copied(name: str) -> Path:
         unchanged_source()
@@ -180,7 +314,15 @@ def inspection_diagnostics(
         return case
 
     def inspect(
-        case: Path, command: str, requested_id: str, *, expected: int = 0, sqlite: bool = False
+        case: Path,
+        command: str,
+        requested_id: str,
+        *,
+        expected: int = 0,
+        sqlite: bool = False,
+        expected_receipt=None,
+        expected_stdout: str | None = None,
+        generic_code: str | None = None,
     ) -> tuple[dict[str, object], str]:
         nonlocal calls
         calls += 1
@@ -191,39 +333,140 @@ def inspection_diagnostics(
             else ("--runs", str(case / "runs"))
         )
         before = _inventory(case, runtime_store=case / "data")
-        unchanged_source()
+        source_before = source_observation()
         remaining = deadline - time.monotonic()
-        assert remaining > 0, "Installed inspection diagnostic deadline exhausted"
+        child = {"state": "not_started", "returncode": None, "expected_returncode": expected}
+        stdout, stderr = b"", b""
         try:
-            result = subprocess.run(
-                [
-                    interpreter,
-                    "-I",
-                    "-c",
-                    _INSPECTION_GUARD,
-                    (case / "data" / "catalog.sqlite3").as_uri() + "?mode=ro",
-                    "yes" if sqlite else "no",
-                    command,
-                    requested_id,
-                    *options,
-                ],
-                cwd=case,
-                text=True,
-                capture_output=True,
-                check=False,
-                timeout=min(15, remaining),
-            )
+            if remaining > 0 and not before["errors"] and all(
+                item["strict_unchanged"] for item in source_before
+            ):
+                result = subprocess.run(
+                    [
+                        interpreter,
+                        "-I",
+                        "-c",
+                        _INSPECTION_GUARD,
+                        (case / "data" / "catalog.sqlite3").as_uri() + "?mode=ro",
+                        "yes" if sqlite else "no",
+                        command,
+                        requested_id,
+                        *options,
+                    ],
+                    cwd=case,
+                    capture_output=True,
+                    check=False,
+                    timeout=min(15, remaining),
+                )
+                stdout, stderr = result.stdout, result.stderr
+                child.update(state="completed", returncode=result.returncode)
+        except subprocess.TimeoutExpired as error:
+            stdout, stderr = error.stdout or b"", error.stderr or b""
+            child.update(state="timeout", timeout_seconds=error.timeout)
+        except OSError as error:
+            child.update(state="os_error", error=_exception(error))
         finally:
-            assert _inventory(case, runtime_store=case / "data") == before, (
-                "Inspection changed persistent copied evidence"
+            after = _inventory(case, runtime_store=case / "data")
+            source_after = source_observation()
+        persistent_diff = _difference(_persistent(before), _persistent(after))
+        metadata_diff = _difference(before["entries"], after["entries"])
+        old_metadata_diff = _difference(_old_copy_metadata(before), _old_copy_metadata(after))
+        persistent_unchanged = (
+            persistent_diff["unchanged"] and not before["errors"] and not after["errors"]
+        )
+        report = {
+            "kind": "installed_inspection_observation_v1",
+            "case": case.name,
+            "command": command,
+            "child": child,
+            "copy": {
+                "persistent_unchanged": persistent_unchanged,
+                "persistent_difference": _diff_summary(persistent_diff),
+                "old_metadata_equal": old_metadata_diff["unchanged"],
+                "old_metadata_observation": _diff_summary(old_metadata_diff),
+                "full_metadata_equal": metadata_diff["unchanged"],
+                "metadata_observation": _diff_summary(metadata_diff),
+                "before_errors": before["errors"][:32],
+                "after_errors": after["errors"][:32],
+                "before_error_count": len(before["errors"]),
+                "after_error_count": len(after["errors"]),
+            },
+            "source_strict_unchanged": all(
+                item["strict_unchanged"] for item in (*source_before, *source_after)
+            ),
+            "source_before": source_before,
+            "source_after": source_after,
+        }
+        failures = []
+        if not persistent_unchanged:
+            failures.append("copied_persistent_evidence_changed_or_unreadable")
+        if not report["source_strict_unchanged"]:
+            failures.append("source_strict_inventory_changed_or_unreadable")
+        if child["state"] != "completed" or child["returncode"] != expected:
+            failures.append("child_did_not_complete_with_expected_exit")
+        unexpected_stream = stdout if expected else stderr
+        if unexpected_stream:
+            failures.append(
+                "unexpected_success_stdout" if expected else "unexpected_success_stderr"
             )
-            unchanged_source()
-        if result.returncode != expected or (result.stdout if expected else result.stderr):
+        receipt, decoded_stdout = None, ""
+        if child["state"] == "completed":
+            try:
+                decoded_stdout = stdout.decode("utf-8")
+                receipt = json.loads(stderr if expected else stdout)
+                if expected_receipt is not None and receipt != expected_receipt:
+                    failures.append("receipt_fields_differ")
+                if expected_stdout is not None and decoded_stdout != expected_stdout:
+                    failures.append("success_receipt_bytes_differ")
+                if generic_code is not None:
+                    error = receipt.get("error") if isinstance(receipt, dict) else None
+                    if not (
+                        isinstance(receipt, dict)
+                        and set(receipt) == {"error"}
+                        and isinstance(error, dict)
+                        and set(error) == {"code", "message"}
+                        and error["code"] == generic_code
+                        and isinstance(error["message"], str)
+                        and error["message"]
+                    ):
+                        failures.append("generic_refusal_fields_differ")
+            except ValueError as error:
+                failures.append(
+                    {"receipt_error": type(error).__name__, "message": str(error)[:512]}
+                )
+        if failures:
+            report.update(failures=failures, stdout=_stream(stdout), stderr=_stream(stderr))
             raise RuntimeError(
-                f"Guarded installed {command} exited {result.returncode}: "
-                f"{result.stdout}\n{result.stderr}"
+                "Installed inspection diagnostic failure: " + json.dumps(report, sort_keys=True)
             )
-        return json.loads(result.stderr if expected else result.stdout), result.stdout
+        metadata_observation = {
+            key: value
+            for key, value in report["copy"]["metadata_observation"].items()
+            if key not in {"before_keys", "after_keys"}
+        }
+        old_metadata_observation = {
+            key: value
+            for key, value in report["copy"]["old_metadata_observation"].items()
+            if key not in {"before_keys", "after_keys"}
+        }
+        print(
+            json.dumps(
+                {
+                    "kind": report["kind"],
+                    "case": case.name,
+                    "command": command,
+                    "child": child,
+                    "persistent_unchanged": persistent_unchanged,
+                    "source_strict_unchanged": report["source_strict_unchanged"],
+                    "old_metadata_equal": report["copy"]["old_metadata_equal"],
+                    "full_metadata_equal": report["copy"]["full_metadata_equal"],
+                    "old_metadata_observation": old_metadata_observation,
+                    "metadata_observation": metadata_observation,
+                },
+                sort_keys=True,
+            )
+        )
+        return receipt, decoded_stdout
 
     def absent(
         case: Path,
@@ -235,7 +478,6 @@ def inspection_diagnostics(
         resource_id: str | None = None,
         sqlite: bool = False,
     ) -> None:
-        receipt, _ = inspect(case, command, requested_id, expected=4, sqlite=sqlite)
         error = {
             "code": "dataset_not_found"
             if lookup in {"dataset_store", "referenced_dataset"}
@@ -248,30 +490,47 @@ def inspection_diagnostics(
         }
         if resource_id is not None:
             error["resource_id"] = resource_id
+        receipt, _ = inspect(
+            case,
+            command,
+            requested_id,
+            expected=4,
+            sqlite=sqlite,
+            expected_receipt={"error": error},
+        )
         assert receipt == {"error": error}
 
     def generic(case: Path, command: str, *, sqlite: bool = False) -> None:
         requested_id = protocol_id if command == "inspect-experiment" else attempt_id
-        receipt, _ = inspect(case, command, requested_id, expected=3, sqlite=sqlite)
-        assert set(receipt) == {"error"}
-        error = receipt["error"]
-        assert isinstance(error, dict) and set(error) == {"code", "message"}
-        assert error["code"] == (
+        code = (
             "store_integrity_or_publication_failure"
             if case.name == "missing-data-objects"
             else "research_store_integrity_or_io_failure"
         )
+        receipt, _ = inspect(
+            case, command, requested_id, expected=3, sqlite=sqlite, generic_code=code
+        )
+        assert set(receipt) == {"error"}
+        error = receipt["error"]
+        assert isinstance(error, dict) and set(error) == {"code", "message"}
+        assert error["code"] == code
         assert isinstance(error["message"], str) and error["message"]
 
     valid = copied("valid-experiment")
-    assert inspect(valid, "inspect-experiment", protocol_id, sqlite=True)[1] == _stdout(experiment)
+    assert inspect(
+        valid, "inspect-experiment", protocol_id, sqlite=True, expected_stdout=_stdout(experiment)
+    )[1] == _stdout(experiment)
     valid_attempt = copied("finalized-attempt")
-    assert inspect(valid_attempt, "inspect-attempt", attempt_id)[1] == _stdout(finalized)
+    assert inspect(
+        valid_attempt, "inspect-attempt", attempt_id, expected_stdout=_stdout(finalized)
+    )[1] == _stdout(finalized)
 
     unfinalized = copied("unfinalized-attempt")
     (unfinalized / "runs" / "outcomes" / f"{attempt_id}.json").unlink()
     expected_unfinalized = dict(finalized, state="reserved_unfinalized", outcome=None)
-    assert inspect(unfinalized, "inspect-attempt", attempt_id)[1] == _stdout(expected_unfinalized)
+    assert inspect(
+        unfinalized, "inspect-attempt", attempt_id, expected_stdout=_stdout(expected_unfinalized)
+    )[1] == _stdout(expected_unfinalized)
 
     missing_registry = copied("missing-registry")
     shutil.rmtree(missing_registry / "registry")

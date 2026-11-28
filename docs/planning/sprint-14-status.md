@@ -78,6 +78,18 @@ F02本身的应用服务、infra分类、领域聚合、持久格式及SDK五方
 writer、mandatory、替换、alias／type和其他IO仍strict3。不放宽取消等待，不重启Job或研究。
 当前修正head完整GREEN／owner接受仍PENDING，早期4ce/2fd不能充当通过；原测试仅加失败traceback，不改断言。
 
+## 当前安装验收缺口与17项新门
+
+[后续独立安装失败](s14-02a-job-journal-2026-11-28.md)保留5a的两类结果：原Job修复及Mac3.14完整core、
+native pytest已通过，但新helper的copied inventory finally失败使整个Mac native Job仍FAILURE。
+当时实际差异字段／child回执未记录，仍UNKNOWN；不能追认为metadata-only或特定文件系统原因。
+
+冻结64合同要求copies持续names/type/bytes保持；checker对齐这个投影，sources仍完整strict，
+旧metadata差异另作观测，并先收child和两组库存结果再报错。真实names/type/hash变化仍失败，
+只排除两个exact普通WAL/SHM sidecar，16/90/15与guard和回执不改。
+新增独立早期macOS core安装job纳入preview及aggregate，修正head需自身17/17实际终态成功，
+当前仍PENDING；原32h、研究预算、人类门及M1关闭不变。
+
 ## 原容量与未承诺工作
 
 | 容量部分 | 预测 | 承诺／接受状态 |

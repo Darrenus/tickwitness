@@ -201,6 +201,34 @@ jobs:
       - run: uv sync --locked
       - run: make test
 
+  inspection-macos:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+          enable-cache: true
+      - run: make build
+      - name: Verify installed inspection on macOS before the native runtime suite
+        run: |
+          set -o pipefail
+          uv venv /tmp/tickwitness-macos-inspection --python 3.12
+          uv pip install --python /tmp/tickwitness-macos-inspection/bin/python --no-index --no-deps dist/*.whl
+          python3 scripts/smoke_evidence.py --python /tmp/tickwitness-macos-inspection/bin/python 2>&1 | tee /tmp/macos-inspection.log
+      - name: Preserve actual macOS inspection observations on every outcome
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-inspection-${{ github.sha }}-${{ github.run_attempt }}
+          path: /tmp/macos-inspection.log
+          if-no-files-found: warn
+          retention-days: 30
+
   distribution:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -923,7 +951,7 @@ jobs:
           retention-days: 30
 
   preview-artifacts:
-    needs: [quality, tests, distribution, native-replay]
+    needs: [quality, tests, inspection-macos, distribution, native-replay]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -1233,7 +1261,7 @@ jobs:
 
   engineering:
     if: always()
-    needs: [quality, tests, distribution, native-replay, job-controls, preview-artifacts]
+    needs: [quality, tests, inspection-macos, distribution, native-replay, job-controls, preview-artifacts]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every engineering job to pass
