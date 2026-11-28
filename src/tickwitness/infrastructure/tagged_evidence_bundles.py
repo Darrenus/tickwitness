@@ -47,6 +47,25 @@ _ROLE_LIMITS = {
 _DEFAULT_LIMITS = BundleLimits()
 
 
+class TaggedPairMissingObjectError(BundleError):
+    """A validated twelve-role manifest declares an observed missing leaf."""
+
+    reason = "tagged_pair_object_missing"
+
+    def __init__(self, roles: tuple[str, ...], sha256: str) -> None:
+        self.role, self.roles, self.sha256 = roles[0], roles, sha256
+        super().__init__(
+            "Missing tagged-pair evidence object for role(s) " + ", ".join(roles) + ": " + sha256
+        )
+
+
+def _missing_tagged_object(
+    sha256: str, roles: Mapping[str, dict[str, object]]
+) -> TaggedPairMissingObjectError:
+    aliases = tuple(sorted(role for role, ref in roles.items() if ref["sha256"] == sha256))
+    return TaggedPairMissingObjectError(aliases, sha256)
+
+
 def _manifest(raw: bytes, limits: BundleLimits) -> dict[str, object]:
     if not isinstance(raw, bytes) or not 0 < len(raw) <= limits.max_manifest_bytes:
         raise BundleError("Manifest exceeds its nonempty byte budget")
@@ -261,10 +280,18 @@ def read_tagged_pair_bundle(
             _io._tree_entries(objects, {"sha256": True})
             content = _io._directory(objects, "sha256")
             stack.callback(os.close, content)
-            _io._tree_entries(content, {digest: False for digest in object_sizes})
+            missing = _io._first_missing_object(content, set(object_sizes))
+            if missing is not None:
+                raise _missing_tagged_object(missing, roles)
             verified: dict[str, bytes] = {}
             for digest, size in sorted(object_sizes.items()):
-                data = _io._read_file(content, digest, size, size=size)
+                data = _io._read_file(
+                    content,
+                    digest,
+                    size,
+                    size=size,
+                    missing_object=_missing_tagged_object(digest, roles),
+                )
                 if _io._digest(data) != digest:
                     raise BundleError("Bundle object hash does not match its identity")
                 verified[digest] = data

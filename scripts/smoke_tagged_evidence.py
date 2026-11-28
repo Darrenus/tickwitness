@@ -14,6 +14,8 @@ import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from smoke_tagged_pair_diagnostics import tagged_pair_diagnostics
+
 POLICIES = ["protected_tag_front_cancel_v1", "protected_tag_back_cancel_v1"]
 _OFFLINE_GUARD = """
 import importlib.abc
@@ -495,11 +497,18 @@ def main() -> None:
                         preserved=preserved,
                     )
                 )
+        diagnostics = tagged_pair_diagnostics(
+            str(arguments.verifier_python.absolute()),
+            root / "standard-gt" / "relocated",
+            cases[0]["verification"],
+            root / "diagnostic-copies",
+        )
     report = {
         "kind": "installed_tagged_pair_evidence_acceptance_v1",
         "accepted": True,
         "fixture_kind": "original_synthetic",
         "cases": cases,
+        "missing_object_diagnostics": diagnostics,
         "fresh_native_runs": not arguments.core_only,
         "source_claim_evaluated": False,
         "finding_issued": False,

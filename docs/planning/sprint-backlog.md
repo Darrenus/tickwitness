@@ -8,14 +8,16 @@ reviewer UNASSIGNED／独立安全NOT_PERFORMED、#24外部真人0/0/PENDING、�
 继续分别登记，不宣称安全复核、采用或beta已完成。原S13共34h与持续质量容量不变。
 
 [S14当前路线](sprint-14-status.md)是有证据的核心诊断补强，MCP／HTTP仍DEFER、需求UNKNOWN。
-Owner已接受S14-01a／#40首8h与S14-02a／#41首8h：PR117/source09→merge484，
-PR118/source3e66546→mergefcbb0fb1bcbe97e312e4955ad71f1b58c7d027df，由Darrenus于2026-11-28
-16:16:54 Asia/Singapore正常合并。实际Engineering17/17与19SUCCESS＋1legacyREFUSED／0pending保留，
-接受例外仅限该PR。#40余4h未承诺；#41余4h选择02b/F03：Job结果已知状态拒绝上下文，
-合同1＋实现1＋远端验收1＋文档1，先实际冻结并读回3b0eccf再实施。原32h=已接受16＋已选择4＋未承诺12
-（01余4＋03原8）；新head／owner接受PENDING，不继承3e/fcbb，不叠加入口，均非实际工时。
+Owner已接受01a8h、02a8h及02b4h：PR117/source09→merge484、PR118/source3e→mergefcbb、
+[PR120](https://github.com/Darrenus/tickwitness/pull/120)/sourcec218→merge06fe2ef1267728c849f71bbdee54c90409015bd3，
+由Darrenus于2026-11-28 17:33:49 Asia/Singapore正常合并。PR120自身Engineering17/17，
+19SUCCESS＋1legacyREFUSED／0pending保留，接受例外只限该PR。#41按原12h实际CLOSED。
+当前唯一活动S14-03／F04／#42选择原父项03的8h：tagged-pair缺件诊断及安装消费者，
+合同2＋实现3＋远端验收2＋文档1；先冻结并真实读回3b668204再实施。
+原32h=已接受20＋已选择8＋未承诺4（父项01余4）；当前head／owner接受PENDING，
+不继承c218/06fe结果，不叠加transport或研究执行权限，均非实际工时。
 
-[Job journal伴随缺陷#119](s14-02a-job-journal-2026-11-28.md)已随PR118接受并关闭：先冻结6239889，再真实RED31PASS/3FAIL，当前34项与完整17job通过。它按原持续质量容量处理，不增加32h、不借用余12h或新增父故事，不放宽原研究预算／期限；早期真实失败与后续取消分别保留。
+[Job journal伴随缺陷#119](s14-02a-job-journal-2026-11-28.md)已随PR118接受并关闭：先冻结6239889，再真实RED31PASS/3FAIL，当前34项与完整17job通过。它按原持续质量容量处理，不增加32h、不借用未承诺容量或新增父故事，不放宽原研究预算／期限；早期真实失败与后续取消分别保留。
 
 以下PR115接受及S13-03进行中记录为PR116接受前历史，已由上述准备接受／当前S14路线取代；
 原始失败、未知、规划容量和人类依赖不回写。
@@ -251,19 +253,20 @@ NOT_PERFORMED与外部真人0/0/PENDING分别保留；本轮未推进条件性S1
 
 ## S14 — 核心诊断补强；MCP／HTTP条件入口DEFER
 
-**目标：** 需求未核验时采用原核心补强路线：baseline定位缺失CAS、inspect关联真实lookup，当前补充Job结果已知拒绝状态。依赖：已接受S12、S13边界及先冻结合同。原专项32小时、父项12／12／8h不变；已接受16h，选择02b的4h，余12h未承诺。MCP／HTTP仍DEFER，不阻塞核心GA。
+**目标：** 需求未核验时采用原核心补强路线：baseline定位缺失CAS、inspect关联真实lookup、Job结果关联已知拒绝状态，当前补充tagged-pair缺件定位。依赖：已接受S12、S13边界及先冻结合同。原专项32小时、父项12／12／8h不变；已接受20h，选择03的8h，余4h未承诺。MCP／HTTP仍DEFER，不阻塞核心GA。
 
 2026-10-25原transport意图保留为DEFER历史：若需求成立选择少量stdio MCP或loopback HTTP之一，复用应用服务、严格参数／预算／审计及真实客户端验收。它不是当前排程或另一组同ID故事，不与本轮核心补强叠加容量；重新进入前仍需真实任务阻碍和参与者确认。
 
 | Story | 用户故事与任务 | 估计 | 可执行验收 |
 | --- | --- | --- | --- |
 | S14-01 / E08 | 核心fallback首切片01a／#40基线缺失CAS诊断8h已随PR117接受；父项其余4h未承诺，父项OPEN | M / 12h | [原诊断合同](../contracts/baseline-evidence-diagnostics-v1.md)／ADR0052；source09→merge484实际16/16远端与owner接受；保留原code/exit3及回执，legacy REFUSED另记，不把父项剩余容量记Done |
-| S14-02 / E08、E06 | 02a／#41检查上下文8h随PR118已接受；当前唯一活动02b／F03选择余4h，Job结果已知状态拒绝上下文 | M / 12h | 02a先冻结64cca6f、六lookup/code4/预算语义保留；02b先冻结3b0eccf的[Job拒绝合同](../contracts/job-result-refusal-context-v1.md)／ADR0055，完整get后才给四状态上下文，code9/成功字节及未知拒绝保留；新head17job／owner PENDING |
-| S14-03 / E09 | 核心复现／诊断及安装消费者预测池，8h未承诺；不排transport真实客户端 | S / 8h | 具体消费者未选择；已选切片安装验收计入各自专项预测，不重复挪入此池；不为填容量虚构需求 |
+| S14-02 / E08、E06 | 02a检查上下文8h随PR118、02b／F03的Job结果拒绝4h随PR120已接受；#41 CLOSED | M / 12h | 先冻结64cca6f及3b0eccf；六lookup/code4/预算、四状态code9/成功字节及未知路线保留；各自完整17job，legacy REFUSED另记 |
+| S14-03 / E09 | 当前唯一活动F04／#42：原8h选择twelve-role tagged-pair缺失CAS定位及既有安装消费者 | S / 8h | 先冻结3b668204的[合同](../contracts/tagged-pair-missing-object-diagnostics-v1.md)／ADR0056；完整manifest的真实stat/open ENOENT才投影role(s)/SHA，结构/其他IO优先；实际issuer泛型隔离、原回执及预算保留；自身17job／owner PENDING |
 
 两个已接受8h各含合同2、实现3、远端验收2、文档1；02b4h为合同1、实现1、远端验收1、文档1。
+03的8h为合同2、实现3、远端验收2、文档1；不重复计入其他故事的安装验收。
 均为预测，不是实际工时或额外预算；详见[S14状态](sprint-14-status.md)。稳定72父故事不增行，
-不复制transport ID；剩余12h未承诺，不并行选择tagged诊断或新入口。
+不复制transport ID；父项01余4h未承诺，不并行新功能或入口。
 
 **风险与退出：** MCP／HTTP仍只在真实需求成立后选择。缺件诊断不修复、执行或重放研究；原协议预算、已提交结果及未知状态保持，M1关闭。未获当前候选验收／owner接受前不计本切片Done。
 

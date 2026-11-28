@@ -241,7 +241,7 @@ def _read_file(
     limit: int,
     *,
     size: int | None = None,
-    missing_object: BundleMissingObjectError | None = None,
+    missing_object: BundleError | None = None,
 ) -> bytes:
     try:
         descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
@@ -297,8 +297,8 @@ def _missing_object(
     return BundleMissingObjectError(aliases, sha256)
 
 
-def _baseline_object_tree(content: int, roles: Mapping[str, dict[str, object]]) -> None:
-    expected = {cast("str", ref["sha256"]) for ref in roles.values()}
+def _first_missing_object(content: int, expected: set[str]) -> str | None:
+    """Finish structural checks before selecting one observed missing leaf."""
     seen: set[str] = set()
     missing: set[str] = set()
     with os.scandir(content) as entries:
@@ -319,7 +319,14 @@ def _baseline_object_tree(content: int, roles: Mapping[str, dict[str, object]]) 
             seen.add(entry.name)
     missing.update(expected - seen)
     if missing:
-        raise _missing_object(min(missing), roles)
+        return min(missing)
+    return None
+
+
+def _baseline_object_tree(content: int, roles: Mapping[str, dict[str, object]]) -> None:
+    missing = _first_missing_object(content, {cast("str", ref["sha256"]) for ref in roles.values()})
+    if missing is not None:
+        raise _missing_object(missing, roles)
 
 
 class _RenameOperation(Protocol):
