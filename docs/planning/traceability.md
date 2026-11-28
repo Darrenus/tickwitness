@@ -8,13 +8,14 @@
 | 不伪造接收时点和缺失历史 Q-01/Q-02 | 数据证据 | S02-01、S03-01 | snapshot/delta/缺口/未知时间夹具和拒绝路径 |
 | 不覆盖原始证据 Q-08 | 数据证据 / 证据包 | S02-02、S04-02 | 幂等导入、崩溃边界、哈希和完整性验证 |
 | 离线缺件可定位且不改变原件 | 证据 / infrastructure reader / CLI | S14-01 | [baseline合同](../contracts/baseline-evidence-diagnostics-v1.md)／ADR0052、[S14状态](sprint-14-status.md)：首8h随PR117/source09→merge484实际接受；原code/exit3/回执及拒绝保留，#40父项余4h未承诺；不继承到后续head |
-| 检查错误可关联真实请求与依赖 | CLI driving adapter / 既有应用读取服务 | S14-02 | [检查上下文合同](../contracts/inspection-absence-context-v1.md)／[ADR0053](../adr/0053-inspection-absence-context.md)：先实际冻结64cca6f；六lookup原code/exit4、真实引用ID、原读取顺序、unfinalized预算true及非NotFound拒绝；新head远端／owner接受PENDING，SDK不扩展 |
+| 检查错误可关联真实请求与依赖 | CLI driving adapter / 既有应用读取服务 | S14-02 | [检查上下文合同](../contracts/inspection-absence-context-v1.md)／[ADR0053](../adr/0053-inspection-absence-context.md)：先冻结64cca6f；02a已随PR118/source3e→mergefcbb接受，六lookup/code4/读取顺序/unfinalized预算保持；SDK不扩 |
+| Job结果拒绝能关联已校验的持久状态 | CLI driving adapter / 原Job读取服务 | S14-02 | [Job拒绝合同](../contracts/job-result-refusal-context-v1.md)／[ADR0055](../adr/0055-job-result-refusal-context.md)：先冻结3b0eccf；02b只在full get后给四状态上下文，code9/原message/成功字节不变；get与第二result未知路线不重分类，新head17job／owner PENDING |
 | L2解释与新增压力分开 Q-03/Q-04 | 研究契约 / 反例搜索 | S05-01、S05-02、S06-01 | 场景类别合法性、同观测解释配对与未知边界 |
 | 不把失败当反例或未发现 Q-05/Q-12 | 判定 / 作业 | S06-02、S07-02、S07-03、S10-03 | execution_status / scoped findings / completeness 三字段与负例 |
 | 反例可以定位和复验 Q-06 | 回放 / 证据 | S03-02、S05-03、S08-01 | 首次分歧、输入订单账本、独立 verifier receipt |
 | 缩减不改变原研究条件 Q-07/Q-11 | 搜索 / 回放 | S09-01、S09-02、S09-03 | [S09状态](sprint-09-status.md)：01a准备与01b原预算回放／terminal投影审计已接受；02有限局部缩减与独立false数值保持判定实现中，cooperative取消不扩大原预算；当前不支持checkpoint |
 | 探索和确认有透明账本 Q-09/Q-10 | 实验注册 | S02-03、S07-01、S08-02 | 所有attempt、暴露继承、固定确认窗口和声明范围 |
-| 长任务可控和可恢复 | 作业 / coordinator | S10-01、S10-02、S10-03 | 崩溃、重试、fencing、取消与资源限制演练；[journal质量companion](s14-02a-job-journal-2026-11-28.md)保留原mac失败及先冻结623／真实RED，窄fix当前GREEN未完成，不改变期限、预算或Job执行权限 |
+| 长任务可控和可恢复 | 作业 / coordinator | S10-01、S10-02、S10-03 | 崩溃、重试、fencing、取消与资源限制演练；[journal质量companion](s14-02a-job-journal-2026-11-28.md)保留先冻结623／真实RED与早期失败，窄fix以34项及完整17job随PR118接受，#119关闭；期限、预算与执行权限不变 |
 | 数据与策略不越过信任边界 | 导入 / 执行 / 入口；infrastructure与运维边界 | S02-01、S04-02、S13-01–S13-03 | [执行信任合同](../contracts/execution-trust-v1.md)／[ADR0044](../adr/0044-explicit-execution-trust-boundaries.md)、[S13状态](sprint-13-status.md)：M0仅现有已资格内置profile；[固定EC2 v3参考](../security/ec2-reference-recovery-v3-evidence-2026-11-27.md)24PASS／累计45、独立只读readback CLOSED，仅QUALIFIED_REFERENCE_ONLY；M1产品未集成／DISABLED，M2托管权限边界不支持。PR115接受内部参考，PR116接受[S13-03审阅／降级](../security/s13-03-review-and-degradation.md)及[采用观察](s13-03-adoption-observation-2026-11-27.md)准备；独立人类门未完成，缺证保持关闭 |
 | 接入现有工作流 | 应用服务 / CLI / SDK | S04-01、S12-01、S12-02 | [已接受SDK与接入状态](sprint-12-status.md)、[自有案例流程](../user-onboarding.md)及[实际招募缺口](s12-02-recruitment-gap.md)；材料与技术成功不冒充真人激活 |
 | SDK兼容与自助接入 | SDK driving adapter / 共享应用服务 / 质量 | S12-03 | [兼容合同](../contracts/sdk-compatibility-v1.md)、具名文档实际安装执行、SDK/CLI未知字段拒绝与开放参数保留、[分层支持矩阵](../support.md)；四档SDK新资格不继承历史绿色 |

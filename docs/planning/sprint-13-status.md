@@ -20,9 +20,10 @@ Owner已明确接受S13-03的有界准备交付及CI维护，接受源码
 这不是beta、release、新资格、旧ACK／export、AWS启动或新研究预算授权。
 
 后续[S14核心补强](sprint-14-status.md)：PR117/source09已于2026-11-28正常合并484，接受首8h基线缺件诊断。
-#40父项余4h未承诺且不并行开发；当前唯一活动S14-02a／#41从原父项02选8h检查上下文，先冻结64cca6f后实现。
-原32h=已接受8＋已选择8＋未承诺16，MCP／HTTP需求仍UNKNOWN/DEFER，不叠加入口开发。
-新切片当前head远端验收及owner接受PENDING，不继承990、09或上述merge的CI结果，人类门保持未完成。
+#40父项余4h未承诺；PR118/source3e→mergefcbb已接受02a首8h及Journal修复，#119关闭。
+当前唯一活动02b／#41选择父项02余4h，先冻结3b0eccf再实施Job结果已知状态拒绝上下文。
+原32h=已接受16＋已选择4＋未承诺12，MCP／HTTP仍UNKNOWN/DEFER；新head／owner PENDING，
+不继承990、09、3e或上述merge的CI结果，人类门保持未完成。
 
 ## PR116接受前的准备记录（历史）
 

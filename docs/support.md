@@ -7,10 +7,11 @@
 独立安全reviewerUNASSIGNED／NOT_PERFORMED、#24外部真人0/0/PENDING、空案例和无激活／复用窗口保留。
 软件接受不提供beta、M1产品启用或新执行权限。
 
-[S14](planning/sprint-14-status.md)原32h=首8h已接受＋S14-02a／#41的8h已选择＋16h未承诺
-（父项01余4＋02余4＋03原8）；MCP／HTTP仍DEFER、已核验需求UNKNOWN。
-仅[PR118](https://github.com/Darrenus/tickwitness/pull/118)新切片的当前head远端验收／owner接受PENDING，
-不借用09／484或其他旧头结果；已接受baseline与候选inspect上下文分开，不宣称新发行。
+[PR118](https://github.com/Darrenus/tickwitness/pull/118)的02a及Journal修复也已接受：source3e正常合并
+fcbb0fb1bcbe97e312e4955ad71f1b58c7d027df，自身Engineering17/17通过，legacy REFUSED另记；#119关闭。
+[S14](planning/sprint-14-status.md)原32h=已接受16＋当前02b选择4＋未承诺12（父项01余4＋03原8）。
+02b只选父项02余4h，先实际冻结3b0eccf的Job结果拒绝合同；新head远端／owner接受PENDING，
+不继承3e/fcbb的结果。MCP／HTTP DEFER、需求UNKNOWN，未新发行或扩大M1／人类验收权限。
 
 以下PR115接受及S13-03准备进行中表述为PR116接受前的历史快照；其产品关闭／人类未完成限制仍然成立。
 
@@ -132,11 +133,12 @@ S14-01a首切片已随[PR117](https://github.com/Darrenus/tickwitness/pull/117)�
 reason=bundle_object_missing、role、排序roles及sha256。有效回执、格式、SDK及其他拒绝不变。
 它不补件、下载、搜索其他store、engine、SQLite、reservation、replay或确认访问；不代表新release。
 
-### 当前候选的inspect缺失上下文
+### 已接受的inspect缺失上下文
 
 S14-02a／#41按[检查合同](contracts/inspection-absence-context-v1.md)及
 [ADR0053](adr/0053-inspection-absence-context.md)先实际冻结64cca6f，再实现已有两个inspect命令的诊断。
-新head远端验收及owner接受仍PENDING。错误保留原research_evidence_not_found或dataset_not_found／exit4，
+已随[PR118](https://github.com/Darrenus/tickwitness/pull/118)接受，source3e→mergefcbb，自身17job通过且legacy REFUSED另记。
+错误保留原research_evidence_not_found或dataset_not_found／exit4，
 增加reason=inspection_evidence_not_found、command、requested_id和固定lookup；实际已知时才有resource_id。
 缺依赖dataset的resource_id来自已验证protocol的真实get入参，构造失败不猜ID，不解析message。
 
@@ -151,17 +153,31 @@ inspect-experiment允许已有SQLite mode=ro访问；其catalog WAL/SHM正常活
 [实际失败／确定性RED](planning/s14-02a-job-journal-2026-11-28.md)与
 [先冻结的修正合同](contracts/job-journal-unlinked-read-conflict-v1.md)单独追踪#119。
 原macOS取消测试的inner异常信息缺失，不能宣称已确认其具体文件；真实COMMIT-after-open回归已证明可复现缺口。
-候选只在fixed optional journal的readonly预检发现REG/nlink0且named实际ENOENT时返回原job_conflict／exit9，
+已接受修复只在fixed optional journal的readonly预检发现REG/nlink0且named实际ENOENT时返回原job_conflict／exit9，
 不给SQLite观察或自动重试。原有限窗口内可以重新读取并完整校验；writer、mandatory、替换／alias／类型及其他IO仍拒绝。
-不删journal、不重建catalog、不扩大期限或发起Job／研究重跑。修正head的完整GREEN／owner接受仍PENDING，
-不能把原31PASS/3FAIL或其他source绿色当当前验收；M1及外部真人门保持关闭／PENDING。
+不删journal、不重建catalog、不扩大期限或发起Job／研究重跑。source3e的34项及完整17job已随PR118接受，
+#119关闭；4ce原inner文件、5a原安装差异/child仍UNKNOWN。M1与外部真人门保持关闭／PENDING。
+
+### 当前候选的Job结果已知状态拒绝
+
+[合同](contracts/job-result-refusal-context-v1.md)／[ADR0055](adr/0055-job-result-refusal-context.md)
+已先以3b0eccf仅文档推送并读回；S14-02b／F03自身17job与owner接受PENDING。
+read-job-result只在已有完整get校验后，对QUEUED/RUNNING/FAILED/LOST保留job_conflict／exit9和原message，
+增加reason=job_result_not_succeeded、command、requested_job_id、stored_state。该状态是那次读取的持久快照，
+不代表当前终态或effective状态，不读取新clock/lock，不授予恢复、研究重试或退款权限。
+
+SUCCEEDED返回保存的原结果字节且无新换行，domain NOT_EVALUABLE仍可有SUCCEEDED Job。
+get与result是不同read transactions：坏/缺成功BLOB、失败行夹带BLOB和snapshot/event损坏仍完整性3；
+缺Catalog/Job仍4，BUSY/journal等冲突仍原泛型；第二result异常或None也不附伪造state。
+没有新reason同样不证明可重试。JobCatalog本身拒绝WAL/SHM，核验库存没有sidecar/journal排除，
+不能套用DatasetStore例外；没有自动reconcile、worker/native、预算重置或已提交结果重跑。
 
 ## HTTP/MCP 入口需求与当前决定
 
 项目路线图中已有 HTTP/MCP 的规划兴趣；它与可核验的“现有 CLI/SDK 阻塞了某个真实任务”是两类证据。截至本页更新，未提供这样的已核验案例记录，阻塞任务、替代成本和参与者确认仍为 **UNKNOWN / 证据不足**，不是已证明没有需求。当前决定是 **DEFER**，保留 S14 或以后条件性入口，本轮不实现。
 
-本轮执行原S14的核心fallback：首8h已接受、S14-02a的8h已选择，原32h中余16h
-（父项01余4h＋02余4h＋03原8h）未承诺，不叠加transport或虚构功能填满容量。
+本轮执行原S14的核心fallback：两个8h已接受，S14-02b选择父项02余4h；原32h余12h
+（父项01余4h＋父项03原8h）未承诺，不叠加transport或并行tagged诊断，不为填容量虚构功能。
 这些都是预测，不是实际工时；重新选择transport前仍需真实需求证据、独立范围和验收。
 
 真实请求到来时，分别记录匿名请求者/角色、日期、具体任务及合法案例、当前工作流、CLI/SDK 替代及其实际阻碍、所需最小入口、原始来源/证据、参与和公开记录同意、投入/限制、评审决定及理由。无记录时不填虚构请求或成功数；规划偏好和维护者推测不改写成外部用户需求。普通文档更新也不授权自动向他人联系。
