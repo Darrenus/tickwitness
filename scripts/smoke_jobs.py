@@ -667,11 +667,15 @@ def main() -> None:
 
         def run(*command, expected=0, stored_state=None):
             if command[0] == "read-job-result":
-                entry = _GUARD + _RESULT_GUARD + (
-                    "\nguard_result_catalog(Path(sys.argv[sys.argv.index('--jobs')+1]))\n"
-                    "try:\n    status = main(sys.argv[1:])\n"
-                    "finally:\n    assert not result_read_attempts, result_read_attempts\n"
-                    "raise SystemExit(status)\n"
+                entry = (
+                    _GUARD
+                    + _RESULT_GUARD
+                    + (
+                        "\nguard_result_catalog(Path(sys.argv[sys.argv.index('--jobs')+1]))\n"
+                        "try:\n    status = main(sys.argv[1:])\n"
+                        "finally:\n    assert not result_read_attempts, result_read_attempts\n"
+                        "raise SystemExit(status)\n"
+                    )
                 )
                 expected_receipt = (
                     None if stored_state is None else _result_refusal(command[1], stored_state)
