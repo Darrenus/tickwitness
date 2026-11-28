@@ -157,6 +157,7 @@ from tickwitness.infrastructure.search_plan_registry import (
     SearchPlanRegistryError,
 )
 from tickwitness.infrastructure.subprocess_replay import ReplayProcessError, SubprocessReplayAdapter
+from tickwitness.infrastructure.tagged_evidence_bundles import TaggedPairMissingObjectError
 from tickwitness.infrastructure.tagged_finding_registry import (
     TaggedFindingNotFoundError,
     TaggedFindingRegistryError,
@@ -581,6 +582,26 @@ def main(argv: list[str] | None = None) -> int:
                         "sha256": error.sha256,
                     }
                 }
+            ),
+            file=sys.stderr,
+        )
+        return 3
+    except TaggedPairMissingObjectError as error:
+        if arguments.command != "verify-tagged-queue-pair":
+            return _write_error("research_store_integrity_or_io_failure", error, 3)
+        print(
+            json.dumps(
+                {
+                    "error": {
+                        "code": "research_store_integrity_or_io_failure",
+                        "message": str(error),
+                        "reason": error.reason,
+                        "role": error.role,
+                        "roles": list(error.roles),
+                        "sha256": error.sha256,
+                    }
+                },
+                sort_keys=True,
             ),
             file=sys.stderr,
         )

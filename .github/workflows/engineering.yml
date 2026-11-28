@@ -67,6 +67,29 @@ jobs:
           path: /tmp/job-result-refusal-context.xml
           if-no-files-found: warn
           retention-days: 30
+      - name: Regress tagged-pair missing-object diagnostics and caller isolation
+        env:
+          PYTHONPATH: tests:tests/application:tests/domain:tests/infrastructure:tests/integration
+        run: >-
+          uv run --locked pytest -q
+          tests/infrastructure/test_tagged_pair_diagnostics.py
+          tests/test_tagged_pair_diagnostics_cli.py
+          tests/infrastructure/test_tagged_evidence_bundles.py
+          tests/application/test_tagged_pair_package.py
+          tests/test_tagged_evidence_cli.py
+          tests/application/test_tagged_findings.py
+          tests/test_tagged_findings_cli.py
+          tests/infrastructure/test_tagged_finding_bundles.py
+          tests/infrastructure/test_search_evidence_bundles.py
+          --junitxml=/tmp/tagged-pair-diagnostics.xml
+      - name: Preserve actual tagged-pair diagnostic regression results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tagged-pair-diagnostics-${{ github.sha }}-${{ github.run_attempt }}
+          path: /tmp/tagged-pair-diagnostics.xml
+          if-no-files-found: warn
+          retention-days: 30
       - name: Regress baseline offline diagnostics before the full runtime matrix
         env:
           PYTHONPATH: tests:tests/application:tests/domain:tests/infrastructure:tests/integration

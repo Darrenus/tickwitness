@@ -2,12 +2,13 @@
 
 更新：2026-11-28 Asia/Singapore。核心 fallback；MCP／HTTP DEFER，核实需求 UNKNOWN。
 
-## 已接受的两个切片
+## 已接受的三个切片
 
 | 切片 | Owner 接受与合并 | 接受源码自己的远端验证 |
 | --- | --- | --- |
 | S14-01a／#40，8h预测 | PR117/source09dc19e→merge484fab84f78c55ed7ac1bdfd3cb14af93cf8d1b6；Darrenus于11:52:43接受合并 | Engineering16/16、focused128、Transport91、Docs162/984；legacy REFUSED另记 |
 | S14-02a／#41，8h预测 | PR118/source3e665465b7b764cfc48c94964433939c4477e13a→mergefcbb0fb1bcbe97e312e4955ad71f1b58c7d027df；Darrenus于16:16:54接受合并 | Engineering17/17、journal34／inspection155／baseline128、Transport91、Docs167/1005；legacy REFUSED另记 |
+| S14-02b／F03／#41，4h预测 | PR120/sourcec218754959aedb5759eb6ba96b6b1dc89477a943→merge06fe2ef1267728c849f71bbdee54c90409015bd3；Darrenus于17:33:49接受合并 | Engineering17/17、Job focused253（含34新项）、journal34／inspection155／baseline128；legacy REFUSED另记 |
 
 [PR118](https://github.com/Darrenus/tickwitness/pull/118)在2026-11-28T08:16:54Z正常matching-head合并。
 Merge与source同tree64e1806b53c7c342f32f368080628eefb0cd11b2；实际CI checkout5d6e292a531573506551959265a68c44059792bc。
@@ -33,40 +34,58 @@ writer、mandatory、替换/relink、alias/type和其他IO仍strict3，不重试
 副本持久names/type/bytes及原源树strict保持，实际日志、全部110制品metadata及四份选定payload已收齐，
 其余payload是metadata-only。没有声称所有110份正文均下载。
 
-## 当前唯一活动功能：S14-02b／F03／#41
+## 已接受的S14-02b／F03
 
-维护者摩擦：现有[CLI分支](../../src/tickwitness/cli_jobs.py)、[CLI负例](../../tests/test_jobs_cli.py)
-与[安装消费者](../../scripts/smoke_jobs.py)对已验证QUEUED/FAILED结果读取仅检查job_conflict/9；
-同码还涵盖BUSY、journal和ownership/version拒绝。现有有限read-conflict重读许可不能由exit9整体推断。
-这是已有自动化诊断缺口，不是虚构外部用户需求。
+[PR120](https://github.com/Darrenus/tickwitness/pull/120)于2026-11-28T09:33:49Z正常matching-head合并；
+sourcec218与merge06fe同tree20c19817f28247a4e638dea10dca8ba953df56dc。
+当时20checks为19SUCCESS＋1披露legacy REFUSED／0pending，required Docs／Engineering满足。
+原非必需失败没有改成成功，接受只限该PR；父项#41按已接受12h实际CLOSED。
 
-[新合同](../contracts/job-result-refusal-context-v1.md)及
-[ADR0055](../adr/0055-job-result-refusal-context.md)已以3b0eccf39978c19dffb82994b22558456883235d
-仅两文档commit/push并真实读回后才开始实施。当前候选自身远端验收与owner接受PENDING，
-不继承PR118或mergefcbb绿色记录。
+[Job结果合同](../contracts/job-result-refusal-context-v1.md)／ADR0055先以3b0eccf仅文档实际推送并读回。
+实现只在原完整get成功后的non-SUCCEEDED分支补充四种已知持久状态；原job_conflict/9、
+原message与SUCCEEDED结果字节保留。第二result读及缺件、损坏、BUSY等未知路线不重分类，
+不承诺两个read transactions原子性，也不授予研究retry、退款或有效状态推断。
 
-范围只在read-job-result的identity→create=False→完整store.get成功后的原non-SUCCEEDED分支：
-新增CLI-local JobConflictError subtype，保留job_conflict/exit9及原message，增加固定
-reason=job_result_not_succeeded、command、requested_job_id和实际stored_state。
-状态仅QUEUED/RUNNING/FAILED/LOST的那次已验证快照；不新增clock/lock/job_view读取，
-不计算effective状态，不捏造CANCELLED，不调用result或启动执行。
+接受源码自身Engineering46126967098完整17/17：focused253含34新项，journal34、
+inspection155、baseline128均无fail/error/skip；six core、two whole native、four controls、
+distribution与preview均实际终态成功。安装Job观察为14条（distribution2、native Ubuntu4、
+native macOS4、一个preview core-only4），不是16条：5次已知状态拒绝与9次原字节成功，
+source/copy保持。既有inspection96条仍通过。Docs169/1011、Transport91通过。
+Legacy46126967107仍因未知attachment拒绝，commands=[]、load=false；
+反例未执行，研究计数NOT_RECORDED，不能填0。原格式失败与取消历史及metadata-only边界保留。
 
-| 类别 | 当前候选必须实际验证 | 当前状态 |
+## 当前唯一活动功能：S14-03／F04／#42
+
+维护者摩擦来自现有twelve-role reader、真实manifest/object删除负例及安装verify消费者：
+声明的raw、receipt或assessment CAS leaf缺失与manifest/container缺失同为generic错误，
+不能定位manifest中的role(s)/SHA。这是现有工作流证据，不是外部用户需求或新入口。
+
+[合同](../contracts/tagged-pair-missing-object-diagnostics-v1.md)／
+[ADR0056](../adr/0056-tagged-pair-missing-object-diagnostics.md)已以
+3b668204115fc96d20f39de6751c94e72661e7c5仅两文档commit/push并真实读回后才实施。
+当前源码自己的完整17job／owner接受仍PENDING，不继承c218或merge06fe结果。
+
+范围：独立TaggedPairMissingObjectError，只来自完整有效12-role manifest和安全打开的containers。
+完成结构扫描后取最小缺失SHA；真实declared stat ENOENT记下并继续查结构；实际open ENOENT
+只报告该对象。aliases完整排序，保留no-follow/nonblock/配额/cleanup。
+只有verify-tagged-queue-pair在原integrity3中投影固定reason、role、roles、sha256；
+实际issue-tagged-findings source路径仍generic {code,message}，不调用publisher。
+共享reader的human message可更具体，不承诺该caller旧文字逐字相同。
+Baseline8、finding14与search独立；SDK/domain/schema/成功回执/authority不改。
+
+| 类别 | 当前源码必须真实验证 | 当前状态 |
 | --- | --- | --- |
-| 正例 | SUCCEEDED规范结果原字节/无新换行；domain NOT_EVALUABLE的成功Job保持未知真值 | 新head远端PENDING |
-| 反例 | 四种合法拒绝状态exactcode/message/fields/exit9、空stdout；RUNNING不改为effective状态；Catalog不变 | 新head远端PENDING |
-| 未知／其他拒绝 | get缺件/损坏/权限/BUSY/journal仍原route；第二result异常或None不加伪造state | 新head远端PENDING |
+| 正例 | recorded real golden移位包的原canonical语义回执逐字节保持 | 自身远端PENDING |
+| 反例 | 所有unique leaf、完整alias、多缺件、真实stat/open unlink及结构优先；原件／副本保持 | 自身远端PENDING |
+| 未知／其他拒绝 | root4；manifest/containers/unsafe/IO/hash/read及post-open ENOENT generic3；双向profile隔离；实际issuer优先序 | 自身远端PENDING |
 
-真实SUCCEEDED缺／坏BLOB和nonSUCCEEDED夹带BLOB仍在get先integrity3。
-get/result是两个read transactions，不承诺跨调用原子性；第二result错误及原raw=None fallback原样。
-没有new reason也不证明可重试；FAILED/LOST不授予research retry、退款或checkpoint恢复。
-应用服务、infra、领域状态机、SDK和持久格式不改。
-
-真实Catalog夹具用既有transition准备，不执行worker/native/research；准备后守卫写入/协调/重整与执行入口。
-Catalog读取只允许已有mode=ro。库存包含全部名字/类型/普通文件字节；没有WAL/SHM/journal排除，
-该Store本来拒绝WAL/SHM，不能套用02a DatasetStore sidecar例外。目录时钟/atime不作不变性承诺。
-安装验收加强既有QUEUED/coreFAILED读取，并保留SUCCEEDED原字节、transcripts、guards和原预算；
-不增Job执行、freeze/reserve/replay或smoke调用/期限。新源码仍须自身17-job完整真实终态。
+缺件不证明其他对象有效、pin一致、来源认证或研究命题。malformed pin仍先拒绝；
+well-formed pin在原完整read后才比较。alias opaque负例只验证IO，不算语义正例。
+安装helper仅在原2/4-profile loop后一次复用standard-gt/relocated；新诊断只copy，
+最多24 verify/shared90s/child15s，不增golden/export/native/Job/freeze/reserve/replay。
+CLI import前class-compatible guards拒绝SQLite双alias、native、socket、worker，
+研究repo构造／发布／reservation不得触发且记录吞掉尝试。明确无排除的nofollow库存，
+先收child/streams/timeout及source/copy前后再统一判；不承诺atime/目录clock不变或hostile隔离。
 
 ## 原容量与未承诺工作
 
@@ -75,13 +94,13 @@ Catalog读取只允许已有mode=ro。库存包含全部名字/类型/普通文�
 | 父项01／#40首切片01a | 8h | 已接受 |
 | 父项01剩余 | 4h | UNCOMMITTED，无并行功能 |
 | 父项02／#41首切片02a | 8h | 已接受 |
-| 父项02剩余02b／F03 | 4h | 当前唯一活动功能：合同1＋实现1＋远端验收1＋文档1；新head／owner PENDING |
-| 父项03原预测 | 8h | UNCOMMITTED，未并行选择tagged诊断或transport消费者 |
-| 原S14总容量 | 32h | 已接受16＋已选择4＋未承诺12 |
+| 父项02剩余02b／F03 | 4h | 随PR120已接受，父项#41 CLOSED |
+| 父项03／F04／#42 | 8h | 当前唯一活动：合同2＋实现3＋远端验收2＋文档1；新head／owner PENDING |
+| 原S14总容量 | 32h | 已接受20＋已选择8＋未承诺4 |
 
 全部为预测，不冒充实际工时。稳定72父故事、原12/12/8h上限不变，#40父项OPEN不代表余4h在开发，
-#41仍OPEN/in-progress待剩余切片接受；#119已关闭，不另计一项功能或借用未承诺容量。
-十二角色tagged-pair缺件诊断是另一个有源码负例的候选，但涉及独立IO/race验收，当前不选。
+#41已CLOSED；#42是唯一活动父项，#119已关闭，不另计功能或借用父项01未承诺容量。
+原条件transport forecast保留为历史，需求UNKNOWN／DEFER，不与当前tagged诊断叠加。
 
 ## 保留的人类门、原研究预算与运行边界
 

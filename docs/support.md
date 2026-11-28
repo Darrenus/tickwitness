@@ -9,9 +9,12 @@
 
 [PR118](https://github.com/Darrenus/tickwitness/pull/118)的02a及Journal修复也已接受：source3e正常合并
 fcbb0fb1bcbe97e312e4955ad71f1b58c7d027df，自身Engineering17/17通过，legacy REFUSED另记；#119关闭。
-[S14](planning/sprint-14-status.md)原32h=已接受16＋当前02b选择4＋未承诺12（父项01余4＋03原8）。
-02b只选父项02余4h，先实际冻结3b0eccf的Job结果拒绝合同；新head远端／owner接受PENDING，
-不继承3e/fcbb的结果。MCP／HTTP DEFER、需求UNKNOWN，未新发行或扩大M1／人类验收权限。
+[PR120](https://github.com/Darrenus/tickwitness/pull/120)的02b余4h也已接受：sourcec218正常合并
+06fe2ef1267728c849f71bbdee54c90409015bd3，Darrenus于2026-11-28 17:33:49 Asia/Singapore合并，
+自身Engineering17/17、focused253通过，legacy REFUSED另记，#41按12h CLOSED。
+[S14](planning/sprint-14-status.md)原32h=已接受20＋当前03／F04选择8＋未承诺4（父项01余4）。
+F04只选原父项03的8h，先实际冻结3b668204的tagged-pair合同；新head远端／owner接受PENDING，
+不继承c218/06fe结果。MCP／HTTP DEFER、需求UNKNOWN，未新发行或扩大M1／人类验收权限。
 
 以下PR115接受及S13-03准备进行中表述为PR116接受前的历史快照；其产品关闭／人类未完成限制仍然成立。
 
@@ -158,10 +161,10 @@ inspect-experiment允许已有SQLite mode=ro访问；其catalog WAL/SHM正常活
 不删journal、不重建catalog、不扩大期限或发起Job／研究重跑。source3e的34项及完整17job已随PR118接受，
 #119关闭；4ce原inner文件、5a原安装差异/child仍UNKNOWN。M1与外部真人门保持关闭／PENDING。
 
-### 当前候选的Job结果已知状态拒绝
+### 已接受的Job结果已知状态拒绝
 
 [合同](contracts/job-result-refusal-context-v1.md)／[ADR0055](adr/0055-job-result-refusal-context.md)
-已先以3b0eccf仅文档推送并读回；S14-02b／F03自身17job与owner接受PENDING。
+已先以3b0eccf仅文档推送并读回；S14-02b／F03已随PR120接受，其自身17job成功，legacy REFUSED另记。
 read-job-result只在已有完整get校验后，对QUEUED/RUNNING/FAILED/LOST保留job_conflict／exit9和原message，
 增加reason=job_result_not_succeeded、command、requested_job_id、stored_state。该状态是那次读取的持久快照，
 不代表当前终态或effective状态，不读取新clock/lock，不授予恢复、研究重试或退款权限。
@@ -172,12 +175,30 @@ get与result是不同read transactions：坏/缺成功BLOB、失败行夹带BLOB
 没有新reason同样不证明可重试。JobCatalog本身拒绝WAL/SHM，核验库存没有sidecar/journal排除，
 不能套用DatasetStore例外；没有自动reconcile、worker/native、预算重置或已提交结果重跑。
 
+### 当前候选的twelve-role tagged-pair缺件定位
+
+[合同](contracts/tagged-pair-missing-object-diagnostics-v1.md)／
+[ADR0056](adr/0056-tagged-pair-missing-object-diagnostics.md)先以3b668204仅文档推送并读回；
+S14-03／F04自身完整17job与owner接受PENDING，不继承PR120结果。
+只在有效12-role manifest与安全containers之后，真实declared leaf stat/open ENOENT才提供
+tagged_pair_object_missing、排序role(s)及sha256；完成扫描后先查结构，再选最小缺失SHA。
+只有verify-tagged-queue-pair投影这些字段，原integrity3与空stdout保留。
+实际issue-tagged-findings读取相同source时保留generic {code,message}，不发布；human文字可更具体。
+
+缺root仍4；缺manifest/container、unsafe/extra、权限/IO、hash/size和post-open ENOENT仍generic3。
+Baseline8、finding14、search和SDK/domain/schema/成功回执不变。
+缺件不证明pin已匹配、其他对象有效、来源认证或命题成立；malformed pin仍先拒绝，
+well-formed pin仍在原完整read后比较。不补件、不下载、不触发repo/SQLite/native/Job/research执行。
+安装矩阵仅复用原standard-gt/relocated并copy，最多24次verify/shared90s/child15s；
+不增原2/4-profile调用或研究预算。显式无排除nofollow库存与child完整状态分别保留，
+不承诺atime/目录clock不变，测试guards不当作hostile sandbox。
+
 ## HTTP/MCP 入口需求与当前决定
 
 项目路线图中已有 HTTP/MCP 的规划兴趣；它与可核验的“现有 CLI/SDK 阻塞了某个真实任务”是两类证据。截至本页更新，未提供这样的已核验案例记录，阻塞任务、替代成本和参与者确认仍为 **UNKNOWN / 证据不足**，不是已证明没有需求。当前决定是 **DEFER**，保留 S14 或以后条件性入口，本轮不实现。
 
-本轮执行原S14的核心fallback：两个8h已接受，S14-02b选择父项02余4h；原32h余12h
-（父项01余4h＋父项03原8h）未承诺，不叠加transport或并行tagged诊断，不为填容量虚构功能。
+本轮执行原S14的核心fallback：01a8h＋02a8h＋02b4h已接受，当前F04选择原父项03的8h；
+原32h余4h（父项01）未承诺，不叠加transport或并行功能，不为填容量虚构外部需求。
 这些都是预测，不是实际工时；重新选择transport前仍需真实需求证据、独立范围和验收。
 
 真实请求到来时，分别记录匿名请求者/角色、日期、具体任务及合法案例、当前工作流、CLI/SDK 替代及其实际阻碍、所需最小入口、原始来源/证据、参与和公开记录同意、投入/限制、评审决定及理由。无记录时不填虚构请求或成功数；规划偏好和维护者推测不改写成外部用户需求。普通文档更新也不授权自动向他人联系。

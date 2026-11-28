@@ -9,7 +9,8 @@
 | 不覆盖原始证据 Q-08 | 数据证据 / 证据包 | S02-02、S04-02 | 幂等导入、崩溃边界、哈希和完整性验证 |
 | 离线缺件可定位且不改变原件 | 证据 / infrastructure reader / CLI | S14-01 | [baseline合同](../contracts/baseline-evidence-diagnostics-v1.md)／ADR0052、[S14状态](sprint-14-status.md)：首8h随PR117/source09→merge484实际接受；原code/exit3/回执及拒绝保留，#40父项余4h未承诺；不继承到后续head |
 | 检查错误可关联真实请求与依赖 | CLI driving adapter / 既有应用读取服务 | S14-02 | [检查上下文合同](../contracts/inspection-absence-context-v1.md)／[ADR0053](../adr/0053-inspection-absence-context.md)：先冻结64cca6f；02a已随PR118/source3e→mergefcbb接受，六lookup/code4/读取顺序/unfinalized预算保持；SDK不扩 |
-| Job结果拒绝能关联已校验的持久状态 | CLI driving adapter / 原Job读取服务 | S14-02 | [Job拒绝合同](../contracts/job-result-refusal-context-v1.md)／[ADR0055](../adr/0055-job-result-refusal-context.md)：先冻结3b0eccf；02b只在full get后给四状态上下文，code9/原message/成功字节不变；get与第二result未知路线不重分类，新head17job／owner PENDING |
+| Job结果拒绝能关联已校验的持久状态 | CLI driving adapter / 原Job读取服务 | S14-02 | [Job拒绝合同](../contracts/job-result-refusal-context-v1.md)／[ADR0055](../adr/0055-job-result-refusal-context.md)：先冻结3b0eccf；02b只在full get后给四状态上下文，code9/原message/成功字节不变；get与第二result未知路线不重分类；PR120/sourcec218→merge06fe自身17job已接受，#41 CLOSED |
+| Tagged-pair离线缺件能定位且不误分类其他caller | 证据 / infrastructure reader / CLI | S14-03 | [合同](../contracts/tagged-pair-missing-object-diagnostics-v1.md)／[ADR0056](../adr/0056-tagged-pair-missing-object-diagnostics.md)：先冻结3b668204；真实declared leaf stat/open ENOENT与结构/其他IO区分；verify唯一投影，实际issue caller泛型；原8h一次选择，自身17job／owner PENDING |
 | L2解释与新增压力分开 Q-03/Q-04 | 研究契约 / 反例搜索 | S05-01、S05-02、S06-01 | 场景类别合法性、同观测解释配对与未知边界 |
 | 不把失败当反例或未发现 Q-05/Q-12 | 判定 / 作业 | S06-02、S07-02、S07-03、S10-03 | execution_status / scoped findings / completeness 三字段与负例 |
 | 反例可以定位和复验 Q-06 | 回放 / 证据 | S03-02、S05-03、S08-01 | 首次分歧、输入订单账本、独立 verifier receipt |
