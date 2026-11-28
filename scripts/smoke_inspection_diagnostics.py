@@ -338,8 +338,10 @@ def inspection_diagnostics(
         child = {"state": "not_started", "returncode": None, "expected_returncode": expected}
         stdout, stderr = b"", b""
         try:
-            if remaining > 0 and not before["errors"] and all(
-                item["strict_unchanged"] for item in source_before
+            if (
+                remaining > 0
+                and not before["errors"]
+                and all(item["strict_unchanged"] for item in source_before)
             ):
                 result = subprocess.run(
                     [
