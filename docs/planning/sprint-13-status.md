@@ -19,9 +19,10 @@ Owner已明确接受S13-03的有界准备交付及CI维护，接受源码
 联系、回复、意向、协助量及研究决定UNKNOWN，没有激活日期、30天窗口或可计算复用率。
 这不是beta、release、新资格、旧ACK／export、AWS启动或新研究预算授权。
 
-后续选择[S14核心补强](sprint-14-status.md)：MCP／HTTP需求仍UNKNOWN并DEFER，原32h中
-只选择S14-01a／#40基线离线缺件诊断8h，其余24h未承诺；不叠加入口开发。
-新分支的候选尚未接受，当前head远端验收及owner接受PENDING，不继承990或上述merge的CI结果。
+后续[S14核心补强](sprint-14-status.md)：PR117/source09已于2026-11-28正常合并484，接受首8h基线缺件诊断。
+#40父项余4h未承诺且不并行开发；当前唯一活动S14-02a／#41从原父项02选8h检查上下文，先冻结64cca6f后实现。
+原32h=已接受8＋已选择8＋未承诺16，MCP／HTTP需求仍UNKNOWN/DEFER，不叠加入口开发。
+新切片当前head远端验收及owner接受PENDING，不继承990、09或上述merge的CI结果，人类门保持未完成。
 
 ## PR116接受前的准备记录（历史）
 

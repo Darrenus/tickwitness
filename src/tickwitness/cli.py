@@ -31,6 +31,7 @@ from tickwitness.cli_confirmation import COMMANDS as CONFIRMATION_COMMANDS
 from tickwitness.cli_confirmation import add_commands as add_confirmation_commands
 from tickwitness.cli_confirmation import execute as execute_confirmation_command
 from tickwitness.cli_experiments import COMMANDS as EXPERIMENT_COMMANDS
+from tickwitness.cli_experiments import InspectionNotFoundError
 from tickwitness.cli_experiments import add_commands as add_experiment_commands
 from tickwitness.cli_experiments import execute as execute_experiment_command
 from tickwitness.cli_jobs import COMMANDS as JOB_COMMANDS
@@ -521,6 +522,19 @@ def main(argv: list[str] | None = None) -> int:
         return _write_error(error.code, error, error.exit_code)
     except (EvaluationValidationError, EvidenceValidationError) as error:
         return _write_error("invalid_research_evidence", error, 2)
+    except InspectionNotFoundError as error:
+        context = {
+            "code": error.code,
+            "message": str(error),
+            "reason": error.reason,
+            "command": error.command,
+            "requested_id": error.requested_id,
+            "lookup": error.lookup,
+        }
+        if error.resource_id is not None:
+            context["resource_id"] = error.resource_id
+        print(json.dumps({"error": context}, sort_keys=True), file=sys.stderr)
+        return 4
     except AttemptBudgetExceededError as error:
         return _write_error("attempt_budget_exhausted", error, 8)
     except (

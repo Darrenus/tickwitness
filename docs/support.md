@@ -1,13 +1,16 @@
 # 分版本支持范围与恢复政策
 
-当前接受，2026-11-27：owner已接受源码`9901edd16450d65c8a483f91912cd6108475932e`的有界S13-03准备及CI维护；
-[PR116](https://github.com/Darrenus/tickwitness/pull/116)由Darrenus于2026-11-27T15:06:02Z
-（23:06:02 Asia/Singapore）正常合并为`4189fbe126d9447b39ba8f5981a5f5eeebb2e2eb`。
-#39已按准备交付范围实际关闭；独立安全reviewer UNASSIGNED／NOT_PERFORMED、#24外部真人0/0/PENDING、
-空自有案例及没有激活／复用窗口继续保留。接受不提供beta、M1产品启用或新执行权限。
+当前接受，2026-11-28：owner已接受S14-01a基线离线诊断源码`09dc19e0696359a18cbb1c7e930871f9b35a133e`，
+[PR117](https://github.com/Darrenus/tickwitness/pull/117)由Darrenus于2026-11-28T03:52:43Z
+（11:52:43 Asia/Singapore）正常合并为`484fab84f78c55ed7ac1bdfd3cb14af93cf8d1b6`。
+#40仅首8h预测范围接受，父项仍OPEN，余4h未承诺且不并行开发。上游PR116／#39已按准备范围接受，
+独立安全reviewerUNASSIGNED／NOT_PERFORMED、#24外部真人0/0/PENDING、空案例和无激活／复用窗口保留。
+软件接受不提供beta、M1产品启用或新执行权限。
 
-[S14](planning/sprint-14-status.md)选择原32h中的8h基线离线缺件诊断，其余24h未承诺，MCP／HTTP仍DEFER。
-本轮候选尚未接受，新head检查PENDING，不借用已接受990／4189的结果；当前可用行为仍以已接受源码及原合同为准。
+[S14](planning/sprint-14-status.md)原32h=首8h已接受＋S14-02a／#41的8h已选择＋16h未承诺
+（父项01余4＋02余4＋03原8）；MCP／HTTP仍DEFER、已核验需求UNKNOWN。
+仅[PR118](https://github.com/Darrenus/tickwitness/pull/118)新切片的当前head远端验收／owner接受PENDING，
+不借用09／484或其他旧头结果；已接受baseline与候选inspect上下文分开，不宣称新发行。
 
 以下PR115接受及S13-03准备进行中表述为PR116接受前的历史快照；其产品关闭／人类未完成限制仍然成立。
 
@@ -120,23 +123,46 @@ SDK contract v1 的五方法、七名称、类型和错误按 [SDK 合同](contr
 
 维护 BLOCKED、Job read conflict、研究 `reserved_unfinalized` 和普通 SDK 存储错误不是同一种状态。只读检查不会替你发起研究重试；维护 apply 的 PARTIAL/IO_UNCONFIRMED 不能报告 APPLIED。相关操作按各自 CLI 合同处理，不能从一个错误码推断另一个子系统的恢复权限。
 
-### 计划中的baseline离线缺件诊断
+### 已接受的baseline离线缺件诊断
 
-S14-01a／#40按[诊断合同](contracts/baseline-evidence-diagnostics-v1.md)及
-[ADR0052](adr/0052-baseline-evidence-missing-object-diagnostics.md)准备改进现有`verify-evidence`，
-尚未获得新候选验收／发行资格。目标保留`research_store_integrity_or_io_failure`和exit3，
-仅在有效manifest已声明的CAS leaf真实ENOENT时增加`reason=bundle_object_missing`、`role`、排序的`roles`及`sha256`。
-有效回执、bundle格式及SDK不改；缺root仍exit4，缺manifest／容器、权限、不安全路径、额外项或损坏仍为原拒绝，
-不补造角色、摘要或成功。实际来源见[baseline reader](../src/tickwitness/infrastructure/evidence_bundles.py)。
-它不修复／下载／搜索其他store，也不调用engine、SQLite、reservation、replay或确认访问。
-typed inspect-experiment／attempt缺失上下文仅是后续候选证据，未Ready／未实现，不是此切片已提供能力。
+S14-01a首切片已随[PR117](https://github.com/Darrenus/tickwitness/pull/117)接受：source09正常合并484，
+其当前源码实际16/16 Engineering、focused128、transport91及Docs162/984通过，legacy REFUSED单独保留。
+[baseline合同](contracts/baseline-evidence-diagnostics-v1.md)／[ADR0052](adr/0052-baseline-evidence-missing-object-diagnostics.md)
+保留research_store_integrity_or_io_failure和exit3，仅对有效manifest声明CAS leaf真实ENOENT增加
+reason=bundle_object_missing、role、排序roles及sha256。有效回执、格式、SDK及其他拒绝不变。
+它不补件、下载、搜索其他store、engine、SQLite、reservation、replay或确认访问；不代表新release。
+
+### 当前候选的inspect缺失上下文
+
+S14-02a／#41按[检查合同](contracts/inspection-absence-context-v1.md)及
+[ADR0053](adr/0053-inspection-absence-context.md)先实际冻结64cca6f，再实现已有两个inspect命令的诊断。
+新head远端验收及owner接受仍PENDING。错误保留原research_evidence_not_found或dataset_not_found／exit4，
+增加reason=inspection_evidence_not_found、command、requested_id和固定lookup；实际已知时才有resource_id。
+缺依赖dataset的resource_id来自已验证protocol的真实get入参，构造失败不猜ID，不解析message。
+
+F02这两个命令不是SDK v1的新方法，本身不改变infra或领域语义；下述Job质量companion单独记录。检查有效reservation但没有outcome仍成功
+reserved_unfinalized、budget_consumed=true；CAS orphan不能证明未执行或预算可用，outcome CAS缺失仍完整性拒绝。
+其他权限、IO、不安全或损坏按既有分类拒绝，没有新增repair、retry、退款、确认访问或重跑许可。
+inspect-experiment允许已有SQLite mode=ro访问；其catalog WAL/SHM正常活动不等于绝无文件系统写入。
+不要把baseline无SQLite profile套到这个命令，也不要删除live sidecar。原协议、用户ledger及已提交结果保持。
+
+### Job journal只读竞态的质量companion
+
+[实际失败／确定性RED](planning/s14-02a-job-journal-2026-11-28.md)与
+[先冻结的修正合同](contracts/job-journal-unlinked-read-conflict-v1.md)单独追踪#119。
+原macOS取消测试的inner异常信息缺失，不能宣称已确认其具体文件；真实COMMIT-after-open回归已证明可复现缺口。
+候选只在fixed optional journal的readonly预检发现REG/nlink0且named实际ENOENT时返回原job_conflict／exit9，
+不给SQLite观察或自动重试。原有限窗口内可以重新读取并完整校验；writer、mandatory、替换／alias／类型及其他IO仍拒绝。
+不删journal、不重建catalog、不扩大期限或发起Job／研究重跑。修正head的完整GREEN／owner接受仍PENDING，
+不能把原31PASS/3FAIL或其他source绿色当当前验收；M1及外部真人门保持关闭／PENDING。
 
 ## HTTP/MCP 入口需求与当前决定
 
 项目路线图中已有 HTTP/MCP 的规划兴趣；它与可核验的“现有 CLI/SDK 阻塞了某个真实任务”是两类证据。截至本页更新，未提供这样的已核验案例记录，阻塞任务、替代成本和参与者确认仍为 **UNKNOWN / 证据不足**，不是已证明没有需求。当前决定是 **DEFER**，保留 S14 或以后条件性入口，本轮不实现。
 
-本轮因此执行原S14的核心fallback：仅首8h已选择，余24h（父项01余4h＋02预测12h＋03预测8h）
-未承诺，不与MCP／HTTP叠加32h或虚构新功能填满容量。重新选择transport前仍需真实需求证据、独立范围和验收。
+本轮执行原S14的核心fallback：首8h已接受、S14-02a的8h已选择，原32h中余16h
+（父项01余4h＋02余4h＋03原8h）未承诺，不叠加transport或虚构功能填满容量。
+这些都是预测，不是实际工时；重新选择transport前仍需真实需求证据、独立范围和验收。
 
 真实请求到来时，分别记录匿名请求者/角色、日期、具体任务及合法案例、当前工作流、CLI/SDK 替代及其实际阻碍、所需最小入口、原始来源/证据、参与和公开记录同意、投入/限制、评审决定及理由。无记录时不填虚构请求或成功数；规划偏好和维护者推测不改写成外部用户需求。普通文档更新也不授权自动向他人联系。
 

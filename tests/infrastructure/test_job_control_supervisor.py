@@ -5,6 +5,7 @@ remote installed controls lifecycle separately supplies that evidence.
 """
 
 import time
+import traceback
 from threading import Thread, current_thread
 
 import pytest
@@ -196,6 +197,7 @@ def test_durable_cancel_from_another_controller_stops_live_owned_process(
                 raise AssertionError("Cancellation was not accepted within the original window")
         except Exception as error:
             failures.append(error)
+            traceback.print_exc()  # Preserve the actual inner origin on any future failure.
 
     controller = Thread(target=request)
     monkeypatch.setattr(store, "get", observed_get)

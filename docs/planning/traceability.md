@@ -1,19 +1,20 @@
 # TickWitness 需求与验收追踪
 
-状态：滚动维护，2026-11-27 Asia/Singapore。以下是产品目标、领域规则、故事与目标验收证据的映射，不表示整行能力已实现。实际工程状态见各Sprint记录、[已接受SDK与接入状态](sprint-12-status.md)、[执行信任与隔离状态](sprint-13-status.md)及GitHub Issues。规则定义以[领域模型](../architecture/domain-model.md)及[质量策略](../quality/quality-strategy.md)为准。
+状态：滚动维护，2026-11-28 Asia/Singapore。以下是产品目标、领域规则、故事与目标验收证据的映射，不表示整行能力已实现。实际工程状态见各Sprint记录、[已接受SDK与接入状态](sprint-12-status.md)、[执行信任与隔离状态](sprint-13-status.md)及GitHub Issues。规则定义以[领域模型](../architecture/domain-model.md)及[质量策略](../quality/quality-strategy.md)为准。
 
 | 用户目标或质量规则 | 领域责任 | 首批故事 | 发布证据 |
 | --- | --- | --- | --- |
 | 对研究问题形成统一语言 | 研究契约 / 实验注册 | S01-03、S02-03 | 真实问题记录、命题/协议边界、正反及未知案例 |
 | 不伪造接收时点和缺失历史 Q-01/Q-02 | 数据证据 | S02-01、S03-01 | snapshot/delta/缺口/未知时间夹具和拒绝路径 |
 | 不覆盖原始证据 Q-08 | 数据证据 / 证据包 | S02-02、S04-02 | 幂等导入、崩溃边界、哈希和完整性验证 |
-| 离线缺件可定位且不改变原件 | 证据 / infrastructure reader / CLI | S14-01 | [baseline诊断合同](../contracts/baseline-evidence-diagnostics-v1.md)／[ADR0052](../adr/0052-baseline-evidence-missing-object-diagnostics.md)、[S14状态](sprint-14-status.md)：首8h目标是对真实缺失的manifest声明CAS leaf增加role(s)／SHA；原code／exit3及有效回执不变，缺manifest／权限／不安全／损坏仍拒绝；新head远端验收及owner接受PENDING |
+| 离线缺件可定位且不改变原件 | 证据 / infrastructure reader / CLI | S14-01 | [baseline合同](../contracts/baseline-evidence-diagnostics-v1.md)／ADR0052、[S14状态](sprint-14-status.md)：首8h随PR117/source09→merge484实际接受；原code/exit3/回执及拒绝保留，#40父项余4h未承诺；不继承到后续head |
+| 检查错误可关联真实请求与依赖 | CLI driving adapter / 既有应用读取服务 | S14-02 | [检查上下文合同](../contracts/inspection-absence-context-v1.md)／[ADR0053](../adr/0053-inspection-absence-context.md)：先实际冻结64cca6f；六lookup原code/exit4、真实引用ID、原读取顺序、unfinalized预算true及非NotFound拒绝；新head远端／owner接受PENDING，SDK不扩展 |
 | L2解释与新增压力分开 Q-03/Q-04 | 研究契约 / 反例搜索 | S05-01、S05-02、S06-01 | 场景类别合法性、同观测解释配对与未知边界 |
 | 不把失败当反例或未发现 Q-05/Q-12 | 判定 / 作业 | S06-02、S07-02、S07-03、S10-03 | execution_status / scoped findings / completeness 三字段与负例 |
 | 反例可以定位和复验 Q-06 | 回放 / 证据 | S03-02、S05-03、S08-01 | 首次分歧、输入订单账本、独立 verifier receipt |
 | 缩减不改变原研究条件 Q-07/Q-11 | 搜索 / 回放 | S09-01、S09-02、S09-03 | [S09状态](sprint-09-status.md)：01a准备与01b原预算回放／terminal投影审计已接受；02有限局部缩减与独立false数值保持判定实现中，cooperative取消不扩大原预算；当前不支持checkpoint |
 | 探索和确认有透明账本 Q-09/Q-10 | 实验注册 | S02-03、S07-01、S08-02 | 所有attempt、暴露继承、固定确认窗口和声明范围 |
-| 长任务可控和可恢复 | 作业 / coordinator | S10-01、S10-02、S10-03 | 崩溃、重试、fencing、取消与资源限制演练 |
+| 长任务可控和可恢复 | 作业 / coordinator | S10-01、S10-02、S10-03 | 崩溃、重试、fencing、取消与资源限制演练；[journal质量companion](s14-02a-job-journal-2026-11-28.md)保留原mac失败及先冻结623／真实RED，窄fix当前GREEN未完成，不改变期限、预算或Job执行权限 |
 | 数据与策略不越过信任边界 | 导入 / 执行 / 入口；infrastructure与运维边界 | S02-01、S04-02、S13-01–S13-03 | [执行信任合同](../contracts/execution-trust-v1.md)／[ADR0044](../adr/0044-explicit-execution-trust-boundaries.md)、[S13状态](sprint-13-status.md)：M0仅现有已资格内置profile；[固定EC2 v3参考](../security/ec2-reference-recovery-v3-evidence-2026-11-27.md)24PASS／累计45、独立只读readback CLOSED，仅QUALIFIED_REFERENCE_ONLY；M1产品未集成／DISABLED，M2托管权限边界不支持。PR115接受内部参考，PR116接受[S13-03审阅／降级](../security/s13-03-review-and-degradation.md)及[采用观察](s13-03-adoption-observation-2026-11-27.md)准备；独立人类门未完成，缺证保持关闭 |
 | 接入现有工作流 | 应用服务 / CLI / SDK | S04-01、S12-01、S12-02 | [已接受SDK与接入状态](sprint-12-status.md)、[自有案例流程](../user-onboarding.md)及[实际招募缺口](s12-02-recruitment-gap.md)；材料与技术成功不冒充真人激活 |
 | SDK兼容与自助接入 | SDK driving adapter / 共享应用服务 / 质量 | S12-03 | [兼容合同](../contracts/sdk-compatibility-v1.md)、具名文档实际安装执行、SDK/CLI未知字段拒绝与开放参数保留、[分层支持矩阵](../support.md)；四档SDK新资格不继承历史绿色 |
@@ -24,7 +25,7 @@
 
 S13-01三模式及威胁模型已随PR114实际接受。S13-02先实际推送[参考合同](../contracts/restricted-reference-v1.md)／[ADR0045](../adr/0045-restricted-reference-qualification.md)冻结环境／机制／数值，再实现内部控制后端与固定合成负例；宿主事实、实际负例与M1产品启用分别判定，不新增SDK模式开关或研究权限。原S13专项10+16+8=34h和持续质量容量不变；原协议预算及5／8／11槽、golden／PR94不重置或退款。既有安全解析／Job／SDK测试不构成本轮隔离攻击资格；本候选远端检查、owner接受、独立安全复核与外部真人研究复验分别记录。独立安全复核尚未完成，外部真人0／0／PENDING及实际自有案例空登记保持，不能以文档或CI成功计作采用。
 
-2026-11-27 PR116接受后：owner已接受源码`9901edd16450d65c8a483f91912cd6108475932e`的有界准备及CI维护，
+2026-11-27 PR116接受后历史快照（其首8h／余24h状态已由上方S14当前记录取代）：owner已接受源码`9901edd16450d65c8a483f91912cd6108475932e`的有界准备及CI维护，
 由Darrenus于23:06:02 Asia/Singapore正常合并为`4189fbe126d9447b39ba8f5981a5f5eeebb2e2eb`。
 #39已按已接受准备范围实际关闭，reviewer UNASSIGNED／独立安全NOT_PERFORMED、#24真人0/0/PENDING、
 空案例／无激活窗口仍是继续依赖。[S14](sprint-14-status.md)选原32h核心fallback中的首8h，余24h未承诺；

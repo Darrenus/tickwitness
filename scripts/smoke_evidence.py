@@ -11,6 +11,8 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from smoke_inspection_diagnostics import inspection_diagnostics
+
 _OFFLINE_GUARD = """
 import importlib.abc
 import socket
@@ -330,6 +332,15 @@ def main() -> None:
             str(runs),
         )
         result = run(*command, expected=0 if arguments.native else 6)
+        inspection_diagnostics(
+            interpreter,
+            store,
+            registry,
+            runs,
+            protocol_id,
+            result["attempt_id"] if arguments.native else result["error"]["attempt_id"],
+            directory / "inspection-copies",
+        )
         if arguments.native:
             observation = result["evaluation"]["claim_observation"]
             assert observation["eligible"] is True and observation["value"] == "-2"

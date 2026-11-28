@@ -288,7 +288,13 @@ class SqliteJobStore:
 
     @staticmethod
     @contextmanager
-    def _regular(root_fd: int, name: str, *, write: bool = False) -> Iterator[int]:
+    def _regular(
+        root_fd: int,
+        name: str,
+        *,
+        write: bool = False,
+        transient_journal: bool = False,
+    ) -> Iterator[int]:
         descriptor = os.open(
             name,
             (os.O_RDWR if write else os.O_RDONLY) | os.O_NOFOLLOW | os.O_NONBLOCK,
@@ -296,6 +302,17 @@ class SqliteJobStore:
         )
         try:
             info = os.fstat(descriptor)
+            if (
+                transient_journal
+                and not write
+                and name == _CATALOG + "-journal"
+                and stat.S_ISREG(info.st_mode)
+                and info.st_nlink == 0
+            ):
+                # An unlinked FD is never accepted. Only actual named ENOENT may
+                # reach the enclosing read-only optional-journal conflict handler.
+                os.stat(name, dir_fd=root_fd, follow_symlinks=False)
+                raise JobStoreError("Job catalog path changed while open")
             _require(
                 stat.S_ISREG(info.st_mode) and info.st_nlink == 1,
                 "Job catalog files must be unaliased regular files",
@@ -379,7 +396,9 @@ class SqliteJobStore:
                     )
                 if self._exists(root_fd, _CATALOG + "-journal"):
                     try:
-                        with self._regular(root_fd, _CATALOG + "-journal"):
+                        with self._regular(
+                            root_fd, _CATALOG + "-journal", transient_journal=not write
+                        ):
                             pass
                     except FileNotFoundError as error:
                         if not write and error.errno == errno.ENOENT:

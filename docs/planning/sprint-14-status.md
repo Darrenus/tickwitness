@@ -1,81 +1,117 @@
 # Sprint 14 核心诊断补强状态
 
-更新：2026-11-27 Asia/Singapore。当前路线：**核心fallback已选择；MCP／HTTP DEFER**。
-已接受上游为源码`9901edd16450d65c8a483f91912cd6108475932e`；[PR116](https://github.com/Darrenus/tickwitness/pull/116)
-由Darrenus于2026-11-27T15:06:02Z（23:06:02 Asia/Singapore）正常合并为
-`4189fbe126d9447b39ba8f5981a5f5eeebb2e2eb`。S13-03接受的是有界审阅／降级准备、真实采用缺口记录及CI维护，
-#39已按该准备范围实际结项，不把独立真人安全、外部参与者研究或复用观察记为完成。
+更新：2026-11-28 Asia/Singapore。路线：**核心fallback；MCP／HTTP DEFER、已核验需求UNKNOWN**。
 
-本页跟踪新切片，不继承990或4189的绿色检查。候选实现按冻结合同推进，新head远端验收及owner接受均为**PENDING**；
-合同／ADR须先实际commit、push及读回远端冻结revision，再开始实现。实际冻结和新检查发生后另记，
-不将文档存在或静态审阅记为运行通过。
+## 已接受的首切片
 
-实际先冻结记录：仅合同及ADR0052的提交`55d4ec6557e70771411d59e05118b921dff6de50`已实际推送，
-远端branch ref读回完全一致后才开始实现。冻结不等于实现／测试通过；当前候选仍需自身远端终态与owner接受。
+Owner明确接受[S14-01a／#40](https://github.com/Darrenus/tickwitness/issues/40)的baseline离线缺件诊断，
+接受源码为09dc19e0696359a18cbb1c7e930871f9b35a133e。[PR117](https://github.com/Darrenus/tickwitness/pull/117)
+由Darrenus于2026-11-28T03:52:43Z（11:52:43 Asia/Singapore）正常matching-head合并为
+484fab84f78c55ed7ac1bdfd3cb14af93cf8d1b6；merge与source同tree4ab7b7d587bc2e2a4d43a28675e69d81e6fabf3d。
+父故事#40仍OPEN/in-progress，仅首8h预测范围已接受，余4h未承诺，不并行开展剩余功能。
 
-## 为什么选择核心fallback
+| 接受源码的实际远端证据 | 结果 |
+| --- | --- |
+| [Engineering46025748380](https://github.com/Darrenus/tickwitness/actions/runs/46025748380) | 16/16SUCCESS，focused baseline128PASS／0failure/error/skip |
+| 六core／两native | 各Ubuntu5651/112skip、各mac5613/150skip；native5760/3skip和5722/41skip，各313warnings |
+| [Docs46025748510](https://github.com/Darrenus/tickwitness/actions/runs/46025748510) | 162documents／984links；quality运行后的163/984另记 |
+| [Transport46025748500](https://github.com/Darrenus/tickwitness/actions/runs/46025748500) | 实际JUnit91PASS／0failure/error/skip |
+| [Legacy46025748236](https://github.com/Darrenus/tickwitness/actions/runs/46025748236) | FAILURE/REFUSED未知attachment；commands[]、loadfalse、qualSKIP、diagUNKNOWN |
 
-[入口需求记录](../support.md#httpmcp-入口需求与当前决定)仍没有可核验的真实CLI／SDK阻塞任务、
-替代成本或参与者确认，状态为UNKNOWN／证据不足，而非“已证明没有需求”。
-按[原S14规则](sprint-backlog.md)，本轮用同一32h容量选择核心补强，
-不叠加MCP／HTTP、listener、托管或UI；原transport意图保留为条件性历史，不复制故事ID。
+接受时19checks为18SUCCESS＋1上述FAILURE／0pending，不能写全部CI绿色。
+Owner接受这一有界源码与已披露例外，不构成后续PR全局豁免，分支保护未改或绕过。
+完整16job日志、107项制品元数据和范围所需JUnit/辅助制品已取回；不声称107份payload全下载。
+五处真实安装完成标记覆盖distribution、两native与preview core/native。
+初次c7头的guard注解、格式真实失败及后来自动取消分别保留，不把取消改成通过。
 
-首个具体缺口来自[现有baseline reader](../../src/tickwitness/infrastructure/evidence_bundles.py)的
-`_tree_entries`：缺manifest与缺已声明CAS对象都得到泛化缺项错误，CLI缺少对象角色及SHA上下文。
-[既有文件系统负例](../../tests/infrastructure/test_evidence_bundles.py)覆盖这两类删除，
-这是维护者可观察的诊断摩擦，不是虚构的外部用户请求。现有search evidence的独立诊断profile不改。
+首切片按[baseline合同](../contracts/baseline-evidence-diagnostics-v1.md)及
+[ADR0052](../adr/0052-baseline-evidence-missing-object-diagnostics.md)先实际推送／读回55d4ec6后实现。
+仅有效manifest已声明的CAS leaf真实ENOENT增加reason/role(s)/sha256；原code/exit3、缺root4、
+有效回执与其他拒绝保留。不修复、下载、搜索别的store或授予研究执行权。
+其离线baseline验证没有SQLite，不把该profile套到需要既有只读catalog的检查命令。
 
-## 首切片：S14-01a／#40
+已接受的上游[PR116](https://github.com/Darrenus/tickwitness/pull/116)／#39仅是有界审阅／降级及采用准备，
+不代表独立真人安全、外部研究复验或实际复用完成；[S13记录](sprint-13-status.md)与原CI失败不回写。
 
-范围按[Baseline evidence diagnostics v1](../contracts/baseline-evidence-diagnostics-v1.md)及
-[ADR0052](../adr/0052-baseline-evidence-missing-object-diagnostics.md)先冻结。
-[S14-01a／#40](https://github.com/Darrenus/tickwitness/issues/40)仅改进既有baseline `verify-evidence`的失败诊断：
-保留`research_store_integrity_or_io_failure`／exit3，仅在有效manifest声明的CAS leaf真实ENOENT时，
-增加`reason=bundle_object_missing`、`role`、排序的全部`roles`及`sha256`。
+## 当前唯一活动功能切片：S14-02a／F02／#41
 
-多项扫描缺失选择字典序最小SHA；同对象别名完整保留，`role`取排序首项。
-完整扫描先检查已遇到的非法额外项／类型，不能用缺件遮蔽结构故障；扫描后open时真实消失可报告该leaf，
-不宣称事务快照或穷尽健康检查。缺root保留exit4；缺manifest／容器、权限、symlink、FIFO、额外项、
-大小变化、hash损坏及其他IO问题不变成带角色的缺件，不能猜测SHA或研究结果。
+[检查缺失上下文合同](../contracts/inspection-absence-context-v1.md)及
+[ADR0053](../adr/0053-inspection-absence-context.md)已先以64cca6f3bb9ddda5ae17d22fef4eebf98fad9533
+仅两文件commit/push，再实际读回远端一致后开始实现。
+本切片的**新head远端验收和owner接受均PENDING**，不继承09、484或旧CI结果。
 
-有效验证回执、八角色v1 bundle格式、公开SDK、研究判定、发布／修复及运行权限不改。
-不下载、补件、改写原树、搜索别的store、导入native、打开SQLite、预留研究槽、replay、确认访问或reconcile。
-一般tree检查及其他调用者的拒绝保持原范围；精确细则以冻结合同为准。
+维护者目标是把既有inspect-experiment／inspect-attempt错误与实际查询目标／依赖关联。
+源码证据是[CLI适配器](../../src/tickwitness/cli_experiments.py)、
+[原应用服务](../../src/tickwitness/application/experiments.py)及
+[原attempt负例](../../tests/infrastructure/test_attempt_ledger.py)：当前NotFound只有code/message，
+而CAS orphan、有效未完成reservation及outcome CAS缺失有不同语义。
+这是已有维护者诊断摩擦，不是虚构外部用户任务。依赖仅已接受的可信M0读取与原合成夹具，
+无新增外部接口／数据权利或专家依赖；角色与账户验证不在本切片范围。
 
-## 容量及未承诺工作
+新CLI适配层仅包装已知NotFound：固定reason=inspection_evidence_not_found、command、requested_id、
+六种lookup及实际已知时的resource_id。保持research_evidence_not_found或dataset_not_found各自原code／exit4，
+构造registry→store→应用inspect的顺序不变；引用dataset ID只取验证后实际get入参，不解析message。
+F02本身的应用服务、infra分类、领域聚合、持久格式及SDK五方法／七导出不改，不复制领域验证。
+本PR另有下述持续质量companion，单独窄改Job journal只读竞态分类，不混入F02功能范围。
 
-| 容量部分 | 预测 | 当前承诺状态 |
-| --- | ---: | --- |
-| 父项01／#40内的首切片 | 8h | 已选择：合同2h＋实现3h＋远端验收2h＋文档1h；尚无当前head远端验收／owner接受 |
-| 父项01原12h中剩余 | 4h | UNCOMMITTED；未Ready功能 |
-| 父项02原预测 | 12h | UNCOMMITTED；需从实际缺口重新细化 |
-| 父项03原预测 | 8h | UNCOMMITTED；需冻结具体核心消费者／文档验收 |
-| 原S14总容量 | 32h | 首8h＋余24h；不叠加transport容量 |
-
-上述都是预测，不是实际工时。稳定backlog仍为原72项父故事，S14原12／12／8h上限不变。
-typed inspect-experiment／attempt缺失上下文（F02）只有候选证据，未排程、未Ready、未实现；
-是否选取及工时，包括原父项03的8h预测池，均须在剩余24h内另行细化，不承诺功能填满容量。
-日常质量容量单独保持原口径；不把同一回归／维护重复计入专项和日常预算。
-
-## 正例、负例及未知／拒绝验收
-
-| 场景 | 需要实际验证的结果 | 当前证据状态 |
+| 验收类别 | 需要实际验证的结果 | 当前状态 |
 | --- | --- | --- |
-| 正例：合法迁移后的完整baseline bundle | 独立安装core CLI返回原样有效回执；不需要native或SQLite；输入树不写入 | PENDING，新head远端运行后填写 |
-| 负例：仅删除有效manifest声明的对象leaf | 确切code／exit3、空成功stdout、确定性SHA及完整排序角色别名；多缺项和扫描／open间真实消失按合同报告，原件和副本均不被失败读取改写 | PENDING，使用一次性合成副本；不改旧封存 |
-| 未知／其他拒绝：缺root、manifest或容器，权限／不安全／额外项／损坏／变化 | 缺root仍exit4且不创建；其他结构／IO／完整性错误保持原拒绝，无伪造角色／SHA／成功或修复建议 | PENDING，不把非ENOENT当作缺件 |
+| 正例 | 合法experiment与finalized回执不变；有效未完成reservation仍成功reserved_unfinalized、budget_consumed=true | 新head远端PENDING |
+| 反例 | 六lookup exactcode/fields；分别缺两dataset时报告真实依赖ID；CAS orphan不猜退款／组件；双故障保留原读取优先级 | 新head远端PENDING |
+| 未知／其他拒绝 | 权限、普通IO、损坏、symlink/FIFO、当前泛型结构拒绝及引用不匹配无伪造context；缺outcome CAS不能变未完成成功 | 新head远端PENDING |
 
-源码、真实文件系统故障、已安装wheel／sdist消费者与既有baseline／search／发布／语义负例须在远端执行，
-保存真实source、CI checkout／tree、各job终态、日志与覆盖范围。测试摘要通过但job未成功、跳过或启动拒绝都不计本切片通过。
-桌面只做静态编辑及惰性字节／JSON／hash检查；不在本机import、测试、lint、build或执行项目代码。
+完整负例用远端unit/integration；安装代表矩阵最多16次inspect，共享90s、子进程各最多15s。
+只复制已有smoke的frozen数据／已消耗attempt，不另freeze/reserve/replay；禁止native、worker、网络及研究写入。
+允许既有SQLite mode=ro，只对目标catalog.sqlite3-wal/shm正常运行活动作明确例外；
+持续证据catalog/CAS/protocol/slot/outcome名字及字节保持，不宣称目录元数据完全不变，不删live sidecar。
+这不是恶意代码sandbox，也不是OS级不存在、预算可用、语义成功、repair/retry或确认访问许可。
 
-## 保留的人类门、预算及运行边界
+## 单独的持续质量companion：Job journal读取
 
-M0只支持既有可信owner及已资格内置profile；M1产品未集成／DISABLED，M2不支持。
-独立安全reviewer UNASSIGNED／NOT_PERFORMED；[#24](https://github.com/Darrenus/tickwitness/issues/24)仍外部真人
-0 attempts／0 successes／PENDING，实际自有案例表为空，联系／回复／意向／协助量／研究决定UNKNOWN，
-没有激活日期、30天窗口或可计算复用率。已接受的[S13准备](sprint-13-status.md)不能代填这些依赖，也不宣称beta。
+[真实失败与RED记录](s14-02a-job-journal-2026-11-28.md)记录4ce源码的原macOS3.14取消控制测试真实FAILURE，
+不是超时或新inspect测试，后来自动取消另记。原异常没有inner文件／inode trace，不宣称根因已确认。
+先实际冻结6239889的[窄合同](../contracts/job-journal-unlinked-read-conflict-v1.md)及ADR0054，
+再在产品未改的2fd源码取得34tests=31PASS/3FAIL的确定性远端RED，才实现候选修复。
 
-离线诊断不创建或重置研究协议／ledger。所有真实新执行仍需要同一原协议的新可用槽；已提交结果不重新执行，
-失败／中断／未知不退款。原5／8／11槽、golden、PR94、参考本轮24＋历史21=45、600s／10s／2s窗口及所有CLOSED封存不改。
-本切片不提供AWS Start、新资格、原host export／旧ACK、额外主机、外发联系或release授权。
+这项[#119](https://github.com/Darrenus/tickwitness/issues/119)属于既有持续质量容量，不增加S14专项32h或挪用余16h，
+与唯一活动02a功能切片分列。只允许固定optional journal的readonly预检在REG/nlink0且named实际ENOENT时给原conflict9；
+writer、mandatory、替换、alias／type和其他IO仍strict3。不放宽取消等待，不重启Job或研究。
+当前修正head完整GREEN／owner接受仍PENDING，早期4ce/2fd不能充当通过；原测试仅加失败traceback，不改断言。
+
+## 当前安装验收缺口与17项新门
+
+[后续独立安装失败](s14-02a-job-journal-2026-11-28.md)保留5a的两类结果：原Job修复及Mac3.14完整core、
+native pytest已通过，但新helper的copied inventory finally失败使整个Mac native Job仍FAILURE。
+当时实际差异字段／child回执未记录，仍UNKNOWN；不能追认为metadata-only或特定文件系统原因。
+
+冻结64合同要求copies持续names/type/bytes保持；checker对齐这个投影，sources仍完整strict，
+旧metadata差异另作观测，并先收child和两组库存结果再报错。真实names/type/hash变化仍失败，
+只排除两个exact普通WAL/SHM sidecar，16/90/15与guard和回执不改。
+新增独立早期macOS core安装job纳入preview及aggregate，修正head需自身17/17实际终态成功，
+当前仍PENDING；原32h、研究预算、人类门及M1关闭不变。
+
+## 原容量与未承诺工作
+
+| 容量部分 | 预测 | 承诺／接受状态 |
+| --- | ---: | --- |
+| 父项01／#40首切片01a | 8h | 已接受：合同2＋实现3＋远端验收2＋文档1；不是实际工时 |
+| 父项01剩余 | 4h | UNCOMMITTED；无Ready功能 |
+| 父项02／#41首切片02a | 8h | 当前选择：合同2＋实现3＋远端验收2＋文档1；新head验收／owner接受PENDING |
+| 父项02剩余 | 4h | UNCOMMITTED |
+| 父项03原预测 | 8h | UNCOMMITTED；未选择transport客户端或其他消费者 |
+| S14原总容量 | 32h | 已接受8＋已选择8＋未承诺16；不叠加transport |
+
+稳定backlog仍为72项父故事、原12/12/8h上限。WIP只统计实际选定的02a功能切片，
+#40保留父项聚合状态不表示并行开发余4h。不为填满容量虚构功能，持续质量容量不重复记账。
+
+## 保留的人类门、原研究预算与运行边界
+
+M0只支持可信owner与既有已资格profile；M1未集成／DISABLED，M2不支持。
+reviewerUNASSIGNED／独立安全NOT_PERFORMED；[#24](https://github.com/Darrenus/tickwitness/issues/24)仍
+外部真人0attempts／0successes／PENDING。实际案例表空，联系／回复／意向／协助／决定UNKNOWN，
+没有激活日期、30天窗口或可计算复用率。软件接受、CI与AI审阅不能代填人类证据，不宣称beta。
+
+所有项目import/test/lint/format/type/build/native回放继续远端执行；桌面只做静态编辑、nativeGit/gh及惰性字节检查。
+原5/8/11槽、golden、PR94、实际参考本轮24＋历史21=45和600/10/2窗口不变。
+失败／中断／未知不退款，真实新执行须同一原协议新槽，已提交结果不重复执行。
+不启动AWS／新资格／原host export或旧ACK，不开放listener、外发联系或release，所有CLOSED封存不改。
